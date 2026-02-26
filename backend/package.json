@@ -11,6 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
+    "dev": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
@@ -20,8 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "ts-node ./node_modules/typeorm/cli",
     "migration:create": "npm run typeorm -- migration:create ./src/db/migrations/%npm_config_name%",
-    "migration:run": "npm run typeorm migration:run  -- -d ./src/db/typeorm-migrations-configs.ts",
-    "migration:revert": "npm run typeorm migration:revert  -- -d ./src/db/typeorm-migrations-configs.ts"
+    "migration:run": "npm run typeorm migration:run  -- -d ./src/db/typeorm.migrations.config.ts",
+    "migration:revert": "npm run typeorm migration:revert  -- -d ./src/db/typeorm.migrations.config.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -29,6 +30,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.2.6",
     "@nestjs/typeorm": "^11.0.0",
     "@types/uuid": "^10.0.0",
     "bcrypt": "^6.0.0",
@@ -36,8 +38,10 @@
     "pg": "^8.19.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.28",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

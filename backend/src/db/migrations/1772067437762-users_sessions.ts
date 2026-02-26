@@ -8,6 +8,7 @@ export class UsersSessions1772067437762 implements MigrationInterface {
                 id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
                 userId uuid not null,
                 token VARCHAR(255) not null,
+                expiresAt TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
                 createdAt TIMESTAMP DEFAULT now(),
                 updatedAt TIMESTAMP DEFAULT now(),
                 CONSTRAINT "FK_users_sessions_userId" FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE

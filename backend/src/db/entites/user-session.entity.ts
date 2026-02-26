@@ -3,22 +3,25 @@ import { User } from './user.entity';
 
 @Entity('users_sessions')
 export class UserSession {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
+    @PrimaryGeneratedColumn('uuid')
+    id!: string;
 
-  @Column({ type: 'uuid' })
-  userId!: string;
+    @Column({ type: 'uuid' })
+    userId!: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  token!: string;
+    @Column({ type: 'varchar', length: 255 })
+    token!: string;
 
-  @CreateDateColumn()
-  createdAt!: Date;
+    @Column({ type: 'timestamp' })
+    expiresAt!: Date;
 
-  @UpdateDateColumn()
-  updatedAt!: Date;
+    @CreateDateColumn()
+    createdAt!: Date;
 
-  @ManyToOne(() => User, (user) => user.sessions, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
-  user!: User;
+    @UpdateDateColumn()
+    updatedAt!: Date;
+
+    @ManyToOne(() => User, (user) => user.sessions, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'userId' })
+    user!: User;
 }
