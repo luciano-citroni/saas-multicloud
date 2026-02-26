@@ -1,11 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { SkipTenant } from '../tenant/tenant.decorators';
 import { createUserSchema, updateUserSchema, userIdParamSchema } from './dto';
 import type { CreateUserDto, UpdateUserDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { UpdateUserRequestDto } from './swagger.dto';
 
+@SkipTenant()
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
 @Controller('users')

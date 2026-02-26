@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { JwtGuard } from './jwt.guard';
 import { UserSession } from '../db/entites/user-session.entity';
 import { UsersModule } from '../users/users.module';
+import { TenantModule } from '../tenant/tenant.module';
 
 @Module({
     imports: [
@@ -23,6 +24,7 @@ import { UsersModule } from '../users/users.module';
             inject: [ConfigService],
         }),
         UsersModule,
+        TenantModule,
     ],
     providers: [AuthService, JwtGuard],
     controllers: [AuthController],

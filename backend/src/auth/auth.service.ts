@@ -12,7 +12,6 @@ import { ErrorMessages } from '../common/messages/error-messages';
 
 export interface JwtPayload {
     sub: string;
-    email: string;
     sessionId: string;
 }
 
@@ -65,7 +64,7 @@ export class AuthService {
 
         if (!user.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
 
-        return this.issueTokens(user.id, user.email);
+        return this.issueTokens(user.id);
     }
 
     async refresh(plainRefreshToken: string) {
@@ -97,14 +96,14 @@ export class AuthService {
         session.expiresAt = newExpiresAt;
         await this.sessionRepository.save(session);
 
-        const payload: JwtPayload = { sub: session.userId, email: session.user.email, sessionId: session.id };
+        const payload: JwtPayload = { sub: session.userId, sessionId: session.id };
         const accessToken = await this.jwtService.signAsync(payload);
 
         return { accessToken, refreshToken: newRefreshToken };
     }
 
-    async logout(sessionId: string, userId: string) {
-        await this.sessionRepository.delete({ id: sessionId, userId });
+    async logout(sessionId: string) {
+        await this.sessionRepository.delete({ id: sessionId });
         return { success: true };
     }
 
@@ -112,7 +111,7 @@ export class AuthService {
         return this.usersService.findById(userId);
     }
 
-    private async issueTokens(userId: string, email: string) {
+    private async issueTokens(userId: string) {
         // Verificar quantas sessões ativas o usuário tem
         const userSessions = await this.sessionRepository.find({
             where: { userId },
@@ -136,7 +135,7 @@ export class AuthService {
             expiresAt,
         });
 
-        const payload: JwtPayload = { sub: userId, email, sessionId: session.id };
+        const payload: JwtPayload = { sub: userId, sessionId: session.id };
         const accessToken = await this.jwtService.signAsync(payload);
 
         return { accessToken, refreshToken: plainRefreshToken };

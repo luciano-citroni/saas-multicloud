@@ -1,10 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { OrganizationService } from './organization.service';
+import { SkipTenant } from '../tenant/tenant.decorators';
 import { createOrganizationSchema, organizationIdParamSchema, updateOrganizationSchema } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto } from './swagger.dto';
 
+@SkipTenant()
 @ApiTags('Organizations')
 @ApiBearerAuth('access-token')
 @Controller('organization')

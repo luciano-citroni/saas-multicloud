@@ -3,9 +3,10 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { IS_PUBLIC_KEY } from './decorators';
+import { UsersService } from '../users/users.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { IS_PUBLIC_KEY } from './decorators';
 import { UserSession } from '../db/entites/user-session.entity';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class JwtGuard implements CanActivate {
         private readonly jwtService: JwtService,
         private readonly reflector: Reflector,
         private readonly configService: ConfigService,
+        private readonly usersService: UsersService,
         @InjectRepository(UserSession)
         private readonly sessionRepository: Repository<UserSession>
     ) {}
@@ -35,29 +37,25 @@ export class JwtGuard implements CanActivate {
                 throw new UnauthorizedException('Invalid or expired access token');
             }
 
-            // Verificar se a sessão existe no banco de dados
+            // Validar se a sessão ainda existe
             const session = await this.sessionRepository.findOne({
-                where: {
-                    id: payload.sessionId,
-                    userId: payload.sub,
-                },
+                where: { id: payload.sessionId, userId: payload.sub },
                 relations: ['user'],
             });
 
-            // Se a sessão não existe ou está expirada, o usuário não está autenticado
+            // Sessão não encontrada = foi removida/revogada
             if (!session) {
-                throw new UnauthorizedException('Session not found');
+                throw new UnauthorizedException('Session was revoked or does not exist. Please login again.');
             }
 
+            // Sessão expirada
             if (session.expiresAt < new Date()) {
-                // Remove sessão expirada
                 await this.sessionRepository.remove(session);
-                throw new UnauthorizedException('Session expired');
+                throw new UnauthorizedException('Session expired. Please login again.');
             }
 
-            // Verificar se o usuário ainda está ativo
-            if (!session.user || !session.user.isActive) {
-                await this.sessionRepository.remove(session);
+            // Usuário desativado
+            if (!session.user?.isActive) {
                 throw new UnauthorizedException('User account is inactive');
             }
 

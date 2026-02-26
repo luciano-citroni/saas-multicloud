@@ -27,6 +27,26 @@ export const ErrorMessages = {
         CNPJ_ALREADY_IN_USE: 'This CNPJ is already in use',
     },
 
+    // Tenant context (multi-tenancy)
+    TENANT: {
+        MISSING_HEADER: 'Missing organization context. Send the "x-organization-id" header.',
+        INVALID_ORG_ID: 'Invalid organization ID format.',
+        NO_ACCESS: 'You do not have access to this organization or it does not exist.',
+    },
+
+    // RBAC (roles)
+    RBAC: {
+        INSUFFICIENT_PERMISSIONS: 'You do not have permission to perform this action.',
+        MISSING_MEMBERSHIP: 'No organization membership found in request context.',
+    },
+
+    // Cloud accounts
+    CLOUD_ACCOUNTS: {
+        NOT_FOUND: 'Cloud account not found.',
+        ALIAS_ALREADY_IN_USE: 'A cloud account with this alias already exists in the organization.',
+        INVALID_PROVIDER: 'Invalid cloud provider. Supported: aws, azure, gcp.',
+    },
+
     // Database
     DATABASE: {
         CONFLICT: 'This value is already in use',
