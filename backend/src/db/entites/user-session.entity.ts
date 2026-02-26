@@ -6,22 +6,22 @@ export class UserSession {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
 
-    @Column({ type: 'uuid' })
+    @Column({ type: 'uuid', name: 'user_id' })
     userId!: string;
 
     @Column({ type: 'varchar', length: 255 })
     token!: string;
 
-    @Column({ type: 'timestamp' })
+    @Column({ type: 'timestamp', name: 'expires_at' })
     expiresAt!: Date;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 
-    @UpdateDateColumn()
+    @UpdateDateColumn({ name: 'updated_at' })
     updatedAt!: Date;
 
     @ManyToOne(() => User, (user) => user.sessions, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'userId' })
+    @JoinColumn({ name: 'user_id' })
     user!: User;
 }

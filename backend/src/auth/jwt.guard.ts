@@ -3,14 +3,19 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { IS_PUBLIC_KEY } from './decorators';
+import { UserSession } from '../db/entites/user-session.entity';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
     constructor(
         private readonly jwtService: JwtService,
         private readonly reflector: Reflector,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        @InjectRepository(UserSession)
+        private readonly sessionRepository: Repository<UserSession>
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,8 +35,37 @@ export class JwtGuard implements CanActivate {
                 throw new UnauthorizedException('Invalid or expired access token');
             }
 
+            // Verificar se a sessão existe no banco de dados
+            const session = await this.sessionRepository.findOne({
+                where: {
+                    id: payload.sessionId,
+                    userId: payload.sub,
+                },
+                relations: ['user'],
+            });
+
+            // Se a sessão não existe ou está expirada, o usuário não está autenticado
+            if (!session) {
+                throw new UnauthorizedException('Session not found');
+            }
+
+            if (session.expiresAt < new Date()) {
+                // Remove sessão expirada
+                await this.sessionRepository.remove(session);
+                throw new UnauthorizedException('Session expired');
+            }
+
+            // Verificar se o usuário ainda está ativo
+            if (!session.user || !session.user.isActive) {
+                await this.sessionRepository.remove(session);
+                throw new UnauthorizedException('User account is inactive');
+            }
+
             request['user'] = payload;
-        } catch {
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
             throw new UnauthorizedException('Invalid or expired access token');
         }
 

@@ -19,13 +19,13 @@ export class User {
     @Column({ type: 'varchar', length: 14, unique: true })
     cpf!: string;
 
-    @Column({ type: 'boolean', default: true })
+    @Column({ type: 'boolean', default: true, name: 'is_active' })
     isActive!: boolean;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 
-    @UpdateDateColumn()
+    @UpdateDateColumn({ name: 'updated_at' })
     updatedAt!: Date;
 
     @OneToMany(() => UserSession, (session) => session.user)

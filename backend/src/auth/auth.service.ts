@@ -1,7 +1,7 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -33,13 +33,26 @@ export class AuthService {
         const existingCpf = await this.usersService.findByCpf(dto.cpf);
         if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
 
-        const user = await this.usersService.create({
-            ...dto,
-            email: normalizedEmail,
-            password: dto.password,
-        });
+        try {
+            const user = await this.usersService.create({
+                ...dto,
+                email: normalizedEmail,
+                password: dto.password,
+            });
 
-        return { id: user.id, email: user.email, name: user.name, cpf: user.cpf, isActive: user.isActive };
+            return { id: user.id, email: user.email, name: user.name, cpf: user.cpf, isActive: user.isActive };
+        } catch (error) {
+            if (error instanceof QueryFailedError) {
+                const dbError = error as QueryFailedError & { detail?: string };
+                if (dbError.detail?.includes('email')) {
+                    throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
+                }
+                if (dbError.detail?.includes('cpf')) {
+                    throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
+                }
+            }
+            throw error;
+        }
     }
 
     async login(dto: LoginDto) {
@@ -73,9 +86,21 @@ export class AuthService {
             throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
         }
 
-        // Token rotation: invalidate old session, issue new tokens
-        await this.sessionRepository.remove(session);
-        return this.issueTokens(session.userId, session.user.email);
+        // Token rotation: atualizar sessão existente com novo token
+        const newRefreshToken = uuidv4();
+        const newTokenHash = this.hashToken(newRefreshToken);
+
+        const newExpiresAt = new Date();
+        newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+        session.token = newTokenHash;
+        session.expiresAt = newExpiresAt;
+        await this.sessionRepository.save(session);
+
+        const payload: JwtPayload = { sub: session.userId, email: session.user.email, sessionId: session.id };
+        const accessToken = await this.jwtService.signAsync(payload);
+
+        return { accessToken, refreshToken: newRefreshToken };
     }
 
     async logout(sessionId: string, userId: string) {
@@ -88,6 +113,17 @@ export class AuthService {
     }
 
     private async issueTokens(userId: string, email: string) {
+        // Verificar quantas sessões ativas o usuário tem
+        const userSessions = await this.sessionRepository.find({
+            where: { userId },
+            order: { createdAt: 'ASC' },
+        });
+
+        // Se o usuário já tem 2 ou mais sessões, remover a mais antiga
+        if (userSessions.length >= 2) {
+            await this.sessionRepository.remove(userSessions[0]);
+        }
+
         const plainRefreshToken = uuidv4();
         const tokenHash = this.hashToken(plainRefreshToken);
 

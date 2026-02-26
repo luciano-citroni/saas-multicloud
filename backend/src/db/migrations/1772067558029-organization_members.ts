@@ -1,19 +1,18 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class OrganizationMembers1772067558029 implements MigrationInterface {
-
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
             CREATE TABLE "organization_members" (
                 id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-                organizationId uuid not null,
-                userId uuid not null,
+                organization_id uuid not null,
+                user_id uuid not null,
                 role VARCHAR(50) not null,
-                joinedAt TIMESTAMP DEFAULT now(),
-                createdAt TIMESTAMP DEFAULT now(),
-                updatedAt TIMESTAMP DEFAULT now(),
-                CONSTRAINT "FK_organization_members_organizationId" FOREIGN KEY (organizationId) REFERENCES organizations(id) ON DELETE CASCADE,
-                CONSTRAINT "FK_organization_members_userId" FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+                joined_at TIMESTAMP DEFAULT now(),
+                created_at TIMESTAMP DEFAULT now(),
+                updated_at TIMESTAMP DEFAULT now(),
+                CONSTRAINT "FK_organization_members_organization_id" FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                CONSTRAINT "FK_organization_members_user_id" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
         `);
     }
@@ -23,5 +22,4 @@ export class OrganizationMembers1772067558029 implements MigrationInterface {
             DROP TABLE IF EXISTS "organization_members";
         `);
     }
-
 }

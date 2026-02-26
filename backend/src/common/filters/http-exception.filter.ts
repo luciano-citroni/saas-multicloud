@@ -35,7 +35,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
         };
 
         if (normalized.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+            if (exception instanceof QueryFailedError) {
+                const dbError = exception as QueryFailedError & { code?: string; detail?: string };
+                this.logger.error({ ...context, dbCode: dbError.code, dbDetail: dbError.detail }, exception.message);
+                return;
+            }
             this.logger.error(context, exception instanceof Error ? exception.stack : undefined);
+            return;
+        }
+
+        if (exception instanceof QueryFailedError) {
+            const dbError = exception as QueryFailedError & { code?: string; detail?: string };
+            this.logger.warn({ ...context, dbCode: dbError.code, dbDetail: dbError.detail });
             return;
         }
 
@@ -95,8 +106,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const error = exception as QueryFailedError & {
             code?: string;
             detail?: string;
+            constraint?: string;
+            message?: string;
         };
 
+        // PostgreSQL code 23505 = unique violation
         if (error.code === '23505') {
             let message = 'This value is already in use';
 
@@ -117,6 +131,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
             };
         }
 
+        // PostgreSQL code 23503 = foreign key violation
         if (error.code === '23503') {
             return {
                 statusCode: HttpStatus.BAD_REQUEST,
@@ -125,10 +140,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
             };
         }
 
+        // Check message for common constraint violation patterns
+        const errorMsg = error.message?.toLowerCase() || '';
+        if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
+            return {
+                statusCode: HttpStatus.CONFLICT,
+                error: 'Conflict',
+                message: 'This value is already in use',
+            };
+        }
+
+        // Log the actual database error for debugging
+        const dbErrorDetails = `Code: ${error.code}, Detail: ${error.detail || 'N/A'}, Message: ${error.message}`;
+        this.logger.warn(`Database constraint error: ${dbErrorDetails}`);
+
         return {
             statusCode: HttpStatus.BAD_REQUEST,
             error: 'DatabaseError',
-            message: 'Database constraint violation',
+            message: `Database constraint violation: ${error.detail || error.message || 'Unknown error'}`,
         };
     }
 }

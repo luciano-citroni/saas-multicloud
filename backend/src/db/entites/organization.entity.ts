@@ -12,10 +12,10 @@ export class Organization {
     @Column({ type: 'varchar', length: 20, unique: true })
     cnpj!: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 
-    @UpdateDateColumn()
+    @UpdateDateColumn({ name: 'updated_at' })
     updatedAt!: Date;
 
     @OneToMany(() => OrganizationMember, (member) => member.organization)

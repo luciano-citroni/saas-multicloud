@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { OrganizationService } from './organization.service';
 import { createOrganizationSchema, organizationIdParamSchema, updateOrganizationSchema } from './dto';
@@ -12,13 +12,14 @@ export class OrganizationController {
     constructor(private readonly organizationService: OrganizationService) {}
 
     @Post()
+    @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Criar nova organização' })
     @ApiBody({
         description: 'Dados para criar nova organização',
         type: CreateOrganizationRequestDto,
     })
     @ApiResponse({
-        status: 201,
+        status: 200,
         description: 'Organização criada com sucesso',
         schema: {
             example: {

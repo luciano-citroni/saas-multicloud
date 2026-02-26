@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import type { JwtPayload } from './auth.service';
@@ -15,13 +15,14 @@ export class AuthController {
 
     @Public()
     @Post('register')
+    @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Registrar novo usuário' })
     @ApiBody({
         description: 'Dados para registrar novo usuário',
         type: RegisterRequestDto,
     })
     @ApiResponse({
-        status: 201,
+        status: 200,
         description: 'Usuário registrado com sucesso',
         schema: {
             example: {
