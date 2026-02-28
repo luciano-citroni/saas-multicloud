@@ -6,11 +6,11 @@ export class Organization {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
 
-    @Column({ type: 'varchar', length: 100, unique: true })
+    @Column({ type: 'varchar', length: 100 })
     name!: string;
 
-    @Column({ type: 'varchar', length: 20, unique: true })
-    cnpj!: string;
+    @Column({ type: 'varchar', length: 20, nullable: true })
+    cnpj?: string | null;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

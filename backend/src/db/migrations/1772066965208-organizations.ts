@@ -6,10 +6,9 @@ export class Organizations1772066965208 implements MigrationInterface {
             CREATE TABLE "organizations" (
                 id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
                 name VARCHAR(100) not null,
-                cnpj VARCHAR(20) not null,
+                cnpj VARCHAR(20) null,
                 created_at TIMESTAMP DEFAULT now(),
                 updated_at TIMESTAMP DEFAULT now(),
-                CONSTRAINT "UQ_organizations_name" UNIQUE (name),
                 CONSTRAINT "UQ_organizations_cnpj" UNIQUE (cnpj)
             );
         `);

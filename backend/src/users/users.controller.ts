@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { SkipTenant } from '../tenant/tenant.decorators';
+import { CurrentOrganization, SkipTenant } from '../tenant/tenant.decorators';
 import { createUserSchema, updateUserSchema, userIdParamSchema } from './dto';
 import type { CreateUserDto, UpdateUserDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { UpdateUserRequestDto } from './swagger.dto';
+import { Roles } from '../rbac/roles.decorator';
+import { OrgRole } from '../rbac/roles.enum';
+import { Organization } from '../db/entites';
 
-@SkipTenant()
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
 @Controller('users')
@@ -15,7 +17,8 @@ export class UsersController {
     constructor(private readonly usersService: UsersService) {}
 
     @Get()
-    @ApiOperation({ summary: 'Listar todos os usuários' })
+    @Roles(OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Listar todos os usuários da organização' })
     @ApiResponse({
         status: 200,
         description: 'Lista de usuários',
@@ -35,10 +38,11 @@ export class UsersController {
         status: 401,
         description: 'Token inválido ou expirado',
     })
-    findAll() {
-        return this.usersService.findAll();
+    findAll(@CurrentOrganization() organization: Organization) {
+        return this.usersService.findAll(organization.id);
     }
 
+    @SkipTenant()
     @Get(':id')
     @ApiOperation({ summary: 'Obter detalhes de um usuário' })
     @ApiResponse({

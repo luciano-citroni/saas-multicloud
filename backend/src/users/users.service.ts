@@ -44,8 +44,14 @@ export class UsersService {
         return this.sanitizeUser(savedUser);
     }
 
-    async findAll(): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>[]> {
-        const users = await this.userRepository.find();
+    async findAll(organizationId: string): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>[]> {
+        const users = await this.userRepository.find({
+            where: {
+                organizationMemberships: {
+                    organizationId: organizationId,
+                },
+            },
+        });
         return users.map((user) => this.sanitizeUser(user));
     }
 

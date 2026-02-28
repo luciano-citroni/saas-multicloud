@@ -4,7 +4,7 @@ const organizationIdSchema = z.string().uuid();
 
 const organizationBaseSchema = z.object({
     name: z.string().min(2).max(100),
-    cnpj: z.string().min(11).max(20),
+    cnpj: z.string().min(11).max(20).optional().nullable(),
 });
 
 export const createOrganizationSchema = organizationBaseSchema;
