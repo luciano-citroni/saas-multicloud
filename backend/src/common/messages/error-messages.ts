@@ -19,12 +19,32 @@ export const ErrorMessages = {
         NOT_FOUND: 'User not found',
         EMAIL_ALREADY_IN_USE: 'This email is already in use',
         CPF_ALREADY_IN_USE: 'This CPF is already in use',
+        CANNOT_DELETE_WHILE_IN_ORGANIZATION: 'You cannot delete your account while you are a member of an organization',
     },
 
     // Organizations
     ORGANIZATIONS: {
         NOT_FOUND: 'Organization not found',
         CNPJ_ALREADY_IN_USE: 'This CNPJ is already in use',
+    },
+
+    // Organization members
+    MEMBERS: {
+        NOT_FOUND: 'Member not found in this organization.',
+        CANNOT_REMOVE_OWNER: 'The organization owner cannot be removed.',
+        CANNOT_REMOVE_SELF: 'You cannot remove yourself from the organization this way.',
+        CANNOT_CHANGE_OWNER_ROLE: 'The role of the organization owner cannot be changed.',
+        CANNOT_PROMOTE_TO_OWNER: 'Only the owner can transfer ownership.',
+        INSUFFICIENT_ROLE_TO_MODIFY: 'You can only manage members with a lower role than yours.',
+    },
+
+    // Organization invites
+    INVITES: {
+        NOT_FOUND: 'Invite not found or has already been used.',
+        EXPIRED: 'This invite has expired.',
+        ALREADY_ACCEPTED: 'This invite has already been accepted.',
+        USER_ALREADY_MEMBER: 'This user is already a member of the organization.',
+        USER_NOT_REGISTERED: 'No account found with this email. Please register before accepting the invite.',
     },
 
     // Tenant context (multi-tenancy)

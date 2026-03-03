@@ -50,24 +50,26 @@ export class LoginRequestDto {
 
 export class RefreshTokenRequestDto {
     @ApiProperty({
-        example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'Token de refresh para renovar o token de acesso',
+        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        description: 'Token JWT de acesso para renovação',
     })
-    refreshToken: string;
+    token: string;
 }
 
 export class AuthResponseDto {
     @ApiProperty({
         example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        description: 'Token JWT de acesso (válido por 15 minutos)',
+        description: 'Token JWT de acesso',
     })
     accessToken: string;
+}
 
+export class LogoutResponseDto {
     @ApiProperty({
-        example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'Token de refresh para renovar o accessToken (válido por 7 dias)',
+        example: true,
+        description: 'Indica se a operação foi bem-sucedida',
     })
-    refreshToken: string;
+    success: boolean;
 }
 
 export class UserResponseDto {

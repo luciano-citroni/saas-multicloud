@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -9,6 +9,7 @@ import { JwtGuard } from './jwt.guard';
 import { UserSession } from '../db/entites/user-session.entity';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../tenant/tenant.module';
+import { OrganizationModule } from '../organization/organization.module';
 
 @Module({
     imports: [
@@ -25,6 +26,7 @@ import { TenantModule } from '../tenant/tenant.module';
         }),
         UsersModule,
         TenantModule,
+        forwardRef(() => OrganizationModule),
     ],
     providers: [AuthService, JwtGuard],
     controllers: [AuthController],

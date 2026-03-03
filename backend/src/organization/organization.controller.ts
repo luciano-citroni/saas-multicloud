@@ -1,10 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { OrganizationService } from './organization.service';
+import { CurrentUser } from '../auth/decorators';
+import type { JwtPayload } from '../auth/auth.service';
 import { SkipTenant } from '../tenant/tenant.decorators';
 import { createOrganizationSchema, organizationIdParamSchema, updateOrganizationSchema } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto } from './swagger.dto';
+import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto, OrganizationResponseDto, DeleteOrganizationResponseDto } from './swagger.dto';
 
 @SkipTenant()
 @ApiTags('Organizations')
@@ -20,17 +22,7 @@ export class OrganizationController {
         description: 'Dados para criar nova organização',
         type: CreateOrganizationRequestDto,
     })
-    @ApiResponse({
-        status: 200,
-        description: 'Organização criada com sucesso',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                name: 'ACME Corporation',
-                cnpj: '12345678000190',
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Organização criada com sucesso', type: OrganizationResponseDto })
     @ApiResponse({
         status: 400,
         description: 'Erro de validação',
@@ -49,51 +41,30 @@ export class OrganizationController {
         },
     })
     create(
+        @CurrentUser() user: JwtPayload,
         @Body(new ZodValidationPipe(createOrganizationSchema))
         body: {
             name: string;
             cnpj: string;
         }
     ) {
-        return this.organizationService.create(body);
+        return this.organizationService.create(body, user.sub);
     }
 
     @Get()
     @ApiOperation({ summary: 'Listar todas as organizações' })
-    @ApiResponse({
-        status: 200,
-        description: 'Lista de organizações',
-        schema: {
-            example: [
-                {
-                    id: '123e4567-e89b-12d3-a456-426614174000',
-                    name: 'ACME Corporation',
-                    cnpj: '12345678000190',
-                },
-            ],
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Lista de organizações', type: OrganizationResponseDto, isArray: true })
     @ApiResponse({
         status: 401,
         description: 'Token inválido ou expirado',
     })
-    findAll() {
-        return this.organizationService.findAll();
+    findAll(@CurrentUser() user: JwtPayload) {
+        return this.organizationService.findAll(user.sub);
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Obter detalhes de uma organização' })
-    @ApiResponse({
-        status: 200,
-        description: 'Dados da organização',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                name: 'ACME Corporation',
-                cnpj: '12345678000190',
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Dados da organização', type: OrganizationResponseDto })
     @ApiResponse({
         status: 404,
         description: 'Organização não encontrada',
@@ -108,12 +79,13 @@ export class OrganizationController {
         },
     })
     findOne(
+        @CurrentUser() user: JwtPayload,
         @Param(new ZodValidationPipe(organizationIdParamSchema))
         params: {
             id: string;
         }
     ) {
-        return this.organizationService.findOne(params.id);
+        return this.organizationService.findOne(params.id, user.sub);
     }
 
     @Patch(':id')
@@ -122,17 +94,7 @@ export class OrganizationController {
         description: 'Campos a atualizar na organização',
         type: UpdateOrganizationRequestDto,
     })
-    @ApiResponse({
-        status: 200,
-        description: 'Organização atualizada com sucesso',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                name: 'Updated ACME',
-                cnpj: '12345678000190',
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Organização atualizada com sucesso', type: OrganizationResponseDto })
     @ApiResponse({
         status: 404,
         description: 'Organização não encontrada',
@@ -142,36 +104,29 @@ export class OrganizationController {
         description: 'CNPJ já em uso',
     })
     update(
+        @CurrentUser() user: JwtPayload,
         @Param(new ZodValidationPipe(organizationIdParamSchema))
         params: { id: string },
         @Body(new ZodValidationPipe(updateOrganizationSchema))
         body: { name?: string; cnpj?: string }
     ) {
-        return this.organizationService.update(params.id, body);
+        return this.organizationService.update(params.id, body, user.sub);
     }
 
     @Delete(':id')
     @ApiOperation({ summary: 'Deletar organização' })
-    @ApiResponse({
-        status: 200,
-        description: 'Organização deletada com sucesso',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                deleted: true,
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Organização deletada com sucesso', type: DeleteOrganizationResponseDto })
     @ApiResponse({
         status: 404,
         description: 'Organização não encontrada',
     })
     remove(
+        @CurrentUser() user: JwtPayload,
         @Param(new ZodValidationPipe(organizationIdParamSchema))
         params: {
             id: string;
         }
     ) {
-        return this.organizationService.remove(params.id);
+        return this.organizationService.remove(params.id, user.sub);
     }
 }

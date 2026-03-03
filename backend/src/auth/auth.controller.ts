@@ -2,15 +2,14 @@ import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards } from '@n
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import type { JwtPayload } from './auth.service';
-import { loginSchema, refreshTokenSchema, registerSchema } from './dto';
-import type { LoginDto, RefreshTokenDto, RegisterDto } from './dto';
-import { CurrentUser, Public } from './decorators';
+import { loginSchema, refreshTokenSchema, registerSchema, registerWithInviteSchema } from './dto';
+import type { LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto } from './dto';
+import { CurrentUser, Public, AllowMissingOrganization } from './decorators';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, UserResponseDto } from './swagger.dto';
+import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, UserResponseDto, LogoutResponseDto } from './swagger.dto';
 
 @ApiTags('Auth')
-@UseGuards(TenantGuard)
 @Controller('auth')
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
@@ -23,19 +22,7 @@ export class AuthController {
         description: 'Dados para registrar novo usuário',
         type: RegisterRequestDto,
     })
-    @ApiResponse({
-        status: 200,
-        description: 'Usuário registrado com sucesso',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                email: 'user@example.com',
-                name: 'John Doe',
-                cpf: '12345678901',
-                isActive: true,
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Usuário registrado com sucesso', type: UserResponseDto })
     @ApiResponse({
         status: 400,
         description: 'Erro de validação',
@@ -70,22 +57,61 @@ export class AuthController {
     }
 
     @Public()
+    @Post('register-with-invite')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Registrar novo usuário com convite de organização' })
+    @ApiBody({
+        description: 'Dados para registrar novo usuário e aceitar convite de organização',
+        schema: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', example: 'João Silva' },
+                email: { type: 'string', example: 'joao@example.com' },
+                cpf: { type: 'string', example: '12345678901' },
+                password: { type: 'string', example: 'SecurePass@123' },
+                inviteToken: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
+            },
+        },
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Usuário registrado e convite aceito com sucesso',
+        schema: {
+            example: {
+                accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                user: {
+                    id: '123e4567-e89b-12d3-a456-426614174000',
+                    email: 'joao@example.com',
+                    name: 'João Silva',
+                    cpf: '12345678901',
+                    isActive: true,
+                },
+            },
+        },
+    })
+    @ApiResponse({
+        status: 400,
+        description: 'Erro de validação ou convite expirado',
+    })
+    @ApiResponse({
+        status: 409,
+        description: 'Email ou CPF já em uso',
+    })
+    registerWithInvite(
+        @Body(new ZodValidationPipe(registerWithInviteSchema))
+        body: RegisterWithInviteDto
+    ) {
+        return this.authService.registerWithInvite(body);
+    }
+
+    @Public()
     @Post('login')
     @ApiOperation({ summary: 'Fazer login' })
     @ApiBody({
         description: 'Credenciais para fazer login',
         type: LoginRequestDto,
     })
-    @ApiResponse({
-        status: 200,
-        description: 'Login bem-sucedido',
-        schema: {
-            example: {
-                accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-                refreshToken: '550e8400-e29b-41d4-a716-446655440000',
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Login bem-sucedido', type: AuthResponseDto })
     @ApiResponse({
         status: 401,
         description: 'Credenciais inválidas',
@@ -110,19 +136,10 @@ export class AuthController {
     @Post('refresh')
     @ApiOperation({ summary: 'Renovar token de acesso' })
     @ApiBody({
-        description: 'Token de refresh para renovar o token de acesso',
+        description: 'Token JWT de acesso para renovação',
         type: RefreshTokenRequestDto,
     })
-    @ApiResponse({
-        status: 200,
-        description: 'Token renovado com sucesso',
-        schema: {
-            example: {
-                accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-                refreshToken: '550e8400-e29b-41d4-a716-446655440000',
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Token renovado com sucesso', type: AuthResponseDto })
     @ApiResponse({
         status: 401,
         description: 'Token inválido ou expirado',
@@ -130,7 +147,7 @@ export class AuthController {
             example: {
                 statusCode: 401,
                 error: 'Unauthorized',
-                message: 'Invalid or expired refresh token',
+                message: 'Invalid or expired token',
                 path: '/api/auth/refresh',
                 timestamp: '2026-02-25T10:00:00.000Z',
             },
@@ -140,41 +157,25 @@ export class AuthController {
         @Body(new ZodValidationPipe(refreshTokenSchema))
         body: RefreshTokenDto
     ) {
-        return this.authService.refresh(body.refreshToken);
+        return this.authService.refresh(body.token);
     }
 
     @Post('logout')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
     @ApiBearerAuth('access-token')
     @ApiOperation({ summary: 'Fazer logout' })
-    @ApiResponse({
-        status: 200,
-        description: 'Logout bem-sucedido',
-        schema: {
-            example: {
-                success: true,
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Logout bem-sucedido', type: LogoutResponseDto })
     logout(@CurrentUser() user: JwtPayload) {
         return this.authService.logout(user.sessionId);
     }
 
     @Get('me')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
     @ApiBearerAuth('access-token')
     @ApiOperation({ summary: 'Obter dados do usuário autenticado' })
-    @ApiResponse({
-        status: 200,
-        description: 'Dados do usuário',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                email: 'user@example.com',
-                name: 'John Doe',
-                cpf: '12345678901',
-                isActive: true,
-            },
-        },
-    })
+    @ApiResponse({ status: 200, description: 'Dados do usuário', type: UserResponseDto })
     @ApiResponse({
         status: 401,
         description: 'Token inválido ou expirado',

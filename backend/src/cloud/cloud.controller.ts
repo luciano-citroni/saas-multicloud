@@ -10,6 +10,7 @@ import { OrgRole } from '../rbac/roles.enum';
 import { Organization } from '../db/entites/organization.entity';
 import { OrganizationMember } from '../db/entites/organization-member.entity';
 import { createCloudAccountSchema } from './dto';
+import { CloudAccountResponseDto } from './swagger.dto';
 import type { CreateCloudAccountDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
@@ -40,21 +41,7 @@ export class CloudController {
     @Post('accounts')
     @Roles(OrgRole.ADMIN)
     @ApiOperation({ summary: 'Criar uma nova conta de cloud' })
-    @ApiResponse({
-        status: 201,
-        description: 'Conta de cloud criada com sucesso',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174001',
-                organizationId: '123e4567-e89b-12d3-a456-426614174000',
-                provider: 'aws',
-                alias: 'Produção',
-                isActive: true,
-                createdAt: '2026-02-27T10:00:00Z',
-                updatedAt: '2026-02-27T10:00:00Z',
-            },
-        },
-    })
+    @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
     @ApiResponse({ status: 400, description: 'Dados inválidos' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Acesso negado — apenas ADMIN+' })
@@ -67,10 +54,7 @@ export class CloudController {
      */
     @Get('accounts')
     @ApiOperation({ summary: 'Lista contas de cloud da organização ativa' })
-    @ApiResponse({
-        status: 200,
-        description: 'Lista de contas de cloud',
-    })
+    @ApiResponse({ status: 200, description: 'Lista de contas de cloud', type: CloudAccountResponseDto, isArray: true })
     async listAccounts(@CurrentOrganization() org: Organization) {
         return this.cloudService.findByOrganization(org.id);
     }

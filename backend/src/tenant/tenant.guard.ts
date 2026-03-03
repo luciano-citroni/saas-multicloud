@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../auth/decorators';
+import { IS_PUBLIC_KEY, ALLOW_MISSING_ORG_KEY } from '../auth/decorators';
 import { TenantService } from './tenant.service';
 
 /**
@@ -43,7 +43,10 @@ export class TenantGuard implements CanActivate {
         const rawOrganizationId = request.headers['x-organization-id'];
         const organizationId = Array.isArray(rawOrganizationId) ? rawOrganizationId[0] : rawOrganizationId;
 
+        const allowMissingOrg = this.reflector.getAllAndOverride<boolean>(ALLOW_MISSING_ORG_KEY, [context.getHandler(), context.getClass()]);
+
         if (!organizationId) {
+            if (allowMissingOrg) return true;
             throw new ForbiddenException('Missing organization context. Send the "x-organization-id" header.');
         }
 

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
@@ -7,8 +7,9 @@ import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { UserSession } from '../db/entites/user-session.entity';
 import { UsersService } from '../users/users.service';
-import { LoginDto, RegisterDto } from './dto';
+import { LoginDto, RegisterDto, RegisterWithInviteDto } from './dto';
 import { ErrorMessages } from '../common/messages/error-messages';
+import { OrganizationService } from '../organization/organization.service';
 
 export interface JwtPayload {
     sub: string;
@@ -21,7 +22,9 @@ export class AuthService {
         @InjectRepository(UserSession)
         private readonly sessionRepository: Repository<UserSession>,
         private readonly jwtService: JwtService,
-        private readonly usersService: UsersService
+        private readonly usersService: UsersService,
+        @Inject(forwardRef(() => OrganizationService))
+        private readonly organizationService: OrganizationService
     ) {}
 
     async register(dto: RegisterDto) {
@@ -54,6 +57,51 @@ export class AuthService {
         }
     }
 
+    async registerWithInvite(dto: RegisterWithInviteDto) {
+        const normalizedEmail = dto.email.toLowerCase();
+        const existingEmail = await this.usersService.findByEmail(normalizedEmail);
+        if (existingEmail) throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
+
+        const existingCpf = await this.usersService.findByCpf(dto.cpf);
+        if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
+
+        try {
+            // Registrar o usuário
+            const user = await this.usersService.create({
+                name: dto.name,
+                email: normalizedEmail,
+                cpf: dto.cpf,
+                password: dto.password,
+            });
+
+            // Aceitar o convite com o novo usuário
+            try {
+                await this.organizationService.acceptInviteWithUserId(dto.inviteToken, user.id);
+            } catch (error) {
+                // Se falhar ao aceitar o convite, ainda assim retornar os dados de login
+                // (o usuário foi criado, mas o convite pode ter expirado, etc.)
+                console.error(`Failed to accept invite for user ${user.id}:`, error);
+            }
+
+            // Emitir tokens para o novo usuário
+            return {
+                user: { id: user.id, email: user.email, name: user.name, cpf: user.cpf, isActive: user.isActive },
+                ...(await this.issueTokens(user.id)),
+            };
+        } catch (error) {
+            if (error instanceof QueryFailedError) {
+                const dbError = error as QueryFailedError & { detail?: string };
+                if (dbError.detail?.includes('email')) {
+                    throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
+                }
+                if (dbError.detail?.includes('cpf')) {
+                    throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
+                }
+            }
+            throw error;
+        }
+    }
+
     async login(dto: LoginDto) {
         const normalizedEmail = dto.email.toLowerCase();
         const user = await this.usersService.findByEmail(normalizedEmail);
@@ -67,39 +115,50 @@ export class AuthService {
         return this.issueTokens(user.id);
     }
 
-    async refresh(plainRefreshToken: string) {
-        const tokenHash = this.hashToken(plainRefreshToken);
+    async refresh(token: string) {
+        try {
+            // Verificar e decodificar o JWT, permitindo desclaração mesmo se expirado
+            let payload: JwtPayload;
+            try {
+                payload = await this.jwtService.verifyAsync(token);
+            } catch (error: any) {
+                // Se o token expirou, tente decodificar apenas para obter a sessão
+                if (error.name === 'TokenExpiredError') {
+                    payload = this.jwtService.decode(token) as JwtPayload;
+                } else {
+                    throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+                }
+            }
 
-        const session = await this.sessionRepository.findOne({
-            where: { token: tokenHash },
-            relations: ['user'],
-        });
+            if (!payload || !payload.sessionId) {
+                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+            }
 
-        if (!session || session.expiresAt < new Date()) {
-            if (session) await this.sessionRepository.remove(session);
+            // Buscar a sessão correspondente
+            const session = await this.sessionRepository.findOne({
+                where: { id: payload.sessionId },
+                relations: ['user'],
+            });
+
+            if (!session) {
+                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+            }
+
+            if (!session.user || !session.user.isActive) {
+                throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
+            }
+
+            // Emitir novo token de acesso usando a mesma sessão
+            const newPayload: JwtPayload = { sub: session.userId, sessionId: session.id };
+            const accessToken = await this.jwtService.signAsync(newPayload);
+
+            return { accessToken };
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
             throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
         }
-
-        if (!session.user || !session.user.isActive) {
-            await this.sessionRepository.remove(session);
-            throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
-        }
-
-        // Token rotation: atualizar sessão existente com novo token
-        const newRefreshToken = uuidv4();
-        const newTokenHash = this.hashToken(newRefreshToken);
-
-        const newExpiresAt = new Date();
-        newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-
-        session.token = newTokenHash;
-        session.expiresAt = newExpiresAt;
-        await this.sessionRepository.save(session);
-
-        const payload: JwtPayload = { sub: session.userId, sessionId: session.id };
-        const accessToken = await this.jwtService.signAsync(payload);
-
-        return { accessToken, refreshToken: newRefreshToken };
     }
 
     async logout(sessionId: string) {
@@ -112,33 +171,17 @@ export class AuthService {
     }
 
     private async issueTokens(userId: string) {
-        // Verificar quantas sessões ativas o usuário tem
-        const userSessions = await this.sessionRepository.find({
-            where: { userId },
-            order: { createdAt: 'ASC' },
-        });
-
-        // Se o usuário já tem 2 ou mais sessões, remover a mais antiga
-        if (userSessions.length >= 2) {
-            await this.sessionRepository.remove(userSessions[0]);
-        }
-
-        const plainRefreshToken = uuidv4();
-        const tokenHash = this.hashToken(plainRefreshToken);
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
-
+        // Criar nova sessão para rastreamento
         const session = await this.sessionRepository.save({
             userId,
-            token: tokenHash,
-            expiresAt,
+            token: this.hashToken(uuidv4()), // Gerar token genérico apenas para registro
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 dias
         });
 
         const payload: JwtPayload = { sub: userId, sessionId: session.id };
         const accessToken = await this.jwtService.signAsync(payload);
 
-        return { accessToken, refreshToken: plainRefreshToken };
+        return { accessToken };
     }
 
     private hashToken(token: string): string {

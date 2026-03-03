@@ -16,6 +16,14 @@ export const loginSchema = z.object({
 export type LoginDto = z.infer<typeof loginSchema>;
 
 export const refreshTokenSchema = z.object({
-    refreshToken: z.string().min(1),
+    token: z.string().min(1),
 });
 export type RefreshTokenDto = z.infer<typeof refreshTokenSchema>;
+export const registerWithInviteSchema = z.object({
+    name: z.string().min(2).max(255),
+    email: z.string().email(),
+    cpf: cpfValidator,
+    password: passwordValidator,
+    inviteToken: z.string().uuid(),
+});
+export type RegisterWithInviteDto = z.infer<typeof registerWithInviteSchema>;

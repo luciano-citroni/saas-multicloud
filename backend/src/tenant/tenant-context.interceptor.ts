@@ -1,7 +1,7 @@
 import { CallHandler, ExecutionContext, ForbiddenException, Injectable, NestInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
-import { IS_PUBLIC_KEY } from '../auth/decorators';
+import { IS_PUBLIC_KEY, ALLOW_MISSING_ORG_KEY } from '../auth/decorators';
 import { SKIP_TENANT_KEY } from './tenant.decorators';
 
 /**
@@ -17,7 +17,9 @@ export class TenantContextInterceptor implements NestInterceptor {
 
         const skipTenant = this.reflector.getAllAndOverride<boolean>(SKIP_TENANT_KEY, [context.getHandler(), context.getClass()]);
 
-        if (isPublic || skipTenant) return next.handle();
+        const allowMissingOrg = this.reflector.getAllAndOverride<boolean>(ALLOW_MISSING_ORG_KEY, [context.getHandler(), context.getClass()]);
+
+        if (isPublic || skipTenant || allowMissingOrg) return next.handle();
 
         const request = context.switchToHttp().getRequest();
         if (request.user && (!request.organization || !request.membership)) {

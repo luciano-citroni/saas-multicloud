@@ -4,7 +4,17 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
+    // Configure global log level from environment (info, warn, error)
+    type LogLevel = 'log' | 'warn' | 'error' | 'verbose' | 'debug' | 'fatal';
+    const rawLevel = (process.env.LOG_LEVEL ?? 'info').toLowerCase();
+    const levelMap: Record<'info' | 'warn' | 'error', LogLevel[]> = {
+        info: ['log', 'warn', 'error'],
+        warn: ['warn', 'error'],
+        error: ['error'],
+    };
+    const levels = (levelMap[rawLevel as 'info' | 'warn' | 'error'] ?? levelMap['info']) as LogLevel[];
+
+    const app = await NestFactory.create(AppModule, { logger: levels });
     app.useGlobalFilters(new HttpExceptionFilter());
     app.setGlobalPrefix('api');
 
