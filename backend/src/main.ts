@@ -2,6 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import * as crypto from 'crypto';
+
+// Polyfill para garantir que crypto esteja disponível globalmente
+if (typeof globalThis.crypto === 'undefined') {
+    (globalThis as any).crypto = crypto;
+}
 
 async function bootstrap() {
     // Configure global log level from environment (info, warn, error)
