@@ -1,14 +1,13 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
 import { CloudService } from './cloud.service';
-import { CurrentUser } from '../auth/decorators';
 import { TenantGuard } from '../tenant/tenant.guard';
-import { CurrentMembership, CurrentOrganization } from '../tenant/tenant.decorators';
+import { CurrentOrganization } from '../tenant/tenant.decorators';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
 import { Organization } from '../db/entites/organization.entity';
-import { OrganizationMember } from '../db/entites/organization-member.entity';
+import { CloudProvider } from '../db/entites/cloud-account.entity';
 import { createCloudAccountSchema } from './dto';
 import { CloudAccountResponseDto } from './swagger.dto';
 import type { CreateCloudAccountDto } from './dto';
@@ -36,15 +35,34 @@ export class CloudController {
     constructor(private readonly cloudService: CloudService) {}
 
     /**
-     * Acessível apenas por ADMIN e OWNER — criar uma nova conta de cloud.
+     * Acessível apenas por OWNER ou ADMIN — criar uma nova conta de cloud.
      */
     @Post('accounts')
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN) // Permite que membros criem contas, mas o ideal seria OWNER/ADMIN apenas. Ajuste conforme necessário.
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                provider: { type: 'string', enum: Object.values(CloudProvider) },
+                alias: { type: 'string', example: 'Produção' },
+                credentials: {
+                    type: 'object',
+                    description: 'Objeto com credenciais específicas do provider (ex.: AWS keys, Azure client secret, etc.)',
+                    example: {
+                        accessKeyId: 'AKIAEXAMPLE',
+                        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+                        region: 'us-east-1',
+                    },
+                },
+            },
+            required: ['provider', 'alias', 'credentials'],
+        },
+    })
     @ApiOperation({ summary: 'Criar uma nova conta de cloud' })
     @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
     @ApiResponse({ status: 400, description: 'Dados inválidos' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado — apenas ADMIN+' })
+    @ApiResponse({ status: 403, description: 'Acesso negado — apenas OWNER ou ADMIN' })
     async createCloudAccount(@CurrentOrganization() org: Organization, @Body(new ZodValidationPipe(createCloudAccountSchema)) dto: CreateCloudAccountDto) {
         return this.cloudService.createCloudAccount(org.id, dto);
     }
@@ -57,56 +75,5 @@ export class CloudController {
     @ApiResponse({ status: 200, description: 'Lista de contas de cloud', type: CloudAccountResponseDto, isArray: true })
     async listAccounts(@CurrentOrganization() org: Organization) {
         return this.cloudService.findByOrganization(org.id);
-    }
-
-    /**
-     * Acessível apenas por ADMIN e OWNER (hierarquia: OWNER >= ADMIN).
-     */
-    @ApiOperation({ summary: 'Configurações avançadas — apenas ADMIN e OWNER' })
-    @Roles(OrgRole.ADMIN)
-    @Get('settings')
-    getSettings(@CurrentOrganization() org: Organization, @CurrentMembership() membership: OrganizationMember) {
-        return {
-            message: 'Admin-only cloud settings',
-            organizationId: org.id,
-            yourRole: membership.role,
-        };
-    }
-
-    /**
-     * Acessível apenas pelo OWNER da organização.
-     */
-    @ApiOperation({ summary: 'Gerenciamento de credenciais — apenas OWNER' })
-    @Roles(OrgRole.OWNER)
-    @Get('credentials')
-    manageCredentials(@CurrentOrganization() org: Organization, @CurrentMembership() membership: OrganizationMember) {
-        return {
-            message: 'Owner-only credentials management',
-            organizationId: org.id,
-            yourRole: membership.role,
-        };
-    }
-
-    /**
-     * Endpoint de diagnóstico: retorna o contexto completo do request.
-     * Útil para verificar que guards e decorators funcionam corretamente.
-     */
-    @ApiOperation({ summary: 'Diagnóstico do contexto de tenant e role' })
-    @Get('context')
-    getContext(@CurrentUser() user: { sub: string }, @CurrentOrganization() org: Organization, @CurrentMembership() membership: OrganizationMember) {
-        return {
-            user: {
-                id: user.sub,
-            },
-            organization: {
-                id: org.id,
-                name: org.name,
-            },
-            membership: {
-                id: membership.id,
-                role: membership.role,
-                joinedAt: membership.joinedAt,
-            },
-        };
     }
 }

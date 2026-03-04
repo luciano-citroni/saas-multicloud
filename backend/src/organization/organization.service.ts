@@ -88,6 +88,28 @@ export class OrganizationService {
 
     // ─── Member Management ────────────────────────────────────────────────────
 
+    /**
+     * Busca um convite por token com validações centralizadas
+     * Valida se o convite existe, não foi aceito, e não expirou
+     */
+    async getInviteByToken(token: string): Promise<OrganizationInvite> {
+        const invite = await this.inviteRepository.findOne({ where: { token } });
+
+        if (!invite || invite.status === InviteStatus.ACCEPTED) {
+            throw new NotFoundException(ErrorMessages.INVITES.NOT_FOUND);
+        }
+
+        if (invite.status === InviteStatus.EXPIRED || invite.expiresAt < new Date()) {
+            if (invite.status !== InviteStatus.EXPIRED) {
+                invite.status = InviteStatus.EXPIRED;
+                await this.inviteRepository.save(invite);
+            }
+            throw new BadRequestException(ErrorMessages.INVITES.EXPIRED);
+        }
+
+        return invite;
+    }
+
     async inviteMember(organizationId: string, inviterUserId: string, dto: InviteMemberDto): Promise<OrganizationInvite> {
         const organization = await this.organizationRepository.findOne({ where: { id: organizationId } });
         if (!organization) {
@@ -160,19 +182,7 @@ export class OrganizationService {
               inviteToken: string;
           }
     > {
-        const invite = await this.inviteRepository.findOne({ where: { token } });
-
-        if (!invite || invite.status === InviteStatus.ACCEPTED) {
-            throw new NotFoundException(ErrorMessages.INVITES.NOT_FOUND);
-        }
-
-        if (invite.status === InviteStatus.EXPIRED || invite.expiresAt < new Date()) {
-            if (invite.status !== InviteStatus.EXPIRED) {
-                invite.status = InviteStatus.EXPIRED;
-                await this.inviteRepository.save(invite);
-            }
-            throw new BadRequestException(ErrorMessages.INVITES.EXPIRED);
-        }
+        const invite = await this.getInviteByToken(token);
 
         // Buscar a organização para obter o nome
         const organization = await this.organizationRepository.findOne({ where: { id: invite.organizationId } });
@@ -219,19 +229,7 @@ export class OrganizationService {
     }
 
     async acceptInviteWithUserId(inviteToken: string, userId: string): Promise<{ message: string; organizationId: string; role: string }> {
-        const invite = await this.inviteRepository.findOne({ where: { token: inviteToken } });
-
-        if (!invite || invite.status === InviteStatus.ACCEPTED) {
-            throw new NotFoundException(ErrorMessages.INVITES.NOT_FOUND);
-        }
-
-        if (invite.status === InviteStatus.EXPIRED || invite.expiresAt < new Date()) {
-            if (invite.status !== InviteStatus.EXPIRED) {
-                invite.status = InviteStatus.EXPIRED;
-                await this.inviteRepository.save(invite);
-            }
-            throw new BadRequestException(ErrorMessages.INVITES.EXPIRED);
-        }
+        const invite = await this.getInviteByToken(inviteToken);
 
         const user = await this.userRepository.findOne({ where: { id: userId } });
         if (!user) {

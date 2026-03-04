@@ -59,6 +59,15 @@ export class AuthService {
 
     async registerWithInvite(dto: RegisterWithInviteDto) {
         const normalizedEmail = dto.email.toLowerCase();
+
+        // Validar o convite antes de proceder com o registro
+        const invite = await this.organizationService.getInviteByToken(dto.inviteToken);
+
+        // Verificar se o email fornecido corresponde ao email do convite
+        if (normalizedEmail !== invite.email.toLowerCase()) {
+            throw new BadRequestException('The registration email does not match the invite email.');
+        }
+
         const existingEmail = await this.usersService.findByEmail(normalizedEmail);
         if (existingEmail) throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
 

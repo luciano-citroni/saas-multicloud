@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CloudAccount, CloudProvider } from '../db/entites/cloud-account.entity';
@@ -9,15 +10,34 @@ import * as crypto from 'crypto';
 export class CloudService {
     constructor(
         @InjectRepository(CloudAccount)
-        private readonly cloudAccountRepository: Repository<CloudAccount>
+        private readonly cloudAccountRepository: Repository<CloudAccount>,
+        private readonly configService: ConfigService
     ) {}
 
     /**
      * Criptografa as credenciais usando AES-256-GCM.
-     * Formato: iv:authTag:ciphertext (em base64)
+     *
+     * Descrição:
+     * - Usa uma chave hex (32 bytes / 64 hex chars) presente em
+     *   `process.env.CREDENTIALS_ENCRYPTION_KEY`.
+     * - Gera um `iv` aleatório de 16 bytes.
+     * - O payload armazenado tem o formato: `ivHex:authTagHex:ciphertextHex`,
+     *   todo este string é então codificado em base64 para persistência.
+     *
+     * Observação de segurança: garanta que `CREDENTIALS_ENCRYPTION_KEY` seja
+     * gerida com segurança (ex.: secret manager, variáveis de ambiente do
+     * runtime) e tenha exatamente 64 caracteres hexadecimais (32 bytes).
+     *
+     * @param credentials Objeto contendo as credenciais a serem criptografadas
+     * @returns string Base64 com o conteúdo combinado (`iv:authTag:ciphertext`)
      */
     private encryptCredentials(credentials: Record<string, any>): string {
-        const key = Buffer.from(process.env.CREDENTIALS_ENCRYPTION_KEY || '0'.repeat(64), 'hex');
+        const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY') || '0'.repeat(64);
+        const key = Buffer.from(keyHex, 'hex');
+        if (key.length !== 32) {
+            throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
+        }
+
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
@@ -31,14 +51,28 @@ export class CloudService {
     }
 
     /**
-     * Descriptografa as credenciais.
+     * Descriptografa as credenciais previamente criptografadas por
+     * `encryptCredentials`.
+     *
+     * O método espera receber a string base64 produzida por
+     * `encryptCredentials` e devolve o objeto original.
+     *
+     * @param encrypted String base64 com `ivHex:authTagHex:ciphertextHex`
+     * @throws BadRequestException em caso de falha na descriptografia
+     * @returns Record<string, any> Objeto de credenciais desserializado
      */
     private decryptCredentials(encrypted: string): Record<string, any> {
         try {
-            const combined = Buffer.from(encrypted, 'base64').toString('hex');
+            // Decodifica a base64 para recuperar o formato textual "ivHex:authTagHex:ciphertextHex"
+            const combined = Buffer.from(encrypted, 'base64').toString('utf8');
             const [ivHex, authTagHex, ciphertext] = combined.split(':');
 
-            const key = Buffer.from(process.env.CREDENTIALS_ENCRYPTION_KEY || '0'.repeat(64), 'hex');
+            const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY') || '0'.repeat(64);
+            const key = Buffer.from(keyHex, 'hex');
+            if (key.length !== 32) {
+                throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
+            }
+
             const iv = Buffer.from(ivHex, 'hex');
             const authTag = Buffer.from(authTagHex, 'hex');
 
