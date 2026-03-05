@@ -6,3 +6,4 @@ export { CloudAccount, CloudProvider } from './cloud-account.entity';
 export { OrganizationInvite, InviteStatus } from './organization-invite.entity';
 export { AwsVpc } from './aws-vpc.entity';
 export { AwsSubnet } from './aws-subnet.entity';
+export { AwsEc2Instance, Ec2InstanceState } from './aws-ec2.entity';

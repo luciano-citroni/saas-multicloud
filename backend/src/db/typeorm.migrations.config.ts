@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { config } from 'dotenv';
 import { DataSourceOptions, DataSource } from 'typeorm';
-import { Organization, OrganizationMember, User, UserSession, CloudAccount, OrganizationInvite, AwsVpc, AwsSubnet } from './entites';
+import { Organization, OrganizationMember, User, UserSession, CloudAccount, OrganizationInvite, AwsVpc, AwsSubnet, AwsEc2Instance } from './entites';
 
 config();
 
@@ -14,7 +14,7 @@ const dataSourceOptions: DataSourceOptions = {
     username: configService.get<string>('DB_USERNAME'),
     password: configService.get<string>('DB_PASSWORD'),
     database: configService.get<string>('DB_NAME'),
-    entities: [Organization, OrganizationMember, User, UserSession, CloudAccount, OrganizationInvite, AwsVpc, AwsSubnet],
+    entities: [Organization, OrganizationMember, User, UserSession, CloudAccount, OrganizationInvite, AwsVpc, AwsSubnet, AwsEc2Instance],
     migrations: [__dirname + '/migrations/*.ts'],
     synchronize: false,
 };

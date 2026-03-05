@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AwsNetworkingController } from './aws-networking.controller';
 import { AwsNetworkingService } from './aws-networking.service';
-import { AwsModule } from '../aws.module';
+import { AwsConnectorModule } from '../aws-connector.module';
 import { TenantModule } from '../../tenant/tenant.module';
 import { AwsVpc, AwsSubnet } from '../../db/entites/index';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([AwsVpc, AwsSubnet]), AwsModule, TenantModule],
+    imports: [TypeOrmModule.forFeature([AwsVpc, AwsSubnet]), AwsConnectorModule, TenantModule],
     controllers: [AwsNetworkingController],
     providers: [AwsNetworkingService],
 })

@@ -4,6 +4,7 @@ import { AwsNetworkingService } from './aws-networking.service';
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Organization } from '../../db/entites/organization.entity';
+import { VpcResponseDto, SubnetResponseDto, VpcWithSubnetsResponseDto, VpcSyncResponseDto, SubnetSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS Networking')
 @ApiBearerAuth('access-token')
@@ -30,22 +31,7 @@ export class AwsNetworkingController {
     @ApiResponse({
         status: 200,
         description: 'Lista de VPCs do banco de dados',
-        schema: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string', format: 'uuid' },
-                    awsVpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                    cidrBlock: { type: 'string', example: '10.0.0.0/16' },
-                    state: { type: 'string', example: 'available' },
-                    isDefault: { type: 'boolean' },
-                    tags: { type: 'object' },
-                    lastSyncedAt: { type: 'string', format: 'date-time', nullable: true },
-                    subnetsCount: { type: 'number' },
-                },
-            },
-        },
+        type: [VpcResponseDto],
     })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
@@ -64,43 +50,7 @@ export class AwsNetworkingController {
     @ApiResponse({
         status: 200,
         description: 'VPC com suas subnets',
-        schema: {
-            type: 'object',
-            properties: {
-                vpc: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string', format: 'uuid' },
-                        awsVpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                        cidrBlock: { type: 'string', example: '10.0.0.0/16' },
-                        state: { type: 'string', example: 'available' },
-                        isDefault: { type: 'boolean' },
-                        tags: { type: 'object' },
-                        lastSyncedAt: { type: 'string', format: 'date-time', nullable: true },
-                    },
-                },
-                subnets: {
-                    type: 'array',
-                    items: {
-                        type: 'object',
-                        properties: {
-                            id: { type: 'string', format: 'uuid' },
-                            vpcId: { type: 'string', format: 'uuid' },
-                            awsSubnetId: { type: 'string', example: 'subnet-0a1b2c3d4e5f67890' },
-                            awsVpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                            cidrBlock: { type: 'string', example: '10.0.1.0/24' },
-                            availabilityZone: { type: 'string', example: 'us-east-1a' },
-                            availableIpAddressCount: { type: 'number' },
-                            state: { type: 'string', example: 'available' },
-                            isDefaultForAz: { type: 'boolean' },
-                            mapPublicIpOnLaunch: { type: 'boolean' },
-                            tags: { type: 'object' },
-                            lastSyncedAt: { type: 'string', format: 'date-time', nullable: true },
-                        },
-                    },
-                },
-            },
-        },
+        type: VpcWithSubnetsResponseDto,
     })
     @ApiResponse({ status: 400, description: 'VPC não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
@@ -108,7 +58,7 @@ export class AwsNetworkingController {
     getVpcWithSubnets(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('vpcId', ParseUUIDPipe) vpcId: string,
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Organization
     ) {
         return this.service.getVpcWithSubnets(vpcId, cloudAccountId);
     }
@@ -123,19 +73,7 @@ export class AwsNetworkingController {
     @ApiResponse({
         status: 200,
         description: 'VPCs sincronizadas com sucesso',
-        schema: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    vpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                    cidrBlock: { type: 'string', example: '10.0.0.0/16' },
-                    state: { type: 'string', example: 'available' },
-                    isDefault: { type: 'boolean' },
-                    tags: { type: 'object' },
-                },
-            },
-        },
+        type: [VpcSyncResponseDto],
     })
     @ApiResponse({ status: 400, description: 'Credenciais inválidas ou erro na AWS' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
@@ -158,26 +96,7 @@ export class AwsNetworkingController {
     @ApiResponse({
         status: 200,
         description: 'Lista de Subnets do banco de dados',
-        schema: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string', format: 'uuid' },
-                    vpcId: { type: 'string', format: 'uuid' },
-                    awsSubnetId: { type: 'string', example: 'subnet-0a1b2c3d4e5f67890' },
-                    awsVpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                    cidrBlock: { type: 'string', example: '10.0.1.0/24' },
-                    availabilityZone: { type: 'string', example: 'us-east-1a' },
-                    availableIpAddressCount: { type: 'number' },
-                    state: { type: 'string', example: 'available' },
-                    isDefaultForAz: { type: 'boolean' },
-                    mapPublicIpOnLaunch: { type: 'boolean' },
-                    tags: { type: 'object' },
-                    lastSyncedAt: { type: 'string', format: 'date-time', nullable: true },
-                },
-            },
-        },
+        type: [SubnetResponseDto],
     })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
@@ -186,9 +105,6 @@ export class AwsNetworkingController {
         return this.service.listSubnetsFromDatabase(cloudAccountId, vpcId);
     }
 
-    /**
-     * Sincroniza Subnets da AWS e armazena no banco de dados.
-     */
     @Post('accounts/:cloudAccountId/subnets/sync')
     @HttpCode(200)
     @ApiOperation({
@@ -200,23 +116,7 @@ export class AwsNetworkingController {
     @ApiResponse({
         status: 200,
         description: 'Subnets sincronizadas com sucesso',
-        schema: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    subnetId: { type: 'string', example: 'subnet-0a1b2c3d4e5f67890' },
-                    vpcId: { type: 'string', example: 'vpc-0a1b2c3d4e5f67890' },
-                    cidrBlock: { type: 'string', example: '10.0.1.0/24' },
-                    availabilityZone: { type: 'string', example: 'us-east-1a' },
-                    availableIpAddressCount: { type: 'number' },
-                    state: { type: 'string', example: 'available' },
-                    isDefaultForAz: { type: 'boolean' },
-                    mapPublicIpOnLaunch: { type: 'boolean' },
-                    tags: { type: 'object' },
-                },
-            },
-        },
+        type: [SubnetSyncResponseDto],
     })
     @ApiResponse({ status: 400, description: 'Credenciais inválidas ou erro na AWS' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
