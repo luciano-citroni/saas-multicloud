@@ -9,29 +9,24 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
         const result = this.schema.safeParse(value);
 
         if (!result.success) {
-            const errors = result.error.flatten();
+            const issues = result.error.errors;
             const messages: string[] = [];
+            const details: Record<string, string[]> = {};
 
-            // Extrair mensagens de erro dos campos
-            if (errors.fieldErrors) {
-                Object.values(errors.fieldErrors).forEach((fieldErrors) => {
-                    if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-                        messages.push(...fieldErrors);
-                    }
-                });
+            for (const issue of issues) {
+                const path = issue.path && issue.path.length > 0 ? issue.path.join('.') : 'form';
+                const msg = issue.message || 'Validation failed';
+                messages.push(msg);
+                if (!details[path]) details[path] = [];
+                details[path].push(msg);
             }
 
-            // Se houver erros de formulário genéricos, adicionar também
-            if (Array.isArray(errors.formErrors) && errors.formErrors.length > 0) {
-                messages.push(...errors.formErrors);
-            }
-
-            // Se não houver mensagens específicas, usar a mensagem padrão
-            const finalMessage = messages.length > 0 ? messages : ['Validation failed'];
+            const finalMessage = messages.length === 1 ? messages[0] : messages;
 
             throw new BadRequestException({
-                message: finalMessage.length === 1 ? finalMessage[0] : finalMessage,
                 error: 'ValidationException',
+                message: finalMessage,
+                details,
             });
         }
 

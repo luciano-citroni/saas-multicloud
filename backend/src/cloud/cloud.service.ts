@@ -89,13 +89,50 @@ export class CloudService {
     }
 
     /**
+     * Valida as credenciais com base no provider.
+     */
+    private validateCredentialsForProvider(provider: CloudProvider, credentials: Record<string, any>): void {
+        if (provider === CloudProvider.AWS) {
+            if (!credentials.roleArn || typeof credentials.roleArn !== 'string') {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial AWS inválida: campo "roleArn" ausente ou inválido.',
+                    details: { field: 'credentials.roleArn' },
+                });
+            }
+            if (!credentials.region || typeof credentials.region !== 'string') {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial AWS inválida: campo "region" ausente ou inválido.',
+                    details: { field: 'credentials.region' },
+                });
+            }
+            if (credentials.externalId && typeof credentials.externalId !== 'string') {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial AWS inválida: campo "externalId" deve ser uma string.',
+                    details: { field: 'credentials.externalId' },
+                });
+            }
+        }
+        // Adicionar validações para outros providers aqui conforme necessário
+    }
+
+    /**
      * Cria uma nova conta de cloud vinculada à organização.
      */
     async createCloudAccount(organizationId: string, dto: CreateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
         // Validar o provider
         if (!Object.values(CloudProvider).includes(dto.provider as CloudProvider)) {
-            throw new BadRequestException(`Provider inválido: ${dto.provider}`);
+            throw new BadRequestException({
+                error: 'ValidationException',
+                message: `Provider inválido: ${dto.provider}`,
+                details: { field: 'provider' },
+            });
         }
+
+        // Validar credenciais específicas do provider
+        this.validateCredentialsForProvider(dto.provider as CloudProvider, dto.credentials);
 
         // Criptografar as credenciais
         const encryptedCredentials = this.encryptCredentials(dto.credentials);
@@ -125,6 +162,23 @@ export class CloudService {
         });
 
         return accounts.map(({ credentialsEncrypted: _, ...acc }) => acc as Omit<CloudAccount, 'credentialsEncrypted'>);
+    }
+
+    /**
+     * Retorna as credenciais descriptografadas de uma conta de cloud.
+     * Valida que a conta pertence à organização antes de expor as credenciais.
+     *
+     * @throws NotFoundException se a conta não for encontrada ou não pertencer à org
+     */
+    async getDecryptedCredentials(id: string, organizationId: string): Promise<Record<string, any>> {
+        const account = await this.findByIdAndOrganization(id, organizationId, true);
+        if (!account) {
+            throw new BadRequestException({
+                error: 'NotFoundException',
+                message: 'Conta de cloud não encontrada',
+            });
+        }
+        return this.decryptCredentials(account.credentialsEncrypted);
     }
 
     /**

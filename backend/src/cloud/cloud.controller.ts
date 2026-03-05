@@ -9,7 +9,7 @@ import { OrgRole } from '../rbac/roles.enum';
 import { Organization } from '../db/entites/organization.entity';
 import { CloudProvider } from '../db/entites/cloud-account.entity';
 import { createCloudAccountSchema } from './dto';
-import { CloudAccountResponseDto } from './swagger.dto';
+import { CloudAccountResponseDto, CreateCloudAccountRequestDto, ValidationErrorResponseDto } from './swagger.dto';
 import type { CreateCloudAccountDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
@@ -39,28 +39,10 @@ export class CloudController {
      */
     @Post('accounts')
     @Roles(OrgRole.OWNER, OrgRole.ADMIN) // Permite que membros criem contas, mas o ideal seria OWNER/ADMIN apenas. Ajuste conforme necessário.
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                provider: { type: 'string', enum: Object.values(CloudProvider) },
-                alias: { type: 'string', example: 'Produção' },
-                credentials: {
-                    type: 'object',
-                    description: 'Objeto com credenciais específicas do provider (ex.: AWS keys, Azure client secret, etc.)',
-                    example: {
-                        accessKeyId: 'AKIAEXAMPLE',
-                        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-                        region: 'us-east-1',
-                    },
-                },
-            },
-            required: ['provider', 'alias', 'credentials'],
-        },
-    })
+    @ApiBody({ type: CreateCloudAccountRequestDto })
     @ApiOperation({ summary: 'Criar uma nova conta de cloud' })
     @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
-    @ApiResponse({ status: 400, description: 'Dados inválidos' })
+    @ApiResponse({ status: 400, description: 'Dados inválidos', type: ValidationErrorResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Acesso negado — apenas OWNER ou ADMIN' })
     async createCloudAccount(@CurrentOrganization() org: Organization, @Body(new ZodValidationPipe(createCloudAccountSchema)) dto: CreateCloudAccountDto) {

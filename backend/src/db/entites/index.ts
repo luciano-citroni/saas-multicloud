@@ -4,3 +4,5 @@ export { UserSession } from './user-session.entity';
 export { OrganizationMember } from './organization-member.entity';
 export { CloudAccount, CloudProvider } from './cloud-account.entity';
 export { OrganizationInvite, InviteStatus } from './organization-invite.entity';
+export { AwsVpc } from './aws-vpc.entity';
+export { AwsSubnet } from './aws-subnet.entity';

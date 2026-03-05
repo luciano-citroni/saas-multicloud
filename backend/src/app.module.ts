@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { UserSession } from './db/entites/user-session.entity';
 import { CloudModule } from './cloud/cloud.module';
+import { AwsNetworkingModule } from './aws/networking/aws-networking.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 
 @Module({
@@ -24,6 +25,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
         UsersModule,
         AuthModule,
         CloudModule,
+        AwsNetworkingModule,
     ],
     controllers: [AppController],
     providers: [AppService, { provide: APP_GUARD, useClass: JwtGuard }, { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor }],
