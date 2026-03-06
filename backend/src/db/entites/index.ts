@@ -8,3 +8,6 @@ export { AwsVpc } from './aws-vpc.entity';
 export { AwsSubnet } from './aws-subnet.entity';
 export { AwsRouteTable } from './aws-route-table.entity';
 export { AwsEc2Instance, Ec2InstanceState } from './aws-ec2.entity';
+export { AwsEcsCluster, EcsClusterStatus } from './aws-ecs-cluster.entity';
+export { AwsEcsTaskDefinition, EcsTaskDefinitionStatus, EcsCompatibility } from './aws-ecs-task-definition.entity';
+export { AwsEcsService, EcsServiceStatus, EcsLaunchType } from './aws-ecs-service.entity';

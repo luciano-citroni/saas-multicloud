@@ -3,9 +3,10 @@ import { AwsConnectorModule } from './aws-connector.module';
 import { AwsNetworkingModule } from './networking/aws-networking.module';
 import { Ec2Module } from './ec2/aws-ec2.module';
 import { AwsRouteTablesModule } from './route-tables/aws-route-tables.module';
+import { AwsEcsModule } from './ecs/aws-ecs.module';
 
 @Module({
-    imports: [AwsConnectorModule, AwsNetworkingModule, Ec2Module, AwsRouteTablesModule],
+    imports: [AwsConnectorModule, AwsNetworkingModule, Ec2Module, AwsRouteTablesModule, AwsEcsModule],
     exports: [AwsConnectorModule],
 })
 export class AwsModule {}

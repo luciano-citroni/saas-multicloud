@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { EC2Client } from '@aws-sdk/client-ec2';
+import { ECSClient } from '@aws-sdk/client-ecs';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
@@ -123,6 +124,16 @@ export class AwsConnectorService {
         const temporaryCreds = await this.assumeRole(creds);
 
         return new EC2Client({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um ECSClient autenticado via AssumeRole.
+     */
+    async getEcsClient(cloudAccountId: string, organizationId: string): Promise<ECSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new ECSClient({ region: creds.region, credentials: temporaryCreds });
     }
 
     // ---------------------------------------------------------------------------
