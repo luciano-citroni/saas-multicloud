@@ -116,6 +116,13 @@ export class SubnetResponseDto {
     mapPublicIpOnLaunch: boolean;
 
     @ApiProperty({
+        example: 'public',
+        description: 'Tipo da subnet baseado na route table: public (com Internet Gateway), private_with_nat (com NAT Gateway) ou private_isolated (sem acesso à internet)',
+        enum: ['public', 'private_with_nat', 'private_isolated'],
+    })
+    subnetType: string;
+
+    @ApiProperty({
         example: { Name: 'Production Subnet', Tier: 'public' },
         description: 'Tags da Subnet (pares chave-valor)',
     })

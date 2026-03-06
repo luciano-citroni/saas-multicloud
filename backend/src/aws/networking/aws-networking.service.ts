@@ -76,6 +76,7 @@ export class AwsNetworkingService {
                 state: subnet.state,
                 isDefaultForAz: subnet.isDefaultForAz,
                 mapPublicIpOnLaunch: subnet.mapPublicIpOnLaunch,
+                subnetType: subnet.subnetType,
                 tags: subnet.tags ?? {},
                 lastSyncedAt: subnet.lastSyncedAt,
             })),
@@ -109,6 +110,7 @@ export class AwsNetworkingService {
             state: subnet.state,
             isDefaultForAz: subnet.isDefaultForAz,
             mapPublicIpOnLaunch: subnet.mapPublicIpOnLaunch,
+            subnetType: subnet.subnetType,
             tags: subnet.tags ?? {},
             lastSyncedAt: subnet.lastSyncedAt,
         }));

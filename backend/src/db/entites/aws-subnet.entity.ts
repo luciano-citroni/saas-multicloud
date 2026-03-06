@@ -69,6 +69,20 @@ export class AwsSubnet {
     mapPublicIpOnLaunch!: boolean;
 
     /**
+     * Tipo da subnet baseado na route table associada:
+     * - public: subnet com rota para Internet Gateway
+     * - private_with_nat: subnet privada com rota para NAT Gateway
+     * - private_isolated: subnet privada sem acesso à internet
+     */
+    @Column({
+        type: 'varchar',
+        length: 20,
+        name: 'subnet_type',
+        default: 'private_isolated',
+    })
+    subnetType!: 'public' | 'private_with_nat' | 'private_isolated';
+
+    /**
      * Tags da Subnet em JSON (ex: {"Name": "prod-private-a", "Tier": "private"}).
      */
     @Column({ type: 'jsonb', nullable: true })
