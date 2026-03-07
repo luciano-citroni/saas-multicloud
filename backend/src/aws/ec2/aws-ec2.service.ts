@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import type { Instance } from '@aws-sdk/client-ec2';
 import { AwsConnectorService } from '../aws-connector.service';
-import { AwsEc2Instance, AwsVpc, AwsSubnet } from '../../db/entites/index';
+import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup } from '../../db/entites/index';
 
 @Injectable()
 export class Ec2Service {
@@ -15,7 +15,9 @@ export class Ec2Service {
         @InjectRepository(AwsVpc)
         private readonly vpcRepository: Repository<AwsVpc>,
         @InjectRepository(AwsSubnet)
-        private readonly subnetRepository: Repository<AwsSubnet>
+        private readonly subnetRepository: Repository<AwsSubnet>,
+        @InjectRepository(AwsSecurityGroup)
+        private readonly securityGroupRepository: Repository<AwsSecurityGroup>
     ) {}
 
     // =========================================================================
@@ -143,6 +145,18 @@ export class Ec2Service {
                 continue;
             }
 
+            // Resolve Security Group no banco de dados
+            let securityGroupId: string | null = null;
+            if (instanceData.awsSecurityGroupId) {
+                const sg = await this.securityGroupRepository.findOne({
+                    where: { cloudAccountId, awsSecurityGroupId: instanceData.awsSecurityGroupId },
+                });
+                if (!sg) {
+                    console.warn(`Security Group ${instanceData.awsSecurityGroupId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                }
+                securityGroupId = sg?.id ?? null;
+            }
+
             if (dbInstance) {
                 // Atualiza instância existente
                 dbInstance.vpcId = vpc.id;
@@ -157,7 +171,8 @@ export class Ec2Service {
                 dbInstance.publicIpAddress = instanceData.publicIpAddress ?? null;
                 dbInstance.elasticIp = instanceData.elasticIp ?? null;
                 dbInstance.keyName = instanceData.keyName ?? null;
-                dbInstance.securityGroupId = instanceData.securityGroupId ?? null;
+                dbInstance.awsSecurityGroupId = instanceData.awsSecurityGroupId ?? null;
+                dbInstance.securityGroupId = securityGroupId;
                 dbInstance.availabilityZone = instanceData.availabilityZone ?? null;
                 dbInstance.launchTime = instanceData.launchTime ?? null;
                 dbInstance.tags = instanceData.tags;
@@ -178,7 +193,8 @@ export class Ec2Service {
                     publicIpAddress: instanceData.publicIpAddress ?? null,
                     elasticIp: instanceData.elasticIp ?? null,
                     keyName: instanceData.keyName ?? null,
-                    securityGroupId: instanceData.securityGroupId ?? null,
+                    awsSecurityGroupId: instanceData.awsSecurityGroupId ?? null,
+                    securityGroupId,
                     availabilityZone: instanceData.availabilityZone ?? null,
                     launchTime: instanceData.launchTime ?? null,
                     tags: instanceData.tags,
@@ -226,7 +242,7 @@ function mapAwsInstance(instance: Instance) {
         publicIpAddress: publicIp,
         elasticIp: elasticIp,
         keyName: instance.KeyName,
-        securityGroupId: instance.SecurityGroups?.[0]?.GroupId,
+        awsSecurityGroupId: instance.SecurityGroups?.[0]?.GroupId,
         availabilityZone: instance.Placement?.AvailabilityZone,
         launchTime: instance.LaunchTime,
         tags: parseTags(instance.Tags),
@@ -249,6 +265,7 @@ function mapDbInstance(instance: AwsEc2Instance) {
         publicIpAddress: instance.publicIpAddress,
         elasticIp: instance.elasticIp,
         keyName: instance.keyName,
+        awsSecurityGroupId: instance.awsSecurityGroupId,
         securityGroupId: instance.securityGroupId,
         availabilityZone: instance.availabilityZone,
         launchTime: instance.launchTime,

@@ -11,3 +11,7 @@ export { AwsEc2Instance, Ec2InstanceState } from './aws-ec2.entity';
 export { AwsEcsCluster, EcsClusterStatus } from './aws-ecs-cluster.entity';
 export { AwsEcsTaskDefinition, EcsTaskDefinitionStatus, EcsCompatibility } from './aws-ecs-task-definition.entity';
 export { AwsEcsService, EcsServiceStatus, EcsLaunchType } from './aws-ecs-service.entity';
+export { AwsLoadBalancer, LoadBalancerType, LoadBalancerState, IpAddressType } from './aws-load-balancer.entity';
+export { AwsLoadBalancerListener, ListenerProtocol, ListenerActionType } from './aws-load-balancer-listener.entity';
+export { AwsSecurityGroup } from './aws-security-group.entity';
+export type { SecurityGroupRule } from './aws-security-group.entity';

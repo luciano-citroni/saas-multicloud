@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { EC2Client } from '@aws-sdk/client-ec2';
 import { ECSClient } from '@aws-sdk/client-ecs';
+import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
@@ -134,6 +135,20 @@ export class AwsConnectorService {
         const temporaryCreds = await this.assumeRole(creds);
 
         return new ECSClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um ElasticLoadBalancingV2Client autenticado via AssumeRole.
+     */
+    async getElbV2Client(cloudAccountId: string, organizationId: string, region?: string): Promise<ElasticLoadBalancingV2Client> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+
+        // Usa a região fornecida ou fallback para a região das credenciais
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
+
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new ElasticLoadBalancingV2Client({ region: finalRegion, credentials: temporaryCreds });
     }
 
     // ---------------------------------------------------------------------------

@@ -167,6 +167,13 @@ export class AwsEcsService {
     schedulingStrategy!: string | null;
 
     /**
+     * IDs dos Security Groups no banco de dados, resolvidos a partir do networkConfiguration.
+     * Preenchido durante o sync para serviços com modo de rede awsvpc.
+     */
+    @Column('uuid', { array: true, name: 'security_group_ids', nullable: true })
+    securityGroupIds!: string[] | null;
+
+    /**
      * Circuit breaker habilitado.
      */
     @Column({ type: 'boolean', name: 'enable_circuit_breaker', default: false })

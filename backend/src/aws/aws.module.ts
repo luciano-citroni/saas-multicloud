@@ -4,9 +4,11 @@ import { AwsNetworkingModule } from './networking/aws-networking.module';
 import { Ec2Module } from './ec2/aws-ec2.module';
 import { AwsRouteTablesModule } from './route-tables/aws-route-tables.module';
 import { AwsEcsModule } from './ecs/aws-ecs.module';
+import { AwsLoadBalancerModule } from './load-balancers/aws-load-balancer.module';
+import { AwsSecurityGroupModule } from './security-groups/aws-security-group.module';
 
 @Module({
-    imports: [AwsConnectorModule, AwsNetworkingModule, Ec2Module, AwsRouteTablesModule, AwsEcsModule],
+    imports: [AwsConnectorModule, AwsNetworkingModule, Ec2Module, AwsRouteTablesModule, AwsEcsModule, AwsLoadBalancerModule, AwsSecurityGroupModule],
     exports: [AwsConnectorModule],
 })
 export class AwsModule {}

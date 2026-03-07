@@ -14,7 +14,7 @@ import {
     type Service as EcsServiceType,
 } from '@aws-sdk/client-ecs';
 import { AwsConnectorService } from '../aws-connector.service';
-import { AwsEcsCluster, AwsEcsTaskDefinition, AwsEcsService as AwsEcsServiceEntity } from '../../db/entites/index';
+import { AwsEcsCluster, AwsEcsTaskDefinition, AwsEcsService as AwsEcsServiceEntity, AwsSecurityGroup } from '../../db/entites/index';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 @Injectable()
@@ -28,7 +28,9 @@ export class EcsService {
         @InjectRepository(AwsEcsServiceEntity)
         private readonly serviceRepository: Repository<AwsEcsServiceEntity>,
         @InjectRepository(CloudAccount)
-        private readonly cloudAccountRepository: Repository<CloudAccount>
+        private readonly cloudAccountRepository: Repository<CloudAccount>,
+        @InjectRepository(AwsSecurityGroup)
+        private readonly securityGroupRepository: Repository<AwsSecurityGroup>
     ) {}
 
     // =========================================================================
@@ -382,6 +384,11 @@ export class EcsService {
                     continue;
                 }
 
+                // Resolve Security Group IDs do networkConfiguration (awsvpc)
+                const awsSgIds: string[] =
+                    (serviceData.networkConfiguration as any)?.awsvpcConfiguration?.securityGroups ?? [];
+                const securityGroupIds = await this.resolveSecurityGroupIds(cloudAccountId, awsSgIds);
+
                 let dbService = await this.serviceRepository.findOne({
                     where: { serviceArn: serviceData.serviceArn },
                 });
@@ -405,6 +412,7 @@ export class EcsService {
                     dbService.deploymentConfiguration = serviceData.deploymentConfiguration;
                     dbService.deployments = serviceData.deployments;
                     dbService.networkConfiguration = serviceData.networkConfiguration;
+                    dbService.securityGroupIds = securityGroupIds;
                     dbService.loadBalancers = serviceData.loadBalancers;
                     dbService.serviceRegistries = serviceData.serviceRegistries;
                     dbService.schedulingStrategy = serviceData.schedulingStrategy;
@@ -436,6 +444,7 @@ export class EcsService {
                         deploymentConfiguration: serviceData.deploymentConfiguration,
                         deployments: serviceData.deployments,
                         networkConfiguration: serviceData.networkConfiguration,
+                        securityGroupIds,
                         loadBalancers: serviceData.loadBalancers,
                         serviceRegistries: serviceData.serviceRegistries,
                         schedulingStrategy: serviceData.schedulingStrategy,
@@ -454,6 +463,27 @@ export class EcsService {
         }
 
         return allMappedServices;
+    }
+
+    /**
+     * Resolve uma lista de AWS Security Group IDs para UUIDs do banco de dados.
+     */
+    private async resolveSecurityGroupIds(cloudAccountId: string, awsSgIds: string[]): Promise<string[] | null> {
+        if (awsSgIds.length === 0) return null;
+
+        const ids: string[] = [];
+        for (const awsSgId of awsSgIds) {
+            const sg = await this.securityGroupRepository.findOne({
+                where: { cloudAccountId, awsSecurityGroupId: awsSgId },
+            });
+            if (!sg) {
+                console.warn(`Security Group ${awsSgId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                continue;
+            }
+            ids.push(sg.id);
+        }
+
+        return ids.length > 0 ? ids : null;
     }
 }
 
@@ -608,6 +638,7 @@ function mapDbService(service: AwsEcsServiceEntity) {
         deploymentConfiguration: service.deploymentConfiguration,
         deployments: service.deployments,
         networkConfiguration: service.networkConfiguration,
+        securityGroupIds: service.securityGroupIds ?? [],
         loadBalancers: service.loadBalancers,
         serviceRegistries: service.serviceRegistries,
         schedulingStrategy: service.schedulingStrategy,

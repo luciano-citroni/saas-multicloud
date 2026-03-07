@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { AwsVpc } from './aws-vpc.entity';
 import { AwsSubnet } from './aws-subnet.entity';
+import { AwsSecurityGroup } from './aws-security-group.entity';
 
 /**
  * Estados possíveis de uma instância EC2.
@@ -106,9 +107,15 @@ export class AwsEc2Instance {
     keyName!: string | null;
 
     /**
-     * ID do security group principal.
+     * Security Group ID na AWS (denormalizado, ex: sg-0a1b2c3d4e5f67890).
      */
-    @Column({ type: 'varchar', length: 50, name: 'security_group_id', nullable: true })
+    @Column({ type: 'varchar', length: 50, name: 'aws_security_group_id', nullable: true })
+    awsSecurityGroupId!: string | null;
+
+    /**
+     * ID do Security Group no banco de dados (FK para aws_security_groups).
+     */
+    @Column({ type: 'uuid', name: 'security_group_id', nullable: true })
     securityGroupId!: string | null;
 
     /**
@@ -148,4 +155,8 @@ export class AwsEc2Instance {
     @ManyToOne(() => AwsVpc, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'vpc_id' })
     vpc!: AwsVpc;
+
+    @ManyToOne(() => AwsSecurityGroup, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'security_group_id' })
+    securityGroup!: AwsSecurityGroup | null;
 }
