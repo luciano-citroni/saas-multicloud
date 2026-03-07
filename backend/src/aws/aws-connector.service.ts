@@ -3,6 +3,8 @@ import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { EC2Client } from '@aws-sdk/client-ec2';
 import { ECSClient } from '@aws-sdk/client-ecs';
 import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { IAMClient } from '@aws-sdk/client-iam';
+import { RDSClient } from '@aws-sdk/client-rds';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
@@ -149,6 +151,27 @@ export class AwsConnectorService {
         const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
 
         return new ElasticLoadBalancingV2Client({ region: finalRegion, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um IAMClient autenticado via AssumeRole.
+     * IAM é um serviço global — a região padrão us-east-1 é usada automaticamente.
+     */
+    async getIamClient(cloudAccountId: string, organizationId: string): Promise<IAMClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new IAMClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um RDSClient autenticado via AssumeRole.
+     */
+    async getRdsClient(cloudAccountId: string, organizationId: string): Promise<RDSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new RDSClient({ region: creds.region, credentials: temporaryCreds });
     }
 
     // ---------------------------------------------------------------------------

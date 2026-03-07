@@ -18,6 +18,8 @@ import {
     AwsLoadBalancer,
     AwsLoadBalancerListener,
     AwsSecurityGroup,
+    AwsIamRole,
+    AwsRdsInstance,
 } from './entites';
 
 config();
@@ -48,6 +50,8 @@ const dataSourceOptions: DataSourceOptions = {
         AwsLoadBalancer,
         AwsLoadBalancerListener,
         AwsSecurityGroup,
+        AwsIamRole,
+        AwsRdsInstance,
     ],
     migrations: [__dirname + '/migrations/*.ts'],
     synchronize: false,

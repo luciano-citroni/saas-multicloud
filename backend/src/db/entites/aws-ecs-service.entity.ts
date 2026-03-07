@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 import { CloudAccount } from './cloud-account.entity';
 import { AwsEcsCluster } from './aws-ecs-cluster.entity';
 import { AwsEcsTaskDefinition } from './aws-ecs-task-definition.entity';
+import { AwsIamRole } from './aws-iam-role.entity';
 
 /**
  * Status possíveis de um serviço ECS.
@@ -131,6 +132,12 @@ export class AwsEcsService {
     roleArn!: string | null;
 
     /**
+     * ID da service role IAM no banco de dados (FK para aws_iam_roles).
+     */
+    @Column({ type: 'uuid', name: 'service_role_id', nullable: true })
+    serviceRoleId!: string | null;
+
+    /**
      * Configuração de deployment.
      */
     @Column({ type: 'jsonb', name: 'deployment_configuration', nullable: true })
@@ -222,6 +229,10 @@ export class AwsEcsService {
     @ManyToOne(() => AwsEcsTaskDefinition, (taskDefinition) => taskDefinition.services, { onDelete: 'RESTRICT' })
     @JoinColumn({ name: 'task_definition_id' })
     taskDefinition!: AwsEcsTaskDefinition;
+
+    @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'service_role_id' })
+    serviceRole!: AwsIamRole | null;
 
     // ========== TIMESTAMPS ==========
 

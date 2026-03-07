@@ -15,3 +15,5 @@ export { AwsLoadBalancer, LoadBalancerType, LoadBalancerState, IpAddressType } f
 export { AwsLoadBalancerListener, ListenerProtocol, ListenerActionType } from './aws-load-balancer-listener.entity';
 export { AwsSecurityGroup } from './aws-security-group.entity';
 export type { SecurityGroupRule } from './aws-security-group.entity';
+export { AwsIamRole } from './aws-iam-role.entity';
+export { AwsRdsInstance } from './aws-rds-instance.entity';

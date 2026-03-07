@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { CloudAccount } from './cloud-account.entity';
 import { AwsEcsService } from './aws-ecs-service.entity';
+import { AwsIamRole } from './aws-iam-role.entity';
 
 /**
  * Status possíveis de uma task definition ECS.
@@ -69,10 +70,22 @@ export class AwsEcsTaskDefinition {
     executionRoleArn!: string | null;
 
     /**
+     * ID da execution role IAM no banco de dados (FK para aws_iam_roles).
+     */
+    @Column({ type: 'uuid', name: 'execution_role_id', nullable: true })
+    executionRoleId!: string | null;
+
+    /**
      * ARN da role da task.
      */
     @Column({ type: 'varchar', length: 255, name: 'task_role_arn', nullable: true })
     taskRoleArn!: string | null;
+
+    /**
+     * ID da task role IAM no banco de dados (FK para aws_iam_roles).
+     */
+    @Column({ type: 'uuid', name: 'task_role_id', nullable: true })
+    taskRoleId!: string | null;
 
     /**
      * Modo de rede da task (bridge, host, awsvpc, none).
@@ -160,6 +173,14 @@ export class AwsEcsTaskDefinition {
 
     @OneToMany(() => AwsEcsService, (service) => service.taskDefinition)
     services!: AwsEcsService[];
+
+    @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'execution_role_id' })
+    executionRole!: AwsIamRole | null;
+
+    @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'task_role_id' })
+    taskRole!: AwsIamRole | null;
 
     // ========== TIMESTAMPS ==========
 

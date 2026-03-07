@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import type { Instance } from '@aws-sdk/client-ec2';
 import { AwsConnectorService } from '../aws-connector.service';
-import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup } from '../../db/entites/index';
+import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
 
 @Injectable()
 export class Ec2Service {
@@ -17,7 +17,9 @@ export class Ec2Service {
         @InjectRepository(AwsSubnet)
         private readonly subnetRepository: Repository<AwsSubnet>,
         @InjectRepository(AwsSecurityGroup)
-        private readonly securityGroupRepository: Repository<AwsSecurityGroup>
+        private readonly securityGroupRepository: Repository<AwsSecurityGroup>,
+        @InjectRepository(AwsIamRole)
+        private readonly iamRoleRepository: Repository<AwsIamRole>
     ) {}
 
     // =========================================================================
@@ -157,6 +159,20 @@ export class Ec2Service {
                 securityGroupId = sg?.id ?? null;
             }
 
+            // Resolve IAM Role no banco de dados a partir do ARN da role
+            let iamRoleId: string | null = null;
+            const iamRoleArn = extractRoleArnFromInstanceProfileArn(instanceData.iamInstanceProfileArn);
+
+            if (iamRoleArn) {
+                const iamRole = await this.iamRoleRepository.findOne({
+                    where: { cloudAccountId, roleArn: iamRoleArn },
+                });
+                if (!iamRole) {
+                    console.warn(`IAM Role ${iamRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                }
+                iamRoleId = iamRole?.id ?? null;
+            }
+
             if (dbInstance) {
                 // Atualiza instância existente
                 dbInstance.vpcId = vpc.id;
@@ -175,6 +191,8 @@ export class Ec2Service {
                 dbInstance.securityGroupId = securityGroupId;
                 dbInstance.availabilityZone = instanceData.availabilityZone ?? null;
                 dbInstance.launchTime = instanceData.launchTime ?? null;
+                dbInstance.iamInstanceProfileArn = iamRoleArn ?? instanceData.iamInstanceProfileArn ?? null;
+                dbInstance.iamRoleId = iamRoleId;
                 dbInstance.tags = instanceData.tags;
                 dbInstance.lastSyncedAt = now;
             } else {
@@ -197,6 +215,8 @@ export class Ec2Service {
                     securityGroupId,
                     availabilityZone: instanceData.availabilityZone ?? null,
                     launchTime: instanceData.launchTime ?? null,
+                    iamInstanceProfileArn: iamRoleArn ?? instanceData.iamInstanceProfileArn ?? null,
+                    iamRoleId,
                     tags: instanceData.tags,
                     lastSyncedAt: now,
                 };
@@ -219,6 +239,13 @@ function parseTags(tags: { Key?: string; Value?: string }[] | undefined): Record
         if (Key) acc[Key] = Value ?? '';
         return acc;
     }, {});
+}
+
+function extractRoleArnFromInstanceProfileArn(instanceProfileArn?: string | null): string | null {
+    if (!instanceProfileArn) return null;
+    if (!instanceProfileArn.includes(':instance-profile/')) return instanceProfileArn;
+
+    return instanceProfileArn.replace(':instance-profile/', ':role/');
 }
 
 function mapAwsInstance(instance: Instance) {
@@ -245,6 +272,7 @@ function mapAwsInstance(instance: Instance) {
         awsSecurityGroupId: instance.SecurityGroups?.[0]?.GroupId,
         availabilityZone: instance.Placement?.AvailabilityZone,
         launchTime: instance.LaunchTime,
+        iamInstanceProfileArn: instance.IamInstanceProfile?.Arn,
         tags: parseTags(instance.Tags),
     };
 }
@@ -269,6 +297,8 @@ function mapDbInstance(instance: AwsEc2Instance) {
         securityGroupId: instance.securityGroupId,
         availabilityZone: instance.availabilityZone,
         launchTime: instance.launchTime,
+        iamInstanceProfileArn: instance.iamInstanceProfileArn,
+        iamRoleId: instance.iamRoleId,
         tags: instance.tags ?? {},
         lastSyncedAt: instance.lastSyncedAt,
     };

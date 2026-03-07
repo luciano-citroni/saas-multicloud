@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 import { AwsVpc } from './aws-vpc.entity';
 import { AwsSubnet } from './aws-subnet.entity';
 import { AwsSecurityGroup } from './aws-security-group.entity';
+import { AwsIamRole } from './aws-iam-role.entity';
 
 /**
  * Estados possíveis de uma instância EC2.
@@ -131,6 +132,19 @@ export class AwsEc2Instance {
     launchTime!: Date | null;
 
     /**
+     * ARN do IAM Instance Profile associado à instância (se houver).
+     */
+    @Column({ type: 'varchar', length: 512, name: 'iam_instance_profile_arn', nullable: true })
+    iamInstanceProfileArn!: string | null;
+
+    /**
+     * ID da role IAM no banco de dados (FK para aws_iam_roles).
+     * Extraído do Instance Profile durante o sync.
+     */
+    @Column({ type: 'uuid', name: 'iam_role_id', nullable: true })
+    iamRoleId!: string | null;
+
+    /**
      * Tags da instância em JSON (ex: {"Name": "web-server-01", "Environment": "production"}).
      */
     @Column({ type: 'jsonb', nullable: true })
@@ -159,4 +173,8 @@ export class AwsEc2Instance {
     @ManyToOne(() => AwsSecurityGroup, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'security_group_id' })
     securityGroup!: AwsSecurityGroup | null;
+
+    @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'iam_role_id' })
+    iamRole!: AwsIamRole | null;
 }

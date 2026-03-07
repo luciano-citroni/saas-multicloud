@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install @aws-sdk/client-iam --save)"
+    ]
+  }
+}

@@ -14,7 +14,7 @@ import {
     type Service as EcsServiceType,
 } from '@aws-sdk/client-ecs';
 import { AwsConnectorService } from '../aws-connector.service';
-import { AwsEcsCluster, AwsEcsTaskDefinition, AwsEcsService as AwsEcsServiceEntity, AwsSecurityGroup } from '../../db/entites/index';
+import { AwsEcsCluster, AwsEcsTaskDefinition, AwsEcsService as AwsEcsServiceEntity, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 @Injectable()
@@ -30,7 +30,9 @@ export class EcsService {
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
         @InjectRepository(AwsSecurityGroup)
-        private readonly securityGroupRepository: Repository<AwsSecurityGroup>
+        private readonly securityGroupRepository: Repository<AwsSecurityGroup>,
+        @InjectRepository(AwsIamRole)
+        private readonly iamRoleRepository: Repository<AwsIamRole>
     ) {}
 
     // =========================================================================
@@ -259,6 +261,30 @@ export class EcsService {
             const taskDefData = mapAwsTaskDefinition(taskDefinition);
             mappedTaskDefs.push(taskDefData);
 
+            // Resolve IAM Roles no banco de dados
+            let executionRoleId: string | null = null;
+            let taskRoleId: string | null = null;
+
+            if (taskDefData.executionRoleArn) {
+                const executionRole = await this.iamRoleRepository.findOne({
+                    where: { cloudAccountId, roleArn: taskDefData.executionRoleArn },
+                });
+                if (!executionRole) {
+                    console.warn(`Execution Role ${taskDefData.executionRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                }
+                executionRoleId = executionRole?.id ?? null;
+            }
+
+            if (taskDefData.taskRoleArn) {
+                const taskRole = await this.iamRoleRepository.findOne({
+                    where: { cloudAccountId, roleArn: taskDefData.taskRoleArn },
+                });
+                if (!taskRole) {
+                    console.warn(`Task Role ${taskDefData.taskRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                }
+                taskRoleId = taskRole?.id ?? null;
+            }
+
             let dbTaskDef = await this.taskDefinitionRepository.findOne({
                 where: { taskDefinitionArn: taskDefData.taskDefinitionArn },
             });
@@ -282,6 +308,8 @@ export class EcsService {
                 dbTaskDef.tags = taskDefData.tags;
                 dbTaskDef.registeredAt = taskDefData.registeredAt;
                 dbTaskDef.registeredBy = taskDefData.registeredBy;
+                dbTaskDef.executionRoleId = executionRoleId;
+                dbTaskDef.taskRoleId = taskRoleId;
                 dbTaskDef.lastSyncedAt = now;
             } else {
                 // Cria nova task definition
@@ -305,6 +333,8 @@ export class EcsService {
                     tags: taskDefData.tags,
                     registeredAt: taskDefData.registeredAt,
                     registeredBy: taskDefData.registeredBy,
+                    executionRoleId,
+                    taskRoleId,
                     lastSyncedAt: now,
                 };
                 dbTaskDef = this.taskDefinitionRepository.create(newTaskDef);
@@ -385,9 +415,20 @@ export class EcsService {
                 }
 
                 // Resolve Security Group IDs do networkConfiguration (awsvpc)
-                const awsSgIds: string[] =
-                    (serviceData.networkConfiguration as any)?.awsvpcConfiguration?.securityGroups ?? [];
+                const awsSgIds: string[] = (serviceData.networkConfiguration as any)?.awsvpcConfiguration?.securityGroups ?? [];
                 const securityGroupIds = await this.resolveSecurityGroupIds(cloudAccountId, awsSgIds);
+
+                // Resolve IAM Service Role no banco de dados
+                let serviceRoleId: string | null = null;
+                if (serviceData.roleArn) {
+                    const serviceRole = await this.iamRoleRepository.findOne({
+                        where: { cloudAccountId, roleArn: serviceData.roleArn },
+                    });
+                    if (!serviceRole) {
+                        console.warn(`Service Role ${serviceData.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                    }
+                    serviceRoleId = serviceRole?.id ?? null;
+                }
 
                 let dbService = await this.serviceRepository.findOne({
                     where: { serviceArn: serviceData.serviceArn },
@@ -421,6 +462,7 @@ export class EcsService {
                     dbService.tags = serviceData.tags;
                     dbService.createdAtAws = serviceData.createdAtAws;
                     dbService.createdBy = serviceData.createdBy;
+                    dbService.serviceRoleId = serviceRoleId;
                     dbService.lastSyncedAt = now;
                 } else {
                     // Cria novo serviço
@@ -453,6 +495,7 @@ export class EcsService {
                         tags: serviceData.tags,
                         createdAtAws: serviceData.createdAtAws,
                         createdBy: serviceData.createdBy,
+                        serviceRoleId,
                         lastSyncedAt: now,
                     };
                     dbService = this.serviceRepository.create(newService);
@@ -597,7 +640,9 @@ function mapDbTaskDefinition(taskDef: AwsEcsTaskDefinition) {
         revision: taskDef.revision,
         status: taskDef.status,
         executionRoleArn: taskDef.executionRoleArn,
+        executionRoleId: taskDef.executionRoleId,
         taskRoleArn: taskDef.taskRoleArn,
+        taskRoleId: taskDef.taskRoleId,
         networkMode: taskDef.networkMode,
         cpu: taskDef.cpu,
         memory: taskDef.memory,
@@ -635,6 +680,7 @@ function mapDbService(service: AwsEcsServiceEntity) {
         platformVersion: service.platformVersion,
         platformFamily: service.platformFamily,
         roleArn: service.roleArn,
+        serviceRoleId: service.serviceRoleId,
         deploymentConfiguration: service.deploymentConfiguration,
         deployments: service.deployments,
         networkConfiguration: service.networkConfiguration,
