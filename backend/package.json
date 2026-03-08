@@ -25,6 +25,7 @@
     "migration:revert": "npm run typeorm migration:revert  -- -d ./src/db/typeorm.migrations.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudfront": "^3.1004.0",
     "@aws-sdk/client-ec2": "^3.1001.0",
     "@aws-sdk/client-ecs": "^3.1003.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.1003.0",

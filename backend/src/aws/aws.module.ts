@@ -9,6 +9,7 @@ import { AwsSecurityGroupModule } from './security-groups/aws-security-group.mod
 import { AwsIamModule } from './iam/aws-iam-role.module';
 import { AwsRdsModule } from './rds/aws-rds.module';
 import { AwsS3Module } from './s3/aws-s3.module';
+import { AwsCloudFrontModule } from './cloudfront/aws-cloudfront.module';
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { AwsS3Module } from './s3/aws-s3.module';
         AwsIamModule,
         AwsRdsModule,
         AwsS3Module,
+        AwsCloudFrontModule,
     ],
     exports: [AwsConnectorModule],
 })

@@ -6,6 +6,7 @@ import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balan
 import { IAMClient } from '@aws-sdk/client-iam';
 import { RDSClient } from '@aws-sdk/client-rds';
 import { S3Client } from '@aws-sdk/client-s3';
+import { CloudFrontClient } from '@aws-sdk/client-cloudfront';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
@@ -183,6 +184,17 @@ export class AwsConnectorService {
         const temporaryCreds = await this.assumeRole(creds);
 
         return new S3Client({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um CloudFrontClient autenticado via AssumeRole.
+     * CloudFront é um serviço global — qualquer região pode ser usada.
+     */
+    async getCloudFrontClient(cloudAccountId: string, organizationId: string): Promise<CloudFrontClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new CloudFrontClient({ region: creds.region, credentials: temporaryCreds });
     }
 
     // ---------------------------------------------------------------------------
