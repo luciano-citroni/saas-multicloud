@@ -8,9 +8,21 @@ import { AwsLoadBalancerModule } from './load-balancers/aws-load-balancer.module
 import { AwsSecurityGroupModule } from './security-groups/aws-security-group.module';
 import { AwsIamModule } from './iam/aws-iam-role.module';
 import { AwsRdsModule } from './rds/aws-rds.module';
+import { AwsS3Module } from './s3/aws-s3.module';
 
 @Module({
-    imports: [AwsConnectorModule, AwsNetworkingModule, Ec2Module, AwsRouteTablesModule, AwsEcsModule, AwsLoadBalancerModule, AwsSecurityGroupModule, AwsIamModule, AwsRdsModule],
+    imports: [
+        AwsConnectorModule,
+        AwsNetworkingModule,
+        Ec2Module,
+        AwsRouteTablesModule,
+        AwsEcsModule,
+        AwsLoadBalancerModule,
+        AwsSecurityGroupModule,
+        AwsIamModule,
+        AwsRdsModule,
+        AwsS3Module,
+    ],
     exports: [AwsConnectorModule],
 })
 export class AwsModule {}

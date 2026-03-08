@@ -17,3 +17,4 @@ export { AwsSecurityGroup } from './aws-security-group.entity';
 export type { SecurityGroupRule } from './aws-security-group.entity';
 export { AwsIamRole } from './aws-iam-role.entity';
 export { AwsRdsInstance } from './aws-rds-instance.entity';
+export { AwsS3Bucket } from './aws-s3-bucket.entity';

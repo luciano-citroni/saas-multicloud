@@ -112,9 +112,7 @@ export class AwsRdsService {
                 where: { awsDbInstanceIdentifier: awsMapped.awsDbInstanceIdentifier },
             });
 
-            const vpc = awsMapped.awsVpcId
-                ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId: awsMapped.awsVpcId } })
-                : null;
+            const vpc = awsMapped.awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId: awsMapped.awsVpcId } }) : null;
 
             if (awsMapped.awsVpcId && !vpc) {
                 console.warn(`VPC ${awsMapped.awsVpcId} não encontrada no banco. Sincronize as VPCs primeiro.`);

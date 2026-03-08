@@ -5,6 +5,7 @@ import { ECSClient } from '@aws-sdk/client-ecs';
 import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { IAMClient } from '@aws-sdk/client-iam';
 import { RDSClient } from '@aws-sdk/client-rds';
+import { S3Client } from '@aws-sdk/client-s3';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
@@ -174,11 +175,19 @@ export class AwsConnectorService {
         return new RDSClient({ region: creds.region, credentials: temporaryCreds });
     }
 
+    /**
+     * Retorna um S3Client autenticado via AssumeRole.
+     */
+    async getS3Client(cloudAccountId: string, organizationId: string): Promise<S3Client> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new S3Client({ region: creds.region, credentials: temporaryCreds });
+    }
+
     // ---------------------------------------------------------------------------
     // Adicione aqui outros factory methods conforme novos módulos forem criados:
     //
-    // async getS3Client(cloudAccountId: string, organizationId: string): Promise<S3Client>
-    // async getRdsClient(cloudAccountId: string, organizationId: string): Promise<RDSClient>
     // async getLambdaClient(cloudAccountId: string, organizationId: string): Promise<LambdaClient>
     // ---------------------------------------------------------------------------
 }

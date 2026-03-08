@@ -20,6 +20,7 @@ import {
     AwsSecurityGroup,
     AwsIamRole,
     AwsRdsInstance,
+    AwsS3Bucket,
 } from './entites';
 
 config();
@@ -52,6 +53,7 @@ const dataSourceOptions: DataSourceOptions = {
         AwsSecurityGroup,
         AwsIamRole,
         AwsRdsInstance,
+        AwsS3Bucket,
     ],
     migrations: [__dirname + '/migrations/*.ts'],
     synchronize: false,
