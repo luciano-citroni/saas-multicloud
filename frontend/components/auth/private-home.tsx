@@ -45,7 +45,7 @@ export function PrivateHome() {
     }, [router]);
 
     return (
-        <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="flex  items-center justify-center p-6">
             <Card className="w-full max-w-lg">
                 <CardHeader>
                     <CardTitle>Area privada</CardTitle>
