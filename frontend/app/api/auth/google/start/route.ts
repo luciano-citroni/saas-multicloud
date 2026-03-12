@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getBackendUrl } from '@/lib/auth/session';
 
-export async function GET() {
-    return NextResponse.redirect(`${getBackendUrl()}/api/auth/google`);
+export async function GET(request: Request) {
+    const redirectUri = new URL('/auth/google/callback', request.url);
+    const backendGoogleUrl = new URL('/api/auth/google', getBackendUrl());
+    backendGoogleUrl.searchParams.set('redirect_uri', redirectUri.toString());
+
+    return NextResponse.redirect(backendGoogleUrl.toString());
 }

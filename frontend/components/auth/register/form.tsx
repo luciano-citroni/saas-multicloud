@@ -217,13 +217,9 @@ export function RegisterForm() {
                         )}
                     />
 
-                    <div className="w-full flex flex-col gap-2">
-                        <Button type="submit" className="w-full" isLoading={loading}>
-                            Cadastrar
-                        </Button>
-
-                        <GoogleButton label="Cadastrar com Google" />
-                    </div>
+                    <Button type="submit" className="w-full" isLoading={loading}>
+                        Cadastrar
+                    </Button>
                 </form>
             </Form>
 
@@ -233,7 +229,9 @@ export function RegisterForm() {
                 <div className="flex-1 border-t border-border" />
             </div>
 
-            <p className="text-center text-sm text-muted-foreground">
+            <GoogleButton label="Cadastrar com Google" />
+
+            <p className="text-center text-sm text-muted-foreground mb-3">
                 Já tem uma conta?{' '}
                 <Link href="/auth/sign-in" className="text-primary underline underline-offset-4 hover:opacity-80 transition-opacity font-medium">
                     Fazer login

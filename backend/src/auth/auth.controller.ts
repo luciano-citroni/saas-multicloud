@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards, Res, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
@@ -12,6 +12,7 @@ import { TenantGuard } from '../tenant/tenant.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, AuthUserResponseDto, LogoutResponseDto } from './swagger.dto';
 import type { GoogleProfile } from './google.strategy';
+import { GoogleAuthGuard } from './google-auth.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -193,7 +194,7 @@ export class AuthController {
 
     @Public()
     @Get('google')
-    @UseGuards(AuthGuard('google'))
+    @UseGuards(GoogleAuthGuard)
     @ApiOperation({ summary: 'Iniciar autenticação com Google' })
     @ApiResponse({ status: 302, description: 'Redireciona para a página de autenticação do Google' })
     googleAuth() {
@@ -205,9 +206,32 @@ export class AuthController {
     @UseGuards(AuthGuard('google'))
     @ApiOperation({ summary: 'Callback do Google OAuth' })
     @ApiResponse({ status: 302, description: 'Redireciona para o frontend com o token JWT' })
-    async googleCallback(@CurrentUser() googleUser: GoogleProfile, @Res() res: Response) {
+    async googleCallback(@CurrentUser() googleUser: GoogleProfile, @Query('state') state: string | undefined, @Res() res: Response) {
         const { accessToken } = await this.authService.googleAuthOrRegister(googleUser);
-        const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
-        res.redirect(`${frontendUrl}/auth/google/callback?token=${accessToken}`);
+        const redirectUrl = this.resolveGoogleRedirectUrl(state);
+        redirectUrl.searchParams.set('token', accessToken);
+        res.redirect(redirectUrl.toString());
+    }
+
+    private resolveGoogleRedirectUrl(state?: string) {
+        const defaultRedirectUrl = new URL('/auth/google/callback', this.configService.getOrThrow<string>('FRONTEND_URL'));
+
+        if (!state) {
+            return defaultRedirectUrl;
+        }
+
+        try {
+            const decodedState = JSON.parse(Buffer.from(state, 'base64url').toString('utf-8')) as {
+                redirectUri?: string;
+            };
+
+            if (!decodedState.redirectUri) {
+                return defaultRedirectUrl;
+            }
+
+            return new URL(decodedState.redirectUri);
+        } catch {
+            return defaultRedirectUrl;
+        }
     }
 }

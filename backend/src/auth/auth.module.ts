@@ -7,6 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtGuard } from './jwt.guard';
+import { GoogleAuthGuard } from './google-auth.guard';
 import { GoogleStrategy } from './google.strategy';
 import { UserSession } from '../db/entites/user-session.entity';
 import { UsersModule } from '../users/users.module';
@@ -31,7 +32,7 @@ import { OrganizationModule } from '../organization/organization.module';
         TenantModule,
         forwardRef(() => OrganizationModule),
     ],
-    providers: [AuthService, JwtGuard, GoogleStrategy],
+    providers: [AuthService, JwtGuard, GoogleAuthGuard, GoogleStrategy],
     controllers: [AuthController],
     exports: [JwtGuard, JwtModule],
 })
