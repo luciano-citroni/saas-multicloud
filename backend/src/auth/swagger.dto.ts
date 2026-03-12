@@ -50,10 +50,18 @@ export class LoginRequestDto {
 
 export class RefreshTokenRequestDto {
     @ApiProperty({
-        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        description: 'Token JWT de acesso para renovação',
+        example: 'r7eQ8m5E5P6GQx0i9R4d3j1sK8gL2nV7hT6yP1cQ4rW9uA3mB2',
+        description: 'Refresh token opaco usado para renovar a sessão',
     })
-    token: string;
+    refreshToken: string;
+}
+
+export class GoogleExchangeRequestDto {
+    @ApiProperty({
+        example: 'qk1V5rS0nM2xZ8pL4dJ9fH6wC3bT7yN1uA5eR0iK8gP2sD6',
+        description: 'Código temporário e de uso único emitido no callback do Google',
+    })
+    code: string;
 }
 
 export class AuthResponseDto {
@@ -62,6 +70,12 @@ export class AuthResponseDto {
         description: 'Token JWT de acesso',
     })
     accessToken: string;
+
+    @ApiProperty({
+        example: 'r7eQ8m5E5P6GQx0i9R4d3j1sK8gL2nV7hT6yP1cQ4rW9uA3mB2',
+        description: 'Refresh token opaco armazenado apenas em cookie HttpOnly no frontend',
+    })
+    refreshToken: string;
 }
 
 export class LogoutResponseDto {

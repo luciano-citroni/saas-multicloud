@@ -8,10 +8,10 @@ function GoogleCallbackContent() {
     const searchParams = useSearchParams();
 
     useEffect(() => {
-        const token = searchParams.get('token');
+        const code = searchParams.get('code');
 
         const createSession = async () => {
-            if (!token) {
+            if (!code) {
                 window.location.replace('/auth/sign-in?error=google_auth_failed');
                 return;
             }
@@ -20,7 +20,7 @@ function GoogleCallbackContent() {
                 const response = await fetch('/api/auth/session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token }),
+                    body: JSON.stringify({ code }),
                 });
 
                 if (!response.ok) {

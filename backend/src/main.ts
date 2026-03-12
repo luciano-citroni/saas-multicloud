@@ -3,6 +3,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import * as crypto from 'crypto';
+import helmet from 'helmet';
 
 // Polyfill para garantir que crypto esteja disponível globalmente
 if (typeof globalThis.crypto === 'undefined') {
@@ -21,8 +22,44 @@ async function bootstrap() {
     const levels = (levelMap[rawLevel as 'info' | 'warn' | 'error'] ?? levelMap['info']) as LogLevel[];
 
     const app = await NestFactory.create(AppModule, { logger: levels });
+    const expressApp = app.getHttpAdapter().getInstance();
+
+    expressApp.disable('x-powered-by');
     app.useGlobalFilters(new HttpExceptionFilter());
     app.setGlobalPrefix('api');
+    app.use(
+        helmet({
+            contentSecurityPolicy: false,
+            crossOriginEmbedderPolicy: false,
+        })
+    );
+    app.enableCors({
+        origin: (origin, callback) => {
+            if (!origin) {
+                callback(null, true);
+                return;
+            }
+
+            try {
+                const requestOrigin = new URL(origin);
+                const frontendUrl = process.env.FRONTEND_URL;
+
+                if (frontendUrl && requestOrigin.origin === new URL(frontendUrl).origin) {
+                    callback(null, true);
+                    return;
+                }
+
+                const isLocalhostInDevelopment = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(requestOrigin.hostname);
+
+                callback(isLocalhostInDevelopment ? null : new Error('Not allowed by CORS'), isLocalhostInDevelopment);
+            } catch {
+                callback(new Error('Not allowed by CORS'), false);
+            }
+        },
+        credentials: true,
+        methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
+    });
 
     // Configuração Swagger
     const config = new DocumentBuilder()

@@ -256,6 +256,11 @@ export interface ApiErrorResponse {
     timestamp: string;
 }
 
+type LocalizedMessage = {
+    en: string;
+    pt: string;
+};
+
 /**
  * Utilitário para obter mensagem traduzida
  * @param category - Categoria do erro (ex: 'AUTH', 'USERS')
@@ -264,13 +269,13 @@ export interface ApiErrorResponse {
  * @returns Mensagem traduzida ou fallback
  */
 export function getErrorMessage(category: keyof typeof ErrorMessages, key: string, language: 'en' | 'pt' = 'pt'): string {
-    const categoryMessages = ErrorMessages[category];
-    if (!categoryMessages || !(key in categoryMessages)) {
+    const categoryMessages = ErrorMessages[category] as Record<string, LocalizedMessage>;
+    const message = categoryMessages[key];
+    if (!message) {
         return ErrorMessages.GENERAL.UNEXPECTED_ERROR[language];
     }
 
-    const message = categoryMessages[key as keyof typeof categoryMessages];
-    return message[language] || message.en;
+    return message[language] ?? message.en;
 }
 
 /**
@@ -289,10 +294,10 @@ export function getApiErrorMessage(error: ApiErrorResponse | unknown, language: 
     // Se a mensagem vier como string simples, tenta encontrar a tradução
     if (typeof apiError.message === 'string') {
         // Procura nos erro messages do backend e retorna tradução
-        for (const [category, messages] of Object.entries(ErrorMessages)) {
-            for (const [key, msg] of Object.entries(messages)) {
+        for (const messages of Object.values(ErrorMessages) as Array<Record<string, LocalizedMessage>>) {
+            for (const msg of Object.values(messages)) {
                 if (msg.en === apiError.message || msg.pt === apiError.message) {
-                    return msg[language] || msg.en;
+                    return msg[language] ?? msg.en;
                 }
             }
         }

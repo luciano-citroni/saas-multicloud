@@ -16,9 +16,15 @@ export const loginSchema = z.object({
 export type LoginDto = z.infer<typeof loginSchema>;
 
 export const refreshTokenSchema = z.object({
-    token: z.string().min(1),
+    refreshToken: z.string().min(1),
 });
 export type RefreshTokenDto = z.infer<typeof refreshTokenSchema>;
+
+export const googleExchangeSchema = z.object({
+    code: z.string().min(1),
+});
+export type GoogleExchangeDto = z.infer<typeof googleExchangeSchema>;
+
 export const registerWithInviteSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),

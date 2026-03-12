@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
-import { backendFetch, clearAuthCookie, getAccessTokenFromCookies, parseJsonSafe, refreshAccessToken, setAuthCookie } from '@/lib/auth/session';
+import {
+    backendFetch,
+    clearAuthCookies,
+    getAccessTokenFromCookies,
+    getRefreshTokenFromCookies,
+    parseJsonSafe,
+    refreshAccessToken,
+    setAuthCookies,
+    type AuthTokens,
+} from '@/lib/auth/session';
 
 export async function GET() {
     const accessToken = await getAccessTokenFromCookies();
+    const refreshToken = await getRefreshTokenFromCookies();
 
-    if (!accessToken) {
+    if (!accessToken && !refreshToken) {
         return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
     }
 
@@ -15,18 +25,43 @@ export async function GET() {
             },
         });
 
-    let userResponse = await fetchUser(accessToken);
+    let currentAccessToken = accessToken;
+    let rotatedTokens: AuthTokens | null = null;
 
-    if (userResponse.status === 401) {
-        const newToken = await refreshAccessToken(accessToken);
+    if (!currentAccessToken && refreshToken) {
+        rotatedTokens = await refreshAccessToken(refreshToken);
 
-        if (!newToken) {
+        if (!rotatedTokens) {
             const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
-            clearAuthCookie(response);
+            clearAuthCookies(response);
             return response;
         }
 
-        userResponse = await fetchUser(newToken);
+        currentAccessToken = rotatedTokens.accessToken;
+    }
+
+    if (!currentAccessToken) {
+        return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
+    }
+
+    let userResponse = await fetchUser(currentAccessToken);
+
+    if (userResponse.status === 401) {
+        if (!refreshToken) {
+            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+            clearAuthCookies(response);
+            return response;
+        }
+
+        rotatedTokens = await refreshAccessToken(refreshToken);
+
+        if (!rotatedTokens) {
+            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+            clearAuthCookies(response);
+            return response;
+        }
+
+        userResponse = await fetchUser(rotatedTokens.accessToken);
 
         if (!userResponse.ok) {
             const failedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
@@ -35,7 +70,7 @@ export async function GET() {
 
         const refreshedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
         const response = NextResponse.json(refreshedPayload ?? {});
-        setAuthCookie(response, newToken);
+        setAuthCookies(response, rotatedTokens);
         return response;
     }
 
@@ -45,5 +80,11 @@ export async function GET() {
         return NextResponse.json(payload ?? { message: 'Erro ao carregar usuario' }, { status: userResponse.status });
     }
 
-    return NextResponse.json(payload ?? {});
+    if (!rotatedTokens) {
+        return NextResponse.json(payload ?? {});
+    }
+
+    const response = NextResponse.json(payload ?? {});
+    setAuthCookies(response, rotatedTokens);
+    return response;
 }

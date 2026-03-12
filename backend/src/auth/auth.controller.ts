@@ -5,12 +5,20 @@ import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import type { JwtPayload } from './auth.service';
-import { loginSchema, refreshTokenSchema, registerSchema, registerWithInviteSchema } from './dto';
-import type { LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto } from './dto';
+import { googleExchangeSchema, loginSchema, refreshTokenSchema, registerSchema, registerWithInviteSchema } from './dto';
+import type { GoogleExchangeDto, LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto } from './dto';
 import { CurrentUser, Public, AllowMissingOrganization } from './decorators';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, AuthUserResponseDto, LogoutResponseDto } from './swagger.dto';
+import {
+    RegisterRequestDto,
+    LoginRequestDto,
+    RefreshTokenRequestDto,
+    GoogleExchangeRequestDto,
+    AuthResponseDto,
+    AuthUserResponseDto,
+    LogoutResponseDto,
+} from './swagger.dto';
 import type { GoogleProfile } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 
@@ -87,6 +95,7 @@ export class AuthController {
         schema: {
             example: {
                 accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                refreshToken: 'r7eQ8m5E5P6GQx0i9R4d3j1sK8gL2nV7hT6yP1cQ4rW9uA3mB2',
                 user: {
                     id: '123e4567-e89b-12d3-a456-426614174000',
                     email: 'joao@example.com',
@@ -165,7 +174,7 @@ export class AuthController {
         @Body(new ZodValidationPipe(refreshTokenSchema))
         body: RefreshTokenDto
     ) {
-        return this.authService.refresh(body.token);
+        return this.authService.refresh(body.refreshToken);
     }
 
     @Post('logout')
@@ -205,12 +214,29 @@ export class AuthController {
     @Get('google/callback')
     @UseGuards(AuthGuard('google'))
     @ApiOperation({ summary: 'Callback do Google OAuth' })
-    @ApiResponse({ status: 302, description: 'Redireciona para o frontend com o token JWT' })
+    @ApiResponse({ status: 302, description: 'Redireciona para o frontend com um código temporário de troca' })
     async googleCallback(@CurrentUser() googleUser: GoogleProfile, @Query('state') state: string | undefined, @Res() res: Response) {
-        const { accessToken } = await this.authService.googleAuthOrRegister(googleUser);
+        const { code } = await this.authService.createGoogleAuthCode(googleUser);
         const redirectUrl = this.resolveGoogleRedirectUrl(state);
-        redirectUrl.searchParams.set('token', accessToken);
+        redirectUrl.searchParams.set('code', code);
         res.redirect(redirectUrl.toString());
+    }
+
+    @Public()
+    @Post('google/exchange')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Trocar código temporário do Google por tokens da sessão' })
+    @ApiBody({
+        description: 'Código temporário emitido após o callback do Google',
+        type: GoogleExchangeRequestDto,
+    })
+    @ApiResponse({ status: 200, description: 'Troca concluída com sucesso', type: AuthResponseDto })
+    @ApiResponse({ status: 401, description: 'Código inválido, expirado ou já utilizado' })
+    googleExchange(
+        @Body(new ZodValidationPipe(googleExchangeSchema))
+        body: GoogleExchangeDto
+    ) {
+        return this.authService.exchangeGoogleAuthCode(body.code);
     }
 
     private resolveGoogleRedirectUrl(state?: string) {

@@ -164,9 +164,9 @@ export class AwsAssessmentService {
         return savedJob;
     }
 
-    async getJobStatus(jobId: string, cloudAccountId: string): Promise<AwsAssessmentJob> {
+    async getJobStatus(jobId: string, cloudAccountId: string, organizationId: string): Promise<AwsAssessmentJob> {
         const job = await this.jobRepository.findOne({
-            where: { id: jobId, cloudAccountId },
+            where: { id: jobId, cloudAccountId, organizationId },
         });
 
         if (!job) {
@@ -176,16 +176,16 @@ export class AwsAssessmentService {
         return job;
     }
 
-    async listJobs(cloudAccountId: string): Promise<AwsAssessmentJob[]> {
+    async listJobs(cloudAccountId: string, organizationId: string): Promise<AwsAssessmentJob[]> {
         return this.jobRepository.find({
-            where: { cloudAccountId },
+            where: { cloudAccountId, organizationId },
             order: { createdAt: 'DESC' },
             take: 20,
         });
     }
 
-    async clearJobExcelFile(jobId: string, cloudAccountId: string): Promise<void> {
-        await this.jobRepository.update({ id: jobId, cloudAccountId }, { excelFileName: null });
+    async clearJobExcelFile(jobId: string, cloudAccountId: string, organizationId: string): Promise<void> {
+        await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName: null });
     }
 
     private async findPendingGeneralSyncJob(cloudAccountId: string): Promise<Job | undefined> {

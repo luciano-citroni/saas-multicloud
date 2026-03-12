@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { backendFetch, parseJsonSafe, setAuthCookie } from '@/lib/auth/session';
+import { backendFetch, extractAuthTokens, parseJsonSafe, setAuthCookies } from '@/lib/auth/session';
+import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 export async function POST(request: Request) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+    }
+
     const body = await request.json();
 
     const backendResponse = await backendFetch('/api/auth/login', {
@@ -18,13 +23,13 @@ export async function POST(request: Request) {
         return NextResponse.json(payload ?? { message: 'Erro ao fazer login' }, { status: backendResponse.status });
     }
 
-    const accessToken = typeof payload?.accessToken === 'string' ? payload.accessToken : null;
+    const tokens = extractAuthTokens(payload);
 
-    if (!accessToken) {
+    if (!tokens) {
         return NextResponse.json({ message: 'Resposta de login invalida' }, { status: 500 });
     }
 
     const response = NextResponse.json({ success: true });
-    setAuthCookie(response, accessToken);
+    setAuthCookies(response, tokens);
     return response;
 }

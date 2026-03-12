@@ -1,6 +1,7 @@
 export { Organization } from './organization.entity';
 export { User } from './user.entity';
 export { UserSession } from './user-session.entity';
+export { GoogleAuthCode } from './google-auth-code.entity';
 export { OrganizationMember } from './organization-member.entity';
 export { CloudAccount, CloudProvider } from './cloud-account.entity';
 export { OrganizationInvite, InviteStatus } from './organization-invite.entity';

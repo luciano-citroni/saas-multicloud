@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { EC2Client } from '@aws-sdk/client-ec2';
 import { ECSClient } from '@aws-sdk/client-ecs';
@@ -56,6 +56,8 @@ export interface AwsRoleCredentials {
  */
 @Injectable()
 export class AwsConnectorService {
+    private readonly logger = new Logger(AwsConnectorService.name);
+
     constructor(private readonly cloudService: CloudService) {}
 
     /**
@@ -123,7 +125,8 @@ export class AwsConnectorService {
                 })
             )
             .catch((error) => {
-                console.log('Erro ao assumir role AWS:', error);
+                const errorMessage = error instanceof Error ? error.message : 'erro desconhecido';
+                this.logger.warn(`Falha ao assumir role AWS para ${creds.roleArn}: ${errorMessage}`);
                 throw new BadRequestException(
                     `Falha ao assumir a role "${creds.roleArn}". ` +
                         `Verifique: (1) O ARN da role está correto, ` +

@@ -1,8 +1,13 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { ACCESS_TOKEN_COOKIE } from '@/lib/auth/constants';
+import { ACCESS_TOKEN_COOKIE, ACCESS_TOKEN_MAX_AGE_SECONDS, REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_MAX_AGE_SECONDS } from '@/lib/auth/constants';
 
 const isProduction = process.env.NODE_ENV === 'production';
+
+export interface AuthTokens {
+    accessToken: string;
+    refreshToken: string;
+}
 
 export function getBackendUrl(): string {
     return process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4880';
@@ -13,27 +18,46 @@ export async function getAccessTokenFromCookies(): Promise<string | null> {
     return cookieStore.get(ACCESS_TOKEN_COOKIE)?.value ?? null;
 }
 
-export function setAuthCookie(response: NextResponse, accessToken: string) {
-    response.cookies.set({
-        name: ACCESS_TOKEN_COOKIE,
-        value: accessToken,
+export async function getRefreshTokenFromCookies(): Promise<string | null> {
+    const cookieStore = await cookies();
+    return cookieStore.get(REFRESH_TOKEN_COOKIE)?.value ?? null;
+}
+
+function buildCookieOptions(maxAge: number) {
+    return {
         httpOnly: true,
         secure: isProduction,
-        sameSite: 'lax',
+        sameSite: 'lax' as const,
         path: '/',
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge,
+    };
+}
+
+export function setAuthCookies(response: NextResponse, tokens: AuthTokens) {
+    response.cookies.set({
+        name: ACCESS_TOKEN_COOKIE,
+        value: tokens.accessToken,
+        ...buildCookieOptions(ACCESS_TOKEN_MAX_AGE_SECONDS),
+    });
+
+    response.cookies.set({
+        name: REFRESH_TOKEN_COOKIE,
+        value: tokens.refreshToken,
+        ...buildCookieOptions(REFRESH_TOKEN_MAX_AGE_SECONDS),
     });
 }
 
-export function clearAuthCookie(response: NextResponse) {
+export function clearAuthCookies(response: NextResponse) {
     response.cookies.set({
         name: ACCESS_TOKEN_COOKIE,
         value: '',
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 0,
+        ...buildCookieOptions(0),
+    });
+
+    response.cookies.set({
+        name: REFRESH_TOKEN_COOKIE,
+        value: '',
+        ...buildCookieOptions(0),
     });
 }
 
@@ -55,19 +79,30 @@ export async function backendFetch(path: string, init?: RequestInit): Promise<Re
     });
 }
 
-export async function refreshAccessToken(currentToken: string): Promise<string | null> {
+export function extractAuthTokens(payload: Record<string, unknown> | null): AuthTokens | null {
+    const accessToken = typeof payload?.accessToken === 'string' ? payload.accessToken : null;
+    const refreshToken = typeof payload?.refreshToken === 'string' ? payload.refreshToken : null;
+
+    if (!accessToken || !refreshToken) {
+        return null;
+    }
+
+    return { accessToken, refreshToken };
+}
+
+export async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | null> {
     const refreshResponse = await backendFetch('/api/auth/refresh', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token: currentToken }),
+        body: JSON.stringify({ refreshToken }),
     });
 
     if (!refreshResponse.ok) {
         return null;
     }
 
-    const refreshBody = await parseJsonSafe<{ accessToken?: string }>(refreshResponse);
-    return refreshBody?.accessToken ?? null;
+    const refreshBody = await parseJsonSafe<Record<string, unknown>>(refreshResponse);
+    return extractAuthTokens(refreshBody);
 }

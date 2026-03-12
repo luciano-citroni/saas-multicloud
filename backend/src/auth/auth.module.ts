@@ -10,6 +10,7 @@ import { JwtGuard } from './jwt.guard';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { GoogleStrategy } from './google.strategy';
 import { UserSession } from '../db/entites/user-session.entity';
+import { GoogleAuthCode } from '../db/entites/google-auth-code.entity';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { OrganizationModule } from '../organization/organization.module';
@@ -17,7 +18,7 @@ import { OrganizationModule } from '../organization/organization.module';
 @Module({
     imports: [
         PassportModule,
-        TypeOrmModule.forFeature([UserSession]),
+        TypeOrmModule.forFeature([UserSession, GoogleAuthCode]),
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({

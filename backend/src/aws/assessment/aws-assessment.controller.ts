@@ -112,7 +112,7 @@ export class AwsAssessmentController {
         @Param('jobId', ParseUUIDPipe) jobId: string,
         @CurrentOrganization() org: Organization
     ): Promise<AssessmentStatusResponseDto> {
-        const job = await this.service.getJobStatus(jobId, cloudAccountId);
+        const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
         return {
             id: job.id,
             status: job.status,
@@ -133,7 +133,7 @@ export class AwsAssessmentController {
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Lista de jobs', type: [AssessmentStatusResponseDto] })
     async listJobs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
-        return this.service.listJobs(cloudAccountId);
+        return this.service.listJobs(cloudAccountId, org.id);
     }
 
     // ─── Download Excel ───────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ export class AwsAssessmentController {
         @CurrentOrganization() org: Organization,
         @Res({ passthrough: true }) res: Response
     ): Promise<StreamableFile> {
-        const job = await this.service.getJobStatus(jobId, cloudAccountId);
+        const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
 
         if (!job.excelFileName || job.status !== 'completed') {
             res.status(400);
@@ -172,7 +172,7 @@ export class AwsAssessmentController {
             if (cleanedUp) return;
             cleanedUp = true;
             await this.excelService.deleteExcel(job.excelFileName as string);
-            await this.service.clearJobExcelFile(jobId, cloudAccountId);
+            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
         };
 
         res.once('finish', () => {

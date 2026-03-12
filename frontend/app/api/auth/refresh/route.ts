@@ -1,22 +1,27 @@
 import { NextResponse } from 'next/server';
-import { clearAuthCookie, getAccessTokenFromCookies, refreshAccessToken, setAuthCookie } from '@/lib/auth/session';
+import { clearAuthCookies, getRefreshTokenFromCookies, refreshAccessToken, setAuthCookies } from '@/lib/auth/session';
+import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
-export async function POST() {
-    const currentToken = await getAccessTokenFromCookies();
+export async function POST(request: Request) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+    }
 
-    if (!currentToken) {
+    const refreshToken = await getRefreshTokenFromCookies();
+
+    if (!refreshToken) {
         return NextResponse.json({ message: 'Sessao ausente' }, { status: 401 });
     }
 
-    const newToken = await refreshAccessToken(currentToken);
+    const tokens = await refreshAccessToken(refreshToken);
 
-    if (!newToken) {
+    if (!tokens) {
         const response = NextResponse.json({ message: 'Nao foi possivel renovar a sessao' }, { status: 401 });
-        clearAuthCookie(response);
+        clearAuthCookies(response);
         return response;
     }
 
     const response = NextResponse.json({ success: true });
-    setAuthCookie(response, newToken);
+    setAuthCookies(response, tokens);
     return response;
 }

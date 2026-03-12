@@ -1,11 +1,11 @@
 import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryFailedError } from 'typeorm';
+import { Repository, QueryFailedError, LessThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
 import { UserSession } from '../db/entites/user-session.entity';
+import { GoogleAuthCode } from '../db/entites/google-auth-code.entity';
 import { UsersService } from '../users/users.service';
 import { LoginDto, RegisterDto, RegisterWithInviteDto } from './dto';
 import { ErrorMessages } from '../common/messages/error-messages';
@@ -16,11 +16,21 @@ export interface JwtPayload {
     sessionId: string;
 }
 
+export interface AuthTokens {
+    accessToken: string;
+    refreshToken: string;
+}
+
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
+
 @Injectable()
 export class AuthService {
     constructor(
         @InjectRepository(UserSession)
         private readonly sessionRepository: Repository<UserSession>,
+        @InjectRepository(GoogleAuthCode)
+        private readonly googleAuthCodeRepository: Repository<GoogleAuthCode>,
         private readonly jwtService: JwtService,
         private readonly usersService: UsersService,
         @Inject(forwardRef(() => OrganizationService))
@@ -131,26 +141,9 @@ export class AuthService {
 
     async refresh(token: string) {
         try {
-            // Verificar e decodificar o JWT, permitindo desclaração mesmo se expirado
-            let payload: JwtPayload;
-            try {
-                payload = await this.jwtService.verifyAsync(token);
-            } catch (error: any) {
-                // Se o token expirou, tente decodificar apenas para obter a sessão
-                if (error.name === 'TokenExpiredError') {
-                    payload = this.jwtService.decode(token) as JwtPayload;
-                } else {
-                    throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
-                }
-            }
-
-            if (!payload || !payload.sessionId) {
-                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
-            }
-
-            // Buscar a sessão correspondente
+            const hashedRefreshToken = this.hashToken(token);
             const session = await this.sessionRepository.findOne({
-                where: { id: payload.sessionId },
+                where: { token: hashedRefreshToken },
                 relations: ['user'],
             });
 
@@ -158,15 +151,16 @@ export class AuthService {
                 throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
             }
 
+            if (session.expiresAt < new Date()) {
+                await this.sessionRepository.delete({ id: session.id });
+                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+            }
+
             if (!session.user || !session.user.isActive) {
                 throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
             }
 
-            // Emitir novo token de acesso usando a mesma sessão
-            const newPayload: JwtPayload = { sub: session.userId, sessionId: session.id };
-            const accessToken = await this.jwtService.signAsync(newPayload);
-
-            return { accessToken };
+            return this.rotateSessionTokens(session);
         } catch (error) {
             if (error instanceof UnauthorizedException) {
                 throw error;
@@ -180,7 +174,45 @@ export class AuthService {
         return { success: true };
     }
 
-    async googleAuthOrRegister(googleUser: { googleId: string; email: string; name: string }) {
+    async createGoogleAuthCode(googleUser: { googleId: string; email: string; name: string }) {
+        const user = await this.resolveGoogleUser(googleUser);
+        return { code: await this.issueGoogleAuthCode(user.id) };
+    }
+
+    async exchangeGoogleAuthCode(code: string) {
+        const codeHash = this.hashToken(code);
+        const pendingCode = await this.googleAuthCodeRepository.findOne({
+            where: { codeHash },
+        });
+
+        if (!pendingCode) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        if (pendingCode.usedAt || pendingCode.expiresAt < new Date()) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        const markUsedResult = await this.googleAuthCodeRepository
+            .createQueryBuilder()
+            .update(GoogleAuthCode)
+            .set({ usedAt: new Date() })
+            .where('id = :id', { id: pendingCode.id })
+            .andWhere('used_at IS NULL')
+            .execute();
+
+        if (markUsedResult.affected !== 1) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        return this.issueTokens(pendingCode.userId);
+    }
+
+    async getMe(userId: string) {
+        return this.usersService.findById(userId);
+    }
+
+    private async resolveGoogleUser(googleUser: { googleId: string; email: string; name: string }) {
         const normalizedEmail = googleUser.email.toLowerCase();
 
         let user = await this.usersService.findByGoogleId(googleUser.googleId);
@@ -201,25 +233,54 @@ export class AuthService {
 
         if (!user!.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
 
-        return this.issueTokens(user!.id);
+        return user!;
     }
 
-    async getMe(userId: string) {
-        return this.usersService.findById(userId);
-    }
-
-    private async issueTokens(userId: string) {
-        // Criar nova sessão para rastreamento
+    private async issueTokens(userId: string): Promise<AuthTokens> {
+        const refreshToken = this.generateOpaqueToken();
         const session = await this.sessionRepository.save({
             userId,
-            token: this.hashToken(uuidv4()), // Gerar token genérico apenas para registro
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 dias
+            token: this.hashToken(refreshToken),
+            expiresAt: new Date(Date.now() + SESSION_TTL_MS),
         });
 
-        const payload: JwtPayload = { sub: userId, sessionId: session.id };
-        const accessToken = await this.jwtService.signAsync(payload);
+        return {
+            accessToken: await this.signAccessToken(userId, session.id),
+            refreshToken,
+        };
+    }
 
-        return { accessToken };
+    private async rotateSessionTokens(session: UserSession): Promise<AuthTokens> {
+        const refreshToken = this.generateOpaqueToken();
+        session.token = this.hashToken(refreshToken);
+        await this.sessionRepository.save(session);
+
+        return {
+            accessToken: await this.signAccessToken(session.userId, session.id),
+            refreshToken,
+        };
+    }
+
+    private async signAccessToken(userId: string, sessionId: string): Promise<string> {
+        const payload: JwtPayload = { sub: userId, sessionId };
+        return this.jwtService.signAsync(payload);
+    }
+
+    private async issueGoogleAuthCode(userId: string): Promise<string> {
+        await this.googleAuthCodeRepository.delete({ expiresAt: LessThan(new Date()) });
+
+        const code = this.generateOpaqueToken();
+        await this.googleAuthCodeRepository.save({
+            codeHash: this.hashToken(code),
+            userId,
+            expiresAt: new Date(Date.now() + GOOGLE_AUTH_CODE_TTL_MS),
+        });
+
+        return code;
+    }
+
+    private generateOpaqueToken(): string {
+        return crypto.randomBytes(48).toString('base64url');
     }
 
     private hashToken(token: string): string {

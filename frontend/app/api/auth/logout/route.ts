@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { backendFetch, clearAuthCookie, getAccessTokenFromCookies } from '@/lib/auth/session';
+import { backendFetch, clearAuthCookies, getAccessTokenFromCookies } from '@/lib/auth/session';
+import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
-export async function POST() {
+export async function POST(request: Request) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+    }
+
     const accessToken = await getAccessTokenFromCookies();
 
     if (accessToken) {
@@ -14,6 +19,6 @@ export async function POST() {
     }
 
     const response = NextResponse.json({ success: true });
-    clearAuthCookie(response);
+    clearAuthCookies(response);
     return response;
 }
