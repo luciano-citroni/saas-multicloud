@@ -153,4 +153,24 @@ export class UsersService {
         await this.userRepository.delete({ id });
         return { id, deleted: true };
     }
+
+    async findByGoogleId(googleId: string): Promise<User | null> {
+        return this.userRepository.findOne({ where: { googleId } });
+    }
+
+    async createWithGoogle(dto: { email: string; name: string; googleId: string }): Promise<User> {
+        const user = this.userRepository.create({
+            email: dto.email.toLowerCase(),
+            name: dto.name,
+            googleId: dto.googleId,
+            password: null,
+            cpf: null,
+            isActive: true,
+        });
+        return this.userRepository.save(user);
+    }
+
+    async linkGoogleAccount(userId: string, googleId: string): Promise<void> {
+        await this.userRepository.update({ id: userId }, { googleId });
+    }
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterRequestDto {
     @ApiProperty({
@@ -16,14 +16,14 @@ export class RegisterRequestDto {
     })
     email: string;
 
-    @ApiProperty({
+    @ApiPropertyOptional({
         example: '12345678901',
         description: 'CPF do usuário (11 dígitos)',
         pattern: '^\\d{11}$',
         minLength: 11,
         maxLength: 11,
     })
-    cpf: string;
+    cpf?: string;
 
     @ApiProperty({
         example: 'MyPassword123!',
@@ -72,7 +72,7 @@ export class LogoutResponseDto {
     success: boolean;
 }
 
-export class UserResponseDto {
+export class AuthUserResponseDto {
     @ApiProperty({
         example: '123e4567-e89b-12d3-a456-426614174000',
         description: 'ID único do usuário (UUID)',
@@ -94,8 +94,9 @@ export class UserResponseDto {
     @ApiProperty({
         example: '12345678901',
         description: 'CPF do usuário',
+        nullable: true,
     })
-    cpf: string;
+    cpf: string | null;
 
     @ApiProperty({
         example: true,

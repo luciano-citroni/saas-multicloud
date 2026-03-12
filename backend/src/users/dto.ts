@@ -6,7 +6,7 @@ const userIdSchema = z.string().uuid();
 const userBaseSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),
-    cpf: cpfValidator,
+    cpf: cpfValidator.optional(),
 });
 
 export const createUserSchema = userBaseSchema.extend({

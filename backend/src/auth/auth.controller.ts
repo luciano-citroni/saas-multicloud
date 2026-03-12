@@ -1,5 +1,8 @@
-import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import type { JwtPayload } from './auth.service';
 import { loginSchema, refreshTokenSchema, registerSchema, registerWithInviteSchema } from './dto';
@@ -7,12 +10,16 @@ import type { LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto } fr
 import { CurrentUser, Public, AllowMissingOrganization } from './decorators';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, UserResponseDto, LogoutResponseDto } from './swagger.dto';
+import { RegisterRequestDto, LoginRequestDto, RefreshTokenRequestDto, AuthResponseDto, AuthUserResponseDto, LogoutResponseDto } from './swagger.dto';
+import type { GoogleProfile } from './google.strategy';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
+    constructor(
+        private readonly authService: AuthService,
+        private readonly configService: ConfigService
+    ) {}
 
     @Public()
     @Post('register')
@@ -22,7 +29,7 @@ export class AuthController {
         description: 'Dados para registrar novo usuário',
         type: RegisterRequestDto,
     })
-    @ApiResponse({ status: 200, description: 'Usuário registrado com sucesso', type: UserResponseDto })
+    @ApiResponse({ status: 200, description: 'Usuário registrado com sucesso', type: AuthUserResponseDto })
     @ApiResponse({
         status: 400,
         description: 'Erro de validação',
@@ -175,12 +182,32 @@ export class AuthController {
     @UseGuards(TenantGuard)
     @ApiBearerAuth('access-token')
     @ApiOperation({ summary: 'Obter dados do usuário autenticado' })
-    @ApiResponse({ status: 200, description: 'Dados do usuário', type: UserResponseDto })
+    @ApiResponse({ status: 200, description: 'Dados do usuário', type: AuthUserResponseDto })
     @ApiResponse({
         status: 401,
         description: 'Token inválido ou expirado',
     })
     getMe(@CurrentUser() user: JwtPayload) {
         return this.authService.getMe(user.sub);
+    }
+
+    @Public()
+    @Get('google')
+    @UseGuards(AuthGuard('google'))
+    @ApiOperation({ summary: 'Iniciar autenticação com Google' })
+    @ApiResponse({ status: 302, description: 'Redireciona para a página de autenticação do Google' })
+    googleAuth() {
+        // O guard do Passport redireciona para o Google automaticamente
+    }
+
+    @Public()
+    @Get('google/callback')
+    @UseGuards(AuthGuard('google'))
+    @ApiOperation({ summary: 'Callback do Google OAuth' })
+    @ApiResponse({ status: 302, description: 'Redireciona para o frontend com o token JWT' })
+    async googleCallback(@CurrentUser() googleUser: GoogleProfile, @Res() res: Response) {
+        const { accessToken } = await this.authService.googleAuthOrRegister(googleUser);
+        const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
+        res.redirect(`${frontendUrl}/auth/google/callback?token=${accessToken}`);
     }
 }

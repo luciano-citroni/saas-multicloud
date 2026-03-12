@@ -4,7 +4,7 @@ import { cpfValidator, passwordValidator } from '../common/validators';
 export const registerSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),
-    cpf: cpfValidator,
+    cpf: cpfValidator.optional(),
     password: passwordValidator,
 });
 export type RegisterDto = z.infer<typeof registerSchema>;

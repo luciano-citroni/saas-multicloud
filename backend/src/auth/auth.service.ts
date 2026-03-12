@@ -32,13 +32,16 @@ export class AuthService {
         const existingEmail = await this.usersService.findByEmail(normalizedEmail);
         if (existingEmail) throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
 
-        const existingCpf = await this.usersService.findByCpf(dto.cpf);
-        if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
+        if (dto.cpf) {
+            const existingCpf = await this.usersService.findByCpf(dto.cpf);
+            if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
+        }
 
         try {
             const user = await this.usersService.create({
                 ...dto,
                 email: normalizedEmail,
+                cpf: dto.cpf,
                 password: dto.password,
             });
 
@@ -116,6 +119,8 @@ export class AuthService {
         const user = await this.usersService.findByEmail(normalizedEmail);
         if (!user) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
 
+        if (!user.password) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
+
         const passwordMatch = await bcrypt.compare(dto.password, user.password);
         if (!passwordMatch) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
 
@@ -173,6 +178,30 @@ export class AuthService {
     async logout(sessionId: string) {
         await this.sessionRepository.delete({ id: sessionId });
         return { success: true };
+    }
+
+    async googleAuthOrRegister(googleUser: { googleId: string; email: string; name: string }) {
+        const normalizedEmail = googleUser.email.toLowerCase();
+
+        let user = await this.usersService.findByGoogleId(googleUser.googleId);
+
+        if (!user) {
+            const existingByEmail = await this.usersService.findByEmail(normalizedEmail);
+            if (existingByEmail) {
+                await this.usersService.linkGoogleAccount(existingByEmail.id, googleUser.googleId);
+                user = { ...existingByEmail, googleId: googleUser.googleId } as any;
+            } else {
+                user = await this.usersService.createWithGoogle({
+                    email: normalizedEmail,
+                    name: googleUser.name,
+                    googleId: googleUser.googleId,
+                });
+            }
+        }
+
+        if (!user!.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
+
+        return this.issueTokens(user!.id);
     }
 
     async getMe(userId: string) {

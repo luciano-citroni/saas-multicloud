@@ -3,9 +3,11 @@ import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtGuard } from './jwt.guard';
+import { GoogleStrategy } from './google.strategy';
 import { UserSession } from '../db/entites/user-session.entity';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../tenant/tenant.module';
@@ -13,6 +15,7 @@ import { OrganizationModule } from '../organization/organization.module';
 
 @Module({
     imports: [
+        PassportModule,
         TypeOrmModule.forFeature([UserSession]),
         JwtModule.registerAsync({
             imports: [ConfigModule],
@@ -28,7 +31,7 @@ import { OrganizationModule } from '../organization/organization.module';
         TenantModule,
         forwardRef(() => OrganizationModule),
     ],
-    providers: [AuthService, JwtGuard],
+    providers: [AuthService, JwtGuard, GoogleStrategy],
     controllers: [AuthController],
     exports: [JwtGuard, JwtModule],
 })
