@@ -39,5 +39,5 @@ USER nestjs
 # Expor porta da aplicação
 EXPOSE 3000
 
-# Comando para iniciar a aplicação
-CMD ["node", "dist/main"]
+# Comando para aplicar migrations e iniciar a aplicação
+CMD ["sh", "-c", "npm run migration:run:prod && node dist/main"]

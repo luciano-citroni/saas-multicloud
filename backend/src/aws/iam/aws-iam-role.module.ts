@@ -10,5 +10,6 @@ import { AwsIamRole } from '../../db/entites/aws-iam-role.entity';
     imports: [TypeOrmModule.forFeature([AwsIamRole]), AwsConnectorModule, TenantModule],
     providers: [AwsIamRoleService],
     controllers: [AwsIamRoleController],
+    exports: [AwsIamRoleService],
 })
 export class AwsIamModule {}

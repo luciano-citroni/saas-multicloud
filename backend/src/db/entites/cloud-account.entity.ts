@@ -1,12 +1,4 @@
-import {
-    Column,
-    CreateDateColumn,
-    Entity,
-    JoinColumn,
-    ManyToOne,
-    PrimaryGeneratedColumn,
-    UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { Organization } from './organization.entity';
 
 /**
@@ -61,6 +53,9 @@ export class CloudAccount {
 
     @Column({ type: 'boolean', default: true, name: 'is_active' })
     isActive!: boolean;
+
+    @Column({ type: 'timestamp', nullable: true, name: 'last_general_sync_at' })
+    lastGeneralSyncAt!: Date | null;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

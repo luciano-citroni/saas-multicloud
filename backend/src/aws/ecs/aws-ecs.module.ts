@@ -15,5 +15,6 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
     ],
     providers: [EcsService],
     controllers: [AwsEcsController],
+    exports: [EcsService],
 })
 export class AwsEcsModule {}

@@ -2,13 +2,26 @@ import { z } from 'zod';
 import { CloudProvider } from '../db/entites/cloud-account.entity';
 
 const cloudProviderSchema = z.enum([CloudProvider.AWS, CloudProvider.AZURE, CloudProvider.GCP]);
+const awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
+const awsRegionSchema = z.string({ invalid_type_error: 'região inválida' }).trim().regex(awsRegionRegex, 'região AWS inválida (ex: us-east-1)');
 
 // Schema para credenciais AWS
-const awsCredentialsSchema = z.object({
-    roleArn: z.string({ required_error: 'roleArn é obrigatório', invalid_type_error: 'roleArn inválido' }),
-    region: z.string({ required_error: 'region é obrigatória', invalid_type_error: 'region inválida' }),
-    externalId: z.string().optional(),
-});
+const awsCredentialsSchema = z
+    .object({
+        roleArn: z.string({ required_error: 'roleArn é obrigatório', invalid_type_error: 'roleArn inválido' }),
+        region: awsRegionSchema.optional(),
+        regions: z.array(awsRegionSchema, { invalid_type_error: 'regions inválida' }).min(1, 'regions deve conter ao menos 1 região').optional(),
+        externalId: z.string().optional(),
+    })
+    .superRefine((credentials, ctx) => {
+        if (!credentials.region && (!credentials.regions || credentials.regions.length === 0)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Informe credentials.region ou credentials.regions',
+                path: ['region'],
+            });
+        }
+    });
 
 export const createCloudAccountSchema = z
     .object({

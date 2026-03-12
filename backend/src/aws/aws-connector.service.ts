@@ -2,17 +2,33 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { EC2Client } from '@aws-sdk/client-ec2';
 import { ECSClient } from '@aws-sdk/client-ecs';
+import { EKSClient } from '@aws-sdk/client-eks';
 import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { IAMClient } from '@aws-sdk/client-iam';
 import { RDSClient } from '@aws-sdk/client-rds';
 import { S3Client } from '@aws-sdk/client-s3';
 import { CloudFrontClient } from '@aws-sdk/client-cloudfront';
+import { Route53Client } from '@aws-sdk/client-route-53';
+import { CloudWatchClient } from '@aws-sdk/client-cloudwatch';
+import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
+import { LambdaClient } from '@aws-sdk/client-lambda';
+import { APIGatewayClient } from '@aws-sdk/client-api-gateway';
+import { KMSClient } from '@aws-sdk/client-kms';
+import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { ECRClient } from '@aws-sdk/client-ecr';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { ElastiCacheClient } from '@aws-sdk/client-elasticache';
+import { SQSClient } from '@aws-sdk/client-sqs';
+import { SNSClient } from '@aws-sdk/client-sns';
+import { WAFV2Client } from '@aws-sdk/client-wafv2';
+import { GuardDutyClient } from '@aws-sdk/client-guardduty';
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 import { CloudService } from '../cloud/cloud.service';
 
 export interface AwsRoleCredentials {
     roleArn: string;
     region: string;
+    regions?: string[];
     externalId?: string;
 }
 
@@ -51,13 +67,20 @@ export class AwsConnectorService {
         if (!raw.roleArn || typeof raw.roleArn !== 'string') {
             throw new BadRequestException('Credencial AWS inválida: campo "roleArn" ausente ou inválido.');
         }
-        if (!raw.region || typeof raw.region !== 'string') {
-            throw new BadRequestException('Credencial AWS inválida: campo "region" ausente ou inválido.');
+
+        const regions = Array.isArray(raw.regions)
+            ? raw.regions.filter((region: unknown): region is string => typeof region === 'string' && region.trim() !== '')
+            : [];
+        const primaryRegion = typeof raw.region === 'string' && raw.region.trim() !== '' ? raw.region.trim() : regions[0];
+
+        if (!primaryRegion) {
+            throw new BadRequestException('Credencial AWS inválida: informe "region" ou "regions".');
         }
 
         return {
             roleArn: raw.roleArn,
-            region: raw.region,
+            region: primaryRegion,
+            regions: regions.length > 0 ? regions : [primaryRegion],
             externalId: raw.externalId as string | undefined,
         };
     }
@@ -142,6 +165,16 @@ export class AwsConnectorService {
     }
 
     /**
+     * Retorna um EKSClient autenticado via AssumeRole.
+     */
+    async getEksClient(cloudAccountId: string, organizationId: string): Promise<EKSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new EKSClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
      * Retorna um ElasticLoadBalancingV2Client autenticado via AssumeRole.
      */
     async getElbV2Client(cloudAccountId: string, organizationId: string, region?: string): Promise<ElasticLoadBalancingV2Client> {
@@ -197,9 +230,147 @@ export class AwsConnectorService {
         return new CloudFrontClient({ region: creds.region, credentials: temporaryCreds });
     }
 
-    // ---------------------------------------------------------------------------
-    // Adicione aqui outros factory methods conforme novos módulos forem criados:
-    //
-    // async getLambdaClient(cloudAccountId: string, organizationId: string): Promise<LambdaClient>
-    // ---------------------------------------------------------------------------
+    /**
+     * Retorna um Route53Client autenticado via AssumeRole.
+     * Route53 é um serviço global.
+     */
+    async getRoute53Client(cloudAccountId: string, organizationId: string): Promise<Route53Client> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new Route53Client({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um CloudWatchClient autenticado via AssumeRole.
+     */
+    async getCloudWatchClient(cloudAccountId: string, organizationId: string): Promise<CloudWatchClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new CloudWatchClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um CloudTrailClient autenticado via AssumeRole.
+     */
+    async getCloudTrailClient(cloudAccountId: string, organizationId: string): Promise<CloudTrailClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new CloudTrailClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um LambdaClient autenticado via AssumeRole.
+     */
+    async getLambdaClient(cloudAccountId: string, organizationId: string): Promise<LambdaClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new LambdaClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um APIGatewayClient autenticado via AssumeRole.
+     */
+    async getApiGatewayClient(cloudAccountId: string, organizationId: string): Promise<APIGatewayClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new APIGatewayClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um KMSClient autenticado via AssumeRole.
+     */
+    async getKmsClient(cloudAccountId: string, organizationId: string): Promise<KMSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new KMSClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um SecretsManagerClient autenticado via AssumeRole.
+     */
+    async getSecretsManagerClient(cloudAccountId: string, organizationId: string): Promise<SecretsManagerClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new SecretsManagerClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um ECRClient autenticado via AssumeRole.
+     */
+    async getEcrClient(cloudAccountId: string, organizationId: string): Promise<ECRClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new ECRClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um DynamoDBClient autenticado via AssumeRole.
+     */
+    async getDynamoDbClient(cloudAccountId: string, organizationId: string): Promise<DynamoDBClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new DynamoDBClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um ElastiCacheClient autenticado via AssumeRole.
+     */
+    async getElastiCacheClient(cloudAccountId: string, organizationId: string): Promise<ElastiCacheClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new ElastiCacheClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um SQSClient autenticado via AssumeRole.
+     */
+    async getSqsClient(cloudAccountId: string, organizationId: string): Promise<SQSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new SQSClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um SNSClient autenticado via AssumeRole.
+     */
+    async getSnsClient(cloudAccountId: string, organizationId: string): Promise<SNSClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new SNSClient({ region: creds.region, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um WAFV2Client autenticado via AssumeRole.
+     * Para Web ACLs CLOUDFRONT, a região deve obrigatoriamente ser us-east-1.
+     * Passe region='us-east-1' para esse caso.
+     */
+    async getWafV2Client(cloudAccountId: string, organizationId: string, region?: string): Promise<WAFV2Client> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const finalRegion = region ?? creds.region;
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new WAFV2Client({ region: finalRegion, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um GuardDutyClient autenticado via AssumeRole.
+     */
+    async getGuardDutyClient(cloudAccountId: string, organizationId: string): Promise<GuardDutyClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const temporaryCreds = await this.assumeRole(creds);
+
+        return new GuardDutyClient({ region: creds.region, credentials: temporaryCreds });
+    }
 }

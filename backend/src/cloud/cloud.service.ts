@@ -8,11 +8,37 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class CloudService {
+    private readonly awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
+
     constructor(
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
         private readonly configService: ConfigService
     ) {}
+
+    private normalizeAwsCredentials(credentials: Record<string, any>): Record<string, any> {
+        const regionFromField = typeof credentials.region === 'string' ? credentials.region.trim().toLowerCase() : '';
+        const regionsFromField = Array.isArray(credentials.regions)
+            ? credentials.regions.filter((region): region is string => typeof region === 'string').map((region) => region.trim().toLowerCase())
+            : [];
+
+        const mergedRegions = [regionFromField, ...regionsFromField].filter((region) => region.length > 0);
+        const uniqueRegions = Array.from(new Set(mergedRegions));
+
+        if (uniqueRegions.length === 0) {
+            throw new BadRequestException({
+                error: 'ValidationException',
+                message: 'Credencial AWS inválida: informe "region" ou "regions" com ao menos uma região.',
+                details: { field: 'credentials.region' },
+            });
+        }
+
+        return {
+            ...credentials,
+            region: uniqueRegions[0],
+            regions: uniqueRegions,
+        };
+    }
 
     /**
      * Criptografa as credenciais usando AES-256-GCM.
@@ -100,13 +126,38 @@ export class CloudService {
                     details: { field: 'credentials.roleArn' },
                 });
             }
-            if (!credentials.region || typeof credentials.region !== 'string') {
+
+            const hasValidRegion = typeof credentials.region === 'string' && credentials.region.trim() !== '';
+            const hasValidRegions = Array.isArray(credentials.regions) && credentials.regions.length > 0;
+            if (!hasValidRegion && !hasValidRegions) {
                 throw new BadRequestException({
                     error: 'ValidationException',
-                    message: 'Credencial AWS inválida: campo "region" ausente ou inválido.',
+                    message: 'Credencial AWS inválida: informe "region" ou "regions".',
                     details: { field: 'credentials.region' },
                 });
             }
+
+            if (hasValidRegion && !this.awsRegionRegex.test(credentials.region.trim())) {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial AWS inválida: "region" está em formato inválido (ex: us-east-1).',
+                    details: { field: 'credentials.region' },
+                });
+            }
+
+            if (hasValidRegions) {
+                const invalidRegion = credentials.regions.find(
+                    (region: unknown) => typeof region !== 'string' || !this.awsRegionRegex.test(region.trim())
+                );
+                if (invalidRegion) {
+                    throw new BadRequestException({
+                        error: 'ValidationException',
+                        message: 'Credencial AWS inválida: "regions" contém valor inválido (ex: us-east-1).',
+                        details: { field: 'credentials.regions' },
+                    });
+                }
+            }
+
             if (credentials.externalId && typeof credentials.externalId !== 'string') {
                 throw new BadRequestException({
                     error: 'ValidationException',
@@ -131,11 +182,13 @@ export class CloudService {
             });
         }
 
+        const normalizedCredentials = dto.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : dto.credentials;
+
         // Validar credenciais específicas do provider
-        this.validateCredentialsForProvider(dto.provider as CloudProvider, dto.credentials);
+        this.validateCredentialsForProvider(dto.provider as CloudProvider, normalizedCredentials);
 
         // Criptografar as credenciais
-        const encryptedCredentials = this.encryptCredentials(dto.credentials);
+        const encryptedCredentials = this.encryptCredentials(normalizedCredentials);
 
         // Criar a conta
         const cloudAccount = this.cloudAccountRepository.create({

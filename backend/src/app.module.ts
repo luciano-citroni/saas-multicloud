@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DbModule } from './db/db.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { OrganizationModule } from './organization/organization.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +20,16 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
     imports: [
         ConfigModule.forRoot({ isGlobal: true }),
         ScheduleModule.forRoot(),
+        BullModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => ({
+                connection: {
+                    host: config.get<string>('REDIS_HOST', 'localhost'),
+                    port: config.get<number>('REDIS_PORT', 6379),
+                    password: config.get<string>('REDIS_PASSWORD') || undefined,
+                },
+            }),
+        }),
         TypeOrmModule.forFeature([UserSession]),
         DbModule,
         OrganizationModule,

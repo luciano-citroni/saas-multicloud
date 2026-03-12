@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CloudProvider } from '../db/entites/cloud-account.entity';
 
 export class CloudAccountResponseDto {
@@ -43,14 +43,32 @@ export class CloudAccountResponseDto {
         description: 'Data da última atualização',
     })
     updatedAt: Date;
+
+    @ApiProperty({
+        example: '2026-03-11T11:20:00Z',
+        description: 'Data/hora do último sync geral executado para a conta',
+        required: false,
+        nullable: true,
+    })
+    lastGeneralSyncAt: Date | null;
 }
 
 export class AwsCredentialsDto {
     @ApiProperty({ example: 'arn:aws:iam::123456789012:role/SaasMulticloudRole', description: 'ARN da role a ser assumida' })
     roleArn: string;
 
-    @ApiProperty({ example: 'us-east-1', description: 'Região AWS associada à conta' })
-    region: string;
+    @ApiPropertyOptional({
+        example: 'us-east-1',
+        description: 'Região AWS principal da conta. Envie este campo ou `regions`.',
+    })
+    region?: string;
+
+    @ApiPropertyOptional({
+        example: ['us-east-1', 'us-west-2'],
+        description: 'Lista de regiões AWS associadas à conta. Envie este campo ou `region`.',
+        type: [String],
+    })
+    regions?: string[];
 
     @ApiProperty({ example: 'external-id-123', description: 'External ID para cross-account (opcional)', required: false })
     externalId?: string;

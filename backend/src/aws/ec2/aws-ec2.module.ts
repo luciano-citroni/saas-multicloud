@@ -10,5 +10,6 @@ import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from 
     imports: [TypeOrmModule.forFeature([AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole]), AwsConnectorModule, TenantModule],
     providers: [Ec2Service],
     controllers: [Ec2Controller],
+    exports: [Ec2Service],
 })
 export class Ec2Module {}

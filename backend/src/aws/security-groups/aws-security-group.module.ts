@@ -11,5 +11,6 @@ import { AwsVpc } from '../../db/entites/index';
     imports: [TypeOrmModule.forFeature([AwsSecurityGroup, AwsVpc]), AwsConnectorModule, TenantModule],
     controllers: [AwsSecurityGroupController],
     providers: [AwsSecurityGroupService],
+    exports: [AwsSecurityGroupService],
 })
 export class AwsSecurityGroupModule {}

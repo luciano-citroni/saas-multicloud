@@ -10,5 +10,6 @@ import { AwsRdsInstance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from 
     imports: [TypeOrmModule.forFeature([AwsRdsInstance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole]), AwsConnectorModule, TenantModule],
     providers: [AwsRdsService],
     controllers: [AwsRdsController],
+    exports: [AwsRdsService],
 })
 export class AwsRdsModule {}

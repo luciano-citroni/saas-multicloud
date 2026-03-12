@@ -10,5 +10,6 @@ import { AwsS3Bucket } from '../../db/entites/aws-s3-bucket.entity';
     imports: [TypeOrmModule.forFeature([AwsS3Bucket]), AwsConnectorModule, TenantModule],
     providers: [S3Service],
     controllers: [S3Controller],
+    exports: [S3Service],
 })
 export class AwsS3Module {}

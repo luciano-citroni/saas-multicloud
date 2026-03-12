@@ -10,5 +10,6 @@ import { AwsVpc, AwsSubnet } from '../../db/entites/index';
     imports: [TypeOrmModule.forFeature([AwsVpc, AwsSubnet]), AwsConnectorModule, TenantModule],
     controllers: [AwsNetworkingController],
     providers: [AwsNetworkingService],
+    exports: [AwsNetworkingService],
 })
 export class AwsNetworkingModule {}

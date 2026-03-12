@@ -10,5 +10,6 @@ import { AwsLoadBalancer, AwsLoadBalancerListener, AwsVpc, AwsSubnet, AwsSecurit
     imports: [TypeOrmModule.forFeature([AwsLoadBalancer, AwsLoadBalancerListener, AwsVpc, AwsSubnet, AwsSecurityGroup]), AwsConnectorModule, TenantModule],
     providers: [AwsLoadBalancerService],
     controllers: [AwsLoadBalancerController],
+    exports: [AwsLoadBalancerService],
 })
 export class AwsLoadBalancerModule {}

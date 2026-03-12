@@ -214,42 +214,41 @@ export class EcsService {
     async syncTaskDefinitionsFromAws(cloudAccountId: string, organizationId: string, family?: string) {
         const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId);
 
-        // Lista apenas as últimas versões das task definitions
-        const { taskDefinitionArns } = await ecs
-            .send(
-                new ListTaskDefinitionsCommand({
-                    familyPrefix: family,
-                    status: 'ACTIVE',
-                    sort: 'DESC', // Ordena por versão descendente (mais recente primeiro)
-                    maxResults: family ? undefined : 100, // Limite razoável quando buscar todas
-                })
-            )
-            .catch(() => {
-                throw new BadRequestException('Falha ao listar task definitions ECS na AWS. Verifique as permissões da role (ecs:ListTaskDefinitions).');
-            });
+        // Lista TODAS as revisões ativas com paginação para cobrir task definitions
+        // ainda referenciadas por serviços (não apenas a revisão mais recente).
+        const allTaskDefinitionArns: string[] = [];
+        let nextToken: string | undefined;
 
-        if (!taskDefinitionArns || taskDefinitionArns.length === 0) {
+        do {
+            const response = await ecs
+                .send(
+                    new ListTaskDefinitionsCommand({
+                        familyPrefix: family,
+                        status: 'ACTIVE',
+                        sort: 'DESC',
+                        maxResults: 100,
+                        nextToken,
+                    })
+                )
+                .catch(() => {
+                    throw new BadRequestException(
+                        'Falha ao listar task definitions ECS na AWS. Verifique as permissões da role (ecs:ListTaskDefinitions).'
+                    );
+                });
+
+            allTaskDefinitionArns.push(...(response.taskDefinitionArns ?? []));
+            nextToken = response.nextToken;
+        } while (nextToken);
+
+        const uniqueTaskDefArns = Array.from(new Set(allTaskDefinitionArns));
+
+        if (uniqueTaskDefArns.length === 0) {
             return [];
         }
-
-        // Filtra para manter apenas a última versão de cada família
-        const latestByFamily = new Map<string, string>();
-        for (const arn of taskDefinitionArns) {
-            // ARN format: arn:aws:ecs:region:account:task-definition/family:revision
-            const parts = arn.split('/')[1].split(':');
-            const familyName = parts[0];
-
-            if (!latestByFamily.has(familyName)) {
-                latestByFamily.set(familyName, arn);
-            }
-        }
-
-        const latestTaskDefArns = Array.from(latestByFamily.values());
         const now = new Date();
         const mappedTaskDefs: any[] = [];
 
-        // Descreve apenas as últimas task definitions
-        for (const taskDefArn of latestTaskDefArns) {
+        for (const taskDefArn of uniqueTaskDefArns) {
             const { taskDefinition } = await ecs
                 .send(new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn, include: ['TAGS'] }))
                 .catch((error: any) => {

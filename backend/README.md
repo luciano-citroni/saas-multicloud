@@ -44,6 +44,38 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Database migrations
+
+```bash
+# create empty migration
+$ npm run migration:create --name=nome-da-migration
+
+# generate migration based on entity changes
+$ npm run migration:generate --name=nome-da-migration
+
+# run migrations in development
+$ npm run migration:run
+
+# revert last migration
+$ npm run migration:revert
+
+# list migration status
+$ npm run migration:show
+```
+
+### Production flow (recommended)
+
+```bash
+# 1) build artifacts
+$ npm run build
+
+# 2) run migrations against production database
+$ npm run migration:run:prod
+
+# 3) start application
+$ npm run start:prod
+```
+
 ## Run tests
 
 ```bash
