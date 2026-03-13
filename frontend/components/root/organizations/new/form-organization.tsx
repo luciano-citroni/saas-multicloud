@@ -11,6 +11,9 @@ import { Building2, IdCardLanyard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { formatCNPJ } from '@/lib/validators/cnpj';
+import { InputMaskForm } from '@/components/ui/mask-input-form';
+import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 
 type CreateOrganizationResponse = {
     id?: string;
@@ -30,7 +33,7 @@ export function FormOrganization() {
         },
     });
 
-    const onSubmit = async (data: z.infer<typeof organizationFormScheme>) => {
+    const onSubmit = form.handleSubmit(async (data) => {
         setIsLoading(true);
         try {
             const response = await fetch('/api/organization', {
@@ -50,7 +53,8 @@ export function FormOrganization() {
             }
 
             if (payload && typeof payload === 'object' && 'id' in payload && typeof payload.id === 'string') {
-                window.localStorage.setItem('smc_active_organization_id', payload.id);
+                window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, payload.id);
+                notifySidebarContextUpdated();
             }
 
             toast.success('Organizacao criada com sucesso.');
@@ -61,12 +65,12 @@ export function FormOrganization() {
         } finally {
             setIsLoading(false);
         }
-    };
+    });
 
     return (
         <div className="w-full gap-3 flex flex-col">
             <Form {...form}>
-                <form className="flex flex-col gap-4">
+                <form className="flex flex-col gap-4" onSubmit={onSubmit}>
                     <FormField
                         control={form.control}
                         name="name"
@@ -81,23 +85,43 @@ export function FormOrganization() {
                         )}
                     />
 
-                    <FormField
+                    <InputMaskForm
+                        form={form}
+                        label="CNPJ"
+                        maxLength={18}
+                        name="cnpj"
+                        placeholder="CNPJ da organização"
+                        icon={IdCardLanyard}
+                        formatter={formatCNPJ}
+                    />
+
+                    {/* <FormField
                         control={form.control}
                         name="cnpj"
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>CNPJ</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="CNPJ da organização" StartIcon={IdCardLanyard} {...field} />
+                                    <IconInput
+                                        placeholder="CNPJ da organização"
+                                        StartIcon={IdCardLanyard}
+                                        {...field}
+                                        onChange={(e) => {
+                                            const formatted = formatCNPJ(e.target.value);
+                                            field.onChange(formatted);
+                                        }}
+                                    />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
                         )}
-                    />
+                    /> */}
                 </form>
             </Form>
             <div className="w-full flex justify-end items-end">
-                <Button isLoading={isLoading}>Criar organização</Button>
+                <Button isLoading={isLoading} onClick={onSubmit}>
+                    Criar organização
+                </Button>
             </div>
         </div>
     );

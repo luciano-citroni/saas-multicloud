@@ -21,7 +21,7 @@ async function bootstrap() {
     };
     const levels = (levelMap[rawLevel as 'info' | 'warn' | 'error'] ?? levelMap['info']) as LogLevel[];
 
-    const app = await NestFactory.create(AppModule, { logger: levels });
+    const app = await NestFactory.create(AppModule, { logger: levels, rawBody: true });
     const expressApp = app.getHttpAdapter().getInstance();
 
     expressApp.disable('x-powered-by');

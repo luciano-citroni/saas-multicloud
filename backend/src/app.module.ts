@@ -15,6 +15,7 @@ import { UserSession } from './db/entites/user-session.entity';
 import { CloudModule } from './cloud/cloud.module';
 import { AwsModule } from './aws/aws.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
     imports: [
@@ -37,6 +38,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
         AuthModule,
         CloudModule,
         AwsModule,
+        BillingModule,
     ],
     controllers: [AppController],
     providers: [AppService, { provide: APP_GUARD, useClass: JwtGuard }, { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor }],

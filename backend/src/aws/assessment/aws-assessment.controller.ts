@@ -82,7 +82,7 @@ export class AwsAssessmentController {
     @HttpCode(200)
     @ApiOperation({
         summary: 'Gerar arquitetura AWS da conta',
-        description: 'Usa as tabelas já sincronizadas como fonte de verdade e retorna a arquitetura em JSON e diagrama Mermaid.',
+        description: 'Usa as tabelas já sincronizadas como fonte de verdade e retorna um grafo de arquitetura pronto para React Flow.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Arquitetura gerada com sucesso', type: AssessmentArchitectureResponseDto })

@@ -1,10 +1,12 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CloudAccount, CloudProvider } from '../db/entites/cloud-account.entity';
 import type { CreateCloudAccountDto } from './dto';
 import * as crypto from 'crypto';
+import { BillingService } from '../billing/billing.service';
+import { ErrorMessages } from '../common/messages/error-messages';
 
 @Injectable()
 export class CloudService {
@@ -13,7 +15,8 @@ export class CloudService {
     constructor(
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        private readonly billingService: BillingService
     ) {}
 
     private normalizeAwsCredentials(credentials: Record<string, any>): Record<string, any> {
@@ -173,6 +176,14 @@ export class CloudService {
      * Cria uma nova conta de cloud vinculada à organização.
      */
     async createCloudAccount(organizationId: string, dto: CreateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
+        const plan = await this.billingService.getActivePlanForOrganization(organizationId);
+        if (plan.metadata.maxCloudAccounts > 0) {
+            const currentAccountsCount = await this.cloudAccountRepository.count({ where: { organizationId } });
+            if (currentAccountsCount >= plan.metadata.maxCloudAccounts) {
+                throw new ForbiddenException(ErrorMessages.PLANS.CLOUD_ACCOUNT_LIMIT_REACHED);
+            }
+        }
+
         // Validar o provider
         if (!Object.values(CloudProvider).includes(dto.provider as CloudProvider)) {
             throw new BadRequestException({

@@ -61,34 +61,95 @@ export interface ArchitectureModel {
     };
 }
 
+export interface ReactFlowNodeData {
+    label: string;
+    resourceType: string;
+    awsId?: string;
+    status?: string;
+    details?: Record<string, unknown>;
+    group?: {
+        vpcId?: string;
+        vpcName?: string;
+        region?: string;
+    };
+}
+
+export interface ReactFlowNode {
+    id: string;
+    type: 'default';
+    position: {
+        x: number;
+        y: number;
+    };
+    data: ReactFlowNodeData;
+}
+
+export interface ReactFlowEdge {
+    id: string;
+    source: string;
+    target: string;
+    label?: string;
+    type?: 'smoothstep';
+    animated?: boolean;
+    data?: {
+        relationship: string;
+    };
+}
+
+export interface ReactFlowGraph {
+    nodes: ReactFlowNode[];
+    edges: ReactFlowEdge[];
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
 export class AwsAssessmentArchitectureService {
     buildArchitectureModel(cloudAccountId: string, data: AssessmentData): ArchitectureModel {
-        // vpcMap keyed by UUID (vpc.id) — covers all entity FK lookups
         const vpcMap = new Map<string, ArchitectureVpc>();
+        const loadBalancerVpcMap = new Map<string, string>();
+
+        const buildVpc = (id: string, awsVpcId: string, name: string, cidrBlock: string): ArchitectureVpc => ({
+            id,
+            awsVpcId,
+            name,
+            cidrBlock,
+            subnets: [],
+            securityGroups: [],
+            routeTables: [],
+            loadBalancers: [],
+            databases: [],
+            containers: [],
+            serverless: [],
+            caches: [],
+        });
+
+        let unassignedVpc: ArchitectureVpc | null = null;
+        const getOrCreateUnassignedVpc = (): ArchitectureVpc => {
+            if (unassignedVpc) {
+                return unassignedVpc;
+            }
+
+            const id = `${cloudAccountId}-unassigned`;
+            unassignedVpc = buildVpc(id, 'unassigned', 'Unassigned Resources', 'n/a');
+            vpcMap.set(id, unassignedVpc);
+            return unassignedVpc;
+        };
+
+        const getVpcOrUnassigned = (vpcId?: string | null): ArchitectureVpc => {
+            if (!vpcId) {
+                return getOrCreateUnassignedVpc();
+            }
+
+            return vpcMap.get(vpcId) ?? getOrCreateUnassignedVpc();
+        };
 
         for (const vpc of data.vpcs) {
-            vpcMap.set(vpc.id, {
-                id: vpc.id,
-                awsVpcId: vpc.awsVpcId,
-                name: vpc.tags?.['Name'] ?? vpc.awsVpcId,
-                cidrBlock: vpc.cidrBlock,
-                subnets: [],
-                securityGroups: [],
-                routeTables: [],
-                loadBalancers: [],
-                databases: [],
-                containers: [],
-                serverless: [],
-                caches: [],
-            });
+            vpcMap.set(vpc.id, buildVpc(vpc.id, vpc.awsVpcId, vpc.tags?.['Name'] ?? vpc.awsVpcId, vpc.cidrBlock));
         }
 
-        // Subnets → VPC (vpcId UUID FK)
         for (const subnet of data.subnets) {
-            const vpc = vpcMap.get(subnet.vpcId ?? '');
+            const vpc = getVpcOrUnassigned(subnet.vpcId);
             const subnetType: 'public' | 'private' | 'unknown' =
                 subnet.subnetType === 'public'
                     ? 'public'
@@ -106,7 +167,6 @@ export class AwsAssessmentArchitectureService {
                 resources: [],
             };
 
-            // Assign EC2 instances to this subnet
             const subnetEc2 = data.ec2Instances.filter((ec2) => ec2.awsSubnetId === subnet.awsSubnetId);
             subnetResource.resources.push(
                 ...subnetEc2.map(
@@ -117,132 +177,142 @@ export class AwsAssessmentArchitectureService {
                             name: ec2.tags?.['Name'] ?? ec2.awsInstanceId,
                             awsId: ec2.awsInstanceId,
                             status: ec2.state,
-                            details: { instanceType: ec2.instanceType, privateIp: ec2.privateIpAddress, publicIp: ec2.publicIpAddress },
+                            details: {
+                                instanceType: ec2.instanceType,
+                                privateIp: ec2.privateIpAddress,
+                                publicIp: ec2.publicIpAddress,
+                                availabilityZone: ec2.availabilityZone,
+                            },
                         }) as ArchitectureResource
                 )
             );
 
-            if (vpc) {
-                vpc.subnets.push(subnetResource);
-            }
+            vpc.subnets.push(subnetResource);
         }
 
-        // Security Groups → VPC
         for (const sg of data.securityGroups) {
-            const vpc = vpcMap.get(sg.vpcId ?? '');
-            if (vpc) {
-                vpc.securityGroups.push({ id: sg.id, type: 'Security Group', name: sg.name, awsId: sg.awsSecurityGroupId });
-            }
+            const vpc = getVpcOrUnassigned(sg.vpcId);
+            vpc.securityGroups.push({ id: sg.id, type: 'Security Group', name: sg.name, awsId: sg.awsSecurityGroupId });
         }
 
-        // Route Tables → VPC
         for (const rt of data.routeTables) {
-            const vpc = vpcMap.get(rt.vpcId ?? '');
-            if (vpc) {
-                vpc.routeTables.push({ id: rt.id, type: 'Route Table', name: rt.tags?.['Name'] ?? rt.awsRouteTableId, awsId: rt.awsRouteTableId });
-            }
+            const vpc = getVpcOrUnassigned(rt.vpcId);
+            vpc.routeTables.push({ id: rt.id, type: 'Route Table', name: rt.tags?.['Name'] ?? rt.awsRouteTableId, awsId: rt.awsRouteTableId });
         }
 
-        // Load Balancers → VPC
         for (const lb of data.loadBalancers) {
-            const vpc = vpcMap.get(lb.vpcId ?? '');
-            const resource: ArchitectureResource = {
+            const vpc = getVpcOrUnassigned(lb.vpcId);
+            if (lb.vpcId) {
+                loadBalancerVpcMap.set(lb.id, lb.vpcId);
+            }
+            vpc.loadBalancers.push({
                 id: lb.id,
                 type: `Load Balancer (${lb.type})`,
                 name: lb.name,
                 awsId: lb.awsLoadBalancerArn,
                 status: lb.state,
                 details: { scheme: lb.scheme, dnsName: lb.dnsName },
-            };
-            if (vpc) vpc.loadBalancers.push(resource);
+            });
         }
 
-        // RDS Instances → VPC
+        for (const listener of data.loadBalancerListeners) {
+            const lbVpcId = loadBalancerVpcMap.get(listener.loadBalancerId);
+            const vpc = lbVpcId ? vpcMap.get(lbVpcId) ?? getOrCreateUnassignedVpc() : getOrCreateUnassignedVpc();
+
+            vpc.loadBalancers.push({
+                id: listener.id,
+                type: 'Load Balancer Listener',
+                name: `${listener.protocol}:${listener.port}`,
+                awsId: listener.awsListenerArn,
+                details: { protocol: listener.protocol, port: listener.port, loadBalancerId: listener.loadBalancerId },
+            });
+        }
+
         for (const rds of data.rdsInstances) {
-            const vpc = vpcMap.get(rds.vpcId ?? '');
-            const resource: ArchitectureResource = {
+            const vpc = getVpcOrUnassigned(rds.vpcId);
+            vpc.databases.push({
                 id: rds.id,
                 type: 'RDS Instance',
                 name: rds.awsDbInstanceIdentifier,
                 awsId: rds.dbInstanceArn ?? undefined,
                 status: rds.status,
                 details: { engine: rds.engine, engineVersion: rds.engineVersion, instanceClass: rds.dbInstanceClass },
-            };
-            if (vpc) vpc.databases.push(resource);
+            });
         }
 
-        // ECS Clusters (no direct VPC — attach to first VPC)
         for (const cluster of data.ecsClusters) {
-            const resource: ArchitectureResource = {
+            getOrCreateUnassignedVpc().containers.push({
                 id: cluster.id,
                 type: 'ECS Cluster',
                 name: cluster.clusterName,
                 awsId: cluster.clusterArn,
                 status: cluster.status,
                 details: { runningTasksCount: cluster.runningTasksCount, activeServicesCount: cluster.activeServicesCount },
-            };
-            const firstVpc = vpcMap.values().next().value as ArchitectureVpc | undefined;
-            if (firstVpc) firstVpc.containers.push(resource);
+            });
         }
 
-        // EKS Clusters → VPC
+        const taskDefinitionIdsInUse = new Set(data.ecsServices.map((service) => service.taskDefinitionId));
+        for (const taskDef of data.ecsTaskDefinitions) {
+            if (!taskDefinitionIdsInUse.has(taskDef.id)) {
+                continue;
+            }
+
+            getOrCreateUnassignedVpc().containers.push({
+                id: taskDef.id,
+                type: 'ECS Task Definition',
+                name: `${taskDef.family}:${taskDef.revision}`,
+                awsId: taskDef.taskDefinitionArn,
+                status: taskDef.status,
+                details: { networkMode: taskDef.networkMode, cpu: taskDef.cpu, memory: taskDef.memory },
+            });
+        }
+
+        for (const service of data.ecsServices) {
+            getOrCreateUnassignedVpc().containers.push({
+                id: service.id,
+                type: 'ECS Service',
+                name: service.serviceName,
+                awsId: service.serviceArn,
+                status: service.status,
+                details: {
+                    launchType: service.launchType,
+                    desiredCount: service.desiredCount,
+                    runningCount: service.runningCount,
+                },
+            });
+        }
+
         for (const eks of data.eksClusters) {
-            const resource: ArchitectureResource = {
+            getVpcOrUnassigned(eks.vpcId).containers.push({
                 id: eks.id,
                 type: 'EKS Cluster',
                 name: eks.clusterName,
                 awsId: eks.clusterArn,
                 status: eks.status,
                 details: { version: eks.version, endpoint: eks.endpoint },
-            };
-            const vpc = vpcMap.get(eks.vpcId ?? '');
-            if (vpc) {
-                vpc.containers.push(resource);
-            } else {
-                const firstVpc = vpcMap.values().next().value as ArchitectureVpc | undefined;
-                if (firstVpc) firstVpc.containers.push(resource);
-            }
+            });
         }
 
-        // Lambda Functions → VPC
         for (const fn of data.lambdaFunctions) {
-            const resource: ArchitectureResource = {
+            getVpcOrUnassigned(fn.vpcId).serverless.push({
                 id: fn.id,
                 type: 'Lambda Function',
                 name: fn.functionName,
                 awsId: fn.functionArn,
                 status: fn.state ?? undefined,
                 details: { runtime: fn.runtime, memorySize: fn.memorySize },
-            };
-            if (fn.vpcId) {
-                const vpc = vpcMap.get(fn.vpcId);
-                if (vpc) {
-                    vpc.serverless.push(resource);
-                    continue;
-                }
-            }
-            // non-VPC Lambda — attach to first VPC if any
-            const firstVpc = vpcMap.values().next().value as ArchitectureVpc | undefined;
-            if (firstVpc) firstVpc.serverless.push(resource);
+            });
         }
 
-        // ElastiCache → VPC
         for (const cache of data.elastiCacheClusters) {
-            const resource: ArchitectureResource = {
+            getVpcOrUnassigned(cache.vpcId).caches.push({
                 id: cache.id,
                 type: 'ElastiCache Cluster',
                 name: cache.cacheClusterId,
                 awsId: cache.clusterArn ?? undefined,
                 status: cache.cacheClusterStatus ?? undefined,
                 details: { engine: cache.engine, nodeType: cache.cacheNodeType },
-            };
-            const vpc = vpcMap.get(cache.vpcId ?? '');
-            if (vpc) {
-                vpc.caches.push(resource);
-            } else {
-                const firstVpc = vpcMap.values().next().value as ArchitectureVpc | undefined;
-                if (firstVpc) firstVpc.caches.push(resource);
-            }
+            });
         }
 
         return {
@@ -251,7 +321,7 @@ export class AwsAssessmentArchitectureService {
             vpcs: Array.from(vpcMap.values()),
             globalResources: {
                 s3Buckets: data.s3Buckets.map(
-                    (b) => ({ id: b.id, type: 'S3 Bucket', name: b.bucketName, details: { region: b.region } }) as ArchitectureResource
+                    (b) => ({ id: b.id, type: 'S3 Bucket', name: b.bucketName, region: b.region, details: { region: b.region } }) as ArchitectureResource
                 ),
                 cloudFrontDistributions: data.cloudFrontDistributions.map(
                     (cf) =>
@@ -268,10 +338,24 @@ export class AwsAssessmentArchitectureService {
                 ),
                 iamRoles: data.iamRoles.map((r) => ({ id: r.id, type: 'IAM Role', name: r.roleName, awsId: r.roleArn }) as ArchitectureResource),
                 cloudTrailTrails: data.cloudTrailTrails.map(
-                    (t) => ({ id: t.id, type: 'CloudTrail Trail', name: t.name, awsId: t.trailArn }) as ArchitectureResource
+                    (t) =>
+                        ({
+                            id: t.id,
+                            type: 'CloudTrail Trail',
+                            name: t.name,
+                            awsId: t.trailArn,
+                            region: (t as unknown as { homeRegion?: string }).homeRegion,
+                        }) as ArchitectureResource
                 ),
                 cloudWatchAlarms: data.cloudWatchAlarms.map(
-                    (a) => ({ id: a.id, type: 'CloudWatch Alarm', name: a.alarmName, status: a.stateValue }) as ArchitectureResource
+                    (a) =>
+                        ({
+                            id: a.id,
+                            type: 'CloudWatch Alarm',
+                            name: a.alarmName,
+                            status: a.stateValue,
+                            region: (a as unknown as { region?: string }).region,
+                        }) as ArchitectureResource
                 ),
                 guardDutyDetectors: data.guardDutyDetectors.map(
                     (g) => ({ id: g.id, type: 'GuardDuty Detector', name: g.detectorId, status: g.status ?? undefined }) as ArchitectureResource
@@ -298,32 +382,406 @@ export class AwsAssessmentArchitectureService {
         };
     }
 
-    buildMermaidDiagram(model: ArchitectureModel): string {
-        // Ajustes de layout via init: aumenta espaçamento entre nós e camadas
-        const lines: string[] = ['%%{init: {"flowchart": {"nodeSpacing": 120, "rankSpacing": 80, "curve": "linear"}}}%%', 'graph TB', ''];
-        const limits = {
-            maxVpcs: 6,
-            maxSubnetsPerVpc: 8,
-            maxEc2PerSubnet: 6,
-            maxLoadBalancersPerVpc: 5,
-            maxDatabasesPerVpc: 4,
-            maxContainersPerVpc: 4,
-            maxCachesPerVpc: 4,
-            maxS3: 6,
-            maxCloudFront: 4,
-            maxRoute53: 4,
-            maxApiGateway: 4,
-            maxSqs: 4,
-            maxSns: 4,
-            maxDynamo: 4,
-            maxKms: 4,
-            maxSecrets: 4,
-            maxWaf: 3,
-            maxGuardDuty: 3,
-            maxCfEdges: 2,
-            maxLbTargetsPerLb: 3,
-            maxDnsEdges: 2,
+    buildReactFlowGraph(model: ArchitectureModel, data: AssessmentData): ReactFlowGraph {
+        const nodes: ReactFlowNode[] = [];
+        const edges: ReactFlowEdge[] = [];
+
+        const nodeIds = new Set<string>();
+        const edgeIds = new Set<string>();
+        const typeCounters = new Map<string, number>();
+
+        const nextPosition = (kind: string): { x: number; y: number } => {
+            const columnX: Record<string, number> = {
+                global: 0,
+                vpc: 260,
+                subnet: 520,
+                routeTable: 780,
+                loadBalancer: 1040,
+                ec2: 1300,
+                container: 1560,
+                database: 1820,
+                serverless: 2080,
+                identity: 2340,
+            };
+
+            const count = typeCounters.get(kind) ?? 0;
+            typeCounters.set(kind, count + 1);
+
+            return {
+                x: columnX[kind] ?? 2600,
+                y: 80 + count * 120,
+            };
         };
+
+        const pushNode = (
+            id: string,
+            kind: string,
+            label: string,
+            resourceType: string,
+            options?: {
+                awsId?: string;
+                status?: string;
+                details?: Record<string, unknown>;
+                group?: { vpcId?: string; vpcName?: string; region?: string };
+            }
+        ): void => {
+            if (nodeIds.has(id)) return;
+            nodeIds.add(id);
+
+            nodes.push({
+                id,
+                type: 'default',
+                position: nextPosition(kind),
+                data: {
+                    label,
+                    resourceType,
+                    awsId: options?.awsId,
+                    status: options?.status,
+                    details: options?.details,
+                    group: options?.group,
+                },
+            });
+        };
+
+        const pushEdge = (source: string, target: string, relationship: string, animated = false): void => {
+            const id = `edge:${source}->${target}:${relationship}`;
+            if (edgeIds.has(id)) return;
+            edgeIds.add(id);
+
+            edges.push({
+                id,
+                source,
+                target,
+                label: relationship,
+                type: 'smoothstep',
+                animated,
+                data: { relationship },
+            });
+        };
+
+        const vpcById = new Map(model.vpcs.map((vpc) => [vpc.id, vpc]));
+        const subnetById = new Map(data.subnets.map((subnet) => [subnet.id, subnet]));
+        const subnetByAwsId = new Map(data.subnets.map((subnet) => [subnet.awsSubnetId, subnet]));
+        const loadBalancerById = new Map(data.loadBalancers.map((lb) => [lb.id, lb]));
+        const loadBalancerByArn = new Map(data.loadBalancers.map((lb) => [lb.awsLoadBalancerArn, lb]));
+        const ecsClusterById = new Map(data.ecsClusters.map((cluster) => [cluster.id, cluster]));
+        const taskDefinitionById = new Map(data.ecsTaskDefinitions.map((taskDef) => [taskDef.id, taskDef]));
+        const iamRoleById = new Map(data.iamRoles.map((role) => [role.id, role]));
+
+        const taskDefinitionIdsInUse = new Set(data.ecsServices.map((service) => service.taskDefinitionId));
+
+        const inferRegion = (resource: ArchitectureResource): string | undefined => {
+            if (resource.region) {
+                return resource.region;
+            }
+
+            const details = resource.details;
+            const regionFromDetails =
+                details && typeof details.region === 'string'
+                    ? details.region
+                    : details && typeof details.awsRegion === 'string'
+                      ? details.awsRegion
+                      : undefined;
+            return regionFromDetails;
+        };
+
+        const nodeMetaFromType = (resource: ArchitectureResource): { id: string; kind: string } => {
+            const type = resource.type.toLowerCase();
+
+            if (type === 'ec2 instance') return { id: `ec2:${resource.id}`, kind: 'ec2' };
+            if (type.startsWith('load balancer listener')) return { id: `lb-listener:${resource.id}`, kind: 'loadBalancer' };
+            if (type.startsWith('load balancer')) return { id: `lb:${resource.id}`, kind: 'loadBalancer' };
+            if (type === 'route table') return { id: `rt:${resource.id}`, kind: 'routeTable' };
+            if (type === 'security group') return { id: `sg:${resource.id}`, kind: 'identity' };
+            if (type === 'rds instance') return { id: `rds:${resource.id}`, kind: 'database' };
+            if (type === 'elasticache cluster') return { id: `cache:${resource.id}`, kind: 'database' };
+            if (type === 'lambda function') return { id: `lambda:${resource.id}`, kind: 'serverless' };
+            if (type === 'eks cluster') return { id: `eks-cluster:${resource.id}`, kind: 'container' };
+            if (type === 'ecs cluster') return { id: `ecs-cluster:${resource.id}`, kind: 'container' };
+            if (type === 'ecs service') return { id: `ecs-service:${resource.id}`, kind: 'container' };
+            if (type === 'ecs task definition') return { id: `ecs-taskdef:${resource.id}`, kind: 'container' };
+            if (type === 'iam role') return { id: `iam:${resource.id}`, kind: 'identity' };
+            if (type === 'api gateway rest api') return { id: `api-gw:${resource.id}`, kind: 'serverless' };
+            if (type === 's3 bucket') return { id: `s3:${resource.id}`, kind: 'global' };
+            if (type === 'cloudfront distribution') return { id: `cloudfront:${resource.id}`, kind: 'global' };
+            if (type === 'route53 hosted zone') return { id: `route53:${resource.id}`, kind: 'global' };
+            if (type === 'cloudtrail trail') return { id: `cloudtrail:${resource.id}`, kind: 'global' };
+            if (type === 'cloudwatch alarm') return { id: `cloudwatch:${resource.id}`, kind: 'global' };
+            if (type === 'guardduty detector') return { id: `guardduty:${resource.id}`, kind: 'global' };
+            if (type === 'kms key') return { id: `kms:${resource.id}`, kind: 'global' };
+            if (type === 'secrets manager secret') return { id: `secret:${resource.id}`, kind: 'global' };
+            if (type === 'ecr repository') return { id: `ecr:${resource.id}`, kind: 'global' };
+            if (type === 'dynamodb table') return { id: `dynamodb:${resource.id}`, kind: 'global' };
+            if (type === 'sqs queue') return { id: `sqs:${resource.id}`, kind: 'global' };
+            if (type === 'sns topic') return { id: `sns:${resource.id}`, kind: 'global' };
+            if (type === 'waf web acl') return { id: `waf:${resource.id}`, kind: 'global' };
+
+            return { id: `resource:${resource.id}`, kind: 'global' };
+        };
+
+        const globalRootId = `global:${model.cloudAccountId}`;
+        pushNode(globalRootId, 'global', 'Global Resources', 'Global Scope', {
+            details: { cloudAccountId: model.cloudAccountId },
+        });
+
+        for (const vpc of model.vpcs) {
+            const vpcNodeId = `vpc:${vpc.id}`;
+            const vpcGroup = { vpcId: vpc.id, vpcName: vpc.name };
+
+            pushNode(vpcNodeId, 'vpc', vpc.name, 'VPC', {
+                awsId: vpc.awsVpcId,
+                details: { cidrBlock: vpc.cidrBlock, vpcId: vpc.id, vpcName: vpc.name },
+                group: vpcGroup,
+            });
+
+            for (const subnetSummary of vpc.subnets) {
+                const subnet = subnetById.get(subnetSummary.id);
+                const subnetNodeId = `subnet:${subnetSummary.id}`;
+                pushNode(subnetNodeId, 'subnet', subnetSummary.name, 'Subnet', {
+                    awsId: subnetSummary.awsSubnetId,
+                    details: {
+                        cidrBlock: subnetSummary.cidrBlock,
+                        availabilityZone: subnetSummary.availabilityZone,
+                        type: subnetSummary.type,
+                        vpcId: vpc.id,
+                        vpcName: vpc.name,
+                    },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, subnetNodeId, 'contains');
+
+                if (subnet?.vpcId === vpc.id) {
+                    pushEdge(vpcNodeId, subnetNodeId, 'network');
+                }
+
+                for (const resource of subnetSummary.resources) {
+                    const meta = nodeMetaFromType(resource);
+                    pushNode(meta.id, meta.kind, resource.name, resource.type, {
+                        awsId: resource.awsId,
+                        status: resource.status,
+                        details: { ...(resource.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                        group: vpcGroup,
+                    });
+                    pushEdge(subnetNodeId, meta.id, 'hosts');
+                }
+            }
+
+            for (const routeTable of vpc.routeTables) {
+                const meta = nodeMetaFromType(routeTable);
+                pushNode(meta.id, meta.kind, routeTable.name, routeTable.type, {
+                    awsId: routeTable.awsId,
+                    details: { ...(routeTable.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'has-route-table');
+            }
+
+            for (const securityGroup of vpc.securityGroups) {
+                const meta = nodeMetaFromType(securityGroup);
+                pushNode(meta.id, meta.kind, securityGroup.name, securityGroup.type, {
+                    awsId: securityGroup.awsId,
+                    details: { ...(securityGroup.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'has-security-group');
+            }
+
+            for (const loadBalancer of vpc.loadBalancers) {
+                const meta = nodeMetaFromType(loadBalancer);
+                pushNode(meta.id, meta.kind, loadBalancer.name, loadBalancer.type, {
+                    awsId: loadBalancer.awsId,
+                    status: loadBalancer.status,
+                    details: { ...(loadBalancer.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+
+                if (loadBalancer.type.startsWith('Load Balancer Listener')) {
+                    const listenerRow = data.loadBalancerListeners.find((listener) => listener.id === loadBalancer.id);
+                    if (listenerRow) {
+                        pushEdge(`lb:${listenerRow.loadBalancerId}`, meta.id, 'has-listener');
+                    }
+                } else {
+                    pushEdge(vpcNodeId, meta.id, 'contains-load-balancer');
+                }
+            }
+
+            for (const database of vpc.databases) {
+                const meta = nodeMetaFromType(database);
+                pushNode(meta.id, meta.kind, database.name, database.type, {
+                    awsId: database.awsId,
+                    status: database.status,
+                    details: { ...(database.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'contains-database');
+            }
+
+            for (const cache of vpc.caches) {
+                const meta = nodeMetaFromType(cache);
+                pushNode(meta.id, meta.kind, cache.name, cache.type, {
+                    awsId: cache.awsId,
+                    status: cache.status,
+                    details: { ...(cache.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'contains-cache');
+            }
+
+            for (const container of vpc.containers) {
+                const meta = nodeMetaFromType(container);
+                pushNode(meta.id, meta.kind, container.name, container.type, {
+                    awsId: container.awsId,
+                    status: container.status,
+                    details: { ...(container.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'contains-workload');
+            }
+
+            for (const fn of vpc.serverless) {
+                const meta = nodeMetaFromType(fn);
+                pushNode(meta.id, meta.kind, fn.name, fn.type, {
+                    awsId: fn.awsId,
+                    status: fn.status,
+                    details: { ...(fn.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    group: vpcGroup,
+                });
+                pushEdge(vpcNodeId, meta.id, 'contains-serverless');
+            }
+        }
+
+        for (const routeTable of data.routeTables) {
+            const associations = routeTable.associations ?? [];
+            for (const association of associations) {
+                const associatedSubnet = subnetByAwsId.get(association.subnetId) ?? subnetById.get(association.subnetId);
+                if (!associatedSubnet) continue;
+                pushEdge(`rt:${routeTable.id}`, `subnet:${associatedSubnet.id}`, association.isMain ? 'main-route' : 'routes-subnet');
+            }
+        }
+
+        for (const lb of data.loadBalancers) {
+            for (const subnetId of lb.subnetIds ?? []) {
+                const subnet = subnetById.get(subnetId);
+                if (!subnet) continue;
+                pushEdge(`lb:${lb.id}`, `subnet:${subnet.id}`, 'attached-to-subnet');
+            }
+        }
+
+        for (const service of data.ecsServices) {
+            const cluster = ecsClusterById.get(service.clusterId);
+            if (!cluster) {
+                continue;
+            }
+
+            const serviceNodeId = `ecs-service:${service.id}`;
+            const clusterNodeId = `ecs-cluster:${cluster.id}`;
+            pushEdge(clusterNodeId, serviceNodeId, 'runs-service', true);
+
+            const awsvpc = (service.networkConfiguration as { awsvpcConfiguration?: { subnets?: string[] } } | null)?.awsvpcConfiguration;
+            for (const subnetAwsId of awsvpc?.subnets ?? []) {
+                const serviceSubnet = subnetByAwsId.get(subnetAwsId);
+                if (!serviceSubnet) continue;
+                pushEdge(serviceNodeId, `subnet:${serviceSubnet.id}`, 'runs-in-subnet');
+            }
+
+            const serviceLoadBalancers = (service.loadBalancers as Array<{ loadBalancerName?: string; loadBalancerArn?: string }> | null) ?? [];
+            for (const serviceLoadBalancer of serviceLoadBalancers) {
+                const resolvedLb =
+                    (serviceLoadBalancer.loadBalancerArn ? loadBalancerByArn.get(serviceLoadBalancer.loadBalancerArn) : undefined) ??
+                    (serviceLoadBalancer.loadBalancerName
+                        ? data.loadBalancers.find((existingLb) => existingLb.name === serviceLoadBalancer.loadBalancerName)
+                        : undefined);
+                if (!resolvedLb || !loadBalancerById.has(resolvedLb.id)) continue;
+                pushEdge(`lb:${resolvedLb.id}`, serviceNodeId, 'routes-traffic-to', true);
+            }
+
+            const taskDefinition = taskDefinitionById.get(service.taskDefinitionId);
+            if (taskDefinition && taskDefinitionIdsInUse.has(taskDefinition.id)) {
+                const taskDefNodeId = `ecs-taskdef:${taskDefinition.id}`;
+                pushEdge(serviceNodeId, taskDefNodeId, 'uses-task-definition');
+
+                if (taskDefinition.executionRoleId) {
+                    const executionRole = iamRoleById.get(taskDefinition.executionRoleId);
+                    if (executionRole) {
+                        pushEdge(taskDefNodeId, `iam:${executionRole.id}`, 'execution-role');
+                    }
+                }
+
+                if (taskDefinition.taskRoleId) {
+                    const taskRole = iamRoleById.get(taskDefinition.taskRoleId);
+                    if (taskRole) {
+                        pushEdge(taskDefNodeId, `iam:${taskRole.id}`, 'task-role');
+                    }
+                }
+            }
+
+            if (service.serviceRoleId) {
+                const serviceRole = iamRoleById.get(service.serviceRoleId);
+                if (serviceRole) {
+                    pushEdge(serviceNodeId, `iam:${serviceRole.id}`, 'service-role');
+                }
+            }
+        }
+
+        const globalCollections = [
+            { relationship: 'contains-s3', items: model.globalResources.s3Buckets },
+            { relationship: 'contains-cloudfront', items: model.globalResources.cloudFrontDistributions },
+            { relationship: 'contains-route53', items: model.globalResources.route53HostedZones },
+            { relationship: 'contains-iam', items: model.globalResources.iamRoles },
+            { relationship: 'contains-cloudtrail', items: model.globalResources.cloudTrailTrails },
+            { relationship: 'contains-cloudwatch', items: model.globalResources.cloudWatchAlarms },
+            { relationship: 'contains-guardduty', items: model.globalResources.guardDutyDetectors },
+            { relationship: 'contains-kms', items: model.globalResources.kmsKeys },
+            { relationship: 'contains-secrets', items: model.globalResources.secretsManagerSecrets },
+            { relationship: 'contains-ecr', items: model.globalResources.ecrRepositories },
+            { relationship: 'contains-dynamodb', items: model.globalResources.dynamoDbTables },
+            { relationship: 'contains-sqs', items: model.globalResources.sqsQueues },
+            { relationship: 'contains-sns', items: model.globalResources.snsTopics },
+            { relationship: 'contains-waf', items: model.globalResources.wafWebAcls },
+            { relationship: 'contains-api', items: model.globalResources.apiGateways },
+        ];
+
+        for (const collection of globalCollections) {
+            for (const resource of collection.items) {
+                const meta = nodeMetaFromType(resource);
+                const region = inferRegion(resource);
+
+                pushNode(meta.id, meta.kind, resource.name, resource.type, {
+                    awsId: resource.awsId,
+                    status: resource.status,
+                    details: resource.details,
+                    group: region ? { region } : undefined,
+                });
+                pushEdge(globalRootId, meta.id, collection.relationship);
+            }
+        }
+
+        for (const route53 of model.globalResources.route53HostedZones) {
+            for (const cloudFront of model.globalResources.cloudFrontDistributions) {
+                pushEdge(nodeMetaFromType(route53).id, nodeMetaFromType(cloudFront).id, 'dns');
+            }
+        }
+
+        for (const cloudFront of model.globalResources.cloudFrontDistributions) {
+            for (const vpc of model.vpcs) {
+                for (const loadBalancer of vpc.loadBalancers.filter((resource) => resource.type.startsWith('Load Balancer ('))) {
+                    pushEdge(nodeMetaFromType(cloudFront).id, nodeMetaFromType(loadBalancer).id, 'http-s');
+                }
+            }
+        }
+
+        const allLambdas = model.vpcs.flatMap((vpc) => vpc.serverless.filter((resource) => resource.type === 'Lambda Function'));
+        for (const api of model.globalResources.apiGateways) {
+            for (const lambda of allLambdas) {
+                pushEdge(nodeMetaFromType(api).id, nodeMetaFromType(lambda).id, 'invoke');
+            }
+        }
+
+        return { nodes, edges };
+    }
+
+    buildMermaidDiagram(model: ArchitectureModel): string {
+        const lines: string[] = ['%%{init: {"flowchart": {"nodeSpacing": 110, "rankSpacing": 90, "curve": "linear"}}}%%', 'graph TB', ''];
 
         const mid = (id: string) => `node_${id.replace(/-/g, '_')}`;
         const mLabel = (text: string) =>
@@ -332,167 +790,146 @@ export class AwsAssessmentArchitectureService {
                 .trim()
                 .substring(0, 32);
 
-        const renderGlobalBlock = (id: string, title: string, items: ArchitectureResource[], limit: number) => {
+        const renderGlobalBlock = (id: string, title: string, items: ArchitectureResource[], prefix: string) => {
             if (items.length === 0) return;
             lines.push(`        subgraph ${id}["${title}"]`);
-            const shown = items.slice(0, limit);
-            shown.forEach((r) => lines.push(`            ${mid(r.id)}["${mLabel(r.name)}"]`));
-            if (items.length > shown.length) {
-                lines.push(`            ${id}_more["+${items.length - shown.length} omitidos"]`);
-            }
+            items.forEach((r) => lines.push(`            ${mid(r.id)}["${prefix}${mLabel(r.name)}"]`));
             lines.push('        end');
         };
 
         const { globalResources } = model;
-        lines.push('    subgraph GLOBAL["☁️ Global Resources"]');
-        renderGlobalBlock('S3', '🪣 S3 Buckets', globalResources.s3Buckets, limits.maxS3);
-        renderGlobalBlock('CF', '🌐 CloudFront', globalResources.cloudFrontDistributions, limits.maxCloudFront);
-        renderGlobalBlock('R53', '🔗 Route53', globalResources.route53HostedZones, limits.maxRoute53);
-        renderGlobalBlock('APIGW', '🔌 API Gateway', globalResources.apiGateways, limits.maxApiGateway);
+        lines.push('    subgraph GLOBAL["Global Resources"]');
+        renderGlobalBlock('S3', 'S3 Buckets', globalResources.s3Buckets, 'S3: ');
+        renderGlobalBlock('CF', 'CloudFront', globalResources.cloudFrontDistributions, 'CF: ');
+        renderGlobalBlock('R53', 'Route53', globalResources.route53HostedZones, 'R53: ');
+        renderGlobalBlock('APIGW', 'API Gateway', globalResources.apiGateways, 'API: ');
+        renderGlobalBlock('IAM', 'IAM Roles', globalResources.iamRoles, 'IAM: ');
+        renderGlobalBlock('CT', 'CloudTrail', globalResources.cloudTrailTrails, 'Trail: ');
+        renderGlobalBlock('CW', 'CloudWatch', globalResources.cloudWatchAlarms, 'Alarm: ');
+        renderGlobalBlock('GD', 'GuardDuty', globalResources.guardDutyDetectors, 'GD: ');
+        renderGlobalBlock('KMS', 'KMS Keys', globalResources.kmsKeys, 'KMS: ');
+        renderGlobalBlock('SECRETS', 'Secrets Manager', globalResources.secretsManagerSecrets, 'Secret: ');
+        renderGlobalBlock('ECR', 'ECR Repositories', globalResources.ecrRepositories, 'ECR: ');
+        renderGlobalBlock('DYNAMO', 'DynamoDB', globalResources.dynamoDbTables, 'DDB: ');
+        renderGlobalBlock('SQS', 'SQS', globalResources.sqsQueues, 'SQS: ');
+        renderGlobalBlock('SNS', 'SNS', globalResources.snsTopics, 'SNS: ');
+        renderGlobalBlock('WAF', 'WAF', globalResources.wafWebAcls, 'WAF: ');
         lines.push('    end', '');
 
-        const shownVpcs = model.vpcs.slice(0, limits.maxVpcs);
-        for (const vpc of shownVpcs) {
+        for (const vpc of model.vpcs) {
             const vpcId = mid(vpc.id);
             const vpcRootId = `${vpcId}_ROOT`;
-            lines.push(`    subgraph ${vpcId}["🏗️ VPC: ${mLabel(vpc.name)} (${vpc.cidrBlock})"]`);
+            lines.push(`    subgraph ${vpcId}["VPC: ${mLabel(vpc.name)} (${vpc.cidrBlock})"]`);
             lines.push(`        ${vpcRootId}["VPC: ${mLabel(vpc.name)}"]`);
 
-            // NETWORK BLOCK
-            const shownSubnets = vpc.subnets.slice(0, limits.maxSubnetsPerVpc);
-            if (shownSubnets.length > 0) {
-                lines.push(`        subgraph ${vpcId}_NETWORK["🌐 Network"]`);
-                shownSubnets.forEach((subnet) => {
+            const allSubnets = vpc.subnets;
+            if (allSubnets.length > 0) {
+                lines.push(`        subgraph ${vpcId}_NETWORK["Network"]`);
+                allSubnets.forEach((subnet) => {
                     const snId = mid(subnet.id);
-                    const snType = subnet.type === 'public' ? '🌍' : '🔒';
+                    const snType = subnet.type === 'public' ? 'PUBLIC' : subnet.type === 'private' ? 'PRIVATE' : 'UNKNOWN';
                     lines.push(`            ${snId}["${snType} ${mLabel(subnet.name)} (${subnet.cidrBlock})"]`);
                 });
-                if (vpc.subnets.length > shownSubnets.length) {
-                    lines.push(`            ${vpcId}_NETWORK_more["+${vpc.subnets.length - shownSubnets.length} subnets omitidas"]`);
-                }
                 lines.push('        end');
             }
 
-            // LOAD BALANCER BLOCK
-            const shownLbs = vpc.loadBalancers.slice(0, limits.maxLoadBalancersPerVpc);
-            if (shownLbs.length > 0) {
-                lines.push(`        subgraph ${vpcId}_LB["⚖️ Load Balancers"]`);
-                shownLbs.forEach((lb) => lines.push(`            ${mid(lb.id)}["ALB/NLB: ${mLabel(lb.name)}"]`));
-                if (vpc.loadBalancers.length > shownLbs.length) {
-                    lines.push(`            ${vpcId}_LB_more["+${vpc.loadBalancers.length - shownLbs.length} LBs omitidos"]`);
-                }
+            if (vpc.routeTables.length > 0) {
+                lines.push(`        subgraph ${vpcId}_RT["Route Tables"]`);
+                vpc.routeTables.forEach((rt) => lines.push(`            ${mid(rt.id)}["RT: ${mLabel(rt.name)}"]`));
                 lines.push('        end');
             }
 
-            // COMPUTE BLOCK (EC2)
-            const ec2BySubnet = shownSubnets.map((subnet) => ({
+            if (vpc.securityGroups.length > 0) {
+                lines.push(`        subgraph ${vpcId}_SG["Security Groups"]`);
+                vpc.securityGroups.forEach((sg) => lines.push(`            ${mid(sg.id)}["SG: ${mLabel(sg.name)}"]`));
+                lines.push('        end');
+            }
+
+            const lbResources = vpc.loadBalancers;
+            if (lbResources.length > 0) {
+                lines.push(`        subgraph ${vpcId}_LB["Load Balancers"]`);
+                lbResources.forEach((lb) => lines.push(`            ${mid(lb.id)}["${mLabel(lb.type)}: ${mLabel(lb.name)}"]`));
+                lines.push('        end');
+            }
+
+            const ec2BySubnet = allSubnets.map((subnet) => ({
                 subnet,
-                ec2: subnet.resources.filter((r) => r.type === 'EC2 Instance').slice(0, limits.maxEc2PerSubnet),
-                totalEc2: subnet.resources.filter((r) => r.type === 'EC2 Instance').length,
+                ec2: subnet.resources.filter((r) => r.type === 'EC2 Instance'),
             }));
             const hasEc2 = ec2BySubnet.some((s) => s.ec2.length > 0);
             if (hasEc2) {
-                lines.push(`        subgraph ${vpcId}_COMPUTE["🖥️ Compute (EC2)"]`);
+                lines.push(`        subgraph ${vpcId}_COMPUTE["Compute (EC2)"]`);
                 for (const item of ec2BySubnet) {
                     for (const ec2 of item.ec2) {
                         lines.push(`            ${mid(ec2.id)}["EC2: ${mLabel(ec2.name)}"]`);
                     }
-                    if (item.totalEc2 > item.ec2.length) {
-                        lines.push(`            ${mid(item.subnet.id)}_ec2_more["+${item.totalEc2 - item.ec2.length} EC2 omitidas"]`);
-                    }
                 }
                 lines.push('        end');
             }
 
-            // DATA BLOCK
-            const shownDb = vpc.databases.slice(0, limits.maxDatabasesPerVpc);
-            const shownCache = vpc.caches.slice(0, limits.maxCachesPerVpc);
-            if (shownDb.length > 0 || shownCache.length > 0) {
-                lines.push(`        subgraph ${vpcId}_DATA["🗄️ Data"]`);
-                shownDb.forEach((db) => lines.push(`            ${mid(db.id)}["DB: ${mLabel(db.name)}"]`));
-                shownCache.forEach((cache) => lines.push(`            ${mid(cache.id)}["Cache: ${mLabel(cache.name)}"]`));
-                if (vpc.databases.length > shownDb.length) {
-                    lines.push(`            ${vpcId}_DATA_db_more["+${vpc.databases.length - shownDb.length} DBs omitidos"]`);
-                }
-                if (vpc.caches.length > shownCache.length) {
-                    lines.push(`            ${vpcId}_DATA_cache_more["+${vpc.caches.length - shownCache.length} caches omitidos"]`);
-                }
+            if (vpc.databases.length > 0 || vpc.caches.length > 0) {
+                lines.push(`        subgraph ${vpcId}_DATA["Data"]`);
+                vpc.databases.forEach((db) => lines.push(`            ${mid(db.id)}["DB: ${mLabel(db.name)}"]`));
+                vpc.caches.forEach((cache) => lines.push(`            ${mid(cache.id)}["Cache: ${mLabel(cache.name)}"]`));
                 lines.push('        end');
             }
 
-            // CONTAINERS BLOCK
-            const shownContainers = vpc.containers.slice(0, limits.maxContainersPerVpc);
-            if (shownContainers.length > 0) {
-                lines.push(`        subgraph ${vpcId}_CONTAINERS["📦 Containers"]`);
-                shownContainers.forEach((c) => lines.push(`            ${mid(c.id)}["${mLabel(c.type)}: ${mLabel(c.name)}"]`));
-                if (vpc.containers.length > shownContainers.length) {
-                    lines.push(`            ${vpcId}_CONTAINERS_more["+${vpc.containers.length - shownContainers.length} containers omitidos"]`);
-                }
+            if (vpc.containers.length > 0) {
+                lines.push(`        subgraph ${vpcId}_CONTAINERS["Containers"]`);
+                vpc.containers.forEach((c) => lines.push(`            ${mid(c.id)}["${mLabel(c.type)}: ${mLabel(c.name)}"]`));
+                lines.push('        end');
+            }
+
+            if (vpc.serverless.length > 0) {
+                lines.push(`        subgraph ${vpcId}_SERVERLESS["Serverless"]`);
+                vpc.serverless.forEach((fn) => lines.push(`            ${mid(fn.id)}["Lambda: ${mLabel(fn.name)}"]`));
                 lines.push('        end');
             }
 
             lines.push('    end', '');
 
-            // Links: VPC -> Subnet
-            for (const subnet of shownSubnets) {
+            for (const subnet of allSubnets) {
                 lines.push(`    ${vpcRootId} -->|contains| ${mid(subnet.id)}`);
             }
 
-            // Links: Subnet -> EC2
             for (const item of ec2BySubnet) {
                 for (const ec2 of item.ec2) {
                     lines.push(`    ${mid(item.subnet.id)} -->|hosts| ${mid(ec2.id)}`);
                 }
             }
 
-            // Links: ALB -> EC2 (heuristica por VPC)
-            const ec2Targets = ec2BySubnet.flatMap((item) => item.ec2).slice(0, limits.maxLbTargetsPerLb);
-            for (const lb of shownLbs) {
+            const ec2Targets = ec2BySubnet.flatMap((item) => item.ec2);
+            for (const lb of lbResources) {
                 for (const ec2 of ec2Targets) {
                     lines.push(`    ${mid(lb.id)} -->|targets| ${mid(ec2.id)}`);
                 }
             }
 
-            // Links: VPC -> LB/DB/Cache/Containers
-            shownLbs.forEach((lb) => lines.push(`    ${vpcRootId} -->|exposes| ${mid(lb.id)}`));
-            shownDb.forEach((db) => lines.push(`    ${vpcRootId} -->|stores| ${mid(db.id)}`));
-            shownCache.forEach((cache) => lines.push(`    ${vpcRootId} -->|accelerates| ${mid(cache.id)}`));
-            shownContainers.forEach((c) => lines.push(`    ${vpcRootId} -->|runs| ${mid(c.id)}`));
+            lbResources.forEach((lb) => lines.push(`    ${vpcRootId} -->|exposes| ${mid(lb.id)}`));
+            vpc.routeTables.forEach((rt) => lines.push(`    ${vpcRootId} -->|routes| ${mid(rt.id)}`));
+            vpc.securityGroups.forEach((sg) => lines.push(`    ${vpcRootId} -->|protects| ${mid(sg.id)}`));
+            vpc.databases.forEach((db) => lines.push(`    ${vpcRootId} -->|stores| ${mid(db.id)}`));
+            vpc.caches.forEach((cache) => lines.push(`    ${vpcRootId} -->|accelerates| ${mid(cache.id)}`));
+            vpc.containers.forEach((c) => lines.push(`    ${vpcRootId} -->|runs| ${mid(c.id)}`));
+            vpc.serverless.forEach((fn) => lines.push(`    ${vpcRootId} -->|executes| ${mid(fn.id)}`));
         }
 
-        if (model.vpcs.length > shownVpcs.length) {
-            lines.push('', `    VPCS_MORE["+${model.vpcs.length - shownVpcs.length} VPCs omitidas"]`);
-        }
-
-        const { sqsQueues, snsTopics, dynamoDbTables } = globalResources;
-        if (sqsQueues.length > 0 || snsTopics.length > 0 || dynamoDbTables.length > 0) {
-            lines.push('', '    subgraph MESSAGING["📨 Messaging & Storage"]');
-            sqsQueues.slice(0, limits.maxSqs).forEach((q) => lines.push(`        ${mid(q.id)}["SQS: ${mLabel(q.name)}"]`));
-            snsTopics.slice(0, limits.maxSns).forEach((t) => lines.push(`        ${mid(t.id)}["SNS: ${mLabel(t.name)}"]`));
-            dynamoDbTables.slice(0, limits.maxDynamo).forEach((t) => lines.push(`        ${mid(t.id)}["DynamoDB: ${mLabel(t.name)}"]`));
-            lines.push('    end');
-        }
-
-        const { kmsKeys, secretsManagerSecrets, wafWebAcls, guardDutyDetectors } = globalResources;
-        if (kmsKeys.length > 0 || secretsManagerSecrets.length > 0 || wafWebAcls.length > 0 || guardDutyDetectors.length > 0) {
-            lines.push('', '    subgraph SECURITY["🔐 Security"]');
-            kmsKeys.slice(0, limits.maxKms).forEach((k) => lines.push(`        ${mid(k.id)}["KMS: ${mLabel(k.name)}"]`));
-            secretsManagerSecrets.slice(0, limits.maxSecrets).forEach((s) => lines.push(`        ${mid(s.id)}["Secret: ${mLabel(s.name)}"]`));
-            wafWebAcls.slice(0, limits.maxWaf).forEach((w) => lines.push(`        ${mid(w.id)}["WAF: ${mLabel(w.name)}"]`));
-            guardDutyDetectors.slice(0, limits.maxGuardDuty).forEach((g) => lines.push(`        ${mid(g.id)}["GuardDuty: ${mLabel(g.name)}"]`));
-            lines.push('    end');
-        }
-
-        for (const r53 of globalResources.route53HostedZones.slice(0, limits.maxDnsEdges)) {
-            for (const cf of globalResources.cloudFrontDistributions.slice(0, limits.maxDnsEdges)) {
+        for (const r53 of globalResources.route53HostedZones) {
+            for (const cf of globalResources.cloudFrontDistributions) {
                 lines.push(`    ${mid(r53.id)} -->|DNS| ${mid(cf.id)}`);
             }
         }
 
-        for (const cf of globalResources.cloudFrontDistributions.slice(0, limits.maxCfEdges)) {
-            for (const vpc of shownVpcs) {
-                const shownLbs = vpc.loadBalancers.slice(0, 1);
-                shownLbs.forEach((lb) => lines.push(`    ${mid(cf.id)} -->|HTTP/S| ${mid(lb.id)}`));
+        for (const cf of globalResources.cloudFrontDistributions) {
+            for (const vpc of model.vpcs) {
+                vpc.loadBalancers.forEach((lb) => lines.push(`    ${mid(cf.id)} -->|HTTP/S| ${mid(lb.id)}`));
+            }
+        }
+
+        const allLambdas = model.vpcs.flatMap((vpc) => vpc.serverless.filter((r) => r.type === 'Lambda Function'));
+        for (const api of globalResources.apiGateways) {
+            for (const lambda of allLambdas) {
+                lines.push(`    ${mid(api.id)} -->|invoke| ${mid(lambda.id)}`);
             }
         }
 

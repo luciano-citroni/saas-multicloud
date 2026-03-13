@@ -1,60 +1,71 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddIamRoleForeignKeys1772916846354 implements MigrationInterface {
-    name = 'AddIamRoleForeignKeys1772916846354'
+    name = 'AddIamRoleForeignKeys1772916846354';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        const hasAwsEc2Instances = await queryRunner.hasTable('aws_ec2_instances');
+        const hasAwsEcsTaskDefinitions = await queryRunner.hasTable('aws_ecs_task_definitions');
+        const hasAwsEcsServices = await queryRunner.hasTable('aws_ecs_services');
+        const hasAwsIamRoles = await queryRunner.hasTable('aws_iam_roles');
+
         await queryRunner.query(`ALTER TABLE "users_sessions" DROP CONSTRAINT "FK_users_sessions_user_id"`);
         await queryRunner.query(`ALTER TABLE "organization_members" DROP CONSTRAINT "FK_organization_members_user_id"`);
         await queryRunner.query(`ALTER TABLE "organization_members" DROP CONSTRAINT "FK_organization_members_organization_id"`);
         await queryRunner.query(`ALTER TABLE "cloud_accounts" DROP CONSTRAINT "FK_cloud_accounts_organization_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_org_members_user_org"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_cloud_accounts_organization_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_86ee44dc17238efe40601b1454"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_89053f57bae552fa77241494df"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_9a1438c30e429b3d23434ba0df"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_559b51a52d2ff51955eaef30cf"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_vpcs_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_vpcs_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_aws_subnet_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_aws_route_table_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_aws_sg_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_role_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_aws_role_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_path"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_subnet_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_aws_instance_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_state"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_security_group_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_family_revision"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_family"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_cluster_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_task_definition_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_service_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_clusters_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_clusters_cluster_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_arn"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancer_listeners_arn"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancer_listeners_lb_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_org_members_user_org"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_cloud_accounts_organization_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_86ee44dc17238efe40601b1454"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_89053f57bae552fa77241494df"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_9a1438c30e429b3d23434ba0df"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_559b51a52d2ff51955eaef30cf"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_vpcs_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_vpcs_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_aws_subnet_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_aws_route_table_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_aws_sg_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_role_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_aws_role_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_path"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_subnet_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_aws_instance_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_state"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_security_group_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_family_revision"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_family"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_cluster_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_task_definition_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_service_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_clusters_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_clusters_cluster_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_arn"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancer_listeners_arn"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancer_listeners_lb_id"`);
         await queryRunner.query(`ALTER TABLE "organization_members" DROP CONSTRAINT "CHK_org_members_role"`);
         await queryRunner.query(`ALTER TABLE "cloud_accounts" DROP CONSTRAINT "CHK_cloud_accounts_provider"`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ADD "iam_instance_profile_arn" character varying(512)`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ADD "iam_role_id" uuid`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD "execution_role_id" uuid`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD "task_role_id" uuid`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "service_role_id" uuid`);
+        if (hasAwsEc2Instances) {
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ADD "iam_instance_profile_arn" character varying(512)`);
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ADD "iam_role_id" uuid`);
+        }
+        if (hasAwsEcsTaskDefinitions) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD "execution_role_id" uuid`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD "task_role_id" uuid`);
+        }
+        if (hasAwsEcsServices) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "service_role_id" uuid`);
+        }
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "expires_at" DROP DEFAULT`);
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "created_at" SET NOT NULL`);
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "updated_at" SET NOT NULL`);
@@ -69,73 +80,152 @@ export class AddIamRoleForeignKeys1772916846354 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "organizations" ALTER COLUMN "updated_at" SET NOT NULL`);
         await queryRunner.query(`ALTER TABLE "organization_invites" ALTER COLUMN "created_at" SET DEFAULT now()`);
         await queryRunner.query(`ALTER TABLE "organization_invites" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "scheduling_strategy"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "scheduling_strategy" jsonb`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "users_sessions" ADD CONSTRAINT "FK_a42387eb0730bc26f78f88ffc31" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "organization_members" ADD CONSTRAINT "FK_7062a4fbd9bab22ffd918e5d3d9" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "organization_members" ADD CONSTRAINT "FK_89bde91f78d36ca41e9515d91c6" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "cloud_accounts" ADD CONSTRAINT "FK_94b1dcbf650e091a414daa9582b" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ADD CONSTRAINT "FK_a5551fcfc1694ce6f049b4b96e3" FOREIGN KEY ("iam_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD CONSTRAINT "FK_ccee558770484faf560bff1cd98" FOREIGN KEY ("execution_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ADD CONSTRAINT "FK_0e379e543f362acad234d9f79ff" FOREIGN KEY ("task_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD CONSTRAINT "FK_d434eef28ad1430f7f01d098597" FOREIGN KEY ("service_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        if (await queryRunner.hasTable('aws_vpcs')) {
+            await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_subnets')) {
+            await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_route_tables')) {
+            await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_security_groups')) {
+            await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (hasAwsIamRoles) {
+            await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (hasAwsEc2Instances) {
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (hasAwsEcsTaskDefinitions) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (hasAwsEcsServices) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "scheduling_strategy"`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "scheduling_strategy" jsonb`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_ecs_clusters')) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_load_balancers')) {
+            await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        if (await queryRunner.hasTable('aws_load_balancer_listeners')) {
+            await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT now()`);
+            await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        }
+        await queryRunner.query(
+            `ALTER TABLE "users_sessions" ADD CONSTRAINT "FK_a42387eb0730bc26f78f88ffc31" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "organization_members" ADD CONSTRAINT "FK_7062a4fbd9bab22ffd918e5d3d9" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "organization_members" ADD CONSTRAINT "FK_89bde91f78d36ca41e9515d91c6" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "cloud_accounts" ADD CONSTRAINT "FK_94b1dcbf650e091a414daa9582b" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        if (hasAwsIamRoles) {
+            if (hasAwsEc2Instances) {
+                await queryRunner.query(
+                    `ALTER TABLE "aws_ec2_instances" ADD CONSTRAINT "FK_a5551fcfc1694ce6f049b4b96e3" FOREIGN KEY ("iam_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`
+                );
+            }
+            if (hasAwsEcsTaskDefinitions) {
+                await queryRunner.query(
+                    `ALTER TABLE "aws_ecs_task_definitions" ADD CONSTRAINT "FK_ccee558770484faf560bff1cd98" FOREIGN KEY ("execution_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`
+                );
+                await queryRunner.query(
+                    `ALTER TABLE "aws_ecs_task_definitions" ADD CONSTRAINT "FK_0e379e543f362acad234d9f79ff" FOREIGN KEY ("task_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`
+                );
+            }
+            if (hasAwsEcsServices) {
+                await queryRunner.query(
+                    `ALTER TABLE "aws_ecs_services" ADD CONSTRAINT "FK_d434eef28ad1430f7f01d098597" FOREIGN KEY ("service_role_id") REFERENCES "aws_iam_roles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`
+                );
+            }
+        }
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP CONSTRAINT "FK_d434eef28ad1430f7f01d098597"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP CONSTRAINT "FK_0e379e543f362acad234d9f79ff"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP CONSTRAINT "FK_ccee558770484faf560bff1cd98"`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP CONSTRAINT "FK_a5551fcfc1694ce6f049b4b96e3"`);
+        const hasAwsEc2Instances = await queryRunner.hasTable('aws_ec2_instances');
+        const hasAwsEcsTaskDefinitions = await queryRunner.hasTable('aws_ecs_task_definitions');
+        const hasAwsEcsServices = await queryRunner.hasTable('aws_ecs_services');
+        const hasAwsIamRoles = await queryRunner.hasTable('aws_iam_roles');
+
+        if (hasAwsIamRoles && hasAwsEcsServices) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP CONSTRAINT "FK_d434eef28ad1430f7f01d098597"`);
+        }
+        if (hasAwsIamRoles && hasAwsEcsTaskDefinitions) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP CONSTRAINT "FK_0e379e543f362acad234d9f79ff"`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP CONSTRAINT "FK_ccee558770484faf560bff1cd98"`);
+        }
+        if (hasAwsIamRoles && hasAwsEc2Instances) {
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP CONSTRAINT "FK_a5551fcfc1694ce6f049b4b96e3"`);
+        }
         await queryRunner.query(`ALTER TABLE "cloud_accounts" DROP CONSTRAINT "FK_94b1dcbf650e091a414daa9582b"`);
         await queryRunner.query(`ALTER TABLE "organization_members" DROP CONSTRAINT "FK_89bde91f78d36ca41e9515d91c6"`);
         await queryRunner.query(`ALTER TABLE "organization_members" DROP CONSTRAINT "FK_7062a4fbd9bab22ffd918e5d3d9"`);
         await queryRunner.query(`ALTER TABLE "users_sessions" DROP CONSTRAINT "FK_a42387eb0730bc26f78f88ffc31"`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "scheduling_strategy"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "scheduling_strategy" character varying(50)`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        if (await queryRunner.hasTable('aws_load_balancer_listeners')) {
+            await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_load_balancers')) {
+            await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_ecs_clusters')) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (hasAwsEcsServices) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "scheduling_strategy"`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" ADD "scheduling_strategy" character varying(50)`);
+        }
+        if (hasAwsEcsTaskDefinitions) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (hasAwsEc2Instances) {
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (hasAwsIamRoles) {
+            await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_security_groups')) {
+            await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_route_tables')) {
+            await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_subnets')) {
+            await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
+        if (await queryRunner.hasTable('aws_vpcs')) {
+            await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+            await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        }
         await queryRunner.query(`ALTER TABLE "organization_invites" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
         await queryRunner.query(`ALTER TABLE "organization_invites" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
         await queryRunner.query(`ALTER TABLE "organizations" ALTER COLUMN "updated_at" DROP NOT NULL`);
@@ -150,13 +240,23 @@ export class AddIamRoleForeignKeys1772916846354 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "updated_at" DROP NOT NULL`);
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "created_at" DROP NOT NULL`);
         await queryRunner.query(`ALTER TABLE "users_sessions" ALTER COLUMN "expires_at" SET DEFAULT (now() + '7 days')`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "service_role_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP COLUMN "task_role_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP COLUMN "execution_role_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP COLUMN "iam_role_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP COLUMN "iam_instance_profile_arn"`);
-        await queryRunner.query(`ALTER TABLE "cloud_accounts" ADD CONSTRAINT "CHK_cloud_accounts_provider" CHECK (((provider)::text = ANY ((ARRAY['aws'::character varying, 'azure'::character varying, 'gcp'::character varying])::text[])))`);
-        await queryRunner.query(`ALTER TABLE "organization_members" ADD CONSTRAINT "CHK_org_members_role" CHECK (((role)::text = ANY ((ARRAY['OWNER'::character varying, 'ADMIN'::character varying, 'MEMBER'::character varying, 'VIEWER'::character varying])::text[])))`);
+        if (hasAwsEcsServices) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_services" DROP COLUMN "service_role_id"`);
+        }
+        if (hasAwsEcsTaskDefinitions) {
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP COLUMN "task_role_id"`);
+            await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" DROP COLUMN "execution_role_id"`);
+        }
+        if (hasAwsEc2Instances) {
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP COLUMN "iam_role_id"`);
+            await queryRunner.query(`ALTER TABLE "aws_ec2_instances" DROP COLUMN "iam_instance_profile_arn"`);
+        }
+        await queryRunner.query(
+            `ALTER TABLE "cloud_accounts" ADD CONSTRAINT "CHK_cloud_accounts_provider" CHECK (((provider)::text = ANY ((ARRAY['aws'::character varying, 'azure'::character varying, 'gcp'::character varying])::text[])))`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "organization_members" ADD CONSTRAINT "CHK_org_members_role" CHECK (((role)::text = ANY ((ARRAY['OWNER'::character varying, 'ADMIN'::character varying, 'MEMBER'::character varying, 'VIEWER'::character varying])::text[])))`
+        );
         await queryRunner.query(`CREATE INDEX "idx_aws_load_balancer_listeners_lb_id" ON "aws_load_balancer_listeners" ("load_balancer_id") `);
         await queryRunner.query(`CREATE INDEX "idx_aws_load_balancer_listeners_arn" ON "aws_load_balancer_listeners" ("aws_listener_arn") `);
         await queryRunner.query(`CREATE INDEX "idx_aws_load_balancers_arn" ON "aws_load_balancers" ("aws_load_balancer_arn") `);
@@ -191,16 +291,25 @@ export class AddIamRoleForeignKeys1772916846354 implements MigrationInterface {
         await queryRunner.query(`CREATE INDEX "idx_aws_subnets_vpc_id" ON "aws_subnets" ("vpc_id") `);
         await queryRunner.query(`CREATE INDEX "idx_aws_vpcs_aws_vpc_id" ON "aws_vpcs" ("aws_vpc_id") `);
         await queryRunner.query(`CREATE INDEX "idx_aws_vpcs_cloud_account_id" ON "aws_vpcs" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "IDX_559b51a52d2ff51955eaef30cf" ON "organization_invites" ("email", "organization_id", "status") WHERE ((status)::text = 'PENDING'::text)`);
+        await queryRunner.query(
+            `CREATE UNIQUE INDEX "IDX_559b51a52d2ff51955eaef30cf" ON "organization_invites" ("email", "organization_id", "status") WHERE ((status)::text = 'PENDING'::text)`
+        );
         await queryRunner.query(`CREATE INDEX "IDX_9a1438c30e429b3d23434ba0df" ON "organization_invites" ("token") `);
         await queryRunner.query(`CREATE INDEX "IDX_89053f57bae552fa77241494df" ON "organization_invites" ("email") `);
         await queryRunner.query(`CREATE INDEX "IDX_86ee44dc17238efe40601b1454" ON "organization_invites" ("organization_id") `);
         await queryRunner.query(`CREATE INDEX "IDX_cloud_accounts_organization_id" ON "cloud_accounts" ("organization_id") `);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_org_members_user_org" ON "organization_members" ("organization_id", "user_id") `);
-        await queryRunner.query(`ALTER TABLE "cloud_accounts" ADD CONSTRAINT "FK_cloud_accounts_organization_id" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "organization_members" ADD CONSTRAINT "FK_organization_members_organization_id" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "organization_members" ADD CONSTRAINT "FK_organization_members_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "users_sessions" ADD CONSTRAINT "FK_users_sessions_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(
+            `ALTER TABLE "cloud_accounts" ADD CONSTRAINT "FK_cloud_accounts_organization_id" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "organization_members" ADD CONSTRAINT "FK_organization_members_organization_id" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "organization_members" ADD CONSTRAINT "FK_organization_members_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE "users_sessions" ADD CONSTRAINT "FK_users_sessions_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
     }
-
 }

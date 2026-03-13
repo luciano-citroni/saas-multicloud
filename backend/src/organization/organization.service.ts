@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger, Inject, forwardRef, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,7 @@ import { CreateOrganizationDto, UpdateOrganizationDto, InviteMemberDto, UpdateMe
 import { ErrorMessages } from '../common/messages/error-messages';
 import { OrgRole, ROLE_HIERARCHY } from '../rbac/roles.enum';
 import { MailerService } from '../mailer/mailer.service';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class OrganizationService {
@@ -22,7 +23,9 @@ export class OrganizationService {
         private readonly inviteRepository: Repository<OrganizationInvite>,
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
-        private readonly mailerService: MailerService
+        private readonly mailerService: MailerService,
+        @Inject(forwardRef(() => BillingService))
+        private readonly billingService: BillingService
     ) {}
 
     async create(payload: CreateOrganizationDto, creatorId?: string): Promise<Organization> {
@@ -30,12 +33,28 @@ export class OrganizationService {
 
         const saved = await this.organizationRepository.save(organization);
 
-        if (creatorId) {
+        if (!creatorId) {
+            return saved;
+        }
+
+        try {
             await this.memberRepository.save({
                 organizationId: saved.id,
                 userId: creatorId,
                 role: OrgRole.OWNER,
             } as Partial<OrganizationMember>);
+
+            const owner = await this.userRepository.findOne({ where: { id: creatorId } });
+            if (!owner) {
+                throw new InternalServerErrorException('Organization owner not found during Stripe initialization');
+            }
+
+            await this.billingService.initializeSubscription(saved, owner);
+        } catch (error) {
+            await this.organizationRepository.delete(saved.id).catch((cleanupError) => {
+                this.logger.error(`Failed to rollback organization ${saved.id} after Stripe initialization error`, cleanupError);
+            });
+            throw error;
         }
 
         return saved;
@@ -115,6 +134,8 @@ export class OrganizationService {
         if (!organization) {
             throw new NotFoundException(ErrorMessages.ORGANIZATIONS.NOT_FOUND);
         }
+
+        await this.ensureCanAddUserToOrganization(organizationId, true);
 
         const inviter = await this.userRepository.findOne({ where: { id: inviterUserId } });
 
@@ -211,6 +232,8 @@ export class OrganizationService {
             throw new ConflictException(ErrorMessages.INVITES.USER_ALREADY_MEMBER);
         }
 
+        await this.ensureCanAddUserToOrganization(invite.organizationId, false);
+
         await this.memberRepository.save({
             organizationId: invite.organizationId,
             userId: user.id,
@@ -249,6 +272,8 @@ export class OrganizationService {
             await this.inviteRepository.save(invite);
             throw new ConflictException(ErrorMessages.INVITES.USER_ALREADY_MEMBER);
         }
+
+        await this.ensureCanAddUserToOrganization(invite.organizationId, false);
 
         await this.memberRepository.save({
             organizationId: invite.organizationId,
@@ -364,6 +389,32 @@ export class OrganizationService {
 
         if (!membership || membership.role !== OrgRole.OWNER) {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+    }
+
+    private async ensureCanAddUserToOrganization(organizationId: string, includePendingInvites: boolean): Promise<void> {
+        const plan = await this.billingService.getActivePlanForOrganization(organizationId);
+        const maxUsers = plan.metadata.maxUsers;
+
+        if (maxUsers <= 0) {
+            return;
+        }
+
+        const currentMembers = await this.memberRepository.count({ where: { organizationId } });
+
+        if (!includePendingInvites) {
+            if (currentMembers >= maxUsers) {
+                throw new ForbiddenException(ErrorMessages.PLANS.USER_LIMIT_REACHED);
+            }
+            return;
+        }
+
+        const pendingInvites = await this.inviteRepository.count({
+            where: { organizationId, status: InviteStatus.PENDING },
+        });
+
+        if (currentMembers + pendingInvites >= maxUsers) {
+            throw new ForbiddenException(ErrorMessages.PLANS.USER_LIMIT_REACHED);
         }
     }
 }

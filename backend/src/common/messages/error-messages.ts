@@ -67,6 +67,15 @@ export const ErrorMessages = {
         INVALID_PROVIDER: 'Invalid cloud provider. Supported: aws, azure, gcp.',
     },
 
+    // Plans / subscriptions
+    PLANS: {
+        NO_ACTIVE_PLAN: 'Your organization does not have an active plan.',
+        PLAN_METADATA_NOT_AVAILABLE: 'Could not resolve plan limits for this organization.',
+        CLOUD_ACCOUNT_LIMIT_REACHED: 'Cloud account limit reached for your current plan.',
+        USER_LIMIT_REACHED: 'User limit reached for your current plan.',
+        MODULE_NOT_ENABLED: 'This feature is not enabled in your current plan.',
+    },
+
     // Database
     DATABASE: {
         CONFLICT: 'This value is already in use',

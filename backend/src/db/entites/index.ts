@@ -42,3 +42,4 @@ export { AwsWafWebAcl } from './aws-waf-web-acl.entity';
 export { AwsGuardDutyDetector } from './aws-guardduty-detector.entity';
 export { AwsAssessmentJob } from './aws-assessment-job.entity';
 export type { AssessmentStatus } from './aws-assessment-job.entity';
+export { OrganizationSubscription, SubscriptionStatus } from './organization-subscription.entity';

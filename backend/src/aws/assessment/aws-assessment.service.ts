@@ -7,13 +7,13 @@ import { AwsAssessmentJob, AssessmentStatus } from '../../db/entites/aws-assessm
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { ASSESSMENT_QUEUE, ASSESSMENT_JOB_NAME, GENERAL_SYNC_QUEUE, GENERAL_SYNC_JOB_NAME } from './constants';
 import { AwsAssessmentReportService } from './aws-assessment-report.service';
-import { AwsAssessmentArchitectureService } from './aws-assessment-architecture.service';
+import { AwsAssessmentArchitectureService, ReactFlowGraph } from './aws-assessment-architecture.service';
+import { BillingService } from '../../billing/billing.service';
 
 export interface AssessmentArchitectureResponse {
     cloudAccountId: string;
     lastGeneralSyncAt: Date | null;
-    architectureJson: object;
-    mermaidDiagram: string;
+    architectureGraph: ReactFlowGraph;
 }
 
 export interface GeneralSyncJobResponse {
@@ -40,6 +40,7 @@ export class AwsAssessmentService {
         private readonly cloudAccountRepository: Repository<CloudAccount>,
         private readonly reportService: AwsAssessmentReportService,
         private readonly architectureService: AwsAssessmentArchitectureService,
+        private readonly billingService: BillingService,
         @InjectQueue(ASSESSMENT_QUEUE)
         private readonly assessmentQueue: Queue,
         @InjectQueue(GENERAL_SYNC_QUEUE)
@@ -47,6 +48,8 @@ export class AwsAssessmentService {
     ) {}
 
     async buildAssessmentArchitecture(cloudAccountId: string, organizationId: string): Promise<AssessmentArchitectureResponse> {
+        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
+
         const cloudAccount = await this.cloudAccountRepository.findOne({
             where: { id: cloudAccountId, organizationId },
         });
@@ -57,17 +60,17 @@ export class AwsAssessmentService {
 
         const data = await this.reportService.collectAllData(cloudAccountId);
         const architectureModel = this.architectureService.buildArchitectureModel(cloudAccountId, data);
-        const mermaidDiagram = this.architectureService.buildMermaidDiagram(architectureModel).replace(/\\n/g, '\n');
+        const architectureGraph = this.architectureService.buildReactFlowGraph(architectureModel, data);
 
         return {
             cloudAccountId,
             lastGeneralSyncAt: cloudAccount.lastGeneralSyncAt,
-            architectureJson: architectureModel as unknown as object,
-            mermaidDiagram,
+            architectureGraph,
         };
     }
 
     async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GeneralSyncJobResponse> {
+        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
@@ -83,7 +86,7 @@ export class AwsAssessmentService {
             GENERAL_SYNC_JOB_NAME,
             { cloudAccountId, organizationId },
             {
-                jobId: `general-sync:${cloudAccountId}`,
+                jobId: `general-sync-${cloudAccountId}`,
                 attempts: 2,
                 backoff: { type: 'exponential', delay: 5000 },
                 removeOnComplete: { count: 50 },
@@ -132,6 +135,8 @@ export class AwsAssessmentService {
     }
 
     async startAssessment(cloudAccountId: string, organizationId: string, runSync: boolean): Promise<AwsAssessmentJob> {
+        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
+
         const cloudAccount = await this.cloudAccountRepository.findOne({
             where: { id: cloudAccountId, organizationId },
         });

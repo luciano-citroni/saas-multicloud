@@ -24,14 +24,35 @@ export class AssessmentArchitectureResponseDto {
     lastGeneralSyncAt?: Date | null;
 
     @ApiProperty({
-        description: 'Estrutura da nuvem gerada a partir dos dados das tabelas',
+        description: 'Grafo da arquitetura para React Flow',
         type: 'object',
         additionalProperties: true,
+        example: {
+            nodes: [
+                {
+                    id: 'vpc:123',
+                    type: 'default',
+                    position: { x: 0, y: 80 },
+                    data: { label: 'prod-vpc', resourceType: 'VPC', awsId: 'vpc-0123456789' },
+                },
+            ],
+            edges: [
+                {
+                    id: 'edge:vpc:123->subnet:456:contains',
+                    source: 'vpc:123',
+                    target: 'subnet:456',
+                    label: 'contains',
+                    type: 'smoothstep',
+                    animated: false,
+                    data: { relationship: 'contains' },
+                },
+            ],
+        },
     })
-    architectureJson: object;
-
-    @ApiProperty({ description: 'Diagrama no formato Mermaid' })
-    mermaidDiagram: string;
+    architectureGraph: {
+        nodes: unknown[];
+        edges: unknown[];
+    };
 }
 
 export class GeneralSyncJobResponseDto {

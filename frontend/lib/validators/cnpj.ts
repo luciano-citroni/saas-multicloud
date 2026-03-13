@@ -25,9 +25,14 @@ export function isValidCNPJ(input: string): boolean {
     return cnpj === base13 + String(secondDigit);
 }
 
-export function formatCNPJ(input: string): string {
-    const digits = (input || '').replace(/\D/g, '').padStart(14, '0');
-    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+export function formatCNPJ(cnpj: string): string {
+    if (!cnpj) {
+        return cnpj;
+    }
+
+    cnpj = cnpj.replace(/\D/g, '');
+
+    return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
 }
 
 export default isValidCNPJ;

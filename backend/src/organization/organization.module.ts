@@ -1,5 +1,4 @@
-import { Module } from '@nestjs/common';
-import { forwardRef } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Organization, OrganizationMember, OrganizationInvite, User } from '../db/entites';
 import { OrganizationService } from './organization.service';
@@ -9,7 +8,8 @@ import { InvitesController } from './invites.controller';
 import { MailerModule } from '../mailer/mailer.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { TenantModule } from '../tenant/tenant.module';
-import { AuthModule } from '../auth/auth.module'; // Add import for AuthModule
+import { AuthModule } from '../auth/auth.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
     imports: [
@@ -17,7 +17,8 @@ import { AuthModule } from '../auth/auth.module'; // Add import for AuthModule
         MailerModule,
         TenantModule,
         RbacModule,
-        forwardRef(() => AuthModule), // Add forwardRef for AuthModule
+        forwardRef(() => AuthModule),
+        forwardRef(() => BillingModule),
     ],
     providers: [OrganizationService],
     controllers: [OrganizationController, MembersController, InvitesController],

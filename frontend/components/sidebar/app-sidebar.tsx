@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard } from 'lucide-react';
+import { CreditCard, GitBranch, LayoutDashboard } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
 import { NavUser } from '@/components/sidebar/nav-user';
 import { toast } from 'sonner';
+import { ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
 
 const baseData = {
     navMain: [
@@ -16,10 +17,19 @@ const baseData = {
             url: '/',
             icon: LayoutDashboard,
         },
+        {
+            title: 'Assessment',
+            url: '/assessment',
+            icon: GitBranch,
+        },
+        {
+            title: 'Planos e Regras',
+            url: '/billing',
+            icon: CreditCard,
+        },
     ],
 };
 
-const ACTIVE_ORG_STORAGE_KEY = 'smc_active_organization_id';
 const ACTIVE_CLOUD_STORAGE_KEY_PREFIX = 'smc_active_cloud_account_id:';
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
@@ -123,54 +133,79 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         [router]
     );
 
-    React.useEffect(() => {
-        const loadSidebarContext = async () => {
-            try {
-                const response = await fetch('/api/sidebar/context', {
-                    cache: 'no-store',
-                });
+    const loadSidebarContext = React.useCallback(async () => {
+        setLoading(true);
 
-                if (response.status === 401) {
-                    router.replace('/auth/sign-in');
-                    router.refresh();
-                    return;
-                }
+        try {
+            const response = await fetch('/api/sidebar/context', {
+                cache: 'no-store',
+            });
 
-                if (!response.ok) {
-                    toast.error('Nao foi possivel carregar os dados da sidebar.');
-                    return;
-                }
-
-                const payload = (await response.json()) as SidebarContextResponse;
-                setUser(payload.user);
-                setOrganizations(payload.organizations ?? []);
-
-                const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-
-                const validStoredOrganization =
-                    storedOrganizationId && payload.organizations?.some((organization) => organization.id === storedOrganizationId)
-                        ? storedOrganizationId
-                        : payload.organizations?.[0]?.id;
-
-                if (!validStoredOrganization) {
-                    setActiveOrganizationId(undefined);
-                    setCloudAccounts([]);
-                    setActiveCloudAccountId(undefined);
-                    return;
-                }
-
-                window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
-                setActiveOrganizationId(validStoredOrganization);
-                await loadCloudAccounts(validStoredOrganization);
-            } catch {
-                toast.error('Nao foi possivel carregar os dados da sidebar.');
-            } finally {
-                setLoading(false);
+            if (response.status === 401) {
+                router.replace('/auth/sign-in');
+                router.refresh();
+                return;
             }
+
+            if (!response.ok) {
+                toast.error('Nao foi possivel carregar os dados da sidebar.');
+                return;
+            }
+
+            const payload = (await response.json()) as SidebarContextResponse;
+            setUser(payload.user);
+            setOrganizations(payload.organizations ?? []);
+
+            const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+
+            const validStoredOrganization =
+                storedOrganizationId && payload.organizations?.some((organization) => organization.id === storedOrganizationId)
+                    ? storedOrganizationId
+                    : payload.organizations?.[0]?.id;
+
+            if (!validStoredOrganization) {
+                window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+                setActiveOrganizationId(undefined);
+                setCloudAccounts([]);
+                setActiveCloudAccountId(undefined);
+                return;
+            }
+
+            window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
+            setActiveOrganizationId(validStoredOrganization);
+            await loadCloudAccounts(validStoredOrganization);
+        } catch {
+            toast.error('Nao foi possivel carregar os dados da sidebar.');
+        } finally {
+            setLoading(false);
+        }
+    }, [loadCloudAccounts, router]);
+
+    React.useEffect(() => {
+        void loadSidebarContext();
+    }, [loadSidebarContext]);
+
+    React.useEffect(() => {
+        const handleSidebarContextUpdated = () => {
+            void loadSidebarContext();
         };
 
-        void loadSidebarContext();
-    }, [loadCloudAccounts, router]);
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key && event.key !== ACTIVE_ORG_STORAGE_KEY) {
+                return;
+            }
+
+            void loadSidebarContext();
+        };
+
+        window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleSidebarContextUpdated);
+        window.addEventListener('storage', handleStorage);
+
+        return () => {
+            window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleSidebarContextUpdated);
+            window.removeEventListener('storage', handleStorage);
+        };
+    }, [loadSidebarContext]);
 
     const handleOrganizationChange = React.useCallback(
         (organization: SidebarOrganization) => {

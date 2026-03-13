@@ -75,6 +75,7 @@ import { AwsSnsModule } from '../sns/aws-sns.module';
 import { AwsWafModule } from '../waf/aws-waf.module';
 import { AwsGuardDutyModule } from '../guardduty/aws-guardduty.module';
 import { TenantModule } from '../../tenant/tenant.module';
+import { BillingModule } from '../../billing/billing.module';
 
 @Module({
     imports: [
@@ -144,6 +145,7 @@ import { TenantModule } from '../../tenant/tenant.module';
         AwsWafModule,
         AwsGuardDutyModule,
         TenantModule,
+        BillingModule,
     ],
     controllers: [AwsAssessmentController],
     providers: [
