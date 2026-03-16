@@ -9,6 +9,7 @@ import { ASSESSMENT_QUEUE, ASSESSMENT_JOB_NAME, GENERAL_SYNC_QUEUE, GENERAL_SYNC
 import { AwsAssessmentReportService } from './aws-assessment-report.service';
 import { AwsAssessmentArchitectureService, ReactFlowGraph } from './aws-assessment-architecture.service';
 import { BillingService } from '../../billing/billing.service';
+import { SystemModule } from '../../common/modules/system-modules';
 
 export interface AssessmentArchitectureResponse {
     cloudAccountId: string;
@@ -48,7 +49,7 @@ export class AwsAssessmentService {
     ) {}
 
     async buildAssessmentArchitecture(cloudAccountId: string, organizationId: string): Promise<AssessmentArchitectureResponse> {
-        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
+        await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
         const cloudAccount = await this.cloudAccountRepository.findOne({
             where: { id: cloudAccountId, organizationId },
@@ -70,7 +71,7 @@ export class AwsAssessmentService {
     }
 
     async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GeneralSyncJobResponse> {
-        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
+        await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
@@ -84,7 +85,7 @@ export class AwsAssessmentService {
 
         const syncJob = await this.generalSyncQueue.add(
             GENERAL_SYNC_JOB_NAME,
-            { cloudAccountId, organizationId },
+            { cloudAccountId },
             {
                 jobId: `general-sync-${cloudAccountId}`,
                 attempts: 2,
@@ -135,7 +136,7 @@ export class AwsAssessmentService {
     }
 
     async startAssessment(cloudAccountId: string, organizationId: string, runSync: boolean): Promise<AwsAssessmentJob> {
-        await this.billingService.assertModuleEnabled(organizationId, 'assessment');
+        await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
         const cloudAccount = await this.cloudAccountRepository.findOne({
             where: { id: cloudAccountId, organizationId },

@@ -4,19 +4,19 @@ import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 export async function POST(request: Request) {
     if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!refreshToken) {
-        return NextResponse.json({ message: 'Sessao ausente' }, { status: 401 });
+        return NextResponse.json({ message: 'Sessão ausente' }, { status: 401 });
     }
 
     const tokens = await refreshAccessToken(refreshToken);
 
     if (!tokens) {
-        const response = NextResponse.json({ message: 'Nao foi possivel renovar a sessao' }, { status: 401 });
+        const response = NextResponse.json({ message: 'Não foi possível renovar a sessão' }, { status: 401 });
         clearAuthCookies(response);
         return response;
     }

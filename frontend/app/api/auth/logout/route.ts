@@ -4,7 +4,7 @@ import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 export async function POST(request: Request) {
     if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
     const accessToken = await getAccessTokenFromCookies();

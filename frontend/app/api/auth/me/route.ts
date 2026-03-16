@@ -15,7 +15,7 @@ export async function GET() {
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
     }
 
     const fetchUser = (token: string) =>
@@ -32,7 +32,7 @@ export async function GET() {
         rotatedTokens = await refreshAccessToken(refreshToken);
 
         if (!rotatedTokens) {
-            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+            const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
             clearAuthCookies(response);
             return response;
         }
@@ -41,7 +41,7 @@ export async function GET() {
     }
 
     if (!currentAccessToken) {
-        return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
     }
 
     let userResponse = await fetchUser(currentAccessToken);
@@ -63,9 +63,9 @@ export async function GET() {
 
         userResponse = await fetchUser(rotatedTokens.accessToken);
 
-        if (!userResponse.ok) {
+            if (!userResponse.ok) {
             const failedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
-            return NextResponse.json(failedPayload ?? { message: 'Erro ao carregar usuario' }, { status: userResponse.status });
+            return NextResponse.json(failedPayload ?? { message: 'Erro ao carregar usuário' }, { status: userResponse.status });
         }
 
         const refreshedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
@@ -77,7 +77,7 @@ export async function GET() {
     const payload = await parseJsonSafe<Record<string, unknown>>(userResponse);
 
     if (!userResponse.ok) {
-        return NextResponse.json(payload ?? { message: 'Erro ao carregar usuario' }, { status: userResponse.status });
+        return NextResponse.json(payload ?? { message: 'Erro ao carregar usuário' }, { status: userResponse.status });
     }
 
     if (!rotatedTokens) {

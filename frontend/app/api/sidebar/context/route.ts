@@ -19,7 +19,66 @@ type BackendUser = {
 type BackendOrganization = {
     id?: string;
     name?: string;
+    currentRole?: string;
+    current_role?: string;
+    maxCloudAccounts?: number;
+    maxUsers?: number;
+    max_cloud_accounts?: number;
+    max_users?: number;
+    plans?: unknown;
 };
+
+function parseOrganizationPlans(plans: unknown): string[] {
+    const normalize = (values: string[]): string[] => {
+        const normalized = values.map((value) => value.trim().toLowerCase()).filter(Boolean);
+
+        if (normalized.includes('*')) {
+            return ['*'];
+        }
+
+        return Array.from(new Set(normalized));
+    };
+
+    if (Array.isArray(plans)) {
+        return normalize(plans.filter((entry): entry is string => typeof entry === 'string'));
+    }
+
+    if (typeof plans !== 'string') {
+        return [];
+    }
+
+    const raw = plans.trim();
+    if (!raw) {
+        return [];
+    }
+
+    if (raw === '*') {
+        return ['*'];
+    }
+
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed)) {
+                return normalize(parsed.filter((entry): entry is string => typeof entry === 'string'));
+            }
+        } catch {
+            // fallback to other formats
+        }
+    }
+
+    // PostgreSQL array literal format (ex: {assessment,*})
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+        const entries = raw
+            .slice(1, -1)
+            .split(',')
+            .map((entry) => entry.replace(/^"|"$/g, '').trim())
+            .filter(Boolean);
+        return normalize(entries);
+    }
+
+    return normalize(raw.split(','));
+}
 
 function toSlug(value: string): string {
     return value
@@ -33,7 +92,7 @@ function toSlug(value: string): string {
 function normalizePayload(userBody: BackendUser | null, organizationsBody: BackendOrganization[] | null) {
     const user = {
         id: userBody?.id ?? '',
-        name: userBody?.name ?? 'Usuario',
+        name: userBody?.name ?? 'Usuário',
         email: userBody?.email ?? 'email@teste.com',
     };
 
@@ -44,6 +103,25 @@ function normalizePayload(userBody: BackendUser | null, organizationsBody: Backe
                   id: organization.id as string,
                   name: organization.name as string,
                   slug: toSlug(organization.name as string),
+                  currentRole:
+                      typeof organization.currentRole === 'string'
+                          ? organization.currentRole
+                          : typeof organization.current_role === 'string'
+                            ? organization.current_role
+                            : null,
+                  maxCloudAccounts:
+                      typeof organization.maxCloudAccounts === 'number'
+                          ? organization.maxCloudAccounts
+                          : typeof organization.max_cloud_accounts === 'number'
+                            ? organization.max_cloud_accounts
+                            : 0,
+                  maxUsers:
+                      typeof organization.maxUsers === 'number'
+                          ? organization.maxUsers
+                          : typeof organization.max_users === 'number'
+                            ? organization.max_users
+                            : 0,
+                  plans: parseOrganizationPlans(organization.plans),
               }))
         : [];
 
@@ -66,7 +144,7 @@ export async function GET() {
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
     }
 
     let currentAccessToken = accessToken;
@@ -76,7 +154,7 @@ export async function GET() {
         rotatedTokens = await refreshAccessToken(refreshToken);
 
         if (!rotatedTokens) {
-            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+            const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
             clearAuthCookies(response);
             return response;
         }
@@ -85,7 +163,7 @@ export async function GET() {
     }
 
     if (!currentAccessToken) {
-        return NextResponse.json({ message: 'Nao autenticado' }, { status: 401 });
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
     }
 
     let [meResponse, organizationsResponse] = await fetchContext(currentAccessToken);
@@ -112,11 +190,11 @@ export async function GET() {
     const organizationsBody = await parseJsonSafe<BackendOrganization[]>(organizationsResponse);
 
     if (!meResponse.ok) {
-        return NextResponse.json(meBody ?? { message: 'Erro ao carregar usuario' }, { status: meResponse.status });
+        return NextResponse.json(meBody ?? { message: 'Erro ao carregar usuário' }, { status: meResponse.status });
     }
 
     if (!organizationsResponse.ok) {
-        return NextResponse.json(organizationsBody ?? { message: 'Erro ao carregar organizacoes' }, { status: organizationsResponse.status });
+        return NextResponse.json(organizationsBody ?? { message: 'Erro ao carregar organizações' }, { status: organizationsResponse.status });
     }
 
     const response = NextResponse.json(normalizePayload(meBody, organizationsBody));

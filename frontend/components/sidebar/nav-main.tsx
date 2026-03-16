@@ -13,6 +13,8 @@ export function NavMain({
         title: string;
         url: string;
         icon?: LucideIcon;
+        disabled?: boolean;
+        disabledReason?: string;
     }[];
 }) {
     const pathname = usePathname();
@@ -34,11 +36,23 @@ export function NavMain({
                 <SidebarMenu>
                     {items.map((item) => {
                         const isActive = activeItem?.url === item.url;
+                        const tooltip = item.disabled && item.disabledReason ? `${item.title}: ${item.disabledReason}` : item.title;
+
+                        if (item.disabled) {
+                            return (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton tooltip={tooltip} disabled isActive={false} className="cursor-not-allowed">
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            );
+                        }
 
                         return (
                             <Link href={item.url} key={item.title}>
                                 <SidebarMenuItem>
-                                    <SidebarMenuButton tooltip={item.title} isActive={isActive} className="cursor-pointer">
+                                    <SidebarMenuButton tooltip={tooltip} isActive={isActive} className="cursor-pointer">
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
                                     </SidebarMenuButton>

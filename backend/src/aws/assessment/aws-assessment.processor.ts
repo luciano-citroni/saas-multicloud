@@ -46,7 +46,7 @@ export class AwsAssessmentProcessor extends WorkerHost {
                 this.logger.log(`[${jobId}] Fase 1/4: Sincronizando recursos da AWS...`);
                 await job.updateProgress(10);
                 await this.syncService.syncAll(cloudAccountId, organizationId);
-                await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { lastGeneralSyncAt: new Date() });
+                await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
                 this.logger.log(`[${jobId}] Sincronização concluída`);
             }
 

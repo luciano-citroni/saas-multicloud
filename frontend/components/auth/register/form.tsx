@@ -65,7 +65,7 @@ export function RegisterForm() {
                             <FormItem>
                                 <FormLabel>Nome*</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="Coloque seu Nome" StartIcon={UserIcon} {...field} />
+                                    <IconInput placeholder="Coloque seu nome" StartIcon={UserIcon} {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -77,9 +77,9 @@ export function RegisterForm() {
                         name="email"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Email*</FormLabel>
+                                <FormLabel>E-mail*</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="Coloque seu Email" StartIcon={Mail} {...field} />
+                                    <IconInput placeholder="Coloque seu e-mail" StartIcon={Mail} {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -117,7 +117,7 @@ export function RegisterForm() {
                                 <FormLabel>Senha*</FormLabel>
                                 <FormControl>
                                     <IconInput
-                                        placeholder="Coloque sua Senha"
+                                        placeholder="Coloque sua senha"
                                         StartIcon={LockKeyhole}
                                         {...field}
                                         type={viewPassword ? 'text' : 'password'}
@@ -134,10 +134,10 @@ export function RegisterForm() {
                         name="confirmPassword"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Confirme a Senha*</FormLabel>
+                                <FormLabel>Confirme a senha*</FormLabel>
                                 <FormControl>
                                     <IconInput
-                                        placeholder="Confirme sua Senha"
+                                        placeholder="Confirme sua senha"
                                         StartIcon={LockKeyhole}
                                         {...field}
                                         type={viewConfirmPassword ? 'text' : 'password'}

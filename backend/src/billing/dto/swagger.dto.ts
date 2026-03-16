@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ALL_MODULES_TOKEN, SYSTEM_MODULES } from '../../common/modules/system-modules';
 
 export class PlanMetadataDto {
     @ApiProperty({ example: 10, description: 'Maximum number of cloud accounts allowed' })
@@ -8,8 +9,10 @@ export class PlanMetadataDto {
     maxUsers!: number;
 
     @ApiProperty({
-        example: ['assessment', 'resources'],
-        description: "Modules available in this plan. ['*'] means all modules. [] means no modules.",
+        example: ['assessment'],
+        enum: [ALL_MODULES_TOKEN, ...SYSTEM_MODULES],
+        isArray: true,
+        description: `Modules available in this plan. ['*'] means all modules. [] means no modules. Available modules: ${SYSTEM_MODULES.join(', ')}.`,
     })
     modules!: string[];
 }

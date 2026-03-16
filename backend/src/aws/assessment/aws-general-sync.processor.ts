@@ -9,7 +9,6 @@ import { GENERAL_SYNC_QUEUE } from './constants';
 
 export interface GeneralSyncJobPayload {
     cloudAccountId: string;
-    organizationId: string;
 }
 
 @Processor(GENERAL_SYNC_QUEUE)
@@ -25,12 +24,17 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
     }
 
     async process(job: Job<GeneralSyncJobPayload>): Promise<void> {
-        const { cloudAccountId, organizationId } = job.data;
+        const { cloudAccountId } = job.data;
         this.logger.log(`[sync:${job.id}] Iniciando sync geral da conta ${cloudAccountId}`);
 
-        await this.syncService.syncAll(cloudAccountId, organizationId);
+        const cloudAccount = await this.cloudAccountRepository.findOne({ where: { id: cloudAccountId } });
+        if (!cloudAccount) {
+            throw new Error(`CloudAccount \"${cloudAccountId}\" não encontrada para sync geral.`);
+        }
 
-        await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { lastGeneralSyncAt: new Date() });
+        await this.syncService.syncAll(cloudAccountId, cloudAccount.organizationId);
+
+        await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
 
         this.logger.log(`[sync:${job.id}] Sync geral concluido para conta ${cloudAccountId}`);
     }

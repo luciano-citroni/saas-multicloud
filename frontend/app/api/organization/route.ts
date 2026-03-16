@@ -64,7 +64,7 @@ function withAuthHeaders(accessToken: string, headers?: HeadersInit): HeadersIni
 }
 
 function buildUnauthorizedResponse() {
-    const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+    const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
     clearAuthCookies(response);
     return response;
 }
@@ -108,7 +108,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
     if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
     const resolved = await resolveAccessToken();
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
     }
 
     const payload = await parseJsonSafe<unknown>(response);
-    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao criar organizacao' }, { status: response.status });
+    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao criar organização' }, { status: response.status });
 
     if (rotatedTokens) {
         setAuthCookies(nextResponse, rotatedTokens);

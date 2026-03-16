@@ -5,6 +5,9 @@ import * as fs from 'fs';
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Organization } from '../../db/entites/organization.entity';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { Roles } from '../../rbac/roles.decorator';
+import { OrgRole } from '../../rbac/roles.enum';
 import { AwsAssessmentService } from './aws-assessment.service';
 import { AwsAssessmentExcelService } from './aws-assessment-excel.service';
 import {
@@ -21,7 +24,7 @@ import {
     description: 'UUID da organização ativa (contexto de tenant)',
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, RolesGuard)
 @Controller('aws/assessment')
 export class AwsAssessmentController {
     constructor(
@@ -33,6 +36,7 @@ export class AwsAssessmentController {
 
     @Post('accounts/:cloudAccountId/sync')
     @HttpCode(202)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @ApiOperation({
         summary: 'Enfileirar sync geral da conta AWS',
         description: 'Enfileira um job de sync geral de todos os endpoints de recursos AWS para a conta.',

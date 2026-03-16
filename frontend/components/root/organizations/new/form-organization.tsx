@@ -46,9 +46,9 @@ export function FormOrganization() {
 
             const payload = (await response.json().catch(() => null)) as CreateOrganizationResponse | { message?: string } | null;
 
-            if (!response.ok) {
+                if (!response.ok) {
                 const message = typeof payload === 'object' && payload && 'message' in payload ? payload.message : null;
-                toast.error(typeof message === 'string' ? message : 'Nao foi possivel criar a organizacao.');
+                toast.error(typeof message === 'string' ? message : 'Não foi possível criar a organização.');
                 return;
             }
 
@@ -57,11 +57,11 @@ export function FormOrganization() {
                 notifySidebarContextUpdated();
             }
 
-            toast.success('Organizacao criada com sucesso.');
+            toast.success('Organização criada com sucesso.');
             router.replace('/');
             router.refresh();
         } catch {
-            toast.error('Nao foi possivel criar a organizacao.');
+            toast.error('Não foi possível criar a organização.');
         } finally {
             setIsLoading(false);
         }

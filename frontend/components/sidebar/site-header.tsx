@@ -10,6 +10,7 @@ const navMain = [{ title: 'Dashboard', url: '/' }];
 const routeNames: Record<string, string> = {
     organizations: 'Organizações',
     new: 'Nova',
+    billing: 'Planos e Regras',
 };
 
 function isId(segment: string) {

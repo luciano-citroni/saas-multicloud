@@ -1,4 +1,14 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger, Inject, forwardRef, InternalServerErrorException } from '@nestjs/common';
+import {
+    Injectable,
+    NotFoundException,
+    ForbiddenException,
+    ConflictException,
+    BadRequestException,
+    Logger,
+    Inject,
+    forwardRef,
+    InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -60,11 +70,18 @@ export class OrganizationService {
         return saved;
     }
 
-    async findAll(userId: string): Promise<Organization[]> {
-        return this.organizationRepository
+    async findAll(userId: string): Promise<Array<Organization & { currentRole: string | null }>> {
+        const query = this.organizationRepository
             .createQueryBuilder('organization')
             .innerJoin('organization.members', 'member', 'member.user_id = :userId', { userId })
-            .getMany();
+            .addSelect('member.role', 'member_role');
+
+        const { entities, raw } = await query.getRawAndEntities();
+
+        return entities.map((organization, index) => ({
+            ...organization,
+            currentRole: typeof raw[index]?.member_role === 'string' ? raw[index].member_role : null,
+        }));
     }
 
     async findOne(id: string, userId: string): Promise<Organization> {

@@ -4,7 +4,7 @@ import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 export async function POST(request: Request) {
     if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const tokens = extractAuthTokens(payload);
 
     if (!tokens) {
-        return NextResponse.json({ message: 'Resposta de login invalida' }, { status: 500 });
+        return NextResponse.json({ message: 'Resposta de login inválida' }, { status: 500 });
     }
 
     const response = NextResponse.json({ success: true });

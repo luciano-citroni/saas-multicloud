@@ -11,6 +11,12 @@ import {
 } from '@/lib/auth/session';
 import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
+type Params = {
+    params: Promise<{
+        cloudAccountId: string;
+    }>;
+};
+
 async function resolveAccessToken() {
     const accessToken = await getAccessTokenFromCookies();
     const refreshToken = await getRefreshTokenFromCookies();
@@ -56,9 +62,8 @@ async function resolveAccessToken() {
     };
 }
 
-function withAuthHeaders(accessToken: string, organizationId: string, headers?: HeadersInit): HeadersInit {
+function withAuthHeaders(accessToken: string, organizationId: string): HeadersInit {
     return {
-        ...(headers ?? {}),
         Authorization: `Bearer ${accessToken}`,
         'x-organization-id': organizationId,
     };
@@ -70,13 +75,21 @@ function buildUnauthorizedResponse() {
     return response;
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request, { params }: Params) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
+    }
+
+    const { cloudAccountId } = await params;
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
-    const checkoutSessionId = searchParams.get('checkoutSessionId');
 
     if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
+        return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
+    }
+
+    if (!cloudAccountId) {
+        return NextResponse.json({ message: 'cloudAccountId é obrigatório' }, { status: 400 });
     }
 
     const resolved = await resolveAccessToken();
@@ -85,14 +98,8 @@ export async function GET(request: Request) {
         return buildUnauthorizedResponse();
     }
 
-    const backendQuery = new URLSearchParams();
-    if (checkoutSessionId) {
-        backendQuery.set('checkoutSessionId', checkoutSessionId);
-    }
-
-    const backendPath = backendQuery.size > 0 ? `/api/billing/subscription?${backendQuery.toString()}` : '/api/billing/subscription';
-
-    let response = await backendFetch(backendPath, {
+    let response = await backendFetch(`/api/aws/assessment/accounts/${cloudAccountId}/sync`, {
+        method: 'POST',
         headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
@@ -107,71 +114,14 @@ export async function GET(request: Request) {
 
         rotatedTokens = refreshResult;
 
-        response = await backendFetch(backendPath, {
+        response = await backendFetch(`/api/aws/assessment/accounts/${cloudAccountId}/sync`, {
+            method: 'POST',
             headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }
 
     const payload = await parseJsonSafe<unknown>(response);
-    const nextResponse = NextResponse.json(payload ?? null, { status: response.status });
-
-    if (rotatedTokens) {
-        setAuthCookies(nextResponse, rotatedTokens);
-    }
-
-    return nextResponse;
-}
-
-export async function PUT(request: Request) {
-    if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organizationId');
-
-    if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
-    }
-
-    const resolved = await resolveAccessToken();
-
-    if (!resolved.accessToken) {
-        return buildUnauthorizedResponse();
-    }
-
-    const body = await request.json();
-
-    let response = await backendFetch('/api/billing/subscription', {
-        method: 'PUT',
-        headers: withAuthHeaders(resolved.accessToken, organizationId, {
-            'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify(body),
-    });
-
-    let rotatedTokens = resolved.rotatedTokens;
-
-    if (response.status === 401 && resolved.refreshToken) {
-        const refreshResult = await refreshAccessToken(resolved.refreshToken);
-
-        if (!refreshResult) {
-            return buildUnauthorizedResponse();
-        }
-
-        rotatedTokens = refreshResult;
-
-        response = await backendFetch('/api/billing/subscription', {
-            method: 'PUT',
-            headers: withAuthHeaders(refreshResult.accessToken, organizationId, {
-                'Content-Type': 'application/json',
-            }),
-            body: JSON.stringify(body),
-        });
-    }
-
-    const payload = await parseJsonSafe<unknown>(response);
-    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao atualizar plano' }, { status: response.status });
+    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao enfileirar sincronização geral' }, { status: response.status });
 
     if (rotatedTokens) {
         setAuthCookies(nextResponse, rotatedTokens);

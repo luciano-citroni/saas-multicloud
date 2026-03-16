@@ -12,6 +12,15 @@ export class Organization {
     @Column({ type: 'varchar', length: 20, nullable: true })
     cnpj?: string | null;
 
+    @Column({ type: 'integer', name: 'max_cloud_accounts', default: 0 })
+    maxCloudAccounts!: number;
+
+    @Column({ type: 'integer', name: 'max_users', default: 0 })
+    maxUsers!: number;
+
+    @Column('text', { name: 'plans', array: true, default: () => "'{}'" })
+    plans!: string[];
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 

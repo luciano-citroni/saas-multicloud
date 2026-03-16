@@ -55,9 +55,10 @@ async function resolveAccessToken() {
     };
 }
 
-function withAuthHeaders(accessToken: string): HeadersInit {
+function withAuthHeaders(accessToken: string, organizationId: string): HeadersInit {
     return {
         Authorization: `Bearer ${accessToken}`,
+        'x-organization-id': organizationId,
     };
 }
 
@@ -67,7 +68,14 @@ function buildUnauthorizedResponse() {
     return response;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const organizationId = searchParams.get('organizationId');
+
+    if (!organizationId) {
+        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
+    }
+
     const resolved = await resolveAccessToken();
 
     if (!resolved.accessToken) {
@@ -75,7 +83,7 @@ export async function GET() {
     }
 
     let response = await backendFetch('/api/billing/plans', {
-        headers: withAuthHeaders(resolved.accessToken),
+        headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
     let rotatedTokens = resolved.rotatedTokens;
@@ -90,7 +98,7 @@ export async function GET() {
         rotatedTokens = refreshResult;
 
         response = await backendFetch('/api/billing/plans', {
-            headers: withAuthHeaders(refreshResult.accessToken),
+            headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }
 

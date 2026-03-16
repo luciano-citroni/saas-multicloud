@@ -48,22 +48,22 @@ export function PrivateHome() {
         <div className="flex  items-center justify-center p-6">
             <Card className="w-full max-w-lg">
                 <CardHeader>
-                    <CardTitle>Area privada</CardTitle>
-                    <CardDescription>Somente usuarios autenticados conseguem acessar esta pagina.</CardDescription>
+                    <CardTitle>Área privada</CardTitle>
+                    <CardDescription>Somente usuários autenticados conseguem acessar esta página.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {loading ? (
-                        <p className="text-sm text-muted-foreground">Carregando sua sessao...</p>
+                        <p className="text-sm text-muted-foreground">Carregando sua sessão...</p>
                     ) : (
                         <div className="space-y-1 text-sm">
                             <p>
-                                <span className="font-medium">Nome:</span> {user?.name ?? 'Nao informado'}
+                                <span className="font-medium">Nome:</span> {user?.name ?? 'Não informado'}
                             </p>
                             <p>
-                                <span className="font-medium">Email:</span> {user?.email ?? 'Nao informado'}
+                                <span className="font-medium">E-mail:</span> {user?.email ?? 'Não informado'}
                             </p>
                             <p>
-                                <span className="font-medium">ID:</span> {user?.id ?? 'Nao informado'}
+                                <span className="font-medium">ID:</span> {user?.id ?? 'Não informado'}
                             </p>
                         </div>
                     )}

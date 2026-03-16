@@ -1,4 +1,4 @@
-import { Controller, Post, Headers, HttpCode, HttpStatus, Logger, Req } from '@nestjs/common';
+import { Controller, Post, Headers, HttpCode, HttpStatus, Logger, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { BillingService } from './billing.service';
@@ -32,7 +32,7 @@ export class BillingWebhookController {
 
         if (!rawBody) {
             this.logger.error('Raw body not available. Ensure rawBody: true is set in NestFactory.create');
-            throw new Error('Raw body not available for webhook verification');
+            throw new BadRequestException('Raw body not available for webhook verification');
         }
 
         await this.billingService.handleWebhookEvent(rawBody, signature);

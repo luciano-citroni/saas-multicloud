@@ -7,6 +7,7 @@ import { OrganizationSubscription, SubscriptionStatus } from '../db/entites/orga
 import { Organization } from '../db/entites/organization.entity';
 import { User } from '../db/entites/user.entity';
 import { ErrorMessages } from '../common/messages/error-messages';
+import { ALL_MODULES_TOKEN, isKnownSystemModule, normalizeModuleName, normalizePlanModules, parseModulesMetadata } from '../common/modules/system-modules';
 
 export interface PlanMetadata {
     maxCloudAccounts: number;
@@ -39,6 +40,8 @@ export class BillingService {
     constructor(
         @InjectRepository(OrganizationSubscription)
         private readonly subscriptionRepository: Repository<OrganizationSubscription>,
+        @InjectRepository(Organization)
+        private readonly organizationRepository: Repository<Organization>,
         private readonly configService: ConfigService
     ) {
         const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -50,7 +53,7 @@ export class BillingService {
 
     // ─── Plans ────────────────────────────────────────────────────────────────
 
-    async listPlans(): Promise<PlanInfo[]> {
+    async listPlans(_organizationId?: string): Promise<PlanInfo[]> {
         const prices = await this.stripe.prices.list({
             active: true,
             type: 'recurring',
@@ -58,7 +61,7 @@ export class BillingService {
             limit: 100,
         });
 
-        return prices.data
+        let plans = prices.data
             .filter((price) => {
                 const product = price.product as Stripe.Product;
                 return product.active;
@@ -77,6 +80,13 @@ export class BillingService {
                     active: product.active,
                 };
             });
+
+        const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID') ?? null;
+        if (!defaultProductId) {
+            return plans;
+        }
+
+        return plans.filter((plan) => plan.productId !== defaultProductId);
     }
 
     async getPlanByPriceId(priceId: string): Promise<PlanInfo | null> {
@@ -160,14 +170,25 @@ export class BillingService {
                 cancelAtPeriodEnd: subscription.cancel_at_period_end,
             });
 
-            return await this.subscriptionRepository.save(record);
+            const savedRecord = await this.subscriptionRepository.save(record);
+
+            const defaultPlan = await this.getPlanByPriceId(priceId);
+            if (defaultPlan) {
+                await this.syncOrganizationPlanSnapshot(org.id, defaultPlan.metadata);
+            }
+
+            return savedRecord;
         } catch (error) {
             await this.rollbackStripeResources(customerId, subscriptionId);
             throw error;
         }
     }
 
-    async getSubscription(organizationId: string): Promise<OrganizationSubscription & { plan: PlanInfo | null }> {
+    async getSubscription(organizationId: string, checkoutSessionId?: string): Promise<OrganizationSubscription & { plan: PlanInfo | null }> {
+        if (checkoutSessionId) {
+            await this.reconcileCheckoutSession(organizationId, checkoutSessionId);
+        }
+
         const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
         if (!record) {
             throw new NotFoundException('No subscription found for this organization');
@@ -176,6 +197,9 @@ export class BillingService {
         let plan: PlanInfo | null = null;
         if (record.stripePriceId) {
             plan = await this.getPlanByPriceId(record.stripePriceId);
+            if (plan) {
+                await this.syncOrganizationPlanSnapshot(organizationId, plan.metadata);
+            }
         }
 
         return { ...record, plan };
@@ -205,10 +229,15 @@ export class BillingService {
 
     async assertModuleEnabled(organizationId: string, moduleName: string): Promise<void> {
         const plan = await this.getActivePlanForOrganization(organizationId);
-        const normalizedModule = moduleName.trim().toLowerCase();
-        const modules = plan.metadata.modules.map((m) => m.trim().toLowerCase());
+        const normalizedModule = normalizeModuleName(moduleName);
+        const modules = normalizePlanModules(plan.metadata.modules);
 
-        if (modules.includes('*') || modules.includes(normalizedModule)) {
+        if (!isKnownSystemModule(normalizedModule)) {
+            this.logger.warn(`Unknown module "${normalizedModule}" requested in module access assertion`);
+            throw new ForbiddenException(ErrorMessages.PLANS.MODULE_NOT_ENABLED);
+        }
+
+        if (modules.includes(ALL_MODULES_TOKEN) || modules.includes(normalizedModule)) {
             return;
         }
 
@@ -232,6 +261,12 @@ export class BillingService {
         const targetPlan = await this.getPlanByPriceId(newPriceId);
         if (!targetPlan || !targetPlan.active) {
             throw new BadRequestException('Selected plan is not available');
+        }
+
+        const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID') ?? null;
+        const currentProductId = await this.resolveCurrentProductId(record);
+        if (defaultProductId && currentProductId && currentProductId !== defaultProductId && targetPlan.productId === defaultProductId) {
+            throw new BadRequestException('Returning to the default plan is not allowed for this organization');
         }
 
         const frontendUrl = this.configService.get<string>('FRONTEND_URL');
@@ -397,28 +432,66 @@ export class BillingService {
     // ─── Private webhook handlers ─────────────────────────────────────────────
 
     private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
+        await this.applyCheckoutSessionToOrganization(session);
+    }
+
+    private async reconcileCheckoutSession(organizationId: string, checkoutSessionId: string): Promise<void> {
+        const session = await this.stripe.checkout.sessions.retrieve(checkoutSessionId, {
+            expand: ['subscription'],
+        });
+
+        await this.applyCheckoutSessionToOrganization(session, organizationId, true);
+    }
+
+    private async applyCheckoutSessionToOrganization(
+        session: Stripe.Checkout.Session,
+        expectedOrganizationId?: string,
+        strictValidation = false
+    ): Promise<void> {
         const metadata = session.metadata ?? {};
-        const organizationId = metadata.organizationId;
+        const organizationId = metadata.organizationId ?? session.client_reference_id ?? undefined;
         const previousSubscriptionId = metadata.previousSubscriptionId;
         const checkoutSubscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
 
+        if (strictValidation && session.status !== 'complete') {
+            throw new BadRequestException('Checkout session is not completed yet');
+        }
+
+        if (expectedOrganizationId && organizationId && expectedOrganizationId !== organizationId) {
+            throw new ForbiddenException('Checkout session does not belong to this organization');
+        }
+
         if (!organizationId || !checkoutSubscriptionId) {
+            if (strictValidation) {
+                throw new BadRequestException('Checkout session is missing organizationId or subscription');
+            }
+
             this.logger.warn(`Checkout session ${session.id} missing organizationId or subscription`);
             return;
         }
 
         const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
         if (!record) {
+            if (strictValidation) {
+                throw new NotFoundException('No subscription found for this organization');
+            }
+
             this.logger.warn(`No subscription record found for organization ${organizationId}`);
             return;
         }
 
         const checkoutSubscription = await this.stripe.subscriptions.retrieve(checkoutSubscriptionId);
 
+        const checkoutCustomerId = typeof checkoutSubscription.customer === 'string' ? checkoutSubscription.customer : checkoutSubscription.customer?.id;
+        if (checkoutCustomerId && checkoutCustomerId !== record.stripeCustomerId) {
+            throw new ForbiddenException('Checkout session customer does not match organization subscription');
+        }
+
         // Enforce subscription replacement order: cancel old subscriptions first,
         // then persist the new one as the single source of truth in our DB.
-        if (previousSubscriptionId && previousSubscriptionId !== checkoutSubscription.id) {
-            await this.cancelSubscriptionStrict(previousSubscriptionId, record.stripeCustomerId, 'previous checkout subscription');
+        const subscriptionToReplace = previousSubscriptionId ?? record.stripeSubscriptionId;
+        if (subscriptionToReplace && subscriptionToReplace !== checkoutSubscription.id) {
+            await this.cancelSubscriptionStrict(subscriptionToReplace, record.stripeCustomerId, 'previous checkout subscription');
         }
 
         await this.cancelOtherCustomerSubscriptionsStrict(record.stripeCustomerId, checkoutSubscription.id);
@@ -435,6 +508,12 @@ export class BillingService {
         record.cancelAtPeriodEnd = checkoutSubscription.cancel_at_period_end;
 
         await this.subscriptionRepository.save(record);
+        if (priceId) {
+            const selectedPlan = await this.getPlanByPriceId(priceId);
+            if (selectedPlan) {
+                await this.syncOrganizationPlanSnapshot(organizationId, selectedPlan.metadata);
+            }
+        }
 
         this.logger.log(`Checkout completed for organization ${organizationId}; subscription switched to ${checkoutSubscription.id}`);
     }
@@ -459,6 +538,13 @@ export class BillingService {
         record.cancelAtPeriodEnd = subscription.cancel_at_period_end;
 
         await this.subscriptionRepository.save(record);
+        if (priceId) {
+            const selectedPlan = await this.getPlanByPriceId(priceId);
+            if (selectedPlan) {
+                await this.syncOrganizationPlanSnapshot(record.organizationId, selectedPlan.metadata);
+            }
+        }
+
         this.logger.log(`Updated subscription ${record.id} to status: ${subscription.status}`);
     }
 
@@ -472,6 +558,12 @@ export class BillingService {
         record.cancelAtPeriodEnd = false;
 
         await this.subscriptionRepository.save(record);
+        await this.syncOrganizationPlanSnapshot(record.organizationId, {
+            maxCloudAccounts: 0,
+            maxUsers: 0,
+            modules: [],
+        });
+
         this.logger.log(`Subscription ${record.id} marked as canceled`);
     }
 
@@ -602,6 +694,19 @@ export class BillingService {
         return String(error);
     }
 
+    private async resolveCurrentProductId(record: OrganizationSubscription): Promise<string | null> {
+        if (record.stripeProductId) {
+            return record.stripeProductId;
+        }
+
+        if (!record.stripePriceId) {
+            return null;
+        }
+
+        const currentPlan = await this.getPlanByPriceId(record.stripePriceId);
+        return currentPlan?.productId ?? null;
+    }
+
     /** Extracts a product ID string from a price.product field (string | Product | DeletedProduct). */
     private extractProductId(product: string | Stripe.Product | Stripe.DeletedProduct | null | undefined): string | null {
         if (!product) return null;
@@ -609,23 +714,27 @@ export class BillingService {
     }
 
     private parseProductMetadata(metadata: Stripe.Metadata): PlanMetadata {
-        const raw = (metadata['modules'] ?? '').trim();
+        const { modules, unknownModules } = parseModulesMetadata(metadata['modules'] ?? '');
 
-        // '*' means all modules are enabled
-        // ''  means no modules are enabled
-        // 'assessment,resources' means specific modules
-        const modules =
-            raw === '*'
-                ? ['*']
-                : raw
-                      .split(',')
-                      .map((m) => m.trim())
-                      .filter(Boolean);
+        if (unknownModules.length > 0) {
+            this.logger.warn(`Ignoring unknown Stripe plan modules: ${unknownModules.join(', ')}`);
+        }
 
         return {
             maxCloudAccounts: parseInt(metadata['max_cloud_accounts'] ?? '0', 10),
             maxUsers: parseInt(metadata['max_users'] ?? '0', 10),
             modules,
         };
+    }
+
+    private async syncOrganizationPlanSnapshot(organizationId: string, metadata: PlanMetadata): Promise<void> {
+        await this.organizationRepository.update(
+            { id: organizationId },
+            {
+                maxCloudAccounts: metadata.maxCloudAccounts,
+                maxUsers: metadata.maxUsers,
+                plans: normalizePlanModules(metadata.modules),
+            }
+        );
     }
 }

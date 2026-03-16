@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { TenantGuard } from '../tenant/tenant.guard';
@@ -6,7 +6,6 @@ import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
-import { SkipTenant } from '../tenant/tenant.decorators';
 import { Organization } from '../db/entites/organization.entity';
 import {
     PlanDto,
@@ -27,11 +26,12 @@ export class BillingController {
     // ─── Plans ────────────────────────────────────────────────────────────────
 
     @Get('plans')
-    @SkipTenant()
+    @UseGuards(TenantGuard)
     @ApiOperation({ summary: 'List all available plans from Stripe' })
+    @ApiHeader({ name: 'x-organization-id', required: true })
     @ApiResponse({ status: 200, description: 'List of available plans', type: PlanDto, isArray: true })
-    listPlans() {
-        return this.billingService.listPlans();
+    listPlans(@CurrentOrganization() org: Organization) {
+        return this.billingService.listPlans(org.id);
     }
 
     // ─── Subscription ─────────────────────────────────────────────────────────
@@ -42,8 +42,8 @@ export class BillingController {
     @ApiHeader({ name: 'x-organization-id', required: true })
     @ApiResponse({ status: 200, description: 'Current subscription details', type: SubscriptionDto })
     @ApiResponse({ status: 404, description: 'No subscription found' })
-    getSubscription(@CurrentOrganization() org: Organization) {
-        return this.billingService.getSubscription(org.id);
+    getSubscription(@CurrentOrganization() org: Organization, @Query('checkoutSessionId') checkoutSessionId?: string) {
+        return this.billingService.getSubscription(org.id, checkoutSessionId);
     }
 
     @Put('subscription')

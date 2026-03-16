@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronsUpDown, LogOut, Settings, WalletCards } from 'lucide-react';
+import { ChevronsUpDown, Coins, LogOut, Settings, WalletCards } from 'lucide-react';
 import Link from 'next/link';
 
 type NavUserProps = {
@@ -75,6 +75,13 @@ export function NavUser({ loading = false, user, onLogout }: NavUserProps) {
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
+                            <DropdownMenuItem asChild className="cursor-pointer">
+                                <Link href="/billing">
+                                    <Coins />
+                                    Planos
+                                </Link>
+                            </DropdownMenuItem>
+
                             <DropdownMenuItem asChild className="cursor-pointer">
                                 <Link href="/configuracoes">
                                     <Settings />

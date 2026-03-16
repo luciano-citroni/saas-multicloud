@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { CreditCard, GitBranch, LayoutDashboard } from 'lucide-react';
+import { Building2, GitBranch, LayoutDashboard } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
 import { NavUser } from '@/components/sidebar/nav-user';
 import { toast } from 'sonner';
 import { ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
+import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 
 const baseData = {
     navMain: [
@@ -18,14 +19,15 @@ const baseData = {
             icon: LayoutDashboard,
         },
         {
+            title: 'Organização',
+            url: '/organizations',
+            icon: Building2,
+        },
+        {
             title: 'Assessment',
             url: '/assessment',
             icon: GitBranch,
-        },
-        {
-            title: 'Planos e Regras',
-            url: '/billing',
-            icon: CreditCard,
+            module: PlanModule.ASSESSMENT,
         },
     ],
 };
@@ -43,6 +45,10 @@ type SidebarOrganization = {
     id: string;
     name: string;
     slug: string;
+    currentRole?: string | null;
+    maxCloudAccounts: number;
+    maxUsers: number;
+    plans: string[];
 };
 
 type SidebarCloudAccount = {
@@ -68,6 +74,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [cloudAccounts, setCloudAccounts] = React.useState<SidebarCloudAccount[]>([]);
     const [activeOrganizationId, setActiveOrganizationId] = React.useState<string | undefined>(undefined);
     const [activeCloudAccountId, setActiveCloudAccountId] = React.useState<string | undefined>(undefined);
+    const [activeOrganizationModules, setActiveOrganizationModules] = React.useState<string[]>([]);
 
     React.useEffect(() => {
         const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -92,7 +99,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 if (!response.ok) {
                     setCloudAccounts([]);
                     setActiveCloudAccountId(undefined);
-                    toast.error('Nao foi possivel carregar as cloud accounts.');
+                    toast.error('Não foi possível carregar as cloud accounts.');
                     return;
                 }
 
@@ -127,7 +134,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             } catch {
                 setCloudAccounts([]);
                 setActiveCloudAccountId(undefined);
-                toast.error('Nao foi possivel carregar as cloud accounts.');
+                toast.error('Não foi possível carregar as cloud accounts.');
             }
         },
         [router]
@@ -148,7 +155,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             }
 
             if (!response.ok) {
-                toast.error('Nao foi possivel carregar os dados da sidebar.');
+                toast.error('Não foi possível carregar os dados da sidebar.');
                 return;
             }
 
@@ -166,6 +173,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             if (!validStoredOrganization) {
                 window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
                 setActiveOrganizationId(undefined);
+                setActiveOrganizationModules([]);
                 setCloudAccounts([]);
                 setActiveCloudAccountId(undefined);
                 return;
@@ -173,9 +181,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
             setActiveOrganizationId(validStoredOrganization);
+            const activeOrganization = payload.organizations?.find((organization) => organization.id === validStoredOrganization);
+            setActiveOrganizationModules(normalizePlanModules(activeOrganization?.plans ?? []));
             await loadCloudAccounts(validStoredOrganization);
         } catch {
-            toast.error('Nao foi possivel carregar os dados da sidebar.');
+            toast.error('Não foi possível carregar os dados da sidebar.');
         } finally {
             setLoading(false);
         }
@@ -208,14 +218,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }, [loadSidebarContext]);
 
     const handleOrganizationChange = React.useCallback(
-        (organization: SidebarOrganization) => {
+        (organization: { id: string }) => {
             window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organization.id);
             setActiveOrganizationId(organization.id);
+            const selectedOrganization = organizations.find((item) => item.id === organization.id);
+            setActiveOrganizationModules(normalizePlanModules(selectedOrganization?.plans ?? []));
             setCloudAccounts([]);
             setActiveCloudAccountId(undefined);
             void loadCloudAccounts(organization.id);
         },
-        [loadCloudAccounts]
+        [loadCloudAccounts, organizations]
     );
 
     const handleCloudAccountChange = React.useCallback(
@@ -241,9 +253,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             router.replace('/auth/sign-in');
             router.refresh();
         } catch {
-            toast.error('Nao foi possivel sair da conta.');
+            toast.error('Não foi possível sair da conta.');
         }
     }, [router]);
+
+    const navItems = React.useMemo(() => {
+        return baseData.navMain.map((item) => {
+            if (!('module' in item) || !item.module || !activeOrganizationId) {
+                return item;
+            }
+
+            const enabled = hasModuleAccess(activeOrganizationModules, item.module);
+
+            return {
+                ...item,
+                disabled: !enabled,
+                disabledReason: enabled ? undefined : 'Módulo não habilitado no plano atual da organização',
+            };
+        });
+    }, [activeOrganizationId, activeOrganizationModules]);
 
     return (
         <Sidebar collapsible="icon" {...props}>
@@ -258,7 +286,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 />
             </SidebarHeader>
             <SidebarContent>
-                <NavMain items={baseData.navMain} />
+                <NavMain items={navItems} />
             </SidebarContent>
             <SidebarFooter>
                 <NavUser loading={loading} user={user ?? undefined} onLogout={handleLogout} />

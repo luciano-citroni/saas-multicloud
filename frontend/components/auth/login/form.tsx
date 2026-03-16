@@ -65,7 +65,7 @@ export function LoginForm() {
                         name="email"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Email</FormLabel>
+                                <FormLabel>E-mail</FormLabel>
                                 <FormControl>
                                     <IconInput placeholder="seu@email.com" StartIcon={Mail} {...field} />
                                 </FormControl>

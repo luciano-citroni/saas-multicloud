@@ -20,7 +20,7 @@ export function LogoutButton() {
             router.replace('/auth/sign-in');
             router.refresh();
         } catch {
-            toast.error('Nao foi possivel sair da conta.');
+            toast.error('Não foi possível sair da conta.');
         } finally {
             setIsLoading(false);
         }

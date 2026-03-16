@@ -64,7 +64,7 @@ function withAuthHeaders(accessToken: string, organizationId: string): HeadersIn
 }
 
 function buildUnauthorizedResponse() {
-    const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+    const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
     clearAuthCookies(response);
     return response;
 }
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     const organizationId = searchParams.get('organizationId');
 
     if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
+        return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     }
 
     const resolved = await resolveAccessToken();
@@ -115,14 +115,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem nao permitida' }, { status: 403 });
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
 
     if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
+        return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     }
 
     const resolved = await resolveAccessToken();
