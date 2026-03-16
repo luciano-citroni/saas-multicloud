@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsApiGatewayService } from './aws-api-gateway.service';
+
 import { ApiGatewayRestApiResponseDto, ApiGatewayRestApiSyncResponseDto, ApiGatewayRestApiWithRelationsResponseDto } from './swagger.dto';
 
 @ApiTags('AWS API Gateway')
@@ -15,6 +23,7 @@ export class AwsApiGatewayController {
     constructor(private readonly service: AwsApiGatewayService) {}
 
     @Get('accounts/:cloudAccountId/rest-apis')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar REST APIs do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [ApiGatewayRestApiResponseDto] })
@@ -30,7 +39,9 @@ export class AwsApiGatewayController {
     @ApiResponse({ status: 400, description: 'API não encontrada' })
     getApi(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('apiId', ParseUUIDPipe) apiId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getApiById(apiId, cloudAccountId);

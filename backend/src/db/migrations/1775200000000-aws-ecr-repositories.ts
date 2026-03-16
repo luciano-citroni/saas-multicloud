@@ -25,15 +25,24 @@ export class CreateAwsEcrRepositories1775200000000 implements MigrationInterface
             })
         );
 
-        await queryRunner.createForeignKey('aws_ecr_repositories', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_ecr_repositories',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_ecr_repositories', new TableIndex({ name: 'idx_aws_ecr_repositories_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_ecr_repositories', new TableIndex({ name: 'idx_aws_ecr_repositories_repository_name', columnNames: ['repository_name'] }));
+        await queryRunner.createIndex(
+            'aws_ecr_repositories',
+            new TableIndex({ name: 'idx_aws_ecr_repositories_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_ecr_repositories',
+            new TableIndex({ name: 'idx_aws_ecr_repositories_repository_name', columnNames: ['repository_name'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

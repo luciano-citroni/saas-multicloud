@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -16,6 +16,8 @@ import { CloudModule } from './cloud/cloud.module';
 import { AwsModule } from './aws/aws.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { BillingModule } from './billing/billing.module';
+import { PaginationMiddleware } from './common/middlewares/pagination.middleware';
+import { PaginationInterceptor } from './common/interceptors/pagination.interceptor';
 
 @Module({
     imports: [
@@ -41,6 +43,15 @@ import { BillingModule } from './billing/billing.module';
         BillingModule,
     ],
     controllers: [AppController],
-    providers: [AppService, { provide: APP_GUARD, useClass: JwtGuard }, { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor }],
+    providers: [
+        AppService,
+        { provide: APP_GUARD, useClass: JwtGuard },
+        { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
+        { provide: APP_INTERCEPTOR, useClass: PaginationInterceptor },
+    ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+    configure(consumer: MiddlewareConsumer): void {
+        consumer.apply(PaginationMiddleware).forRoutes({ path: '*', method: RequestMethod.GET });
+    }
+}

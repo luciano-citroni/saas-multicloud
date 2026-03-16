@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsWafService } from './aws-waf.service';
+
 import { WafWebAclResponseDto, WafWebAclSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS WAF')
@@ -15,6 +23,7 @@ export class AwsWafController {
     constructor(private readonly service: AwsWafService) {}
 
     @Get('accounts/:cloudAccountId/web-acls')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar Web ACLs WAF do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [WafWebAclResponseDto] })
@@ -30,7 +39,9 @@ export class AwsWafController {
     @ApiResponse({ status: 400, description: 'Web ACL não encontrada' })
     getWebAcl(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('webAclId', ParseUUIDPipe) webAclId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getWebAclById(webAclId, cloudAccountId);

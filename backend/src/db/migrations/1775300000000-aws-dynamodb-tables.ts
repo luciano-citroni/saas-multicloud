@@ -30,14 +30,20 @@ export class CreateAwsDynamoDbTables1775300000000 implements MigrationInterface 
             })
         );
 
-        await queryRunner.createForeignKey('aws_dynamodb_tables', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_dynamodb_tables',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_dynamodb_tables', new TableIndex({ name: 'idx_aws_dynamodb_tables_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_dynamodb_tables',
+            new TableIndex({ name: 'idx_aws_dynamodb_tables_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_dynamodb_tables', new TableIndex({ name: 'idx_aws_dynamodb_tables_table_name', columnNames: ['table_name'] }));
     }
 

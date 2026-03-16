@@ -1,17 +1,20 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Repository } from 'typeorm';
-import {
-    DescribeAlarmsCommand,
-    type MetricAlarm,
-} from '@aws-sdk/client-cloudwatch';
+
+import { DescribeAlarmsCommand, type MetricAlarm } from '@aws-sdk/client-cloudwatch';
+
 import { AwsConnectorService } from '../aws-connector.service';
+
 import { AwsCloudWatchAlarm } from '../../db/entites';
 
 @Injectable()
 export class AwsCloudWatchService {
     constructor(
         private readonly connector: AwsConnectorService,
+
         @InjectRepository(AwsCloudWatchAlarm)
         private readonly alarmRepository: Repository<AwsCloudWatchAlarm>
     ) {}
@@ -19,6 +22,7 @@ export class AwsCloudWatchService {
     async listAlarmsFromDatabase(cloudAccountId: string) {
         return this.alarmRepository.find({
             where: { cloudAccountId },
+
             order: { alarmName: 'ASC' },
         });
     }
@@ -45,35 +49,52 @@ export class AwsCloudWatchService {
         }
 
         const now = new Date();
+
         const mapped: ReturnType<typeof mapAwsAlarm>[] = [];
 
         for (const alarm of MetricAlarms) {
             if (!alarm.AlarmArn) continue;
 
             const alarmData = mapAwsAlarm(alarm);
+
             mapped.push(alarmData);
 
             let dbAlarm = await this.alarmRepository.findOne({ where: { alarmArn: alarmData.alarmArn } });
 
             if (dbAlarm) {
                 dbAlarm.alarmName = alarmData.alarmName;
+
                 dbAlarm.alarmDescription = alarmData.alarmDescription;
+
                 dbAlarm.stateValue = alarmData.stateValue;
+
                 dbAlarm.stateReason = alarmData.stateReason;
+
                 dbAlarm.namespace = alarmData.namespace;
+
                 dbAlarm.metricName = alarmData.metricName;
+
                 dbAlarm.comparisonOperator = alarmData.comparisonOperator;
+
                 dbAlarm.threshold = alarmData.threshold;
+
                 dbAlarm.period = alarmData.period;
+
                 dbAlarm.evaluationPeriods = alarmData.evaluationPeriods;
+
                 dbAlarm.statistic = alarmData.statistic;
+
                 dbAlarm.alarmActions = alarmData.alarmActions;
+
                 dbAlarm.dimensions = alarmData.dimensions;
+
                 dbAlarm.lastSyncedAt = now;
             } else {
                 dbAlarm = this.alarmRepository.create({
                     cloudAccountId,
+
                     ...alarmData,
+
                     lastSyncedAt: now,
                 });
             }
@@ -88,18 +109,31 @@ export class AwsCloudWatchService {
 function mapAwsAlarm(alarm: MetricAlarm) {
     return {
         alarmArn: alarm.AlarmArn ?? '',
+
         alarmName: alarm.AlarmName ?? '',
+
         alarmDescription: alarm.AlarmDescription ?? null,
+
         stateValue: alarm.StateValue ?? 'INSUFFICIENT_DATA',
+
         stateReason: alarm.StateReason ?? null,
+
         namespace: alarm.Namespace ?? null,
+
         metricName: alarm.MetricName ?? null,
+
         comparisonOperator: alarm.ComparisonOperator ?? null,
+
         threshold: alarm.Threshold ?? null,
+
         period: alarm.Period ?? null,
+
         evaluationPeriods: alarm.EvaluationPeriods ?? null,
+
         statistic: alarm.Statistic ?? null,
+
         alarmActions: alarm.AlarmActions ?? null,
+
         dimensions: alarm.Dimensions?.map((d) => ({ Name: d.Name ?? '', Value: d.Value ?? '' })) ?? null,
     };
 }

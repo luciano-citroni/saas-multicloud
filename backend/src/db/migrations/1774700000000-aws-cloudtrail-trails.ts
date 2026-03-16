@@ -28,21 +28,30 @@ export class CreateAwsCloudTrailTrails1774700000000 implements MigrationInterfac
             })
         );
 
-        await queryRunner.createForeignKey('aws_cloudtrail_trails', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_cloudtrail_trails',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createForeignKey('aws_cloudtrail_trails', new TableForeignKey({
-            columnNames: ['vpc_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'aws_vpcs',
-            onDelete: 'SET NULL',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_cloudtrail_trails',
+            new TableForeignKey({
+                columnNames: ['vpc_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'aws_vpcs',
+                onDelete: 'SET NULL',
+            })
+        );
 
-        await queryRunner.createIndex('aws_cloudtrail_trails', new TableIndex({ name: 'idx_aws_cloudtrail_trails_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_cloudtrail_trails',
+            new TableIndex({ name: 'idx_aws_cloudtrail_trails_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_cloudtrail_trails', new TableIndex({ name: 'idx_aws_cloudtrail_trails_vpc_id', columnNames: ['vpc_id'] }));
     }
 

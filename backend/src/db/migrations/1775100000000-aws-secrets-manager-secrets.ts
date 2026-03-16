@@ -26,15 +26,24 @@ export class CreateAwsSecretsManagerSecrets1775100000000 implements MigrationInt
             })
         );
 
-        await queryRunner.createForeignKey('aws_secrets_manager_secrets', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_secrets_manager_secrets',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_secrets_manager_secrets', new TableIndex({ name: 'idx_aws_secrets_manager_secrets_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_secrets_manager_secrets', new TableIndex({ name: 'idx_aws_secrets_manager_secrets_name', columnNames: ['name'] }));
+        await queryRunner.createIndex(
+            'aws_secrets_manager_secrets',
+            new TableIndex({ name: 'idx_aws_secrets_manager_secrets_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_secrets_manager_secrets',
+            new TableIndex({ name: 'idx_aws_secrets_manager_secrets_name', columnNames: ['name'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

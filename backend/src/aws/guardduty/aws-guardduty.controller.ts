@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsGuardDutyService } from './aws-guardduty.service';
+
 import { GuardDutyDetectorResponseDto, GuardDutyDetectorSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS GuardDuty')
@@ -15,6 +23,7 @@ export class AwsGuardDutyController {
     constructor(private readonly service: AwsGuardDutyService) {}
 
     @Get('accounts/:cloudAccountId/detectors')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar detectores GuardDuty do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GuardDutyDetectorResponseDto] })
@@ -30,7 +39,9 @@ export class AwsGuardDutyController {
     @ApiResponse({ status: 400, description: 'Detector não encontrado' })
     getDetector(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('detectorId', ParseUUIDPipe) detectorId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getDetectorById(detectorId, cloudAccountId);

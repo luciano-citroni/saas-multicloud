@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsSqsService } from './aws-sqs.service';
+
 import { SqsQueueResponseDto, SqsQueueSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS SQS')
@@ -15,6 +23,7 @@ export class AwsSqsController {
     constructor(private readonly service: AwsSqsService) {}
 
     @Get('accounts/:cloudAccountId/queues')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar filas SQS do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SqsQueueResponseDto] })
@@ -30,7 +39,9 @@ export class AwsSqsController {
     @ApiResponse({ status: 400, description: 'Fila não encontrada' })
     getQueue(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('queueId', ParseUUIDPipe) queueId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getQueueById(queueId, cloudAccountId);

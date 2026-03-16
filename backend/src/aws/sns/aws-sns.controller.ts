@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsSnsService } from './aws-sns.service';
+
 import { SnsTopicResponseDto, SnsTopicSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS SNS')
@@ -15,6 +23,7 @@ export class AwsSnsController {
     constructor(private readonly service: AwsSnsService) {}
 
     @Get('accounts/:cloudAccountId/topics')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar tópicos SNS do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SnsTopicResponseDto] })
@@ -30,7 +39,9 @@ export class AwsSnsController {
     @ApiResponse({ status: 400, description: 'Tópico não encontrado' })
     getTopic(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('topicId', ParseUUIDPipe) topicId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getTopicById(topicId, cloudAccountId);

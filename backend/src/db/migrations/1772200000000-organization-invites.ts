@@ -65,7 +65,7 @@ export class OrganizationInvites1772200000000 implements MigrationInterface {
                     },
                 ],
             }),
-            true,
+            true
         );
 
         await queryRunner.createForeignKey(
@@ -75,7 +75,7 @@ export class OrganizationInvites1772200000000 implements MigrationInterface {
                 referencedTableName: 'organizations',
                 referencedColumnNames: ['id'],
                 onDelete: 'CASCADE',
-            }),
+            })
         );
 
         await queryRunner.createForeignKey(
@@ -85,28 +85,28 @@ export class OrganizationInvites1772200000000 implements MigrationInterface {
                 referencedTableName: 'users',
                 referencedColumnNames: ['id'],
                 onDelete: 'SET NULL',
-            }),
+            })
         );
 
         await queryRunner.createIndex(
             'organization_invites',
             new TableIndex({
                 columnNames: ['organization_id'],
-            }),
+            })
         );
 
         await queryRunner.createIndex(
             'organization_invites',
             new TableIndex({
                 columnNames: ['email'],
-            }),
+            })
         );
 
         await queryRunner.createIndex(
             'organization_invites',
             new TableIndex({
                 columnNames: ['token'],
-            }),
+            })
         );
     }
 

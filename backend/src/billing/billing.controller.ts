@@ -1,12 +1,23 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
+
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
+
 import { BillingService } from './billing.service';
+
 import { TenantGuard } from '../tenant/tenant.guard';
+
 import { RolesGuard } from '../rbac/roles.guard';
+
 import { Roles } from '../rbac/roles.decorator';
+
 import { OrgRole } from '../rbac/roles.enum';
+
 import { CurrentOrganization } from '../tenant/tenant.decorators';
+
 import { Organization } from '../db/entites/organization.entity';
+
 import {
     PlanDto,
     SubscriptionDto,
@@ -23,9 +34,14 @@ import {
 export class BillingController {
     constructor(private readonly billingService: BillingService) {}
 
-    // ─── Plans ────────────────────────────────────────────────────────────────
+    // =========================================================================
+
+    // Plans and Subscription management endpoints are public to all authenticated users of the organization, but changing plans and managing payment methods are restricted to OWNER/ADMIN roles only.
+
+    // =========================================================================
 
     @Get('plans')
+    @ApiPaginationQuery()
     @UseGuards(TenantGuard)
     @ApiOperation({ summary: 'List all available plans from Stripe' })
     @ApiHeader({ name: 'x-organization-id', required: true })
@@ -34,7 +50,11 @@ export class BillingController {
         return this.billingService.listPlans(org.id);
     }
 
-    // ─── Subscription ─────────────────────────────────────────────────────────
+    // =========================================================================
+    //
+    // Subscription management endpoints
+    //
+    // =========================================================================
 
     @Get('subscription')
     @UseGuards(TenantGuard)
@@ -59,9 +79,14 @@ export class BillingController {
         return this.billingService.changePlan(org.id, body.priceId);
     }
 
-    // ─── Payment Methods ──────────────────────────────────────────────────────
+    // =========================================================================
+    //
+    // Payment Methods management endpoints
+    //
+    // =========================================================================
 
     @Get('payment-methods')
+    @ApiPaginationQuery()
     @UseGuards(TenantGuard)
     @ApiOperation({ summary: "List organization's saved payment methods (cards)" })
     @ApiHeader({ name: 'x-organization-id', required: true })
@@ -76,7 +101,7 @@ export class BillingController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Create a Stripe SetupIntent to add a new card (OWNER/ADMIN only)' })
     @ApiHeader({ name: 'x-organization-id', required: true })
-    @ApiResponse({ status: 200, description: 'SetupIntent created — use clientSecret in Stripe.js', type: SetupIntentDto })
+    @ApiResponse({ status: 200, description: 'SetupIntent created  use clientSecret in Stripe.js', type: SetupIntentDto })
     createSetupIntent(@CurrentOrganization() org: Organization) {
         return this.billingService.createSetupIntent(org.id);
     }

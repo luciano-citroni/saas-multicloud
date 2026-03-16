@@ -29,16 +29,28 @@ export class CreateAwsCloudWatchAlarms1774600000000 implements MigrationInterfac
             })
         );
 
-        await queryRunner.createForeignKey('aws_cloudwatch_alarms', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_cloudwatch_alarms',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_cloudwatch_alarms', new TableIndex({ name: 'idx_aws_cloudwatch_alarms_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_cloudwatch_alarms', new TableIndex({ name: 'idx_aws_cloudwatch_alarms_alarm_name', columnNames: ['alarm_name'] }));
-        await queryRunner.createIndex('aws_cloudwatch_alarms', new TableIndex({ name: 'idx_aws_cloudwatch_alarms_state_value', columnNames: ['state_value'] }));
+        await queryRunner.createIndex(
+            'aws_cloudwatch_alarms',
+            new TableIndex({ name: 'idx_aws_cloudwatch_alarms_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_cloudwatch_alarms',
+            new TableIndex({ name: 'idx_aws_cloudwatch_alarms_alarm_name', columnNames: ['alarm_name'] })
+        );
+        await queryRunner.createIndex(
+            'aws_cloudwatch_alarms',
+            new TableIndex({ name: 'idx_aws_cloudwatch_alarms_state_value', columnNames: ['state_value'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

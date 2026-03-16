@@ -25,14 +25,20 @@ export class CreateAwsGuardDutyDetectors1775800000000 implements MigrationInterf
             })
         );
 
-        await queryRunner.createForeignKey('aws_guardduty_detectors', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_guardduty_detectors',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_guardduty_detectors', new TableIndex({ name: 'idx_aws_guardduty_detectors_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_guardduty_detectors',
+            new TableIndex({ name: 'idx_aws_guardduty_detectors_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_guardduty_detectors', new TableIndex({ name: 'idx_aws_guardduty_detectors_status', columnNames: ['status'] }));
     }
 

@@ -109,12 +109,31 @@ export class AwsAssessmentReportService {
 
         // Resources with direct cloudAccountId
         const [
-            vpcs, ecsClusters, ecsTaskDefinitions, ecsServices, eksClusters,
-            loadBalancers, securityGroups, iamRoles, rdsInstances, s3Buckets,
-            cloudFrontDistributions, route53HostedZones, cloudWatchAlarms,
-            cloudTrailTrails, lambdaFunctions, apiGatewayRestApis, kmsKeys,
-            secretsManagerSecrets, ecrRepositories, dynamoDbTables,
-            elastiCacheClusters, sqsQueues, snsTopics, wafWebAcls, guardDutyDetectors,
+            vpcs,
+            ecsClusters,
+            ecsTaskDefinitions,
+            ecsServices,
+            eksClusters,
+            loadBalancers,
+            securityGroups,
+            iamRoles,
+            rdsInstances,
+            s3Buckets,
+            cloudFrontDistributions,
+            route53HostedZones,
+            cloudWatchAlarms,
+            cloudTrailTrails,
+            lambdaFunctions,
+            apiGatewayRestApis,
+            kmsKeys,
+            secretsManagerSecrets,
+            ecrRepositories,
+            dynamoDbTables,
+            elastiCacheClusters,
+            sqsQueues,
+            snsTopics,
+            wafWebAcls,
+            guardDutyDetectors,
         ] = await Promise.all([
             this.vpcRepo.find({ where: byAccount }),
             this.ecsClusterRepo.find({ where: byAccount }),
@@ -144,7 +163,7 @@ export class AwsAssessmentReportService {
         ]);
 
         // Resources linked via VPC FK (no direct cloudAccountId)
-        const vpcUuids = vpcs.map(v => v.id);
+        const vpcUuids = vpcs.map((v) => v.id);
         const [subnets, routeTables, ec2Instances] = await Promise.all([
             vpcUuids.length > 0 ? this.subnetRepo.find({ where: { vpcId: In(vpcUuids) } }) : Promise.resolve([]),
             vpcUuids.length > 0 ? this.routeTableRepo.find({ where: { vpcId: In(vpcUuids) } }) : Promise.resolve([]),
@@ -152,18 +171,39 @@ export class AwsAssessmentReportService {
         ]);
 
         // LB Listeners linked via LB FK
-        const lbUuids = loadBalancers.map(lb => lb.id);
-        const loadBalancerListeners = lbUuids.length > 0
-            ? await this.lbListenerRepo.find({ where: { loadBalancerId: In(lbUuids) } })
-            : [];
+        const lbUuids = loadBalancers.map((lb) => lb.id);
+        const loadBalancerListeners = lbUuids.length > 0 ? await this.lbListenerRepo.find({ where: { loadBalancerId: In(lbUuids) } }) : [];
 
         return {
-            vpcs, subnets, routeTables, ec2Instances, ecsClusters, ecsTaskDefinitions,
-            ecsServices, eksClusters, loadBalancers, loadBalancerListeners, securityGroups,
-            iamRoles, rdsInstances, s3Buckets, cloudFrontDistributions, route53HostedZones,
-            cloudWatchAlarms, cloudTrailTrails, lambdaFunctions, apiGatewayRestApis,
-            kmsKeys, secretsManagerSecrets, ecrRepositories, dynamoDbTables,
-            elastiCacheClusters, sqsQueues, snsTopics, wafWebAcls, guardDutyDetectors,
+            vpcs,
+            subnets,
+            routeTables,
+            ec2Instances,
+            ecsClusters,
+            ecsTaskDefinitions,
+            ecsServices,
+            eksClusters,
+            loadBalancers,
+            loadBalancerListeners,
+            securityGroups,
+            iamRoles,
+            rdsInstances,
+            s3Buckets,
+            cloudFrontDistributions,
+            route53HostedZones,
+            cloudWatchAlarms,
+            cloudTrailTrails,
+            lambdaFunctions,
+            apiGatewayRestApis,
+            kmsKeys,
+            secretsManagerSecrets,
+            ecrRepositories,
+            dynamoDbTables,
+            elastiCacheClusters,
+            sqsQueues,
+            snsTopics,
+            wafWebAcls,
+            guardDutyDetectors,
         };
     }
 

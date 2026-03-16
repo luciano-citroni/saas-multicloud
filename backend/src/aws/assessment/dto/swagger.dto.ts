@@ -25,25 +25,38 @@ export class AssessmentArchitectureResponseDto {
 
     @ApiProperty({
         description: 'Grafo da arquitetura para React Flow',
+
         type: 'object',
+
         additionalProperties: true,
+
         example: {
             nodes: [
                 {
                     id: 'vpc:123',
+
                     type: 'default',
+
                     position: { x: 0, y: 80 },
+
                     data: { label: 'prod-vpc', resourceType: 'VPC', awsId: 'vpc-0123456789' },
                 },
             ],
+
             edges: [
                 {
                     id: 'edge:vpc:123->subnet:456:contains',
+
                     source: 'vpc:123',
+
                     target: 'subnet:456',
+
                     label: 'contains',
+
                     type: 'smoothstep',
+
                     animated: false,
+
                     data: { relationship: 'contains' },
                 },
             ],
@@ -51,6 +64,7 @@ export class AssessmentArchitectureResponseDto {
     })
     architectureGraph: {
         nodes: unknown[];
+
         edges: unknown[];
     };
 }

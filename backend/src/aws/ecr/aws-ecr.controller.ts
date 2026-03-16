@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsEcrService } from './aws-ecr.service';
+
 import { EcrRepositoryResponseDto, EcrRepositorySyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS ECR')
@@ -15,6 +23,7 @@ export class AwsEcrController {
     constructor(private readonly service: AwsEcrService) {}
 
     @Get('accounts/:cloudAccountId/repositories')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar repositórios ECR do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [EcrRepositoryResponseDto] })
@@ -30,7 +39,9 @@ export class AwsEcrController {
     @ApiResponse({ status: 400, description: 'Repositório não encontrado' })
     getRepository(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('repositoryId', ParseUUIDPipe) repositoryId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getRepositoryById(repositoryId, cloudAccountId);

@@ -83,7 +83,7 @@ export function NavUser({ loading = false, user, onLogout }: NavUserProps) {
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild className="cursor-pointer">
-                                <Link href="/configuracoes">
+                                <Link href="/settings">
                                     <Settings />
                                     Configurações
                                 </Link>

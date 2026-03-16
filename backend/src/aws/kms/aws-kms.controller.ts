@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsKmsService } from './aws-kms.service';
+
 import { KmsKeyResponseDto, KmsKeySyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS KMS')
@@ -15,6 +23,7 @@ export class AwsKmsController {
     constructor(private readonly service: AwsKmsService) {}
 
     @Get('accounts/:cloudAccountId/keys')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar chaves KMS do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [KmsKeyResponseDto] })
@@ -30,7 +39,9 @@ export class AwsKmsController {
     @ApiResponse({ status: 400, description: 'Chave não encontrada' })
     getKey(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('keyId', ParseUUIDPipe) keyId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getKeyById(keyId, cloudAccountId);

@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsCloudTrailService } from './aws-cloudtrail.service';
+
 import { CloudTrailTrailResponseDto, CloudTrailTrailSyncResponseDto, CloudTrailTrailWithRelationsResponseDto } from './swagger.dto';
 
 @ApiTags('AWS CloudTrail')
@@ -15,6 +23,7 @@ export class AwsCloudTrailController {
     constructor(private readonly service: AwsCloudTrailService) {}
 
     @Get('accounts/:cloudAccountId/trails')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar trails CloudTrail do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [CloudTrailTrailResponseDto] })
@@ -30,7 +39,9 @@ export class AwsCloudTrailController {
     @ApiResponse({ status: 400, description: 'Trail não encontrada' })
     getTrail(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('trailId', ParseUUIDPipe) trailId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getTrailById(trailId, cloudAccountId);

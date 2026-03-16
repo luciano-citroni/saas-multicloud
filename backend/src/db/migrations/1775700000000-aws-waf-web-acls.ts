@@ -25,14 +25,20 @@ export class CreateAwsWafWebAcls1775700000000 implements MigrationInterface {
             })
         );
 
-        await queryRunner.createForeignKey('aws_waf_web_acls', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_waf_web_acls',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_waf_web_acls', new TableIndex({ name: 'idx_aws_waf_web_acls_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_waf_web_acls',
+            new TableIndex({ name: 'idx_aws_waf_web_acls_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_waf_web_acls', new TableIndex({ name: 'idx_aws_waf_web_acls_name', columnNames: ['name'] }));
         await queryRunner.createIndex('aws_waf_web_acls', new TableIndex({ name: 'idx_aws_waf_web_acls_scope', columnNames: ['scope'] }));
     }

@@ -29,14 +29,20 @@ export class CreateAwsSqsQueues1775500000000 implements MigrationInterface {
             })
         );
 
-        await queryRunner.createForeignKey('aws_sqs_queues', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_sqs_queues',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_sqs_queues', new TableIndex({ name: 'idx_aws_sqs_queues_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_sqs_queues',
+            new TableIndex({ name: 'idx_aws_sqs_queues_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_sqs_queues', new TableIndex({ name: 'idx_aws_sqs_queues_queue_name', columnNames: ['queue_name'] }));
     }
 

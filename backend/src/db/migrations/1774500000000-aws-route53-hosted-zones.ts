@@ -24,22 +24,34 @@ export class CreateAwsRoute53HostedZones1774500000000 implements MigrationInterf
             })
         );
 
-        await queryRunner.createForeignKey('aws_route53_hosted_zones', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_route53_hosted_zones',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createForeignKey('aws_route53_hosted_zones', new TableForeignKey({
-            columnNames: ['vpc_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'aws_vpcs',
-            onDelete: 'SET NULL',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_route53_hosted_zones',
+            new TableForeignKey({
+                columnNames: ['vpc_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'aws_vpcs',
+                onDelete: 'SET NULL',
+            })
+        );
 
-        await queryRunner.createIndex('aws_route53_hosted_zones', new TableIndex({ name: 'idx_aws_route53_hosted_zones_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_route53_hosted_zones', new TableIndex({ name: 'idx_aws_route53_hosted_zones_vpc_id', columnNames: ['vpc_id'] }));
+        await queryRunner.createIndex(
+            'aws_route53_hosted_zones',
+            new TableIndex({ name: 'idx_aws_route53_hosted_zones_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_route53_hosted_zones',
+            new TableIndex({ name: 'idx_aws_route53_hosted_zones_vpc_id', columnNames: ['vpc_id'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

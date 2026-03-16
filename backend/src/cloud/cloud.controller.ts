@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
+import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 import { CloudService } from './cloud.service';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
@@ -15,11 +16,11 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 /**
  * Controller de exemplo demonstrando a stack completa de segurança:
- *   JwtGuard → TenantGuard → RolesGuard
+ *   JwtGuard – TenantGuard – RolesGuard
  *
  * Todos os endpoints aqui exigem:
- *   1. Token JWT válido (JwtGuard — aplicado globalmente no AppModule)
- *   2. Header `x-organization-id` com uma org à qual o usuário pertence (TenantGuard)
+ *   1. Token JWT válido (JwtGuard – aplicado globalmente no AppModule)
+ *   2. Header `x-organization-id` com uma organização qual o usuário pertence (TenantGuard)
  *   3. Role suficiente dentro dessa organização (RolesGuard + @Roles)
  */
 @ApiTags('Cloud Accounts')
@@ -35,7 +36,7 @@ export class CloudController {
     constructor(private readonly cloudService: CloudService) {}
 
     /**
-     * Acessível apenas por OWNER ou ADMIN — criar uma nova conta de cloud.
+     * Acessível apenas por OWNER ou ADMIN organização criar uma nova conta de cloud.
      */
     @Post('accounts')
     @Roles(OrgRole.OWNER, OrgRole.ADMIN) // Permite que membros criem contas, mas o ideal seria OWNER/ADMIN apenas. Ajuste conforme necessário.
@@ -44,7 +45,7 @@ export class CloudController {
     @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
     @ApiResponse({ status: 400, description: 'Dados inválidos', type: ValidationErrorResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado — apenas OWNER ou ADMIN' })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas OWNER ou ADMIN' })
     async createCloudAccount(@CurrentOrganization() org: Organization, @Body(new ZodValidationPipe(createCloudAccountSchema)) dto: CreateCloudAccountDto) {
         return this.cloudService.createCloudAccount(org.id, dto);
     }
@@ -53,6 +54,7 @@ export class CloudController {
      * Acessível por qualquer membro da organização (VIEWER, MEMBER, ADMIN, OWNER).
      */
     @Get('accounts')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Lista contas de cloud da organização ativa' })
     @ApiResponse({ status: 200, description: 'Lista de contas de cloud', type: CloudAccountResponseDto, isArray: true })
     async listAccounts(@CurrentOrganization() org: Organization) {

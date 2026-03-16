@@ -1,18 +1,38 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+
 import { CloudAccount } from './cloud-account.entity';
+
 import { AwsVpc } from './aws-vpc.entity';
+
 import { AwsSubnet } from './aws-subnet.entity';
+
 import { AwsSecurityGroup } from './aws-security-group.entity';
+
 import { AwsIamRole } from './aws-iam-role.entity';
 
 /**
+
+
  * Representa uma instância RDS sincronizada da Amazon Web Services.
+
+
  *
+
+
  * Isolamento de tenant:
+
+
  * - A instância está vinculada à CloudAccount da organização.
+
+
  * - Referências de rede e segurança (VPC, Subnet e Security Group) são resolvidas no banco.
+
+
  * - Sempre filtrar por cloudAccount.organizationId para garantir isolamento.
+
+
  */
+
 @Entity('aws_rds_instances')
 export class AwsRdsInstance {
     @PrimaryGeneratedColumn('uuid')

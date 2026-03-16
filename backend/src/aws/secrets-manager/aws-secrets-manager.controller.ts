@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsSecretsManagerService } from './aws-secrets-manager.service';
+
 import { SecretsManagerSecretResponseDto, SecretsManagerSecretSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS Secrets Manager')
@@ -15,6 +23,7 @@ export class AwsSecretsManagerController {
     constructor(private readonly service: AwsSecretsManagerService) {}
 
     @Get('accounts/:cloudAccountId/secrets')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar secrets do Secrets Manager do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SecretsManagerSecretResponseDto] })
@@ -30,7 +39,9 @@ export class AwsSecretsManagerController {
     @ApiResponse({ status: 400, description: 'Secret não encontrado' })
     getSecret(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('secretId', ParseUUIDPipe) secretId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getSecretById(secretId, cloudAccountId);

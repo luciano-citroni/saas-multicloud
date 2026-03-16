@@ -33,22 +33,34 @@ export class CreateAwsElastiCacheClusters1775400000000 implements MigrationInter
             })
         );
 
-        await queryRunner.createForeignKey('aws_elasticache_clusters', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_elasticache_clusters',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createForeignKey('aws_elasticache_clusters', new TableForeignKey({
-            columnNames: ['vpc_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'aws_vpcs',
-            onDelete: 'SET NULL',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_elasticache_clusters',
+            new TableForeignKey({
+                columnNames: ['vpc_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'aws_vpcs',
+                onDelete: 'SET NULL',
+            })
+        );
 
-        await queryRunner.createIndex('aws_elasticache_clusters', new TableIndex({ name: 'idx_aws_elasticache_clusters_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_elasticache_clusters', new TableIndex({ name: 'idx_aws_elasticache_clusters_vpc_id', columnNames: ['vpc_id'] }));
+        await queryRunner.createIndex(
+            'aws_elasticache_clusters',
+            new TableIndex({ name: 'idx_aws_elasticache_clusters_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_elasticache_clusters',
+            new TableIndex({ name: 'idx_aws_elasticache_clusters_vpc_id', columnNames: ['vpc_id'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

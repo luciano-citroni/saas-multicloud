@@ -27,12 +27,15 @@ export class CreateAwsKmsKeys1775000000000 implements MigrationInterface {
             })
         );
 
-        await queryRunner.createForeignKey('aws_kms_keys', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_kms_keys',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
         await queryRunner.createIndex('aws_kms_keys', new TableIndex({ name: 'idx_aws_kms_keys_cloud_account_id', columnNames: ['cloud_account_id'] }));
         await queryRunner.createIndex('aws_kms_keys', new TableIndex({ name: 'idx_aws_kms_keys_key_state', columnNames: ['key_state'] }));

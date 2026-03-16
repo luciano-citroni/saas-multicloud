@@ -1,6 +1,9 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Repository } from 'typeorm';
+
 import {
     ListDetectorsCommand,
     GetDetectorCommand,
@@ -8,13 +11,16 @@ import {
     GetFindingsStatisticsCommand,
     FindingStatisticType,
 } from '@aws-sdk/client-guardduty';
+
 import { AwsConnectorService } from '../aws-connector.service';
+
 import { AwsGuardDutyDetector } from '../../db/entites';
 
 @Injectable()
 export class AwsGuardDutyService {
     constructor(
         private readonly connector: AwsConnectorService,
+
         @InjectRepository(AwsGuardDutyDetector)
         private readonly detectorRepository: Repository<AwsGuardDutyDetector>
     ) {}
@@ -25,9 +31,11 @@ export class AwsGuardDutyService {
 
     async getDetectorById(detectorId: string, cloudAccountId: string) {
         const detector = await this.detectorRepository.findOne({ where: { id: detectorId, cloudAccountId } });
+
         if (!detector) {
             throw new BadRequestException(`Detector GuardDuty com ID "${detectorId}" não encontrado.`);
         }
+
         return detector;
     }
 
@@ -43,6 +51,7 @@ export class AwsGuardDutyService {
         }
 
         const now = new Date();
+
         const mapped: Record<string, any>[] = [];
 
         for (const detectorId of DetectorIds) {
@@ -51,13 +60,16 @@ export class AwsGuardDutyService {
             });
 
             let findingsCount: number | null = null;
+
             try {
                 const { FindingStatistics } = await client.send(
                     new GetFindingsStatisticsCommand({
                         DetectorId: detectorId,
+
                         FindingStatisticTypes: [FindingStatisticType.COUNT_BY_SEVERITY],
                     })
                 );
+
                 if (FindingStatistics?.CountBySeverity) {
                     findingsCount = Object.values(FindingStatistics.CountBySeverity).reduce((sum, c) => sum + c, 0);
                 }
@@ -66,9 +78,12 @@ export class AwsGuardDutyService {
             }
 
             let tags: Record<string, string> = {};
+
             try {
                 const arn = `arn:aws:guardduty:*:*:detector/${detectorId}`;
+
                 const { Tags } = await client.send(new ListTagsForResourceCommand({ ResourceArn: arn }));
+
                 tags = Tags ?? {};
             } catch {
                 console.warn(`Não foi possível obter tags do detector ${detectorId}.`);
@@ -76,13 +91,21 @@ export class AwsGuardDutyService {
 
             const detectorData = {
                 detectorId,
+
                 status: detector.Status ?? null,
+
                 findingPublishingFrequency: detector.FindingPublishingFrequency ?? null,
+
                 serviceRole: detector.ServiceRole ?? null,
+
                 findingsCount,
+
                 dataSources: detector.DataSources ? JSON.parse(JSON.stringify(detector.DataSources)) : null,
+
                 features: detector.Features ? JSON.parse(JSON.stringify(detector.Features)) : null,
+
                 createdAtAws: detector.CreatedAt ? new Date(detector.CreatedAt) : null,
+
                 updatedAtAws: detector.UpdatedAt ? new Date(detector.UpdatedAt) : null,
             };
 

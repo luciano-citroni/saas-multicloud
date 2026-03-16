@@ -1,9 +1,17 @@
 import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+
 import { TenantGuard } from '../../tenant/tenant.guard';
+
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+
 import { Organization } from '../../db/entites/organization.entity';
+
 import { AwsDynamoDbService } from './aws-dynamodb.service';
+
 import { DynamoDbTableResponseDto, DynamoDbTableSyncResponseDto } from './swagger.dto';
 
 @ApiTags('AWS DynamoDB')
@@ -15,6 +23,7 @@ export class AwsDynamoDbController {
     constructor(private readonly service: AwsDynamoDbService) {}
 
     @Get('accounts/:cloudAccountId/tables')
+    @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar tabelas DynamoDB do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [DynamoDbTableResponseDto] })
@@ -30,7 +39,9 @@ export class AwsDynamoDbController {
     @ApiResponse({ status: 400, description: 'Tabela não encontrada' })
     getTable(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
         @Param('tableId', ParseUUIDPipe) tableId: string,
+
         @CurrentOrganization() org: Organization
     ) {
         return this.service.getTableById(tableId, cloudAccountId);

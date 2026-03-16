@@ -26,22 +26,34 @@ export class CreateAwsApiGatewayRestApis1774900000000 implements MigrationInterf
             })
         );
 
-        await queryRunner.createForeignKey('aws_api_gateway_rest_apis', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_api_gateway_rest_apis',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createForeignKey('aws_api_gateway_rest_apis', new TableForeignKey({
-            columnNames: ['vpc_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'aws_vpcs',
-            onDelete: 'SET NULL',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_api_gateway_rest_apis',
+            new TableForeignKey({
+                columnNames: ['vpc_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'aws_vpcs',
+                onDelete: 'SET NULL',
+            })
+        );
 
-        await queryRunner.createIndex('aws_api_gateway_rest_apis', new TableIndex({ name: 'idx_aws_api_gateway_rest_apis_cloud_account_id', columnNames: ['cloud_account_id'] }));
-        await queryRunner.createIndex('aws_api_gateway_rest_apis', new TableIndex({ name: 'idx_aws_api_gateway_rest_apis_vpc_id', columnNames: ['vpc_id'] }));
+        await queryRunner.createIndex(
+            'aws_api_gateway_rest_apis',
+            new TableIndex({ name: 'idx_aws_api_gateway_rest_apis_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
+        await queryRunner.createIndex(
+            'aws_api_gateway_rest_apis',
+            new TableIndex({ name: 'idx_aws_api_gateway_rest_apis_vpc_id', columnNames: ['vpc_id'] })
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

@@ -27,7 +27,9 @@ export class EksClusterResponseDto {
 
     @ApiProperty({
         example: ['123e4567-e89b-12d3-a456-426614174020'],
+
         description: 'IDs de instâncias EC2 no banco relacionadas ao cluster',
+
         nullable: true,
     })
     ec2InstanceIds: string[] | null;
@@ -66,32 +68,46 @@ export class EksClusterWithRelationsResponseDto extends EksClusterResponseDto {
     @ApiProperty({
         example: {
             id: '123e4567-e89b-12d3-a456-426614174001',
+
             awsVpcId: 'vpc-0a1b2c3d4e5f67890',
+
             cidrBlock: '10.0.0.0/16',
+
             state: 'available',
         },
+
         description: 'VPC vinculada ao cluster',
+
         nullable: true,
     })
     vpc?: {
         id: string;
+
         awsVpcId: string;
+
         cidrBlock: string;
+
         state: string;
     } | null;
 
     @ApiProperty({
         example: {
             id: '123e4567-e89b-12d3-a456-426614174030',
+
             roleArn: 'arn:aws:iam::123456789012:role/EksClusterRole',
+
             roleName: 'EksClusterRole',
         },
+
         description: 'Role IAM vinculada ao cluster',
+
         nullable: true,
     })
     iamRole?: {
         id: string;
+
         roleArn: string;
+
         roleName: string;
     } | null;
 }

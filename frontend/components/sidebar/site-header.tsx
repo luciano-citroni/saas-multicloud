@@ -11,6 +11,7 @@ const routeNames: Record<string, string> = {
     organizations: 'Organizações',
     new: 'Nova',
     billing: 'Planos e Regras',
+    settings: 'Configurações',
 };
 
 function isId(segment: string) {

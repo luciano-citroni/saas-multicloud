@@ -25,14 +25,20 @@ export class CreateAwsSnsTopics1775600000000 implements MigrationInterface {
             })
         );
 
-        await queryRunner.createForeignKey('aws_sns_topics', new TableForeignKey({
-            columnNames: ['cloud_account_id'],
-            referencedColumnNames: ['id'],
-            referencedTableName: 'cloud_accounts',
-            onDelete: 'CASCADE',
-        }));
+        await queryRunner.createForeignKey(
+            'aws_sns_topics',
+            new TableForeignKey({
+                columnNames: ['cloud_account_id'],
+                referencedColumnNames: ['id'],
+                referencedTableName: 'cloud_accounts',
+                onDelete: 'CASCADE',
+            })
+        );
 
-        await queryRunner.createIndex('aws_sns_topics', new TableIndex({ name: 'idx_aws_sns_topics_cloud_account_id', columnNames: ['cloud_account_id'] }));
+        await queryRunner.createIndex(
+            'aws_sns_topics',
+            new TableIndex({ name: 'idx_aws_sns_topics_cloud_account_id', columnNames: ['cloud_account_id'] })
+        );
         await queryRunner.createIndex('aws_sns_topics', new TableIndex({ name: 'idx_aws_sns_topics_topic_name', columnNames: ['topic_name'] }));
     }
 
