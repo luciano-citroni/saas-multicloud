@@ -8,7 +8,12 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/compone
 import { NavMain } from '@/components/sidebar/nav-main';
 import { NavUser } from '@/components/sidebar/nav-user';
 import { toast } from 'sonner';
-import { ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_ORG_STORAGE_KEY,
+    SIDEBAR_CONTEXT_UPDATED_EVENT,
+    notifyActiveCloudAccountChanged,
+    notifyActiveOrganizationChanged,
+} from '@/lib/sidebar-context';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 
 const baseData = {
@@ -57,13 +62,137 @@ type SidebarCloudAccount = {
     provider: string;
 };
 
+type BackendOrganization = {
+    id?: string;
+    name?: string;
+    currentRole?: string;
+    current_role?: string;
+    maxCloudAccounts?: number;
+    maxUsers?: number;
+    max_cloud_accounts?: number;
+    max_users?: number;
+    plans?: unknown;
+};
+
+type SidebarCloudAccountsResponse = {
+    items?: SidebarCloudAccount[];
+};
+
 type SidebarContextResponse = {
     user: SidebarUser;
     organizations: SidebarOrganization[];
 };
 
+type OrganizationsApiResponse =
+    | BackendOrganization[]
+    | {
+          items?: BackendOrganization[];
+      };
+
 function getCloudStorageKey(organizationId: string) {
     return `${ACTIVE_CLOUD_STORAGE_KEY_PREFIX}${organizationId}`;
+}
+
+function normalizeCloudAccountsPayload(payload: SidebarCloudAccount[] | SidebarCloudAccountsResponse): SidebarCloudAccount[] {
+    const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+
+    return items.filter(
+        (cloudAccount) => typeof cloudAccount?.id === 'string' && typeof cloudAccount?.alias === 'string' && typeof cloudAccount?.provider === 'string'
+    );
+}
+
+function parseOrganizationPlans(plans: unknown): string[] {
+    const normalize = (values: string[]) => {
+        const normalized = values.map((value) => value.trim().toLowerCase()).filter(Boolean);
+
+        if (normalized.includes('*')) {
+            return ['*'];
+        }
+
+        return Array.from(new Set(normalized));
+    };
+
+    if (Array.isArray(plans)) {
+        return normalize(plans.filter((entry): entry is string => typeof entry === 'string'));
+    }
+
+    if (typeof plans !== 'string') {
+        return [];
+    }
+
+    const raw = plans.trim();
+
+    if (!raw) {
+        return [];
+    }
+
+    if (raw === '*') {
+        return ['*'];
+    }
+
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+
+            if (Array.isArray(parsed)) {
+                return normalize(parsed.filter((entry): entry is string => typeof entry === 'string'));
+            }
+        } catch {
+            return normalize(raw.split(','));
+        }
+    }
+
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+        const entries = raw
+            .slice(1, -1)
+            .split(',')
+            .map((entry) => entry.replace(/^"|"$/g, '').trim())
+            .filter(Boolean);
+
+        return normalize(entries);
+    }
+
+    return normalize(raw.split(','));
+}
+
+function toSlug(value: string): string {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+}
+
+function normalizeOrganizationsPayload(payload: OrganizationsApiResponse | null | undefined): SidebarOrganization[] {
+    const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+
+    return items
+        .filter((organization): organization is BackendOrganization => typeof organization?.id === 'string' && typeof organization?.name === 'string')
+        .map((organization) => ({
+            id: organization.id as string,
+            name: organization.name as string,
+            slug: toSlug(organization.name as string),
+            currentRole:
+                typeof organization.currentRole === 'string'
+                    ? organization.currentRole
+                    : typeof organization.current_role === 'string'
+                      ? organization.current_role
+                      : null,
+            maxCloudAccounts:
+                typeof organization.maxCloudAccounts === 'number'
+                    ? organization.maxCloudAccounts
+                    : typeof organization.max_cloud_accounts === 'number'
+                      ? organization.max_cloud_accounts
+                      : 0,
+            maxUsers:
+                typeof organization.maxUsers === 'number'
+                    ? organization.maxUsers
+                    : typeof organization.max_users === 'number'
+                      ? organization.max_users
+                      : 0,
+            plans: parseOrganizationPlans(organization.plans),
+        }));
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -103,23 +232,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     return;
                 }
 
-                const payload = (await response.json()) as SidebarCloudAccount[];
-                const nextCloudAccounts = Array.isArray(payload)
-                    ? payload.filter(
-                          (cloudAccount) =>
-                              typeof cloudAccount?.id === 'string' && typeof cloudAccount?.alias === 'string' && typeof cloudAccount?.provider === 'string'
-                      )
-                    : [];
+                const payload = (await response.json()) as SidebarCloudAccount[] | SidebarCloudAccountsResponse;
+                const cloudAccountsList = normalizeCloudAccountsPayload(payload);
 
-                setCloudAccounts(nextCloudAccounts);
+                setCloudAccounts(cloudAccountsList);
 
                 const cloudStorageKey = getCloudStorageKey(organizationId);
                 const storedCloudAccountId = window.localStorage.getItem(cloudStorageKey) ?? window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
 
                 const validStoredCloudAccountId =
-                    storedCloudAccountId && nextCloudAccounts.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
+                    storedCloudAccountId && cloudAccountsList.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
                         ? storedCloudAccountId
-                        : nextCloudAccounts[0]?.id;
+                        : cloudAccountsList[0]?.id;
 
                 if (!validStoredCloudAccountId) {
                     setActiveCloudAccountId(undefined);
@@ -161,14 +285,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             const payload = (await response.json()) as SidebarContextResponse;
             setUser(payload.user);
-            setOrganizations(payload.organizations ?? []);
+
+            let nextOrganizations = payload.organizations ?? [];
+
+            if (nextOrganizations.length === 0) {
+                const organizationsResponse = await fetch('/api/organization?page=1&limit=100', {
+                    cache: 'no-store',
+                });
+
+                if (organizationsResponse.ok) {
+                    const organizationsPayload = (await organizationsResponse.json().catch(() => null)) as OrganizationsApiResponse | null;
+
+                    nextOrganizations = normalizeOrganizationsPayload(organizationsPayload);
+                }
+            }
+
+            setOrganizations(nextOrganizations);
 
             const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
 
             const validStoredOrganization =
-                storedOrganizationId && payload.organizations?.some((organization) => organization.id === storedOrganizationId)
+                storedOrganizationId && nextOrganizations.some((organization) => organization.id === storedOrganizationId)
                     ? storedOrganizationId
-                    : payload.organizations?.[0]?.id;
+                    : nextOrganizations[0]?.id;
 
             if (!validStoredOrganization) {
                 window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
@@ -181,7 +320,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
             setActiveOrganizationId(validStoredOrganization);
-            const activeOrganization = payload.organizations?.find((organization) => organization.id === validStoredOrganization);
+            const activeOrganization = nextOrganizations.find((organization) => organization.id === validStoredOrganization);
             setActiveOrganizationModules(normalizePlanModules(activeOrganization?.plans ?? []));
             await loadCloudAccounts(validStoredOrganization);
         } catch {
@@ -220,6 +359,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const handleOrganizationChange = React.useCallback(
         (organization: { id: string }) => {
             window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organization.id);
+            notifyActiveOrganizationChanged();
             setActiveOrganizationId(organization.id);
             const selectedOrganization = organizations.find((item) => item.id === organization.id);
             setActiveOrganizationModules(normalizePlanModules(selectedOrganization?.plans ?? []));
@@ -240,6 +380,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             window.localStorage.setItem(cloudStorageKey, cloudAccount.id);
             window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, cloudAccount.id);
             setActiveCloudAccountId(cloudAccount.id);
+            notifyActiveCloudAccountChanged();
         },
         [activeOrganizationId]
     );

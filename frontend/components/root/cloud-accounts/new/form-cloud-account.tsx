@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { buildTrustPolicy, PERMISSIONS_POLICY } from '@/lib/role-permissions';
 
 type Props = {
@@ -82,6 +83,10 @@ export function FormCloudAccount({ organizationId }: Props) {
             provider: 'aws',
             roleArn: '',
             region: '',
+            tenantId: '',
+            clientId: '',
+            clientSecret: '',
+            subscriptionId: '',
         },
     });
 
@@ -96,6 +101,11 @@ export function FormCloudAccount({ organizationId }: Props) {
                 if (data.roleArn) credentials.roleArn = data.roleArn.trim();
                 if (data.region) credentials.region = data.region.trim();
                 credentials.externalId = externalId;
+            } else if (data.provider === 'azure') {
+                if (data.tenantId) credentials.tenantId = data.tenantId.trim();
+                if (data.clientId) credentials.clientId = data.clientId.trim();
+                if (data.clientSecret) credentials.clientSecret = data.clientSecret.trim();
+                if (data.subscriptionId) credentials.subscriptionId = data.subscriptionId.trim();
             }
 
             const body = {
@@ -126,6 +136,8 @@ export function FormCloudAccount({ organizationId }: Props) {
                 window.localStorage.setItem(storageKey, payload.id);
                 window.localStorage.setItem('smc_active_cloud_account_id', payload.id);
             }
+
+            notifySidebarContextUpdated();
 
             toast.success('Cloud account conectada com sucesso.');
             router.replace('/');
@@ -251,19 +263,84 @@ export function FormCloudAccount({ organizationId }: Props) {
                         </>
                     )}
 
-                    {/* Azure/GCP placeholder */}
-                    {(selectedProvider === 'azure' || selectedProvider === 'gcp') && (
+                    {/* Azure credentials */}
+                    {selectedProvider === 'azure' && (
+                        <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                <ShieldCheck className="size-3.5" />
+                                Credenciais Azure (Service Principal)
+                            </p>
+
+                            <FormField
+                                control={form.control}
+                                name="tenantId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Tenant ID</FormLabel>
+                                        <FormControl>
+                                            <IconInput placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" StartIcon={KeyRound} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="clientId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Client ID (Application ID)</FormLabel>
+                                        <FormControl>
+                                            <IconInput placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" StartIcon={KeyRound} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="clientSecret"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Client Secret</FormLabel>
+                                        <FormControl>
+                                            <IconInput placeholder="Client secret do App Registration" StartIcon={KeyRound} type="password" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="subscriptionId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Subscription ID</FormLabel>
+                                        <FormControl>
+                                            <IconInput placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" StartIcon={Globe} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    )}
+
+                    {/* GCP placeholder */}
+                    {selectedProvider === 'gcp' && (
                         <div className="rounded-lg border border-border p-4 flex items-center gap-3">
                             <Cloud className="size-5 text-muted-foreground shrink-0" />
                             <p className="text-sm text-muted-foreground">
-                                Suporte a <strong>{selectedProvider === 'azure' ? 'Azure' : 'GCP'}</strong> em breve. No momento apenas AWS está
-                                disponível.
+                                Suporte a <strong>GCP</strong> em breve.
                             </p>
                         </div>
                     )}
 
                     <div className="flex justify-end">
-                        <Button type="submit" isLoading={isLoading} disabled={selectedProvider !== 'aws'}>
+                        <Button type="submit" isLoading={isLoading} disabled={selectedProvider === 'gcp'}>
                             Conectar cloud account
                         </Button>
                     </div>

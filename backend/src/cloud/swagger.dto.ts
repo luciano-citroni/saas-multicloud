@@ -62,6 +62,12 @@ export class CloudAccountResponseDto {
         nullable: true,
     })
     lastGeneralSyncAt: Date | null;
+
+    @ApiProperty({
+        example: true,
+        description: 'Indica se existe sync/assessment em andamento para esta conta',
+    })
+    isSyncInProgress: boolean;
 }
 
 export class AwsCredentialsDto {

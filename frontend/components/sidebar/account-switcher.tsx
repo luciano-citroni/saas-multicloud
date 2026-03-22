@@ -147,7 +147,10 @@ export function AccountSwitcher({
                     }}
                 >
                     <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+                        <SidebarMenuButton
+                            size="lg"
+                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground  group cursor-pointer transition-colors duration-200"
+                        >
                             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                                 <Building2 className="size-4" />
                             </div>
@@ -159,11 +162,11 @@ export function AccountSwitcher({
                                         : 'Sem cloud account'}
                                 </span>
                             </div>
-                            <ChevronsUpDown className="ml-auto" />
+                            <ChevronsUpDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-64 max-h-[80svh] overflow-y-auto rounded-lg"
+                        className="w-(--radix-dropdown-menu-trigger-width) min-w-64 max-h-[80svh] overflow-y-auto rounded-lg animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out"
                         align="start"
                         side={isMobile ? 'bottom' : 'right'}
                         sideOffset={4}

@@ -109,6 +109,21 @@ export class AwsAssessmentSyncService {
     async syncAll(cloudAccountId: string, organizationId: string): Promise<void> {
         this.logger.log(`[${cloudAccountId}] Iniciando sincronização completa`);
 
+        await this.runFullSync(cloudAccountId, organizationId);
+
+        this.logger.log(`[${cloudAccountId}] Sincronização completa finalizada`);
+    }
+
+    async syncIncremental(cloudAccountId: string, organizationId: string): Promise<void> {
+        this.logger.log(`[${cloudAccountId}] Iniciando sincronização incremental`);
+
+        await this.runIncrementalSync(cloudAccountId, organizationId);
+
+        this.logger.log(`[${cloudAccountId}] Sincronização incremental finalizada`);
+    }
+
+    private async runFullSync(cloudAccountId: string, organizationId: string): Promise<void> {
+
         await this.runStep('VPCs', () => this.networkingService.syncVpcsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('Subnets', () => this.networkingService.syncSubnetsFromAws(cloudAccountId, organizationId));
@@ -164,8 +179,52 @@ export class AwsAssessmentSyncService {
         await this.runStep('WAF Web ACLs', () => this.wafService.syncWebAclsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('GuardDuty Detectors', () => this.guardDutyService.syncDetectorsFromAws(cloudAccountId, organizationId));
+    }
 
-        this.logger.log(`[${cloudAccountId}] Sincronização completa finalizada`);
+    private async runIncrementalSync(cloudAccountId: string, organizationId: string): Promise<void> {
+        await this.runStep('VPCs', () => this.networkingService.syncVpcsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Subnets', () => this.networkingService.syncSubnetsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Route Tables', () => this.routeTablesService.syncRouteTablesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Security Groups', () => this.securityGroupService.syncSecurityGroupsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('EC2 Instances', () => this.ec2Service.syncInstancesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('ECS Clusters', () => this.ecsService.syncClustersFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('ECS Task Definitions', () => this.ecsService.syncTaskDefinitionsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('ECS Services', () => this.ecsService.syncServicesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('EKS Clusters', () => this.eksService.syncClustersFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Load Balancers', () => this.loadBalancerService.syncLoadBalancersFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('RDS Instances', () => this.rdsService.syncInstancesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('S3 Buckets', () => this.s3Service.syncBucketsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('CloudWatch Alarms', () => this.cloudWatchService.syncAlarmsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('CloudTrail', () => this.cloudTrailService.syncTrailsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Lambda Functions', () => this.lambdaService.syncFunctionsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('API Gateway', () => this.apiGatewayService.syncApisFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('DynamoDB Tables', () => this.dynamoDbService.syncTablesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('ElastiCache Clusters', () => this.elastiCacheService.syncClustersFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('SQS Queues', () => this.sqsService.syncQueuesFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('SNS Topics', () => this.snsService.syncTopicsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('WAF Web ACLs', () => this.wafService.syncWebAclsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('GuardDuty Detectors', () => this.guardDutyService.syncDetectorsFromAws(cloudAccountId, organizationId));
     }
 
     private async runStep(name: string, fn: () => Promise<any>): Promise<void> {

@@ -69,14 +69,29 @@ function buildUnauthorizedResponse() {
     return response;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     const resolved = await resolveAccessToken();
 
     if (!resolved.accessToken) {
         return buildUnauthorizedResponse();
     }
 
-    let response = await backendFetch('/api/organization', {
+    const { searchParams } = new URL(request.url);
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    const backendSearchParams = new URLSearchParams();
+
+    if (page) {
+        backendSearchParams.set('page', page);
+    }
+
+    if (limit) {
+        backendSearchParams.set('limit', limit);
+    }
+
+    const backendUrl = backendSearchParams.size > 0 ? `/api/organization?${backendSearchParams.toString()}` : '/api/organization';
+
+    let response = await backendFetch(backendUrl, {
         headers: withAuthHeaders(resolved.accessToken),
     });
 
@@ -91,7 +106,7 @@ export async function GET() {
 
         rotatedTokens = refreshResult;
 
-        response = await backendFetch('/api/organization', {
+        response = await backendFetch(backendUrl, {
             headers: withAuthHeaders(refreshResult.accessToken),
         });
     }

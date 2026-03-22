@@ -42,10 +42,22 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
             throw new Error(`CloudAccount \"${cloudAccountId}\" não encontrada para sync geral.`);
         }
 
-        await this.syncService.syncAll(cloudAccountId, cloudAccount.organizationId);
+        await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: true });
 
-        await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
+        try {
+            const hasPreviousSync = cloudAccount.lastGeneralSyncAt !== null;
 
-        this.logger.log(`[sync:${job.id}] Sync geral concluido para conta ${cloudAccountId}`);
+            if (hasPreviousSync) {
+                await this.syncService.syncIncremental(cloudAccountId, cloudAccount.organizationId);
+            } else {
+                await this.syncService.syncAll(cloudAccountId, cloudAccount.organizationId);
+            }
+
+            await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
+
+            this.logger.log(`[sync:${job.id}] Sync geral concluido para conta ${cloudAccountId}`);
+        } finally {
+            await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: false });
+        }
     }
 }

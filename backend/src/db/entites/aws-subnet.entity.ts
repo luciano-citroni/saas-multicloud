@@ -2,6 +2,8 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 
 import { AwsVpc } from './aws-vpc.entity';
 
+import { AwsRouteTable } from './aws-route-table.entity';
+
 /**
 
 
@@ -188,4 +190,30 @@ export class AwsSubnet {
     @ManyToOne(() => AwsVpc, (vpc) => vpc.subnets, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'vpc_id' })
     vpc!: AwsVpc;
+
+    /**
+
+
+     * ID interno da Route Table associada a esta Subnet (pode ser null antes do sync de route tables).
+
+
+     */
+
+    @Column({ type: 'uuid', name: 'route_table_id', nullable: true })
+    routeTableId!: string | null;
+
+    /**
+
+
+     * Route Table ID na AWS (denormalizado para facilitar queries).
+
+
+     */
+
+    @Column({ type: 'varchar', length: 50, name: 'aws_route_table_id', nullable: true })
+    awsRouteTableId!: string | null;
+
+    @ManyToOne(() => AwsRouteTable, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'route_table_id' })
+    routeTable!: AwsRouteTable | null;
 }

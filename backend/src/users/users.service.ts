@@ -100,6 +100,9 @@ export class UsersService {
                     organizationId: organizationId,
                 },
             },
+            order: {
+                createdAt: 'DESC',
+            },
         });
         return users.map((user) => this.sanitizeUser(user));
     }
@@ -156,6 +159,28 @@ export class UsersService {
 
     async findByGoogleId(googleId: string): Promise<User | null> {
         return this.userRepository.findOne({ where: { googleId } });
+    }
+
+    async findEntityById(id: string): Promise<User> {
+        const user = await this.userRepository.findOne({ where: { id } });
+        if (!user) throw new NotFoundException(ErrorMessages.USERS.NOT_FOUND);
+        return user;
+    }
+
+    async validatePassword(userId: string, password: string): Promise<boolean> {
+        const user = await this.findEntityById(userId);
+        if (!user.password) {
+            return false;
+        }
+
+        return bcrypt.compare(password, user.password);
+    }
+
+    async updatePassword(userId: string, newPassword: string): Promise<void> {
+        await this.findEntityById(userId);
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        await this.userRepository.update({ id: userId }, { password: hashedPassword });
     }
 
     async createWithGoogle(dto: { email: string; name: string; googleId: string }): Promise<User> {

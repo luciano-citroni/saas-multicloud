@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository, QueryFailedError, LessThan } from 'typeorm';
+import { Repository, QueryFailedError, LessThan, In } from 'typeorm';
 
 import * as bcrypt from 'bcrypt';
 
@@ -34,7 +34,15 @@ export interface AuthTokens {
     refreshToken: string;
 }
 
+export interface ActiveSessionDto {
+    id: string;
+    createdAt: Date;
+    expiresAt: Date;
+    isCurrent: boolean;
+}
+
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_ACTIVE_SESSIONS = 3;
 
 const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
 
@@ -268,7 +276,68 @@ export class AuthService {
     }
 
     async getMe(userId: string) {
-        return this.usersService.findById(userId);
+        return this.getAuthUserPayload(userId);
+    }
+
+    async updateMe(userId: string, payload: { name?: string; email?: string; cpf?: string }) {
+        await this.usersService.update(userId, payload);
+        return this.getAuthUserPayload(userId);
+    }
+
+    async updateMyPassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+        const user = await this.usersService.findEntityById(userId);
+
+        if (user.password) {
+            if (!currentPassword) {
+                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
+            }
+
+            const isCurrentPasswordValid = await this.usersService.validatePassword(userId, currentPassword);
+
+            if (!isCurrentPasswordValid) {
+                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
+            }
+        }
+
+        await this.usersService.updatePassword(userId, newPassword);
+
+        return { success: true };
+    }
+
+    async listMySessions(userId: string, currentSessionId: string): Promise<ActiveSessionDto[]> {
+        await this.enforceActiveSessionLimit(userId);
+
+        const sessions = await this.sessionRepository.find({
+            where: { userId },
+            order: {
+                createdAt: 'DESC',
+            },
+        });
+
+        return sessions.map((session) => ({
+            id: session.id,
+            createdAt: session.createdAt,
+            expiresAt: session.expiresAt,
+            isCurrent: session.id === currentSessionId,
+        }));
+    }
+
+    async removeMySession(userId: string, sessionId: string, currentSessionId: string) {
+        const session = await this.sessionRepository.findOne({
+            where: { id: sessionId, userId },
+        });
+
+        if (!session) {
+            throw new NotFoundException(ErrorMessages.GENERAL.NOT_FOUND);
+        }
+
+        await this.sessionRepository.delete({ id: sessionId, userId });
+
+        return {
+            removedSessionId: sessionId,
+            removedCurrent: sessionId === currentSessionId,
+            success: true,
+        };
     }
 
     private async resolveGoogleUser(googleUser: { googleId: string; email: string; name: string }) {
@@ -309,6 +378,8 @@ export class AuthService {
 
             expiresAt: new Date(Date.now() + SESSION_TTL_MS),
         });
+
+        await this.enforceActiveSessionLimit(userId);
 
         return {
             accessToken: await this.signAccessToken(userId, session.id),
@@ -359,5 +430,44 @@ export class AuthService {
 
     private hashToken(token: string): string {
         return crypto.createHash('sha256').update(token).digest('hex');
+    }
+
+    private async getAuthUserPayload(userId: string) {
+        const user = await this.usersService.findEntityById(userId);
+
+        return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            cpf: user.cpf,
+            isActive: user.isActive,
+            hasPassword: Boolean(user.password),
+        };
+    }
+
+    private async enforceActiveSessionLimit(userId: string): Promise<void> {
+        await this.sessionRepository.delete({
+            userId,
+            expiresAt: LessThan(new Date()),
+        });
+
+        const activeSessions = await this.sessionRepository.find({
+            where: { userId },
+            order: {
+                createdAt: 'DESC',
+            },
+        });
+
+        if (activeSessions.length <= MAX_ACTIVE_SESSIONS) {
+            return;
+        }
+
+        const staleSessionIds = activeSessions.slice(MAX_ACTIVE_SESSIONS).map((session) => session.id);
+
+        if (staleSessionIds.length === 0) {
+            return;
+        }
+
+        await this.sessionRepository.delete({ id: In(staleSessionIds) });
     }
 }

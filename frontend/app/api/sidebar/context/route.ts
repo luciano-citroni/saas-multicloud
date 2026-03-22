@@ -28,6 +28,15 @@ type BackendOrganization = {
     plans?: unknown;
 };
 
+type PaginatedOrganizationsPayload = {
+    items?: BackendOrganization[];
+    pagination?: {
+        hasNextPage?: boolean;
+    };
+};
+
+const ORGANIZATIONS_PAGE_SIZE = 100;
+
 function parseOrganizationPlans(plans: unknown): string[] {
     const normalize = (values: string[]): string[] => {
         const normalized = values.map((value) => value.trim().toLowerCase()).filter(Boolean);
@@ -131,12 +140,63 @@ function normalizePayload(userBody: BackendUser | null, organizationsBody: Backe
     };
 }
 
+function normalizeOrganizationsPayload(payload: BackendOrganization[] | PaginatedOrganizationsPayload | null): BackendOrganization[] | null {
+    if (Array.isArray(payload)) {
+        return payload;
+    }
+
+    if (payload && typeof payload === 'object' && Array.isArray(payload.items)) {
+        return payload.items;
+    }
+
+    return null;
+}
+
 function fetchContext(accessToken: string) {
     const headers = {
         Authorization: `Bearer ${accessToken}`,
     };
 
-    return Promise.all([backendFetch('/api/auth/me', { headers }), backendFetch('/api/organization', { headers })]);
+    return Promise.all([
+        backendFetch('/api/auth/me', { headers }),
+        backendFetch(`/api/organization?page=1&limit=${ORGANIZATIONS_PAGE_SIZE}`, { headers }),
+    ]);
+}
+
+async function fetchRemainingOrganizations(accessToken: string, startPage: number): Promise<BackendOrganization[] | null> {
+    const headers = {
+        Authorization: `Bearer ${accessToken}`,
+    };
+
+    const organizations: BackendOrganization[] = [];
+    let page = startPage;
+
+    while (true) {
+        const response = await backendFetch(`/api/organization?page=${page}&limit=${ORGANIZATIONS_PAGE_SIZE}`, {
+            headers,
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const payload = await parseJsonSafe<BackendOrganization[] | PaginatedOrganizationsPayload>(response);
+        const normalizedItems = normalizeOrganizationsPayload(payload);
+
+        if (!normalizedItems) {
+            return null;
+        }
+
+        organizations.push(...normalizedItems);
+
+        if (!payload || Array.isArray(payload) || payload.pagination?.hasNextPage !== true) {
+            break;
+        }
+
+        page += 1;
+    }
+
+    return organizations;
 }
 
 export async function GET() {
@@ -187,7 +247,26 @@ export async function GET() {
     }
 
     const meBody = await parseJsonSafe<BackendUser>(meResponse);
-    const organizationsBody = await parseJsonSafe<BackendOrganization[]>(organizationsResponse);
+    const initialOrganizationsPayload = await parseJsonSafe<BackendOrganization[] | PaginatedOrganizationsPayload>(organizationsResponse);
+    const initialOrganizations = normalizeOrganizationsPayload(initialOrganizationsPayload);
+
+    let organizationsBody = initialOrganizations;
+
+    if (organizationsResponse.ok && initialOrganizations) {
+        const hasNextPage = !Array.isArray(initialOrganizationsPayload) && initialOrganizationsPayload?.pagination?.hasNextPage === true;
+
+        if (hasNextPage) {
+            const nextToken = rotatedTokens?.accessToken ?? currentAccessToken;
+
+            if (nextToken) {
+                const remainingOrganizations = await fetchRemainingOrganizations(nextToken, 2);
+
+                if (remainingOrganizations) {
+                    organizationsBody = [...initialOrganizations, ...remainingOrganizations];
+                }
+            }
+        }
+    }
 
     if (!meResponse.ok) {
         return NextResponse.json(meBody ?? { message: 'Erro ao carregar usuário' }, { status: meResponse.status });

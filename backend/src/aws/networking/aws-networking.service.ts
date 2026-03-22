@@ -125,6 +125,10 @@ export class AwsNetworkingService {
 
                 subnetType: subnet.subnetType,
 
+                routeTableId: subnet.routeTableId ?? null,
+
+                awsRouteTableId: subnet.awsRouteTableId ?? null,
+
                 tags: subnet.tags ?? {},
 
                 lastSyncedAt: subnet.lastSyncedAt,
@@ -180,6 +184,10 @@ export class AwsNetworkingService {
             mapPublicIpOnLaunch: subnet.mapPublicIpOnLaunch,
 
             subnetType: subnet.subnetType,
+
+            routeTableId: subnet.routeTableId ?? null,
+
+            awsRouteTableId: subnet.awsRouteTableId ?? null,
 
             tags: subnet.tags ?? {},
 

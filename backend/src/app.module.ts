@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -14,10 +14,9 @@ import { JwtGuard } from './auth/jwt.guard';
 import { UserSession } from './db/entites/user-session.entity';
 import { CloudModule } from './cloud/cloud.module';
 import { AwsModule } from './aws/aws.module';
+import { AzureModule } from './azure/azure.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { BillingModule } from './billing/billing.module';
-import { PaginationMiddleware } from './common/middlewares/pagination.middleware';
-import { PaginationInterceptor } from './common/interceptors/pagination.interceptor';
 
 @Module({
     imports: [
@@ -40,6 +39,7 @@ import { PaginationInterceptor } from './common/interceptors/pagination.intercep
         AuthModule,
         CloudModule,
         AwsModule,
+        AzureModule,
         BillingModule,
     ],
     controllers: [AppController],
@@ -47,11 +47,6 @@ import { PaginationInterceptor } from './common/interceptors/pagination.intercep
         AppService,
         { provide: APP_GUARD, useClass: JwtGuard },
         { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
-        { provide: APP_INTERCEPTOR, useClass: PaginationInterceptor },
     ],
 })
-export class AppModule implements NestModule {
-    configure(consumer: MiddlewareConsumer): void {
-        consumer.apply(PaginationMiddleware).forRoutes({ path: '*', method: RequestMethod.GET });
-    }
-}
+export class AppModule {}

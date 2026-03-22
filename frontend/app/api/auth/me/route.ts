@@ -9,82 +9,138 @@ import {
     setAuthCookies,
     type AuthTokens,
 } from '@/lib/auth/session';
+import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
-export async function GET() {
+async function resolveAccessToken() {
     const accessToken = await getAccessTokenFromCookies();
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+        return {
+            accessToken: null,
+            refreshToken: null,
+            rotatedTokens: null as AuthTokens | null,
+        };
     }
 
-    const fetchUser = (token: string) =>
-        backendFetch('/api/auth/me', {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-
-    let currentAccessToken = accessToken;
-    let rotatedTokens: AuthTokens | null = null;
-
-    if (!currentAccessToken && refreshToken) {
-        rotatedTokens = await refreshAccessToken(refreshToken);
-
-        if (!rotatedTokens) {
-            const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
-            clearAuthCookies(response);
-            return response;
-        }
-
-        currentAccessToken = rotatedTokens.accessToken;
+    if (accessToken) {
+        return {
+            accessToken,
+            refreshToken,
+            rotatedTokens: null as AuthTokens | null,
+        };
     }
 
-    if (!currentAccessToken) {
-        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+    if (!refreshToken) {
+        return {
+            accessToken: null,
+            refreshToken: null,
+            rotatedTokens: null as AuthTokens | null,
+        };
     }
 
-    let userResponse = await fetchUser(currentAccessToken);
-
-    if (userResponse.status === 401) {
-        if (!refreshToken) {
-            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
-            clearAuthCookies(response);
-            return response;
-        }
-
-        rotatedTokens = await refreshAccessToken(refreshToken);
-
-        if (!rotatedTokens) {
-            const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
-            clearAuthCookies(response);
-            return response;
-        }
-
-        userResponse = await fetchUser(rotatedTokens.accessToken);
-
-            if (!userResponse.ok) {
-            const failedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
-            return NextResponse.json(failedPayload ?? { message: 'Erro ao carregar usuário' }, { status: userResponse.status });
-        }
-
-        const refreshedPayload = await parseJsonSafe<Record<string, unknown>>(userResponse);
-        const response = NextResponse.json(refreshedPayload ?? {});
-        setAuthCookies(response, rotatedTokens);
-        return response;
-    }
-
-    const payload = await parseJsonSafe<Record<string, unknown>>(userResponse);
-
-    if (!userResponse.ok) {
-        return NextResponse.json(payload ?? { message: 'Erro ao carregar usuário' }, { status: userResponse.status });
-    }
+    const rotatedTokens = await refreshAccessToken(refreshToken);
 
     if (!rotatedTokens) {
-        return NextResponse.json(payload ?? {});
+        return {
+            accessToken: null,
+            refreshToken,
+            rotatedTokens: null as AuthTokens | null,
+        };
     }
 
-    const response = NextResponse.json(payload ?? {});
-    setAuthCookies(response, rotatedTokens);
+    return {
+        accessToken: rotatedTokens.accessToken,
+        refreshToken,
+        rotatedTokens,
+    };
+}
+
+function buildUnauthorizedResponse() {
+    const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
+    clearAuthCookies(response);
     return response;
+}
+
+function withAuthHeaders(accessToken: string, headers?: HeadersInit): HeadersInit {
+    return {
+        ...(headers ?? {}),
+        Authorization: `Bearer ${accessToken}`,
+    };
+}
+
+async function proxyWithRefresh(options: { path: string; method: 'GET' | 'PATCH'; body?: string }) {
+    const resolved = await resolveAccessToken();
+
+    if (!resolved.accessToken) {
+        return buildUnauthorizedResponse();
+    }
+
+    let response = await backendFetch(options.path, {
+        method: options.method,
+        headers: withAuthHeaders(
+            resolved.accessToken,
+            options.method === 'PATCH'
+                ? {
+                      'Content-Type': 'application/json',
+                  }
+                : undefined
+        ),
+        body: options.body,
+    });
+
+    let rotatedTokens = resolved.rotatedTokens;
+
+    if (response.status === 401 && resolved.refreshToken) {
+        const refreshResult = await refreshAccessToken(resolved.refreshToken);
+
+        if (!refreshResult) {
+            return buildUnauthorizedResponse();
+        }
+
+        rotatedTokens = refreshResult;
+
+        response = await backendFetch(options.path, {
+            method: options.method,
+            headers: withAuthHeaders(
+                refreshResult.accessToken,
+                options.method === 'PATCH'
+                    ? {
+                          'Content-Type': 'application/json',
+                      }
+                    : undefined
+            ),
+            body: options.body,
+        });
+    }
+
+    const payload = await parseJsonSafe<Record<string, unknown>>(response);
+    const nextResponse = NextResponse.json(payload ?? {}, { status: response.status });
+
+    if (rotatedTokens) {
+        setAuthCookies(nextResponse, rotatedTokens);
+    }
+
+    return nextResponse;
+}
+
+export async function GET() {
+    return proxyWithRefresh({
+        path: '/api/auth/me',
+        method: 'GET',
+    });
+}
+
+export async function PATCH(request: Request) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
+    }
+
+    const body = await request.json();
+
+    return proxyWithRefresh({
+        path: '/api/auth/me',
+        method: 'PATCH',
+        body: JSON.stringify(body),
+    });
 }

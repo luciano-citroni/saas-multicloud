@@ -269,6 +269,10 @@ export class AwsRouteTablesService {
                 if (subnet) {
                     subnet.subnetType = subnetType;
 
+                    subnet.routeTableId = routeTable.id;
+
+                    subnet.awsRouteTableId = routeTable.awsRouteTableId;
+
                     await this.subnetRepository.save(subnet);
                 }
             }

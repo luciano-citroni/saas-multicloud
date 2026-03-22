@@ -110,6 +110,9 @@ export class CloudAccount {
     @Column({ type: 'timestamp', nullable: true, name: 'last_general_sync_at' })
     lastGeneralSyncAt!: Date | null;
 
+    @Column({ type: 'boolean', default: false, name: 'is_general_sync_in_progress' })
+    isGeneralSyncInProgress!: boolean;
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 

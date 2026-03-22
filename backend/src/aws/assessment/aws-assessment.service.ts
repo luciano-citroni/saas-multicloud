@@ -101,13 +101,15 @@ export class AwsAssessmentService {
     }
 
     async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GeneralSyncJobResponse> {
-        await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        await this.assertCloudInventoryAccess(organizationId);
 
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
 
         if (existingJob) {
+            await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+
             return {
                 id: String(existingJob.id),
 
@@ -117,14 +119,14 @@ export class AwsAssessmentService {
             };
         }
 
+        await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+
         const syncJob = await this.generalSyncQueue.add(
             GENERAL_SYNC_JOB_NAME,
 
             { cloudAccountId },
 
             {
-                jobId: `general-sync-${cloudAccountId}`,
-
                 attempts: 2,
 
                 backoff: { type: 'exponential', delay: 5000 },
@@ -288,5 +290,15 @@ export class AwsAssessmentService {
         }
 
         return cloudAccount;
+    }
+
+    private async assertCloudInventoryAccess(organizationId: string): Promise<void> {
+        try {
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.CLOUD_INVENTORY);
+            return;
+        } catch {
+            // Compatibilidade temporária para planos antigos que ainda usam apenas "assessment".
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        }
     }
 }

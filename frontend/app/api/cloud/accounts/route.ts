@@ -70,8 +70,11 @@ function buildUnauthorizedResponse() {
 }
 
 export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
+    const requestUrl = new URL(request.url);
+    const { searchParams } = requestUrl;
     const organizationId = searchParams.get('organizationId');
+    const name = searchParams.get('name');
+    const isActive = searchParams.get('isActive');
 
     if (!organizationId) {
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
@@ -83,7 +86,19 @@ export async function GET(request: Request) {
         return buildUnauthorizedResponse();
     }
 
-    let response = await backendFetch('/api/cloud/accounts', {
+    const backendSearchParams = new URLSearchParams();
+
+    if (name) {
+        backendSearchParams.set('name', name);
+    }
+
+    if (isActive === 'true' || isActive === 'false') {
+        backendSearchParams.set('isActive', isActive);
+    }
+
+    const backendUrl = backendSearchParams.size > 0 ? `/api/cloud/accounts?${backendSearchParams.toString()}` : '/api/cloud/accounts';
+
+    let response = await backendFetch(backendUrl, {
         headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
@@ -98,7 +113,7 @@ export async function GET(request: Request) {
 
         rotatedTokens = refreshResult;
 
-        response = await backendFetch('/api/cloud/accounts', {
+        response = await backendFetch(backendUrl, {
             headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }

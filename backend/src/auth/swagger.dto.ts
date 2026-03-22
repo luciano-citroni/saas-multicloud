@@ -80,6 +80,92 @@ export class GoogleExchangeRequestDto {
     code: string;
 }
 
+export class UpdateMeRequestDto {
+    @ApiPropertyOptional({
+        example: 'John Doe',
+        description: 'Novo nome do usuário',
+        minLength: 2,
+        maxLength: 255,
+    })
+    name?: string;
+
+    @ApiPropertyOptional({
+        example: 'user@example.com',
+        description: 'Novo e-mail do usuário',
+        format: 'email',
+    })
+    email?: string;
+
+    @ApiPropertyOptional({
+        example: '12345678901',
+        description: 'Novo CPF do usuário (11 dígitos)',
+        minLength: 11,
+        maxLength: 11,
+    })
+    cpf?: string;
+}
+
+export class UpdateMyPasswordRequestDto {
+    @ApiPropertyOptional({
+        example: 'MyCurrentPassword123!',
+        description: 'Senha atual do usuário (obrigatória apenas quando a conta já possui senha)',
+    })
+    currentPassword?: string;
+
+    @ApiProperty({
+        example: 'MyNewPassword123!',
+        description: 'Nova senha com pelo menos 8 caracteres, contendo maiúscula, minúscula, número e caractere especial',
+        minLength: 8,
+    })
+    newPassword: string;
+}
+
+export class ActiveSessionResponseDto {
+    @ApiProperty({
+        example: '123e4567-e89b-12d3-a456-426614174000',
+        description: 'ID da sessão',
+    })
+    id: string;
+
+    @ApiProperty({
+        example: '2026-03-22T12:00:00.000Z',
+        description: 'Data de criação da sessão',
+    })
+    createdAt: Date;
+
+    @ApiProperty({
+        example: '2026-03-29T12:00:00.000Z',
+        description: 'Data de expiração da sessão',
+    })
+    expiresAt: Date;
+
+    @ApiProperty({
+        example: true,
+        description: 'Indica se é a sessão atual',
+    })
+    isCurrent: boolean;
+}
+
+export class RemoveSessionResponseDto {
+    @ApiProperty({
+        example: true,
+        description: 'Indica se a operação foi bem-sucedida',
+    })
+    success: boolean;
+
+    @ApiProperty({
+        example: '123e4567-e89b-12d3-a456-426614174000',
+        description: 'ID da sessão removida',
+    })
+    removedSessionId: string;
+
+    @ApiProperty({
+        example: false,
+        description: 'Indica se a sessão removida era a sessão atual',
+    })
+    removedCurrent: boolean;
+}
+
 export class AuthResponseDto {
     @ApiProperty({
         example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -142,4 +228,10 @@ export class AuthUserResponseDto {
         description: 'Status de ativação do usuário',
     })
     isActive: boolean;
+
+    @ApiProperty({
+        example: true,
+        description: 'Indica se a conta já possui senha definida',
+    })
+    hasPassword: boolean;
 }

@@ -246,7 +246,7 @@ export function BillingPlansRules() {
     }
 
     return (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <div className="flex w-full flex-col gap-4">
             <CurrentPlanCard loading={loading} subscription={subscription} />
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

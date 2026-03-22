@@ -91,12 +91,10 @@ export class OrganizationService {
 
     async findAll(userId: string): Promise<Array<Organization & { currentRole: string | null }>> {
         const query = this.organizationRepository
-
             .createQueryBuilder('organization')
-
             .innerJoin('organization.members', 'member', 'member.user_id = :userId', { userId })
-
-            .addSelect('member.role', 'member_role');
+            .addSelect('member.role', 'member_role')
+            .orderBy('organization.createdAt', 'DESC');
 
         const { entities, raw } = await query.getRawAndEntities();
 

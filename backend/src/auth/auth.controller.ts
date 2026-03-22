@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards, Res, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, HttpCode, HttpStatus, UseGuards, Res, Query, Patch, Delete, Param } from '@nestjs/common';
 
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
@@ -12,9 +12,17 @@ import { AuthService } from './auth.service';
 
 import type { JwtPayload } from './auth.service';
 
-import { googleExchangeSchema, loginSchema, refreshTokenSchema, registerSchema, registerWithInviteSchema } from './dto';
+import {
+    googleExchangeSchema,
+    loginSchema,
+    refreshTokenSchema,
+    registerSchema,
+    registerWithInviteSchema,
+    updateMeSchema,
+    updateMyPasswordSchema,
+} from './dto';
 
-import type { GoogleExchangeDto, LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto } from './dto';
+import type { GoogleExchangeDto, LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto, UpdateMeDto, UpdateMyPasswordDto } from './dto';
 
 import { CurrentUser, Public, AllowMissingOrganization } from './decorators';
 
@@ -30,6 +38,10 @@ import {
     AuthResponseDto,
     AuthUserResponseDto,
     LogoutResponseDto,
+    UpdateMeRequestDto,
+    UpdateMyPasswordRequestDto,
+    ActiveSessionResponseDto,
+    RemoveSessionResponseDto,
 } from './swagger.dto';
 
 import type { GoogleProfile } from './google.strategy';
@@ -258,6 +270,63 @@ export class AuthController {
     })
     getMe(@CurrentUser() user: JwtPayload) {
         return this.authService.getMe(user.sub);
+    }
+
+    @Patch('me')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Atualizar dados do usuário autenticado' })
+    @ApiBody({ type: UpdateMeRequestDto })
+    @ApiResponse({ status: 200, description: 'Dados atualizados com sucesso', type: AuthUserResponseDto })
+    @ApiResponse({ status: 400, description: 'Erro de validação' })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    updateMe(
+        @CurrentUser() user: JwtPayload,
+        @Body(new ZodValidationPipe(updateMeSchema))
+        body: UpdateMeDto
+    ) {
+        return this.authService.updateMe(user.sub, body);
+    }
+
+    @Patch('me/password')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Alterar senha do usuário autenticado' })
+    @ApiBody({ type: UpdateMyPasswordRequestDto })
+    @ApiResponse({ status: 200, description: 'Senha atualizada com sucesso', type: LogoutResponseDto })
+    @ApiResponse({ status: 400, description: 'Erro de validação' })
+    @ApiResponse({ status: 401, description: 'Senha atual inválida' })
+    updateMyPassword(
+        @CurrentUser() user: JwtPayload,
+        @Body(new ZodValidationPipe(updateMyPasswordSchema))
+        body: UpdateMyPasswordDto
+    ) {
+        return this.authService.updateMyPassword(user.sub, body.currentPassword, body.newPassword);
+    }
+
+    @Get('sessions')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Listar sessões ativas do usuário autenticado' })
+    @ApiResponse({ status: 200, description: 'Lista de sessões ativas', type: ActiveSessionResponseDto, isArray: true })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    listSessions(@CurrentUser() user: JwtPayload) {
+        return this.authService.listMySessions(user.sub, user.sessionId);
+    }
+
+    @Delete('sessions/:sessionId')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Remover uma sessão ativa do usuário autenticado' })
+    @ApiResponse({ status: 200, description: 'Sessão removida com sucesso', type: RemoveSessionResponseDto })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 404, description: 'Sessão não encontrada' })
+    removeSession(@CurrentUser() user: JwtPayload, @Param('sessionId') sessionId: string) {
+        return this.authService.removeMySession(user.sub, sessionId, user.sessionId);
     }
 
     @Public()

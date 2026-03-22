@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 import { CloudService } from './cloud.service';
 import { TenantGuard } from '../tenant/tenant.guard';
@@ -9,9 +9,9 @@ import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
 import { Organization } from '../db/entites/organization.entity';
 import { CloudProvider } from '../db/entites/cloud-account.entity';
-import { createCloudAccountSchema } from './dto';
+import { createCloudAccountSchema, listCloudAccountsQuerySchema } from './dto';
 import { CloudAccountResponseDto, CreateCloudAccountRequestDto, ValidationErrorResponseDto } from './swagger.dto';
-import type { CreateCloudAccountDto } from './dto';
+import type { CreateCloudAccountDto, ListCloudAccountsQueryDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 /**
@@ -55,9 +55,14 @@ export class CloudController {
      */
     @Get('accounts')
     @ApiPaginationQuery()
+    @ApiQuery({ name: 'name', required: false, description: 'Filtro por alias da conta cloud (busca parcial)' })
+    @ApiQuery({ name: 'isActive', required: false, enum: ['true', 'false'], description: 'Filtra por status ativo/inativo' })
     @ApiOperation({ summary: 'Lista contas de cloud da organização ativa' })
     @ApiResponse({ status: 200, description: 'Lista de contas de cloud', type: CloudAccountResponseDto, isArray: true })
-    async listAccounts(@CurrentOrganization() org: Organization) {
-        return this.cloudService.findByOrganization(org.id);
+    async listAccounts(
+        @CurrentOrganization() org: Organization,
+        @Query(new ZodValidationPipe(listCloudAccountsQuerySchema)) query: ListCloudAccountsQueryDto
+    ) {
+        return this.cloudService.findByOrganization(org.id, query);
     }
 }

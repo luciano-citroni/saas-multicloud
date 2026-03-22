@@ -1,5 +1,6 @@
 export enum PlanModule {
     ASSESSMENT = 'assessment',
+    CLOUD_INVENTORY = 'cloud_inventory',
     FINOPS = 'finops',
 }
 
@@ -9,6 +10,7 @@ export const MODULE_ALIAS_MAP: Partial<Record<string, PlanModule>> = {
 
 export const MODULE_LABEL_MAP: Record<PlanModule, string> = {
     [PlanModule.ASSESSMENT]: 'assessment',
+    [PlanModule.CLOUD_INVENTORY]: 'cloud inventory',
     [PlanModule.FINOPS]: 'finops',
 };
 

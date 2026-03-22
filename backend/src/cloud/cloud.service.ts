@@ -4,17 +4,29 @@ import { ConfigService } from '@nestjs/config';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
+
+import { InjectQueue } from '@nestjs/bullmq';
+
+import { Queue } from 'bullmq';
 
 import { CloudAccount, CloudProvider } from '../db/entites/cloud-account.entity';
 
-import type { CreateCloudAccountDto } from './dto';
+import type { CreateCloudAccountDto, ListCloudAccountsQueryDto } from './dto';
 
 import * as crypto from 'crypto';
 
 import { BillingService } from '../billing/billing.service';
 
 import { ErrorMessages } from '../common/messages/error-messages';
+
+import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
+
+import { GENERAL_SYNC_JOB_NAME, GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
+
+type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
+    isSyncInProgress: boolean;
+};
 
 @Injectable()
 export class CloudService {
@@ -23,6 +35,12 @@ export class CloudService {
     constructor(
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
+
+        @InjectRepository(AzureAssessmentJob)
+        private readonly azureAssessmentJobRepository: Repository<AzureAssessmentJob>,
+
+        @InjectQueue(GENERAL_SYNC_QUEUE)
+        private readonly generalSyncQueue: Queue,
 
         private readonly configService: ConfigService,
 
@@ -347,12 +365,95 @@ export class CloudService {
 
      */
 
-    async findByOrganization(organizationId: string): Promise<Omit<CloudAccount, 'credentialsEncrypted'>[]> {
-        const accounts = await this.cloudAccountRepository.find({
-            where: { organizationId },
+    async findByOrganization(
+        organizationId: string,
+        filters?: Pick<ListCloudAccountsQueryDto, 'name' | 'isActive'>
+    ): Promise<CloudAccountWithSyncStatus[]> {
+        const queryBuilder = this.cloudAccountRepository
+            .createQueryBuilder('cloudAccount')
+            .where('cloudAccount.organization_id = :organizationId', { organizationId });
+
+        if (filters?.name) {
+            queryBuilder.andWhere('cloudAccount.alias ILIKE :name', { name: `%${filters.name}%` });
+        }
+
+        if (filters?.isActive === 'true' || filters?.isActive === 'false') {
+            queryBuilder.andWhere('cloudAccount.is_active = :isActive', { isActive: filters.isActive === 'true' });
+        }
+
+        const accounts = await queryBuilder.orderBy('cloudAccount.alias', 'ASC').getMany();
+
+        const accountIds = accounts.map((account) => account.id);
+
+        if (accountIds.length === 0) {
+            return [];
+        }
+
+        const [awsSyncingAccountIds, azureSyncingAccountIds] = await Promise.all([
+            this.findAwsAccountsWithSyncInProgress(accountIds),
+            this.findAzureAccountsWithSyncInProgress(accountIds),
+        ]);
+
+        return accounts.map(({ credentialsEncrypted: _, ...acc }) => ({
+            ...acc,
+            isSyncInProgress: awsSyncingAccountIds.has(acc.id) || azureSyncingAccountIds.has(acc.id),
+        }));
+    }
+
+    private async findAwsAccountsWithSyncInProgress(accountIds: string[]): Promise<Set<string>> {
+        const jobs = await this.generalSyncQueue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'paused'], 0, 199, false);
+
+        const syncingIds = new Set<string>();
+        const accountIdsSet = new Set(accountIds);
+
+        for (const job of jobs) {
+            const jobCloudAccountId = (job.data as { cloudAccountId?: string }).cloudAccountId;
+
+            if (job.name === GENERAL_SYNC_JOB_NAME && jobCloudAccountId && accountIdsSet.has(jobCloudAccountId)) {
+                syncingIds.add(jobCloudAccountId);
+            }
+        }
+
+        const persistedSyncingAccounts = await this.cloudAccountRepository.find({
+            select: ['id'],
+            where: {
+                id: In(accountIds),
+                isGeneralSyncInProgress: true,
+            },
         });
 
-        return accounts.map(({ credentialsEncrypted: _, ...acc }) => acc as Omit<CloudAccount, 'credentialsEncrypted'>);
+        const staleSyncingIds = persistedSyncingAccounts
+            .map((account) => account.id)
+            .filter((accountId) => !syncingIds.has(accountId));
+
+        if (staleSyncingIds.length > 0) {
+            await this.cloudAccountRepository.update({ id: In(staleSyncingIds) }, { isGeneralSyncInProgress: false });
+        }
+
+        return syncingIds;
+    }
+
+    private async findAzureAccountsWithSyncInProgress(accountIds: string[]): Promise<Set<string>> {
+        try {
+            const runningAzureJobs = await this.azureAssessmentJobRepository.find({
+                select: ['cloudAccountId'],
+                where: {
+                    cloudAccountId: In(accountIds),
+                    status: In(['pending', 'running']),
+                },
+            });
+
+            return new Set(runningAzureJobs.map((job) => job.cloudAccountId));
+        } catch (error) {
+            const dbCode = error instanceof QueryFailedError ? ((error as QueryFailedError & { code?: string }).code ?? undefined) : undefined;
+
+            // Em ambientes sem a migration Azure aplicada, ignora o lookup para não derrubar /cloud/accounts.
+            if (dbCode === '42P01') {
+                return new Set<string>();
+            }
+
+            throw error;
+        }
     }
 
     /**

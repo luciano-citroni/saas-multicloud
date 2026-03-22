@@ -33,3 +33,20 @@ export const registerWithInviteSchema = z.object({
     inviteToken: z.string().uuid(),
 });
 export type RegisterWithInviteDto = z.infer<typeof registerWithInviteSchema>;
+
+export const updateMeSchema = z
+    .object({
+        name: z.string().min(2).max(255).optional(),
+        email: z.string().email().optional(),
+        cpf: cpfValidator.optional(),
+    })
+    .refine((payload) => Object.keys(payload).length > 0, {
+        message: 'At least one field must be provided',
+    });
+export type UpdateMeDto = z.infer<typeof updateMeSchema>;
+
+export const updateMyPasswordSchema = z.object({
+    currentPassword: z.string().min(1, 'Current password is required').optional(),
+    newPassword: passwordValidator,
+});
+export type UpdateMyPasswordDto = z.infer<typeof updateMyPasswordSchema>;
