@@ -68,3 +68,7 @@ export { AzureAssessmentJob } from './azure-assessment-job.entity';
 export type { AzureAssessmentStatus } from './azure-assessment-job.entity';
 export { CloudSyncJob } from './cloud-sync-job.entity';
 export type { SyncJobStatus } from './cloud-sync-job.entity';
+export { GovernanceJob } from './governance-job.entity';
+export type { GovernanceJobStatus } from './governance-job.entity';
+export { GovernanceFinding } from './governance-finding.entity';
+export type { FindingSeverity, FindingStatus } from './governance-finding.entity';

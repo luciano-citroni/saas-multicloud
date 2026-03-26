@@ -33,6 +33,7 @@ components/
 ```
 
 Rules:
+
 - Each page/feature has its own subfolder inside `components/`.
 - Components are small, focused on a single responsibility.
 - Never put business logic or API calls directly inside components.
@@ -43,6 +44,7 @@ Rules:
 ### Route Handlers (`app/api/`)
 
 All backend communication goes through **Next.js Route Handlers** in `app/api/`. These handlers:
+
 - Manage authentication cookies (`smc_access_token`, `smc_refresh_token`)
 - Auto-refresh expired tokens
 - Attach `Authorization` and `x-organization-id` headers
@@ -52,26 +54,37 @@ All backend communication goes through **Next.js Route Handlers** in `app/api/`.
 // Example: app/api/cloud/accounts/route.ts
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const organizationId = searchParams.get('organizationId');
+  const organizationId = searchParams.get("organizationId");
 
   if (!organizationId) {
-    return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
+    return NextResponse.json(
+      { message: "organizationId é obrigatório" },
+      { status: 400 },
+    );
   }
 
   const { accessToken, rotatedTokens } = await resolveAccessToken();
 
   if (!accessToken) {
-    const res = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
+    const res = NextResponse.json(
+      { message: "Sessão expirada" },
+      { status: 401 },
+    );
     clearAuthCookies(res);
     return res;
   }
 
-  const response = await backendFetch('/api/cloud/accounts', {
-    headers: { Authorization: `Bearer ${accessToken}`, 'x-organization-id': organizationId },
+  const response = await backendFetch("/api/cloud/accounts", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-organization-id": organizationId,
+    },
   });
 
   const payload = await parseJsonSafe<unknown>(response);
-  const nextResponse = NextResponse.json(payload ?? [], { status: response.status });
+  const nextResponse = NextResponse.json(payload ?? [], {
+    status: response.status,
+  });
 
   if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);
 
@@ -87,19 +100,25 @@ Client components call the Next.js API routes via simple fetch wrappers — neve
 // app/actions/organization.ts
 export async function fetchOrganizationCloudAccounts(organizationId: string) {
   const url = `/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`;
-  return fetch(url, { cache: 'no-store' });
+  return fetch(url, { cache: "no-store" });
 }
 
-export async function enqueueGeneralSync(organizationId: string, cloudAccountId: string, provider = 'aws') {
-  const url = provider === 'azure'
-    ? `/api/azure/assessment/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`
-    : `/api/aws/assessment/accounts/${encodeURIComponent(cloudAccountId)}/sync?organizationId=${encodeURIComponent(organizationId)}`;
+export async function enqueueGeneralSync(
+  organizationId: string,
+  cloudAccountId: string,
+  provider = "aws",
+) {
+  const url =
+    provider === "azure"
+      ? `/api/azure/assessment/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`
+      : `/api/aws/assessment/accounts/${encodeURIComponent(cloudAccountId)}/sync?organizationId=${encodeURIComponent(organizationId)}`;
 
-  return fetch(url, { method: 'POST' });
+  return fetch(url, { method: "POST" });
 }
 ```
 
 Rules:
+
 - Client components NEVER call the backend directly — always go through `app/api/` route handlers.
 - Route handlers ALWAYS use `backendFetch`, `resolveAccessToken`, `setAuthCookies` from `lib/auth/session`.
 - Never construct bearer tokens or read cookies manually inside components.
@@ -111,12 +130,12 @@ Sessions are managed via **httpOnly cookies** (`smc_access_token` / `smc_refresh
 
 ```typescript
 // lib/auth/session.ts - utilities you must reuse
-getAccessTokenFromCookies()
-getRefreshTokenFromCookies()
-setAuthCookies(response, tokens)
-clearAuthCookies(response)
-refreshAccessToken(refreshToken)
-backendFetch(path, options)        // always use this instead of raw fetch to backend
+getAccessTokenFromCookies();
+getRefreshTokenFromCookies();
+setAuthCookies(response, tokens);
+clearAuthCookies(response);
+refreshAccessToken(refreshToken);
+backendFetch(path, options); // always use this instead of raw fetch to backend
 ```
 
 Route protection is handled by the middleware in `proxy.ts` — unauthenticated requests to protected routes are redirected to `/auth/sign-in`.
@@ -180,6 +199,7 @@ export function MyForm() {
 ```
 
 Rules:
+
 - Always define Zod schemas in the same file or a sibling `schema.ts` file.
 - Never use uncontrolled inputs; always use `FormField` + `FormControl` + `FormMessage`.
 - Use `form.formState.isSubmitting` to disable the submit button while loading.
@@ -189,12 +209,12 @@ Rules:
 All backend error messages must be translated before displaying to the user. Never show raw backend strings.
 
 ```typescript
-import { extractErrorMessage } from '@/lib/error-messages';
+import { extractErrorMessage } from "@/lib/error-messages";
 
 // In async handlers:
 const body = await response.json();
 if (!response.ok) {
-  toast.error(extractErrorMessage(body, 'pt'));
+  toast.error(extractErrorMessage(body, "pt"));
   return;
 }
 ```
@@ -202,6 +222,7 @@ if (!response.ok) {
 The `extractErrorMessage` function maps backend `ErrorMessages` keys to Portuguese/English UI strings using the centralized dictionary in `lib/error-messages.ts`.
 
 Rules:
+
 - Always call `extractErrorMessage(body, 'pt')` before showing errors in toasts or inline messages.
 - Never display `body.message` directly in the UI.
 - Use `toast.error()` from `sonner` for non-blocking error feedback.
@@ -230,6 +251,7 @@ import { hasModuleAccess, PlanModule } from '@/lib/modules';
 ```
 
 Rules:
+
 - Never hardcode role strings — use `OrgRole` equivalents from `lib/organization-rbac.ts`.
 - Features gated by plan must use `hasModuleAccess`.
 - Hiding UI is a UX affordance only. The backend always enforces the real access control.
@@ -245,6 +267,7 @@ Rules:
 ## State Management
 
 - Prefer **local component state** (`useState`, `useReducer`) for UI state.
+- Todos os filtros de frontend devem usar **URL state** (query params) como fonte de verdade para permitir compartilhamento de link, refresh e navegação com histórico.
 - Use **`window.dispatchEvent`** with event constants from `lib/sidebar-context.ts` to signal cross-component updates (e.g., after creating an organization, dispatch `SIDEBAR_CONTEXT_UPDATED_EVENT`).
 - Use `localStorage` only for non-sensitive UI preferences (e.g., `ACTIVE_ORG_STORAGE_KEY`).
 - Never store tokens, user data, or session info in `localStorage` — they live in httpOnly cookies.

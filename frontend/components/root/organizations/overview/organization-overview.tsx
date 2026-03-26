@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Building2, Plus, RefreshCw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { type UserOrganization, fetchUserOrganizations } from '@/app/actions/organization';
 import { Button } from '@/components/ui/button';
@@ -98,13 +98,7 @@ export function OrganizationOverview() {
             <div className="rounded-xl border">
                 <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-col gap-1">
-                        <p className="flex items-center gap-2 text-sm font-medium">
-                            <Building2 className="size-4.5" />
-                            Organizações acessíveis
-                        </p>
-                        <p className="max-w-2xl text-xs text-muted-foreground sm:text-sm">
-                            Visualize todas as organizações em que você participa e edite apenas aquelas em que seu papel é owner.
-                        </p>
+                        <p className="text-sm font-medium">Organizações acessíveis</p>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -114,13 +108,7 @@ export function OrganizationOverview() {
                                 Nova organização
                             </Button>
                         </Link>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void loadOrganizations({ nextRefreshing: true })}
-                            disabled={loading || refreshing}
-                        >
-                            <RefreshCw className={refreshing ? 'size-4 animate-spin' : 'size-4'} />
+                        <Button variant="outline" size="sm" onClick={() => void loadOrganizations({ nextRefreshing: true })} isLoading={refreshing}>
                             Atualizar
                         </Button>
                     </div>

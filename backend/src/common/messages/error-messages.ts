@@ -142,6 +142,14 @@ export const ErrorMessages = {
         PASSWORD_REQUIREMENTS: 'Password must be at least 8 characters with uppercase, lowercase, number and special character',
     },
 
+    // Governance
+
+    GOVERNANCE: {
+        JOB_NOT_FOUND: 'Governance scan job not found.',
+
+        SCAN_ALREADY_RUNNING: 'A governance scan is already running for this account.',
+    },
+
     // General
 
     GENERAL: {

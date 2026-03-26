@@ -271,6 +271,7 @@ Rules:
 ## State Management
 
 - Prefer **local component state** (`useState`, `useReducer`) for UI state.
+- Todos os filtros de frontend devem usar **URL state** (query params) como fonte de verdade para permitir compartilhamento de link, refresh e navegação com histórico.
 - Use **`window.dispatchEvent`** with event constants from `lib/sidebar-context.ts` to signal cross-component updates (e.g., after creating an organization, dispatch `SIDEBAR_CONTEXT_UPDATED_EVENT`).
 - Use `localStorage` only for non-sensitive UI preferences (e.g., `ACTIVE_ORG_STORAGE_KEY`).
 - Never store tokens, user data, or session info in `localStorage` — they live in httpOnly cookies.

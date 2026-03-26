@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toPng } from 'html-to-image';
 import { getViewportForBounds } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
@@ -60,6 +60,60 @@ const MIN_EXPORT_HEIGHT = 720;
 const MAX_EXPORT_SIZE = 12000;
 const LOGO_EXPORT_WIDTH = 132;
 const LOGO_EXPORT_MARGIN = 28;
+const DEFAULT_GROUPING_MODES: GroupingDimension[] = ['vpc', 'region'];
+const DEFAULT_HIDDEN_FILTER_IDS: ResourceVisibilityFilterId[] = ['securityGroups'];
+const GROUP_BY_QUERY_PARAM = 'groupBy';
+const HIDDEN_FILTERS_QUERY_PARAM = 'hiddenFilters';
+const VALID_GROUPING_MODES: GroupingDimension[] = ['resourceType', 'vpc', 'region'];
+const VALID_HIDDEN_FILTER_IDS: ResourceVisibilityFilterId[] = ['securityGroups', 'taskDefinitions', 'managedIdentities'];
+
+function normalizeGroupingModesFromUrl(value: string | null): GroupingDimension[] {
+    if (!value) {
+        return DEFAULT_GROUPING_MODES;
+    }
+
+    const parsed = value
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item): item is GroupingDimension => VALID_GROUPING_MODES.includes(item as GroupingDimension));
+
+    return parsed.length > 0 ? [...new Set(parsed)] : [];
+}
+
+function normalizeHiddenFiltersFromUrl(value: string | null): ResourceVisibilityFilterId[] {
+    if (!value) {
+        return DEFAULT_HIDDEN_FILTER_IDS;
+    }
+
+    const parsed = value
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item): item is ResourceVisibilityFilterId => VALID_HIDDEN_FILTER_IDS.includes(item as ResourceVisibilityFilterId));
+
+    return [...new Set(parsed)];
+}
+
+function areStringArraysEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+
+    return a.every((value, index) => value === b[index]);
+}
+
+function areFilterSetsEqual(a: Set<ResourceVisibilityFilterId>, b: Set<ResourceVisibilityFilterId>): boolean {
+    if (a.size !== b.size) {
+        return false;
+    }
+
+    for (const value of a) {
+        if (!b.has(value)) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 function formatExportTimestamp(date: Date): string {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -266,7 +320,9 @@ function normalizeCloudAccounts(payload: unknown): OrganizationCloudAccount[] {
 }
 
 export function AssessmentPageClient() {
+    const pathname = usePathname();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { resolvedTheme } = useTheme();
     const graphWrapperRef = useRef<HTMLDivElement | null>(null);
     const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -278,9 +334,54 @@ export function AssessmentPageClient() {
     const [downloading, setDownloading] = useState(false);
     const [resourceNodes, setResourceNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
-    const [groupingModes, setGroupingModes] = useState<GroupingDimension[]>(['resourceType']);
-    const [hiddenResourceFilterIds, setHiddenResourceFilterIds] = useState<Set<ResourceVisibilityFilterId>>(new Set(['securityGroups']));
+    const [groupingModes, setGroupingModes] = useState<GroupingDimension[]>(() => normalizeGroupingModesFromUrl(searchParams.get(GROUP_BY_QUERY_PARAM)));
+    const [hiddenResourceFilterIds, setHiddenResourceFilterIds] = useState<Set<ResourceVisibilityFilterId>>(
+        () => new Set(normalizeHiddenFiltersFromUrl(searchParams.get(HIDDEN_FILTERS_QUERY_PARAM)))
+    );
     const [layoutNonce, setLayoutNonce] = useState(0);
+
+    const syncFilterStateToUrl = useCallback(
+        (nextGroupingModes: GroupingDimension[], nextHiddenFilterIds: Set<ResourceVisibilityFilterId>) => {
+            const params = new URLSearchParams(searchParams.toString());
+            const groupedValue = nextGroupingModes.join(',');
+            const hiddenFilterValues = [...nextHiddenFilterIds].sort();
+            const hiddenFiltersValue = hiddenFilterValues.join(',');
+
+            if (areStringArraysEqual(nextGroupingModes, DEFAULT_GROUPING_MODES)) {
+                params.delete(GROUP_BY_QUERY_PARAM);
+            } else {
+                params.set(GROUP_BY_QUERY_PARAM, groupedValue);
+            }
+
+            if (areStringArraysEqual(hiddenFilterValues, [...DEFAULT_HIDDEN_FILTER_IDS].sort())) {
+                params.delete(HIDDEN_FILTERS_QUERY_PARAM);
+            } else {
+                params.set(HIDDEN_FILTERS_QUERY_PARAM, hiddenFiltersValue);
+            }
+
+            const nextQuery = params.toString();
+            const currentQuery = searchParams.toString();
+
+            if (nextQuery === currentQuery) {
+                return;
+            }
+
+            router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+        },
+        [pathname, router, searchParams]
+    );
+
+    useEffect(() => {
+        const urlGroupingModes = normalizeGroupingModesFromUrl(searchParams.get(GROUP_BY_QUERY_PARAM));
+        const urlHiddenFilters = new Set(normalizeHiddenFiltersFromUrl(searchParams.get(HIDDEN_FILTERS_QUERY_PARAM)));
+
+        setGroupingModes((current) => (areStringArraysEqual(current, urlGroupingModes) ? current : urlGroupingModes));
+        setHiddenResourceFilterIds((current) => (areFilterSetsEqual(current, urlHiddenFilters) ? current : urlHiddenFilters));
+    }, [searchParams]);
+
+    useEffect(() => {
+        syncFilterStateToUrl(groupingModes, hiddenResourceFilterIds);
+    }, [groupingModes, hiddenResourceFilterIds, syncFilterStateToUrl]);
 
     const filteredGraph = useMemo(() => {
         const nodesAfterVisibilityFilter = filterNodesByVisibility(resourceNodes, hiddenResourceFilterIds);
@@ -315,11 +416,21 @@ export function AssessmentPageClient() {
 
     const toggleGroupingMode = useCallback((mode: GroupingDimension) => {
         setGroupingModes((current) => {
-            if (current.includes(mode)) {
-                return current.filter((value) => value !== mode);
+            return current.includes(mode) ? current.filter((value) => value !== mode) : [...current, mode];
+        });
+    }, []);
+
+    const toggleResourceFilter = useCallback((filterId: ResourceVisibilityFilterId) => {
+        setHiddenResourceFilterIds((current) => {
+            const next = new Set(current);
+
+            if (next.has(filterId)) {
+                next.delete(filterId);
+            } else {
+                next.add(filterId);
             }
 
-            return [...current, mode];
+            return next;
         });
     }, []);
 
@@ -505,20 +616,6 @@ export function AssessmentPageClient() {
 
     const reorganizeGraph = useCallback(() => {
         setLayoutNonce((value) => value + 1);
-    }, []);
-
-    const toggleResourceFilter = useCallback((filterId: ResourceVisibilityFilterId) => {
-        setHiddenResourceFilterIds((current) => {
-            const next = new Set(current);
-
-            if (next.has(filterId)) {
-                next.delete(filterId);
-            } else {
-                next.add(filterId);
-            }
-
-            return next;
-        });
     }, []);
 
     const downloadDiagram = useCallback(async () => {

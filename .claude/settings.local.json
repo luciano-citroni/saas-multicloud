@@ -8,7 +8,15 @@
       "Bash(grep -n ^s+\\\\\\(aws\\\\\\)?[a-zA-Z]+!: c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-load-balancer.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-kms-key.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-secrets-manager-secret.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-waf-web-acl.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-api-gateway-rest-api.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-route53-hosted-zone.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-sqs-queue.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-ecr-repository.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-iam-role.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-load-balancer-listener.entity.ts)",
       "Bash(grep -v \"@\\\\|import\\\\|from\\\\|//\")",
       "Bash(grep -n ^s+[a-zA-Z]+!: c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-route53-hosted-zone.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-sqs-queue.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-ecr-repository.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-iam-role.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-sns-topic.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-guardduty-detector.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-cloudwatch-alarm.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-cloudtrail-trail.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-cloudfront-distribution.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-dynamodb-table.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-lambda-function.entity.ts c:/Users/lucia/Documents/GitHub/saas-multicloud/backend/src/db/entites/aws-s3-bucket.entity.ts)",
-      "Bash(grep -v \"//\")"
+      "Bash(grep -v \"//\")",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/actions//**)",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/api//**)",
+      "Bash(ls -la \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/organizations/[organizationId]/\")",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/components/sidebar//**)",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/components/ui//**)",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/lib/**)",
+      "Bash(find \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/organizations/[organizationId]\" -type f)",
+      "Bash(ls -la \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/billing/\")"
     ]
   }
 }
