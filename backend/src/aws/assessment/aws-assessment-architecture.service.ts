@@ -688,6 +688,17 @@ export class AwsAssessmentArchitectureService {
 
         const taskDefinitionIdsInUse = new Set(data.ecsServices.map((service) => service.taskDefinitionId));
 
+        const regionFromAz = (az?: string): string | undefined => {
+            if (!az) return undefined;
+
+            const match = az
+                .trim()
+                .toLowerCase()
+                .match(/^([a-z]{2}(?:-gov)?-[a-z]+-\d)[a-z]$/i);
+
+            return match?.[1];
+        };
+
         const inferRegion = (resource: ArchitectureResource): string | undefined => {
             if (resource.region) {
                 return resource.region;
@@ -703,6 +714,32 @@ export class AwsAssessmentArchitectureService {
                       : undefined;
 
             return regionFromDetails;
+        };
+
+        const vpcRegionById = new Map<string, string>();
+
+        for (const vpc of model.vpcs) {
+            const subnetRegion = vpc.subnets.map((subnet) => regionFromAz(subnet.availabilityZone)).find((region): region is string => Boolean(region));
+
+            if (subnetRegion) {
+                vpcRegionById.set(vpc.id, subnetRegion);
+            }
+        }
+
+        const resolveRegionalValue = (resource: ArchitectureResource, vpcId?: string): string => {
+            const explicitRegion = inferRegion(resource);
+            if (explicitRegion && explicitRegion.trim().length > 0) {
+                return explicitRegion.trim();
+            }
+
+            if (vpcId) {
+                const vpcRegion = vpcRegionById.get(vpcId);
+                if (vpcRegion) {
+                    return vpcRegion;
+                }
+            }
+
+            return 'unknown';
         };
 
         const nodeMetaFromType = (resource: ArchitectureResource): { id: string; kind: string } => {
@@ -774,12 +811,14 @@ export class AwsAssessmentArchitectureService {
         for (const vpc of model.vpcs) {
             const vpcNodeId = `vpc:${vpc.id}`;
 
-            const vpcGroup = { vpcId: vpc.id, vpcName: vpc.name };
+            const vpcRegion = vpcRegionById.get(vpc.id) ?? 'unknown';
+
+            const vpcGroup = { vpcId: vpc.id, vpcName: vpc.name, region: vpcRegion };
 
             pushNode(vpcNodeId, 'vpc', vpc.name, 'VPC', {
                 awsId: vpc.awsVpcId,
 
-                details: { cidrBlock: vpc.cidrBlock, vpcId: vpc.id, vpcName: vpc.name },
+                details: { cidrBlock: vpc.cidrBlock, vpcId: vpc.id, vpcName: vpc.name, region: vpcRegion },
 
                 group: vpcGroup,
             });
@@ -789,6 +828,8 @@ export class AwsAssessmentArchitectureService {
 
                 const subnetNodeId = `subnet:${subnetSummary.id}`;
 
+                const subnetRegion = regionFromAz(subnetSummary.availabilityZone) ?? vpcRegion;
+
                 pushNode(subnetNodeId, 'subnet', subnetSummary.name, 'Subnet', {
                     awsId: subnetSummary.awsSubnetId,
 
@@ -797,6 +838,8 @@ export class AwsAssessmentArchitectureService {
 
                         availabilityZone: subnetSummary.availabilityZone,
 
+                        region: subnetRegion,
+
                         type: subnetSummary.type,
 
                         vpcId: vpc.id,
@@ -804,7 +847,7 @@ export class AwsAssessmentArchitectureService {
                         vpcName: vpc.name,
                     },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: subnetRegion },
                 });
 
                 pushEdge(vpcNodeId, subnetNodeId, 'contains');
@@ -816,14 +859,16 @@ export class AwsAssessmentArchitectureService {
                 for (const resource of subnetSummary.resources) {
                     const meta = nodeMetaFromType(resource);
 
+                    const resourceRegion = resolveRegionalValue(resource, vpc.id);
+
                     pushNode(meta.id, meta.kind, resource.name, resource.type, {
                         awsId: resource.awsId,
 
                         status: resource.status,
 
-                        details: { ...(resource.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                        details: { ...(resource.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: resourceRegion },
 
-                        group: vpcGroup,
+                        group: { ...vpcGroup, region: resourceRegion },
                     });
 
                     pushEdge(subnetNodeId, meta.id, 'hosts');
@@ -833,12 +878,14 @@ export class AwsAssessmentArchitectureService {
             for (const routeTable of vpc.routeTables) {
                 const meta = nodeMetaFromType(routeTable);
 
+                const routeTableRegion = resolveRegionalValue(routeTable, vpc.id);
+
                 pushNode(meta.id, meta.kind, routeTable.name, routeTable.type, {
                     awsId: routeTable.awsId,
 
-                    details: { ...(routeTable.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(routeTable.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: routeTableRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: routeTableRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'has-route-table');
@@ -847,12 +894,14 @@ export class AwsAssessmentArchitectureService {
             for (const securityGroup of vpc.securityGroups) {
                 const meta = nodeMetaFromType(securityGroup);
 
+                const securityGroupRegion = resolveRegionalValue(securityGroup, vpc.id);
+
                 pushNode(meta.id, meta.kind, securityGroup.name, securityGroup.type, {
                     awsId: securityGroup.awsId,
 
-                    details: { ...(securityGroup.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(securityGroup.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: securityGroupRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: securityGroupRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'has-security-group');
@@ -861,14 +910,16 @@ export class AwsAssessmentArchitectureService {
             for (const loadBalancer of vpc.loadBalancers) {
                 const meta = nodeMetaFromType(loadBalancer);
 
+                const loadBalancerRegion = resolveRegionalValue(loadBalancer, vpc.id);
+
                 pushNode(meta.id, meta.kind, loadBalancer.name, loadBalancer.type, {
                     awsId: loadBalancer.awsId,
 
                     status: loadBalancer.status,
 
-                    details: { ...(loadBalancer.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(loadBalancer.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: loadBalancerRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: loadBalancerRegion },
                 });
 
                 if (loadBalancer.type.startsWith('Load Balancer Listener')) {
@@ -885,14 +936,16 @@ export class AwsAssessmentArchitectureService {
             for (const database of vpc.databases) {
                 const meta = nodeMetaFromType(database);
 
+                const databaseRegion = resolveRegionalValue(database, vpc.id);
+
                 pushNode(meta.id, meta.kind, database.name, database.type, {
                     awsId: database.awsId,
 
                     status: database.status,
 
-                    details: { ...(database.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(database.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: databaseRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: databaseRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'contains-database');
@@ -901,14 +954,16 @@ export class AwsAssessmentArchitectureService {
             for (const cache of vpc.caches) {
                 const meta = nodeMetaFromType(cache);
 
+                const cacheRegion = resolveRegionalValue(cache, vpc.id);
+
                 pushNode(meta.id, meta.kind, cache.name, cache.type, {
                     awsId: cache.awsId,
 
                     status: cache.status,
 
-                    details: { ...(cache.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(cache.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: cacheRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: cacheRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'contains-cache');
@@ -917,14 +972,16 @@ export class AwsAssessmentArchitectureService {
             for (const container of vpc.containers) {
                 const meta = nodeMetaFromType(container);
 
+                const containerRegion = resolveRegionalValue(container, vpc.id);
+
                 pushNode(meta.id, meta.kind, container.name, container.type, {
                     awsId: container.awsId,
 
                     status: container.status,
 
-                    details: { ...(container.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(container.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: containerRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: containerRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'contains-workload');
@@ -933,14 +990,16 @@ export class AwsAssessmentArchitectureService {
             for (const fn of vpc.serverless) {
                 const meta = nodeMetaFromType(fn);
 
+                const serverlessRegion = resolveRegionalValue(fn, vpc.id);
+
                 pushNode(meta.id, meta.kind, fn.name, fn.type, {
                     awsId: fn.awsId,
 
                     status: fn.status,
 
-                    details: { ...(fn.details ?? {}), vpcId: vpc.id, vpcName: vpc.name },
+                    details: { ...(fn.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: serverlessRegion },
 
-                    group: vpcGroup,
+                    group: { ...vpcGroup, region: serverlessRegion },
                 });
 
                 pushEdge(vpcNodeId, meta.id, 'contains-serverless');
@@ -1083,8 +1142,6 @@ export class AwsAssessmentArchitectureService {
                     status: resource.status,
 
                     details: resource.details,
-
-                    group: region ? { region } : undefined,
                 });
 
                 pushEdge(globalRootId, meta.id, collection.relationship);

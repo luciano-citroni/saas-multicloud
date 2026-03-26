@@ -62,6 +62,10 @@ export const ErrorMessages = {
             en: 'This CNPJ is already in use',
             pt: 'Este CNPJ já está sendo usado',
         },
+        OWNER_CANNOT_LEAVE: {
+            en: 'The organization owner cannot leave without transferring ownership or deleting the organization.',
+            pt: 'O owner não pode sair da organização sem antes transferir a propriedade ou excluí-la.',
+        },
     },
 
     // Organization members
@@ -148,15 +152,15 @@ export const ErrorMessages = {
     CLOUD_ACCOUNTS: {
         NOT_FOUND: {
             en: 'Cloud account not found',
-            pt: 'Conta na nuvem não encontrada',
+            pt: 'Conta cloud não encontrada',
         },
         ALIAS_ALREADY_IN_USE: {
             en: 'A cloud account with this alias already exists in the organization',
-            pt: 'Uma conta na nuvem com este alias já existe na organização',
+            pt: 'Uma conta cloud com este alias já existe na organização',
         },
         INVALID_PROVIDER: {
             en: 'Invalid cloud provider. Supported: aws, azure, gcp',
-            pt: 'Provedor de nuvem inválido. Suportado: aws, azure, gcp',
+            pt: 'Provedor cloud inválido. Suportado: aws, azure, gcp',
         },
     },
 

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import z from 'zod';
-import { Cloud, KeyRound, Globe, Tag, ShieldCheck, Copy, Check as CheckIcon } from 'lucide-react';
+import { Cloud, KeyRound, Globe, Tag, ShieldCheck, Copy, Check as CheckIcon, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -33,6 +33,12 @@ type FormValues = z.infer<typeof cloudAccountFormScheme>;
 type CreateCloudAccountResponse = {
     id?: string;
 };
+
+function parseAdditionalRegions(values?: Array<{ value?: string }>): string[] {
+    if (!values) return [];
+
+    return values.map((item) => (item.value ?? '').trim().toLowerCase()).filter((region) => region.length > 0);
+}
 
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
@@ -83,6 +89,7 @@ export function FormCloudAccount({ organizationId }: Props) {
             provider: 'aws',
             roleArn: '',
             region: '',
+            awsRegions: [],
             tenantId: '',
             clientId: '',
             clientSecret: '',
@@ -90,16 +97,31 @@ export function FormCloudAccount({ organizationId }: Props) {
         },
     });
 
+    const {
+        fields: awsRegionFields,
+        append: appendAwsRegion,
+        remove: removeAwsRegion,
+    } = useFieldArray({
+        control: form.control,
+        name: 'awsRegions',
+    });
+
     const selectedProvider = form.watch('provider');
 
     const onSubmit = async (data: FormValues) => {
         setIsLoading(true);
         try {
-            const credentials: Record<string, string> = {};
+            const credentials: Record<string, string | string[]> = {};
 
             if (data.provider === 'aws') {
                 if (data.roleArn) credentials.roleArn = data.roleArn.trim();
                 if (data.region) credentials.region = data.region.trim();
+
+                const parsedRegions = parseAdditionalRegions(data.awsRegions);
+                if (parsedRegions.length > 0) {
+                    credentials.regions = Array.from(new Set(parsedRegions));
+                }
+
                 credentials.externalId = externalId;
             } else if (data.provider === 'azure') {
                 if (data.tenantId) credentials.tenantId = data.tenantId.trim();
@@ -126,7 +148,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                 const message =
                     typeof payload === 'object' && payload && 'message' in payload && typeof payload.message === 'string'
                         ? payload.message
-                        : 'Não foi possível conectar a cloud account.';
+                        : 'Não foi possível conectar a conta cloud.';
                 toast.error(message);
                 return;
             }
@@ -139,11 +161,11 @@ export function FormCloudAccount({ organizationId }: Props) {
 
             notifySidebarContextUpdated();
 
-            toast.success('Cloud account conectada com sucesso.');
+            toast.success('Conta cloud conectada com sucesso.');
             router.replace('/');
             router.refresh();
         } catch {
-            toast.error('Não foi possível conectar a cloud account.');
+            toast.error('Não foi possível conectar a conta cloud.');
         } finally {
             setIsLoading(false);
         }
@@ -229,6 +251,58 @@ export function FormCloudAccount({ organizationId }: Props) {
                                             <FormControl>
                                                 <IconInput placeholder="us-east-1" StartIcon={Globe} {...field} />
                                             </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="awsRegions"
+                                    render={() => (
+                                        <FormItem>
+                                            <FormLabel>Regiões adicionais (opcional)</FormLabel>
+                                            <div className="flex flex-col gap-2">
+                                                {awsRegionFields.length === 0 ? (
+                                                    <p className="text-xs text-muted-foreground">Nenhuma região adicional adicionada.</p>
+                                                ) : null}
+
+                                                {awsRegionFields.map((awsRegionField, index) => (
+                                                    <div key={awsRegionField.id} className="flex items-center gap-2">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`awsRegions.${index}.value`}
+                                                            render={({ field }) => (
+                                                                <FormControl>
+                                                                    <IconInput placeholder="ex: us-west-2" StartIcon={Globe} {...field} />
+                                                                </FormControl>
+                                                            )}
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            onClick={() => removeAwsRegion(index)}
+                                                            title="Remover região"
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+
+                                                <div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => appendAwsRegion({ value: '' })}
+                                                        className="gap-1"
+                                                    >
+                                                        <Plus className="size-4" />
+                                                        Adicionar região
+                                                    </Button>
+                                                </div>
+                                            </div>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -341,7 +415,7 @@ export function FormCloudAccount({ organizationId }: Props) {
 
                     <div className="flex justify-end">
                         <Button type="submit" isLoading={isLoading} disabled={selectedProvider === 'gcp'}>
-                            Conectar cloud account
+                            Conectar Conta Cloud
                         </Button>
                     </div>
                 </form>

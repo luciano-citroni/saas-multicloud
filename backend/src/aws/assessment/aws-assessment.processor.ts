@@ -11,6 +11,8 @@ import { Job } from 'bullmq';
 import { AwsAssessmentJob } from '../../db/entites/aws-assessment-job.entity';
 
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
+import { CloudProvider } from '../../db/entites/cloud-account.entity';
 
 import { AwsAssessmentSyncService } from './aws-assessment-sync.service';
 
@@ -41,6 +43,9 @@ export class AwsAssessmentProcessor extends WorkerHost {
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
 
+        @InjectRepository(CloudSyncJob)
+        private readonly syncJobRepository: Repository<CloudSyncJob>,
+
         private readonly syncService: AwsAssessmentSyncService,
 
         private readonly reportService: AwsAssessmentReportService,
@@ -67,9 +72,39 @@ export class AwsAssessmentProcessor extends WorkerHost {
 
                 await job.updateProgress(10);
 
-                await this.syncService.syncAll(cloudAccountId, organizationId);
+                const syncRecord = this.syncJobRepository.create({
+                    cloudAccountId,
+                    organizationId,
+                    provider: CloudProvider.AWS,
+                    status: 'running',
+                    error: null,
+                    completedAt: null,
+                });
 
-                await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
+                const savedSyncRecord = await this.syncJobRepository.save(syncRecord);
+
+                try {
+                    await this.syncService.syncAll(cloudAccountId, organizationId);
+
+                    const syncedAt = new Date();
+
+                    await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: syncedAt });
+
+                    await this.syncJobRepository.update(savedSyncRecord.id, {
+                        status: 'completed',
+                        completedAt: syncedAt,
+                    });
+                } catch (syncErr) {
+                    const syncError = syncErr instanceof Error ? syncErr.message : String(syncErr);
+
+                    await this.syncJobRepository.update(savedSyncRecord.id, {
+                        status: 'failed',
+                        error: syncError,
+                        completedAt: new Date(),
+                    });
+
+                    throw syncErr;
+                }
 
                 this.logger.log(`[${jobId}] Sincronização concluída`);
             }

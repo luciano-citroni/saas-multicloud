@@ -1,492 +1,627 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddRouteTableToSubnet1774210337152 implements MigrationInterface {
-    name = 'AddRouteTableToSubnet1774210337152'
+    name = 'AddRouteTableToSubnet1774210337152';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "organization_subscriptions" DROP CONSTRAINT "FK_organization_subscriptions_organization"`);
-        await queryRunner.query(`ALTER TABLE "google_auth_codes" DROP CONSTRAINT "FK_google_auth_codes_user_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" DROP CONSTRAINT "FK_aws_assessment_jobs_cloud_account"`);
-        await queryRunner.query(`ALTER TABLE "azure_assessment_jobs" DROP CONSTRAINT "FK_azure_assessment_jobs_cloud_account"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_org_subscriptions_organization_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_org_subscriptions_stripe_customer_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_org_subscriptions_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_559b51a52d2ff51955eaef30cf"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_google_auth_codes_expires_at"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_vpcs_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_vpcs_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_aws_route_table_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route_tables_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_aws_subnet_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_subnets_aws_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_security_groups_aws_sg_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_aws_role_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_path"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_iam_roles_role_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_subnet_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_aws_instance_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_state"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ec2_security_group_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_family"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_task_definitions_family_revision"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_cluster_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_task_definition_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_services_service_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_clusters_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecs_clusters_cluster_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancers_arn"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancer_listeners_lb_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_load_balancer_listeners_arn"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_subnet_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_security_group_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_iam_role_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_identifier"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_rds_instances_status"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_s3_buckets_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_s3_buckets_bucket_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_s3_buckets_region"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_s3_buckets_encryption_enabled"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_s3_buckets_public_access_blocked"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_eks_clusters_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_eks_clusters_cluster_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_eks_clusters_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_eks_clusters_iam_role_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_distribution_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_s3_bucket_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_status"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_enabled"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_cloudfront_distributions_origin_domain_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route53_hosted_zones_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_route53_hosted_zones_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_cloudwatch_alarms_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_cloudwatch_alarms_alarm_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_cloudwatch_alarms_state_value"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_cloudtrail_trails_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_cloudtrail_trails_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_lambda_functions_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_lambda_functions_function_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_lambda_functions_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_lambda_functions_iam_role_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_api_gateway_rest_apis_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_api_gateway_rest_apis_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_kms_keys_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_kms_keys_key_state"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_secrets_manager_secrets_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_secrets_manager_secrets_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecr_repositories_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_ecr_repositories_repository_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_dynamodb_tables_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_dynamodb_tables_table_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_elasticache_clusters_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_elasticache_clusters_vpc_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_sqs_queues_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_sqs_queues_queue_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_sns_topics_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_sns_topics_topic_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_waf_web_acls_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_waf_web_acls_name"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_waf_web_acls_scope"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_guardduty_detectors_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_aws_guardduty_detectors_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_aws_assessment_jobs_cloudAccountId"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_aws_assessment_jobs_organizationId"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_azure_assessment_jobs_cloud_account_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_azure_assessment_jobs_organization_id"`);
-        await queryRunner.query(`CREATE TABLE "azure"."subscriptions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_subscriptions_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_a87248d73155605cf782be9ee5e" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."resource_groups" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_resource_groups_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_28a058efef9c99ea831eff22185" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."virtual_machines" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "vm_size" character varying(100), "os_type" character varying(20), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_virtual_machines_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_e6a3b4ed20fed871e0c10e0c32b" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."vmss" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(100), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_vmss_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_df255d76c37d85cd543217eafac" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."aks_clusters" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "kubernetes_version" character varying(30), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_aks_clusters_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_3d41a5c76a0cb55661cbf9ef441" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."web_apps" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "kind" character varying(50), "state" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_web_apps_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_d64ce0dab73ef11144910ccc702" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."app_service_plans" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "kind" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_app_service_plans_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_2c52e00f038f63324abb67e247b" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."virtual_networks" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "address_prefixes" text, "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_virtual_networks_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_f54d8b29518e4b3525817fee3e0" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."network_interfaces" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "private_ip_address" character varying(50), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_network_interfaces_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_6fe8238659b6714aaf0e01ec7de" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."public_ips" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "ip_address" character varying(50), "allocation_method" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_public_ips_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_fd212d105d90745529e11f50162" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."nsgs" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_nsgs_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_4d14d55e805f4c47cd808d4022b" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."load_balancers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_load_balancers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_b6777365746cffab90a3ef3353c" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."application_gateways" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_application_gateways_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_f945d0f3c85fa00b5cdaa059d32" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."storage_accounts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "kind" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_storage_accounts_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_7520fd21d5542a7e53f84f58981" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."disks" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "disk_size_gb" integer, "disk_state" character varying(50), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_disks_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_765d2554907d689ca154949630f" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."recovery_vaults" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_recovery_vaults_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_a4177a96e9d05a2e87bb1c3a7ff" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."sql_servers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "fully_qualified_domain_name" character varying(255), "administrator_login" character varying(100), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_sql_servers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_8b8830acccf8c0a7751f02b7425" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."sql_databases" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(100), "status" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_sql_databases_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_183bd49c408d5b29cd549a12068" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."postgres_servers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "administrator_login" character varying(100), "version" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_postgres_servers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_097ec9dae24a9b0bb43d2aa074d" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."cosmos_db_accounts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "database_account_offer_type" character varying(50), "document_endpoint" character varying(255), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_cosmos_db_accounts_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_841620e0365cb1e217a79325f69" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "azure"."key_vaults" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "vault_uri" character varying(255), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_key_vaults_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_da46b3b569735901c2107673876" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ADD "route_table_id" uuid`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ADD "aws_route_table_id" character varying(50)`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_rds_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_rds_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_s3_buckets" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_s3_buckets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ALTER COLUMN "tags" DROP NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ALTER COLUMN "tags" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudfront_distributions" ALTER COLUMN "created_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudfront_distributions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "last_modified_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "last_modified_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "deletion_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "deletion_date" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_rotated_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_rotated_date" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_accessed_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_accessed_date" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "deleted_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "deleted_date" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "created_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "updated_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "updated_at_aws" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "last_synced_at" TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" DROP COLUMN "organizationId"`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" ADD "organizationId" character varying NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "organization_subscriptions" ADD CONSTRAINT "FK_ee120ecc7d96135bd947a1ea7ae" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ADD CONSTRAINT "FK_abe3cbb644f50763cac173070c1" FOREIGN KEY ("route_table_id") REFERENCES "aws_route_tables"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" ADD CONSTRAINT "FK_2b63b7b36c69391cbb57caaac8f" FOREIGN KEY ("cloudAccountId") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."subscriptions" ADD CONSTRAINT "FK_6aeb3c28fb09d41ea876e3c4006" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."resource_groups" ADD CONSTRAINT "FK_d8565e01bea021221945dfeda47" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."virtual_machines" ADD CONSTRAINT "FK_fccc8cd7b0c2da14ed6c5d1961a" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."vmss" ADD CONSTRAINT "FK_35a5bd0f332b3f08e6e0d32fe2a" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."aks_clusters" ADD CONSTRAINT "FK_ea4b06bbc97c6d337e5f0a7bcdf" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."web_apps" ADD CONSTRAINT "FK_ccc1121cc7a1d3edcf455126e93" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."app_service_plans" ADD CONSTRAINT "FK_feca4f90d9538bcc11ed50cd2d4" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."virtual_networks" ADD CONSTRAINT "FK_afc36fa41d917db6354f5864ed7" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."network_interfaces" ADD CONSTRAINT "FK_814d14bf1617419de02bf078ca0" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."public_ips" ADD CONSTRAINT "FK_c37da3881530e32b636494bb832" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."nsgs" ADD CONSTRAINT "FK_6e21bfbe1e3de3ed9f26b103e58" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."load_balancers" ADD CONSTRAINT "FK_d97f428e8f8ec99c0786585e37c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."application_gateways" ADD CONSTRAINT "FK_e50c59ecb2b32052f46c40ecdde" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."storage_accounts" ADD CONSTRAINT "FK_69e46c8b8609146233a3df66d3c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."disks" ADD CONSTRAINT "FK_f4cf2ce934d42c1b93b944a880c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."recovery_vaults" ADD CONSTRAINT "FK_532292da1b2e5553d686390c448" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."sql_servers" ADD CONSTRAINT "FK_5b43237bd67491b1e2c64cf0e71" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."sql_databases" ADD CONSTRAINT "FK_3fd5d53797c56fc2abc140d7f43" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."postgres_servers" ADD CONSTRAINT "FK_e29887edc7cf57b2a29d06ae079" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."cosmos_db_accounts" ADD CONSTRAINT "FK_d3e10c9141fc19d82e79475bad7" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure"."key_vaults" ADD CONSTRAINT "FK_f498ed56d6a32284747e4c37f58" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "azure_assessment_jobs" ADD CONSTRAINT "FK_4d68c710283eb17ee69290636ae" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "organization_subscriptions" DROP CONSTRAINT IF EXISTS "FK_organization_subscriptions_organization"`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "google_auth_codes" DROP CONSTRAINT IF EXISTS "FK_google_auth_codes_user_id"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" DROP CONSTRAINT IF EXISTS "FK_aws_assessment_jobs_cloud_account"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure_assessment_jobs" DROP CONSTRAINT IF EXISTS "FK_azure_assessment_jobs_cloud_account"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_org_subscriptions_organization_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_org_subscriptions_stripe_customer_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_org_subscriptions_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_559b51a52d2ff51955eaef30cf"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_google_auth_codes_expires_at"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_vpcs_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_vpcs_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_aws_route_table_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route_tables_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_aws_subnet_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_subnets_aws_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_security_groups_aws_sg_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_aws_role_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_path"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_iam_roles_role_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_subnet_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_aws_instance_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_state"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ec2_security_group_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_family"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_task_definitions_family_revision"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_cluster_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_task_definition_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_services_service_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_clusters_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecs_clusters_cluster_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancers_arn"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancer_listeners_lb_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_load_balancer_listeners_arn"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_subnet_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_security_group_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_iam_role_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_identifier"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_rds_instances_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_s3_buckets_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_s3_buckets_bucket_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_s3_buckets_region"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_s3_buckets_encryption_enabled"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_s3_buckets_public_access_blocked"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_eks_clusters_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_eks_clusters_cluster_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_eks_clusters_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_eks_clusters_iam_role_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_distribution_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_s3_bucket_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_enabled"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_cloudfront_distributions_origin_domain_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route53_hosted_zones_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_route53_hosted_zones_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_cloudwatch_alarms_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_cloudwatch_alarms_alarm_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_cloudwatch_alarms_state_value"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_cloudtrail_trails_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_cloudtrail_trails_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_lambda_functions_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_lambda_functions_function_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_lambda_functions_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_lambda_functions_iam_role_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_api_gateway_rest_apis_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_api_gateway_rest_apis_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_kms_keys_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_kms_keys_key_state"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_secrets_manager_secrets_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_secrets_manager_secrets_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecr_repositories_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_ecr_repositories_repository_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_dynamodb_tables_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_dynamodb_tables_table_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_elasticache_clusters_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_elasticache_clusters_vpc_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_sqs_queues_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_sqs_queues_queue_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_sns_topics_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_sns_topics_topic_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_waf_web_acls_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_waf_web_acls_name"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_waf_web_acls_scope"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_guardduty_detectors_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_aws_guardduty_detectors_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_aws_assessment_jobs_cloudAccountId"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_aws_assessment_jobs_organizationId"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_azure_assessment_jobs_cloud_account_id"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_azure_assessment_jobs_organization_id"`);
+        await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "azure"`);
+        await queryRunner.query(
+            `CREATE TABLE "azure"."subscriptions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_subscriptions_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_a87248d73155605cf782be9ee5e" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."resource_groups" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_resource_groups_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_28a058efef9c99ea831eff22185" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."virtual_machines" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "vm_size" character varying(100), "os_type" character varying(20), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_virtual_machines_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_e6a3b4ed20fed871e0c10e0c32b" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."vmss" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(100), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_vmss_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_df255d76c37d85cd543217eafac" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."aks_clusters" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "kubernetes_version" character varying(30), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_aks_clusters_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_3d41a5c76a0cb55661cbf9ef441" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."web_apps" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "kind" character varying(50), "state" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_web_apps_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_d64ce0dab73ef11144910ccc702" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."app_service_plans" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "kind" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_app_service_plans_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_2c52e00f038f63324abb67e247b" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."virtual_networks" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "address_prefixes" text, "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_virtual_networks_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_f54d8b29518e4b3525817fee3e0" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."network_interfaces" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "private_ip_address" character varying(50), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_network_interfaces_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_6fe8238659b6714aaf0e01ec7de" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."public_ips" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "ip_address" character varying(50), "allocation_method" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_public_ips_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_fd212d105d90745529e11f50162" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."nsgs" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_nsgs_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_4d14d55e805f4c47cd808d4022b" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."load_balancers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_load_balancers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_b6777365746cffab90a3ef3353c" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."application_gateways" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "provisioning_state" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_application_gateways_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_f945d0f3c85fa00b5cdaa059d32" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."storage_accounts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "kind" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_storage_accounts_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_7520fd21d5542a7e53f84f58981" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."disks" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "disk_size_gb" integer, "disk_state" character varying(50), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_disks_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_765d2554907d689ca154949630f" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."recovery_vaults" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_recovery_vaults_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_a4177a96e9d05a2e87bb1c3a7ff" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."sql_servers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "fully_qualified_domain_name" character varying(255), "administrator_login" character varying(100), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_sql_servers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_8b8830acccf8c0a7751f02b7425" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."sql_databases" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "sku" character varying(100), "status" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_sql_databases_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_183bd49c408d5b29cd549a12068" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."postgres_servers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "administrator_login" character varying(100), "version" character varying(20), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_postgres_servers_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_097ec9dae24a9b0bb43d2aa074d" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."cosmos_db_accounts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "database_account_offer_type" character varying(50), "document_endpoint" character varying(255), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_cosmos_db_accounts_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_841620e0365cb1e217a79325f69" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(
+            `CREATE TABLE "azure"."key_vaults" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "cloud_account_id" uuid NOT NULL, "azure_id" text NOT NULL, "name" character varying(255) NOT NULL, "location" character varying(100), "resource_group" character varying(255), "subscription_id" character varying(36), "vault_uri" character varying(255), "sku" character varying(50), "tags" jsonb, "properties" jsonb, "last_synced_at" TIMESTAMP, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_azure_key_vaults_account_azure_id" UNIQUE ("cloud_account_id", "azure_id"), CONSTRAINT "PK_da46b3b569735901c2107673876" PRIMARY KEY ("id"))`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ADD "route_table_id" uuid`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ADD "aws_route_table_id" character varying(50)`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_rds_instances" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_rds_instances" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_s3_buckets" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_s3_buckets" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ALTER COLUMN "tags" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ALTER COLUMN "tags" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudfront_distributions" ALTER COLUMN "created_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudfront_distributions" ALTER COLUMN "updated_at" SET DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "last_modified_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "last_modified_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "deletion_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "deletion_date" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_rotated_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_rotated_date" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_accessed_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_accessed_date" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "deleted_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "deleted_date" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "created_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "updated_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "updated_at_aws" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "last_synced_at" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "created_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "updated_at" TIMESTAMP NOT NULL DEFAULT now()`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" DROP COLUMN IF EXISTS "organizationId"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" ADD "organizationId" character varying NOT NULL`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "organization_subscriptions" ADD CONSTRAINT "FK_ee120ecc7d96135bd947a1ea7ae" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_subnets" ADD CONSTRAINT "FK_abe3cbb644f50763cac173070c1" FOREIGN KEY ("route_table_id") REFERENCES "aws_route_tables"("id") ON DELETE SET NULL ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_assessment_jobs" ADD CONSTRAINT "FK_2b63b7b36c69391cbb57caaac8f" FOREIGN KEY ("cloudAccountId") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."subscriptions" ADD CONSTRAINT "FK_6aeb3c28fb09d41ea876e3c4006" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."resource_groups" ADD CONSTRAINT "FK_d8565e01bea021221945dfeda47" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."virtual_machines" ADD CONSTRAINT "FK_fccc8cd7b0c2da14ed6c5d1961a" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."vmss" ADD CONSTRAINT "FK_35a5bd0f332b3f08e6e0d32fe2a" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."aks_clusters" ADD CONSTRAINT "FK_ea4b06bbc97c6d337e5f0a7bcdf" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."web_apps" ADD CONSTRAINT "FK_ccc1121cc7a1d3edcf455126e93" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."app_service_plans" ADD CONSTRAINT "FK_feca4f90d9538bcc11ed50cd2d4" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."virtual_networks" ADD CONSTRAINT "FK_afc36fa41d917db6354f5864ed7" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."network_interfaces" ADD CONSTRAINT "FK_814d14bf1617419de02bf078ca0" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."public_ips" ADD CONSTRAINT "FK_c37da3881530e32b636494bb832" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."nsgs" ADD CONSTRAINT "FK_6e21bfbe1e3de3ed9f26b103e58" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."load_balancers" ADD CONSTRAINT "FK_d97f428e8f8ec99c0786585e37c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."application_gateways" ADD CONSTRAINT "FK_e50c59ecb2b32052f46c40ecdde" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."storage_accounts" ADD CONSTRAINT "FK_69e46c8b8609146233a3df66d3c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."disks" ADD CONSTRAINT "FK_f4cf2ce934d42c1b93b944a880c" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."recovery_vaults" ADD CONSTRAINT "FK_532292da1b2e5553d686390c448" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."sql_servers" ADD CONSTRAINT "FK_5b43237bd67491b1e2c64cf0e71" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."sql_databases" ADD CONSTRAINT "FK_3fd5d53797c56fc2abc140d7f43" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."postgres_servers" ADD CONSTRAINT "FK_e29887edc7cf57b2a29d06ae079" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."cosmos_db_accounts" ADD CONSTRAINT "FK_d3e10c9141fc19d82e79475bad7" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure"."key_vaults" ADD CONSTRAINT "FK_f498ed56d6a32284747e4c37f58" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure_assessment_jobs" ADD CONSTRAINT "FK_4d68c710283eb17ee69290636ae" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "azure_assessment_jobs" DROP CONSTRAINT "FK_4d68c710283eb17ee69290636ae"`);
-        await queryRunner.query(`ALTER TABLE "azure"."key_vaults" DROP CONSTRAINT "FK_f498ed56d6a32284747e4c37f58"`);
-        await queryRunner.query(`ALTER TABLE "azure"."cosmos_db_accounts" DROP CONSTRAINT "FK_d3e10c9141fc19d82e79475bad7"`);
-        await queryRunner.query(`ALTER TABLE "azure"."postgres_servers" DROP CONSTRAINT "FK_e29887edc7cf57b2a29d06ae079"`);
-        await queryRunner.query(`ALTER TABLE "azure"."sql_databases" DROP CONSTRAINT "FK_3fd5d53797c56fc2abc140d7f43"`);
-        await queryRunner.query(`ALTER TABLE "azure"."sql_servers" DROP CONSTRAINT "FK_5b43237bd67491b1e2c64cf0e71"`);
-        await queryRunner.query(`ALTER TABLE "azure"."recovery_vaults" DROP CONSTRAINT "FK_532292da1b2e5553d686390c448"`);
-        await queryRunner.query(`ALTER TABLE "azure"."disks" DROP CONSTRAINT "FK_f4cf2ce934d42c1b93b944a880c"`);
-        await queryRunner.query(`ALTER TABLE "azure"."storage_accounts" DROP CONSTRAINT "FK_69e46c8b8609146233a3df66d3c"`);
-        await queryRunner.query(`ALTER TABLE "azure"."application_gateways" DROP CONSTRAINT "FK_e50c59ecb2b32052f46c40ecdde"`);
-        await queryRunner.query(`ALTER TABLE "azure"."load_balancers" DROP CONSTRAINT "FK_d97f428e8f8ec99c0786585e37c"`);
-        await queryRunner.query(`ALTER TABLE "azure"."nsgs" DROP CONSTRAINT "FK_6e21bfbe1e3de3ed9f26b103e58"`);
-        await queryRunner.query(`ALTER TABLE "azure"."public_ips" DROP CONSTRAINT "FK_c37da3881530e32b636494bb832"`);
-        await queryRunner.query(`ALTER TABLE "azure"."network_interfaces" DROP CONSTRAINT "FK_814d14bf1617419de02bf078ca0"`);
-        await queryRunner.query(`ALTER TABLE "azure"."virtual_networks" DROP CONSTRAINT "FK_afc36fa41d917db6354f5864ed7"`);
-        await queryRunner.query(`ALTER TABLE "azure"."app_service_plans" DROP CONSTRAINT "FK_feca4f90d9538bcc11ed50cd2d4"`);
-        await queryRunner.query(`ALTER TABLE "azure"."web_apps" DROP CONSTRAINT "FK_ccc1121cc7a1d3edcf455126e93"`);
-        await queryRunner.query(`ALTER TABLE "azure"."aks_clusters" DROP CONSTRAINT "FK_ea4b06bbc97c6d337e5f0a7bcdf"`);
-        await queryRunner.query(`ALTER TABLE "azure"."vmss" DROP CONSTRAINT "FK_35a5bd0f332b3f08e6e0d32fe2a"`);
-        await queryRunner.query(`ALTER TABLE "azure"."virtual_machines" DROP CONSTRAINT "FK_fccc8cd7b0c2da14ed6c5d1961a"`);
-        await queryRunner.query(`ALTER TABLE "azure"."resource_groups" DROP CONSTRAINT "FK_d8565e01bea021221945dfeda47"`);
-        await queryRunner.query(`ALTER TABLE "azure"."subscriptions" DROP CONSTRAINT "FK_6aeb3c28fb09d41ea876e3c4006"`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" DROP CONSTRAINT "FK_2b63b7b36c69391cbb57caaac8f"`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" DROP CONSTRAINT "FK_abe3cbb644f50763cac173070c1"`);
-        await queryRunner.query(`ALTER TABLE "organization_subscriptions" DROP CONSTRAINT "FK_ee120ecc7d96135bd947a1ea7ae"`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" DROP COLUMN "organizationId"`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" ADD "organizationId" uuid NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "updated_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "updated_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_guardduty_detectors" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_waf_web_acls" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sns_topics" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_sqs_queues" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_elasticache_clusters" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_dynamodb_tables" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_ecr_repositories" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "deleted_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "deleted_date" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_accessed_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_accessed_date" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" DROP COLUMN "last_rotated_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_secrets_manager_secrets" ADD "last_rotated_date" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "deletion_date"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "deletion_date" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_kms_keys" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_api_gateway_rest_apis" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" DROP COLUMN "last_modified_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_lambda_functions" ADD "last_modified_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudtrail_trails" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudwatch_alarms" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_route53_hosted_zones" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudfront_distributions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_cloudfront_distributions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "updated_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "created_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "last_synced_at"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ALTER COLUMN "tags" SET DEFAULT '{}'`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ALTER COLUMN "tags" SET NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" DROP COLUMN "created_at_aws"`);
-        await queryRunner.query(`ALTER TABLE "aws_eks_clusters" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "aws_s3_buckets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_s3_buckets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_rds_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_rds_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" DROP COLUMN "aws_route_table_id"`);
-        await queryRunner.query(`ALTER TABLE "aws_subnets" DROP COLUMN "route_table_id"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure_assessment_jobs" DROP CONSTRAINT IF EXISTS "FK_4d68c710283eb17ee69290636ae"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."key_vaults" DROP CONSTRAINT "FK_f498ed56d6a32284747e4c37f58"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."cosmos_db_accounts" DROP CONSTRAINT "FK_d3e10c9141fc19d82e79475bad7"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."postgres_servers" DROP CONSTRAINT "FK_e29887edc7cf57b2a29d06ae079"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."sql_databases" DROP CONSTRAINT "FK_3fd5d53797c56fc2abc140d7f43"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."sql_servers" DROP CONSTRAINT "FK_5b43237bd67491b1e2c64cf0e71"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."recovery_vaults" DROP CONSTRAINT "FK_532292da1b2e5553d686390c448"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."disks" DROP CONSTRAINT "FK_f4cf2ce934d42c1b93b944a880c"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."storage_accounts" DROP CONSTRAINT "FK_69e46c8b8609146233a3df66d3c"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."application_gateways" DROP CONSTRAINT "FK_e50c59ecb2b32052f46c40ecdde"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."load_balancers" DROP CONSTRAINT "FK_d97f428e8f8ec99c0786585e37c"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."nsgs" DROP CONSTRAINT "FK_6e21bfbe1e3de3ed9f26b103e58"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."public_ips" DROP CONSTRAINT "FK_c37da3881530e32b636494bb832"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."network_interfaces" DROP CONSTRAINT "FK_814d14bf1617419de02bf078ca0"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."virtual_networks" DROP CONSTRAINT "FK_afc36fa41d917db6354f5864ed7"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."app_service_plans" DROP CONSTRAINT "FK_feca4f90d9538bcc11ed50cd2d4"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."web_apps" DROP CONSTRAINT "FK_ccc1121cc7a1d3edcf455126e93"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."aks_clusters" DROP CONSTRAINT "FK_ea4b06bbc97c6d337e5f0a7bcdf"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."vmss" DROP CONSTRAINT "FK_35a5bd0f332b3f08e6e0d32fe2a"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."virtual_machines" DROP CONSTRAINT "FK_fccc8cd7b0c2da14ed6c5d1961a"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."resource_groups" DROP CONSTRAINT "FK_d8565e01bea021221945dfeda47"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "azure"."subscriptions" DROP CONSTRAINT "FK_6aeb3c28fb09d41ea876e3c4006"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" DROP CONSTRAINT IF EXISTS "FK_2b63b7b36c69391cbb57caaac8f"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" DROP CONSTRAINT IF EXISTS "FK_abe3cbb644f50763cac173070c1"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "organization_subscriptions" DROP CONSTRAINT IF EXISTS "FK_ee120ecc7d96135bd947a1ea7ae"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" DROP COLUMN IF EXISTS "organizationId"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_assessment_jobs" ADD "organizationId" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "updated_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "updated_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_guardduty_detectors" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_waf_web_acls" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sns_topics" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_sqs_queues" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_elasticache_clusters" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_dynamodb_tables" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecr_repositories" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "deleted_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "deleted_date" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_accessed_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_accessed_date" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" DROP COLUMN IF EXISTS "last_rotated_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_secrets_manager_secrets" ADD "last_rotated_date" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "deletion_date"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "deletion_date" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_kms_keys" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_api_gateway_rest_apis" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" DROP COLUMN IF EXISTS "last_modified_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_lambda_functions" ADD "last_modified_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudtrail_trails" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudwatch_alarms" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route53_hosted_zones" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudfront_distributions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_cloudfront_distributions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "updated_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "created_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "last_synced_at"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "last_synced_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ALTER COLUMN "tags" SET DEFAULT '{}'`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ALTER COLUMN "tags" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" DROP COLUMN IF EXISTS "created_at_aws"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_eks_clusters" ADD "created_at_aws" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_s3_buckets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_s3_buckets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_rds_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_rds_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancer_listeners" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancer_listeners" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancers" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_load_balancers" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_clusters" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_clusters" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_services" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_services" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_task_definitions" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ecs_task_definitions" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ec2_instances" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_ec2_instances" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_iam_roles" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_iam_roles" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_security_groups" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_security_groups" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route_tables" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_route_tables" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_vpcs" ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_vpcs" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" DROP COLUMN IF EXISTS "aws_route_table_id"`);
+        await queryRunner.query(`ALTER TABLE IF EXISTS "aws_subnets" DROP COLUMN IF EXISTS "route_table_id"`);
         await queryRunner.query(`DROP TABLE "azure"."key_vaults"`);
         await queryRunner.query(`DROP TABLE "azure"."cosmos_db_accounts"`);
         await queryRunner.query(`DROP TABLE "azure"."postgres_servers"`);
@@ -508,107 +643,148 @@ export class AddRouteTableToSubnet1774210337152 implements MigrationInterface {
         await queryRunner.query(`DROP TABLE "azure"."virtual_machines"`);
         await queryRunner.query(`DROP TABLE "azure"."resource_groups"`);
         await queryRunner.query(`DROP TABLE "azure"."subscriptions"`);
-        await queryRunner.query(`CREATE INDEX "IDX_azure_assessment_jobs_organization_id" ON "azure_assessment_jobs" ("organization_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_azure_assessment_jobs_cloud_account_id" ON "azure_assessment_jobs" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_aws_assessment_jobs_organizationId" ON "aws_assessment_jobs" ("organizationId") `);
-        await queryRunner.query(`CREATE INDEX "IDX_aws_assessment_jobs_cloudAccountId" ON "aws_assessment_jobs" ("cloudAccountId") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_guardduty_detectors_status" ON "aws_guardduty_detectors" ("status") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_guardduty_detectors_cloud_account_id" ON "aws_guardduty_detectors" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_waf_web_acls_scope" ON "aws_waf_web_acls" ("scope") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_waf_web_acls_name" ON "aws_waf_web_acls" ("name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_waf_web_acls_cloud_account_id" ON "aws_waf_web_acls" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_sns_topics_topic_name" ON "aws_sns_topics" ("topic_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_sns_topics_cloud_account_id" ON "aws_sns_topics" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_sqs_queues_queue_name" ON "aws_sqs_queues" ("queue_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_sqs_queues_cloud_account_id" ON "aws_sqs_queues" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_elasticache_clusters_vpc_id" ON "aws_elasticache_clusters" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_elasticache_clusters_cloud_account_id" ON "aws_elasticache_clusters" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_dynamodb_tables_table_name" ON "aws_dynamodb_tables" ("table_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_dynamodb_tables_cloud_account_id" ON "aws_dynamodb_tables" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecr_repositories_repository_name" ON "aws_ecr_repositories" ("repository_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecr_repositories_cloud_account_id" ON "aws_ecr_repositories" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_secrets_manager_secrets_name" ON "aws_secrets_manager_secrets" ("name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_secrets_manager_secrets_cloud_account_id" ON "aws_secrets_manager_secrets" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_kms_keys_key_state" ON "aws_kms_keys" ("key_state") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_kms_keys_cloud_account_id" ON "aws_kms_keys" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_api_gateway_rest_apis_vpc_id" ON "aws_api_gateway_rest_apis" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_api_gateway_rest_apis_cloud_account_id" ON "aws_api_gateway_rest_apis" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_lambda_functions_iam_role_id" ON "aws_lambda_functions" ("iam_role_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_lambda_functions_vpc_id" ON "aws_lambda_functions" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_lambda_functions_function_name" ON "aws_lambda_functions" ("function_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_lambda_functions_cloud_account_id" ON "aws_lambda_functions" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_cloudtrail_trails_vpc_id" ON "aws_cloudtrail_trails" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_cloudtrail_trails_cloud_account_id" ON "aws_cloudtrail_trails" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_cloudwatch_alarms_state_value" ON "aws_cloudwatch_alarms" ("state_value") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_cloudwatch_alarms_alarm_name" ON "aws_cloudwatch_alarms" ("alarm_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_cloudwatch_alarms_cloud_account_id" ON "aws_cloudwatch_alarms" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_route53_hosted_zones_vpc_id" ON "aws_route53_hosted_zones" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_route53_hosted_zones_cloud_account_id" ON "aws_route53_hosted_zones" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_origin_domain_name" ON "aws_cloudfront_distributions" ("origin_domain_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_enabled" ON "aws_cloudfront_distributions" ("enabled") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_status" ON "aws_cloudfront_distributions" ("status") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_s3_bucket_id" ON "aws_cloudfront_distributions" ("s3_bucket_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_distribution_id" ON "aws_cloudfront_distributions" ("distribution_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_cloudfront_distributions_cloud_account_id" ON "aws_cloudfront_distributions" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_eks_clusters_iam_role_id" ON "aws_eks_clusters" ("iam_role_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_eks_clusters_vpc_id" ON "aws_eks_clusters" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_eks_clusters_cluster_name" ON "aws_eks_clusters" ("cluster_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_eks_clusters_cloud_account_id" ON "aws_eks_clusters" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_s3_buckets_public_access_blocked" ON "aws_s3_buckets" ("public_access_blocked") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_s3_buckets_encryption_enabled" ON "aws_s3_buckets" ("encryption_enabled") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_s3_buckets_region" ON "aws_s3_buckets" ("region") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_s3_buckets_bucket_name" ON "aws_s3_buckets" ("bucket_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_s3_buckets_cloud_account_id" ON "aws_s3_buckets" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_status" ON "aws_rds_instances" ("status") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_identifier" ON "aws_rds_instances" ("aws_db_instance_identifier") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_iam_role_id" ON "aws_rds_instances" ("iam_role_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_security_group_id" ON "aws_rds_instances" ("security_group_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_subnet_id" ON "aws_rds_instances" ("subnet_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_vpc_id" ON "aws_rds_instances" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_rds_instances_cloud_account_id" ON "aws_rds_instances" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_load_balancer_listeners_arn" ON "aws_load_balancer_listeners" ("aws_listener_arn") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_load_balancer_listeners_lb_id" ON "aws_load_balancer_listeners" ("load_balancer_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_load_balancers_arn" ON "aws_load_balancers" ("aws_load_balancer_arn") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_load_balancers_vpc_id" ON "aws_load_balancers" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_load_balancers_cloud_account_id" ON "aws_load_balancers" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_clusters_cluster_name" ON "aws_ecs_clusters" ("cluster_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_clusters_cloud_account_id" ON "aws_ecs_clusters" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_services_service_name" ON "aws_ecs_services" ("service_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_services_task_definition_id" ON "aws_ecs_services" ("task_definition_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_services_cluster_id" ON "aws_ecs_services" ("cluster_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_services_cloud_account_id" ON "aws_ecs_services" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_task_definitions_family_revision" ON "aws_ecs_task_definitions" ("family", "revision") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_task_definitions_family" ON "aws_ecs_task_definitions" ("family") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ecs_task_definitions_cloud_account_id" ON "aws_ecs_task_definitions" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ec2_security_group_id" ON "aws_ec2_instances" ("security_group_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ec2_state" ON "aws_ec2_instances" ("state") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ec2_aws_instance_id" ON "aws_ec2_instances" ("aws_instance_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ec2_vpc_id" ON "aws_ec2_instances" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_ec2_subnet_id" ON "aws_ec2_instances" ("subnet_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_iam_roles_role_name" ON "aws_iam_roles" ("role_name") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_iam_roles_path" ON "aws_iam_roles" ("path") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_iam_roles_aws_role_id" ON "aws_iam_roles" ("aws_role_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_iam_roles_cloud_account_id" ON "aws_iam_roles" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_security_groups_aws_sg_id" ON "aws_security_groups" ("aws_security_group_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_security_groups_vpc_id" ON "aws_security_groups" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_security_groups_cloud_account_id" ON "aws_security_groups" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_subnets_aws_vpc_id" ON "aws_subnets" ("aws_vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_subnets_aws_subnet_id" ON "aws_subnets" ("aws_subnet_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_subnets_vpc_id" ON "aws_subnets" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_route_tables_aws_vpc_id" ON "aws_route_tables" ("aws_vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_route_tables_aws_route_table_id" ON "aws_route_tables" ("aws_route_table_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_route_tables_vpc_id" ON "aws_route_tables" ("vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_vpcs_aws_vpc_id" ON "aws_vpcs" ("aws_vpc_id") `);
-        await queryRunner.query(`CREATE INDEX "idx_aws_vpcs_cloud_account_id" ON "aws_vpcs" ("cloud_account_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_google_auth_codes_expires_at" ON "google_auth_codes" ("expires_at") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "IDX_559b51a52d2ff51955eaef30cf" ON "organization_invites" ("email", "organization_id", "status") WHERE ((status)::text = 'PENDING'::text)`);
-        await queryRunner.query(`CREATE INDEX "IDX_org_subscriptions_status" ON "organization_subscriptions" ("status") `);
-        await queryRunner.query(`CREATE INDEX "IDX_org_subscriptions_stripe_customer_id" ON "organization_subscriptions" ("stripe_customer_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_org_subscriptions_organization_id" ON "organization_subscriptions" ("organization_id") `);
-        await queryRunner.query(`ALTER TABLE "azure_assessment_jobs" ADD CONSTRAINT "FK_azure_assessment_jobs_cloud_account" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "aws_assessment_jobs" ADD CONSTRAINT "FK_aws_assessment_jobs_cloud_account" FOREIGN KEY ("cloudAccountId") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "google_auth_codes" ADD CONSTRAINT "FK_google_auth_codes_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "organization_subscriptions" ADD CONSTRAINT "FK_organization_subscriptions_organization" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_azure_assessment_jobs_organization_id" ON "azure_assessment_jobs" ("organization_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "IDX_azure_assessment_jobs_cloud_account_id" ON "azure_assessment_jobs" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_aws_assessment_jobs_organizationId" ON "aws_assessment_jobs" ("organizationId") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_aws_assessment_jobs_cloudAccountId" ON "aws_assessment_jobs" ("cloudAccountId") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_guardduty_detectors_status" ON "aws_guardduty_detectors" ("status") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_guardduty_detectors_cloud_account_id" ON "aws_guardduty_detectors" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_waf_web_acls_scope" ON "aws_waf_web_acls" ("scope") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_waf_web_acls_name" ON "aws_waf_web_acls" ("name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_waf_web_acls_cloud_account_id" ON "aws_waf_web_acls" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_sns_topics_topic_name" ON "aws_sns_topics" ("topic_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_sns_topics_cloud_account_id" ON "aws_sns_topics" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_sqs_queues_queue_name" ON "aws_sqs_queues" ("queue_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_sqs_queues_cloud_account_id" ON "aws_sqs_queues" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_elasticache_clusters_vpc_id" ON "aws_elasticache_clusters" ("vpc_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_elasticache_clusters_cloud_account_id" ON "aws_elasticache_clusters" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_dynamodb_tables_table_name" ON "aws_dynamodb_tables" ("table_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_dynamodb_tables_cloud_account_id" ON "aws_dynamodb_tables" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecr_repositories_repository_name" ON "aws_ecr_repositories" ("repository_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecr_repositories_cloud_account_id" ON "aws_ecr_repositories" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_secrets_manager_secrets_name" ON "aws_secrets_manager_secrets" ("name") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_secrets_manager_secrets_cloud_account_id" ON "aws_secrets_manager_secrets" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_kms_keys_key_state" ON "aws_kms_keys" ("key_state") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_kms_keys_cloud_account_id" ON "aws_kms_keys" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_api_gateway_rest_apis_vpc_id" ON "aws_api_gateway_rest_apis" ("vpc_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_api_gateway_rest_apis_cloud_account_id" ON "aws_api_gateway_rest_apis" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_lambda_functions_iam_role_id" ON "aws_lambda_functions" ("iam_role_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_lambda_functions_vpc_id" ON "aws_lambda_functions" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_lambda_functions_function_name" ON "aws_lambda_functions" ("function_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_lambda_functions_cloud_account_id" ON "aws_lambda_functions" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_cloudtrail_trails_vpc_id" ON "aws_cloudtrail_trails" ("vpc_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_cloudtrail_trails_cloud_account_id" ON "aws_cloudtrail_trails" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_cloudwatch_alarms_state_value" ON "aws_cloudwatch_alarms" ("state_value") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_cloudwatch_alarms_alarm_name" ON "aws_cloudwatch_alarms" ("alarm_name") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_cloudwatch_alarms_cloud_account_id" ON "aws_cloudwatch_alarms" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_route53_hosted_zones_vpc_id" ON "aws_route53_hosted_zones" ("vpc_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_route53_hosted_zones_cloud_account_id" ON "aws_route53_hosted_zones" ("cloud_account_id") `
+        );
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_origin_domain_name" ON "aws_cloudfront_distributions" ("origin_domain_name") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_enabled" ON "aws_cloudfront_distributions" ("enabled") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_status" ON "aws_cloudfront_distributions" ("status") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_s3_bucket_id" ON "aws_cloudfront_distributions" ("s3_bucket_id") `
+        );
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_distribution_id" ON "aws_cloudfront_distributions" ("distribution_id") `
+        );
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_cloudfront_distributions_cloud_account_id" ON "aws_cloudfront_distributions" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_eks_clusters_iam_role_id" ON "aws_eks_clusters" ("iam_role_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_eks_clusters_vpc_id" ON "aws_eks_clusters" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_eks_clusters_cluster_name" ON "aws_eks_clusters" ("cluster_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_eks_clusters_cloud_account_id" ON "aws_eks_clusters" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_s3_buckets_public_access_blocked" ON "aws_s3_buckets" ("public_access_blocked") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_s3_buckets_encryption_enabled" ON "aws_s3_buckets" ("encryption_enabled") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_s3_buckets_region" ON "aws_s3_buckets" ("region") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_s3_buckets_bucket_name" ON "aws_s3_buckets" ("bucket_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_s3_buckets_cloud_account_id" ON "aws_s3_buckets" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_status" ON "aws_rds_instances" ("status") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_identifier" ON "aws_rds_instances" ("aws_db_instance_identifier") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_iam_role_id" ON "aws_rds_instances" ("iam_role_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_security_group_id" ON "aws_rds_instances" ("security_group_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_subnet_id" ON "aws_rds_instances" ("subnet_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_vpc_id" ON "aws_rds_instances" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_rds_instances_cloud_account_id" ON "aws_rds_instances" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_load_balancer_listeners_arn" ON "aws_load_balancer_listeners" ("aws_listener_arn") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_load_balancer_listeners_lb_id" ON "aws_load_balancer_listeners" ("load_balancer_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_load_balancers_arn" ON "aws_load_balancers" ("aws_load_balancer_arn") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_load_balancers_vpc_id" ON "aws_load_balancers" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_load_balancers_cloud_account_id" ON "aws_load_balancers" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_clusters_cluster_name" ON "aws_ecs_clusters" ("cluster_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_clusters_cloud_account_id" ON "aws_ecs_clusters" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_services_service_name" ON "aws_ecs_services" ("service_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_services_task_definition_id" ON "aws_ecs_services" ("task_definition_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_services_cluster_id" ON "aws_ecs_services" ("cluster_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_services_cloud_account_id" ON "aws_ecs_services" ("cloud_account_id") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_ecs_task_definitions_family_revision" ON "aws_ecs_task_definitions" ("family", "revision") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ecs_task_definitions_family" ON "aws_ecs_task_definitions" ("family") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "idx_aws_ecs_task_definitions_cloud_account_id" ON "aws_ecs_task_definitions" ("cloud_account_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ec2_security_group_id" ON "aws_ec2_instances" ("security_group_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ec2_state" ON "aws_ec2_instances" ("state") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ec2_aws_instance_id" ON "aws_ec2_instances" ("aws_instance_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ec2_vpc_id" ON "aws_ec2_instances" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_ec2_subnet_id" ON "aws_ec2_instances" ("subnet_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_iam_roles_role_name" ON "aws_iam_roles" ("role_name") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_iam_roles_path" ON "aws_iam_roles" ("path") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_iam_roles_aws_role_id" ON "aws_iam_roles" ("aws_role_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_iam_roles_cloud_account_id" ON "aws_iam_roles" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_security_groups_aws_sg_id" ON "aws_security_groups" ("aws_security_group_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_security_groups_vpc_id" ON "aws_security_groups" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_security_groups_cloud_account_id" ON "aws_security_groups" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_subnets_aws_vpc_id" ON "aws_subnets" ("aws_vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_subnets_aws_subnet_id" ON "aws_subnets" ("aws_subnet_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_subnets_vpc_id" ON "aws_subnets" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_route_tables_aws_vpc_id" ON "aws_route_tables" ("aws_vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_route_tables_aws_route_table_id" ON "aws_route_tables" ("aws_route_table_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_route_tables_vpc_id" ON "aws_route_tables" ("vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_vpcs_aws_vpc_id" ON "aws_vpcs" ("aws_vpc_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_aws_vpcs_cloud_account_id" ON "aws_vpcs" ("cloud_account_id") `);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_google_auth_codes_expires_at" ON "google_auth_codes" ("expires_at") `);
+        await queryRunner.query(
+            `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_559b51a52d2ff51955eaef30cf" ON "organization_invites" ("email", "organization_id", "status") WHERE ((status)::text = 'PENDING'::text)`
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_org_subscriptions_status" ON "organization_subscriptions" ("status") `);
+        await queryRunner.query(
+            `CREATE INDEX IF NOT EXISTS "IDX_org_subscriptions_stripe_customer_id" ON "organization_subscriptions" ("stripe_customer_id") `
+        );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_org_subscriptions_organization_id" ON "organization_subscriptions" ("organization_id") `);
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "azure_assessment_jobs" ADD CONSTRAINT "FK_azure_assessment_jobs_cloud_account" FOREIGN KEY ("cloud_account_id") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "aws_assessment_jobs" ADD CONSTRAINT "FK_aws_assessment_jobs_cloud_account" FOREIGN KEY ("cloudAccountId") REFERENCES "cloud_accounts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "google_auth_codes" ADD CONSTRAINT "FK_google_auth_codes_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
+        await queryRunner.query(
+            `ALTER TABLE IF EXISTS "organization_subscriptions" ADD CONSTRAINT "FK_organization_subscriptions_organization" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`
+        );
     }
-
 }

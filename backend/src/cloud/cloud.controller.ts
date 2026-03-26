@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 import { CloudService } from './cloud.service';
@@ -9,9 +9,9 @@ import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
 import { Organization } from '../db/entites/organization.entity';
 import { CloudProvider } from '../db/entites/cloud-account.entity';
-import { createCloudAccountSchema, listCloudAccountsQuerySchema } from './dto';
-import { CloudAccountResponseDto, CreateCloudAccountRequestDto, ValidationErrorResponseDto } from './swagger.dto';
-import type { CreateCloudAccountDto, ListCloudAccountsQueryDto } from './dto';
+import { cloudAccountIdParamSchema, createCloudAccountSchema, listCloudAccountsQuerySchema, updateCloudAccountSchema } from './dto';
+import { CloudAccountResponseDto, CreateCloudAccountRequestDto, DeleteCloudAccountResponseDto, ValidationErrorResponseDto } from './swagger.dto';
+import type { CloudAccountIdParam, CreateCloudAccountDto, ListCloudAccountsQueryDto, UpdateCloudAccountDto } from './dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 /**
@@ -64,5 +64,40 @@ export class CloudController {
         @Query(new ZodValidationPipe(listCloudAccountsQuerySchema)) query: ListCloudAccountsQueryDto
     ) {
         return this.cloudService.findByOrganization(org.id, query);
+    }
+
+    @Get('accounts/:id')
+    @ApiOperation({ summary: 'Obtém uma conta de cloud por ID (inclui credenciais para edição)' })
+    @ApiResponse({ status: 200, description: 'Conta de cloud encontrada' })
+    @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
+    async getAccountById(@CurrentOrganization() org: Organization, @Param(new ZodValidationPipe(cloudAccountIdParamSchema)) params: CloudAccountIdParam) {
+        return this.cloudService.getAccountForEdit(org.id, params.id);
+    }
+
+    @Patch('accounts/:id')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Atualiza uma conta de cloud por ID' })
+    @ApiResponse({ status: 200, description: 'Conta de cloud atualizada com sucesso', type: CloudAccountResponseDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos', type: ValidationErrorResponseDto })
+    @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
+    async updateCloudAccount(
+        @CurrentOrganization() org: Organization,
+        @Param(new ZodValidationPipe(cloudAccountIdParamSchema)) params: CloudAccountIdParam,
+        @Body(new ZodValidationPipe(updateCloudAccountSchema)) dto: UpdateCloudAccountDto
+    ) {
+        return this.cloudService.updateCloudAccount(org.id, params.id, dto);
+    }
+
+    @Delete('accounts/:id')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Exclui uma conta de cloud por ID' })
+    @ApiResponse({ status: 200, description: 'Conta de cloud excluida com sucesso', type: DeleteCloudAccountResponseDto })
+    @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
+    async deleteCloudAccount(
+        @CurrentOrganization() org: Organization,
+        @Param(new ZodValidationPipe(cloudAccountIdParamSchema)) params: CloudAccountIdParam
+    ) {
+        return this.cloudService.deleteCloudAccount(org.id, params.id);
     }
 }

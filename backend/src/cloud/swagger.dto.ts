@@ -119,3 +119,17 @@ export class ValidationErrorResponseDto {
     @ApiProperty({ example: { field: 'credentials.roleArn' }, required: false })
     details?: Record<string, any>;
 }
+
+export class DeleteCloudAccountResponseDto {
+    @ApiProperty({
+        example: '123e4567-e89b-12d3-a456-426614174001',
+        description: 'ID da conta de cloud excluída',
+    })
+    id: string;
+
+    @ApiProperty({
+        example: true,
+        description: 'Indica se a conta foi excluída com sucesso',
+    })
+    deleted: boolean;
+}

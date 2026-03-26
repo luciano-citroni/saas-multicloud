@@ -16,7 +16,13 @@ import { createOrganizationSchema, organizationIdParamSchema, updateOrganization
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto, OrganizationResponseDto, DeleteOrganizationResponseDto } from './swagger.dto';
+import {
+    CreateOrganizationRequestDto,
+    UpdateOrganizationRequestDto,
+    OrganizationResponseDto,
+    DeleteOrganizationResponseDto,
+    LeaveOrganizationResponseDto,
+} from './swagger.dto';
 
 @SkipTenant()
 @ApiTags('Organizations')
@@ -126,6 +132,11 @@ export class OrganizationController {
     })
     @ApiResponse({ status: 200, description: 'Organização atualizada com sucesso', type: OrganizationResponseDto })
     @ApiResponse({
+        status: 403,
+
+        description: 'Apenas admin ou owner podem editar a organização',
+    })
+    @ApiResponse({
         status: 404,
 
         description: 'Organização não encontrada',
@@ -145,6 +156,22 @@ export class OrganizationController {
         body: { name?: string; cnpj?: string }
     ) {
         return this.organizationService.update(params.id, body, user.sub);
+    }
+
+    @Delete(':id/leave')
+    @ApiOperation({ summary: 'Sair da organização' })
+    @ApiResponse({ status: 200, description: 'Usuário saiu da organização com sucesso', type: LeaveOrganizationResponseDto })
+    @ApiResponse({ status: 403, description: 'Owner não pode sair da organização sem transferir propriedade ou excluí-la' })
+    @ApiResponse({ status: 404, description: 'Membro não encontrado na organização' })
+    leave(
+        @CurrentUser() user: JwtPayload,
+
+        @Param(new ZodValidationPipe(organizationIdParamSchema))
+        params: {
+            id: string;
+        }
+    ) {
+        return this.organizationService.leave(params.id, user.sub);
     }
 
     @Delete(':id')

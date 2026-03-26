@@ -67,8 +67,54 @@ export class OrganizationResponseDto {
         example: '12345678000190',
 
         description: 'CNPJ da organização',
+        required: false,
     })
-    cnpj: string;
+    cnpj?: string | null;
+
+    @ApiProperty({
+        example: 'OWNER',
+        description: 'Papel atual do usuário autenticado na organização',
+        required: false,
+        enum: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'],
+    })
+    currentRole?: string | null;
+
+    @ApiProperty({
+        example: 10,
+        description: 'Limite de cloud accounts permitido para a organização',
+        required: false,
+    })
+    maxCloudAccounts?: number;
+
+    @ApiProperty({
+        example: 25,
+        description: 'Limite de usuários permitido para a organização',
+        required: false,
+    })
+    maxUsers?: number;
+
+    @ApiProperty({
+        example: ['assessment'],
+        description: 'Módulos liberados no plano atual da organização',
+        required: false,
+        isArray: true,
+        type: String,
+    })
+    plans?: string[];
+
+    @ApiProperty({
+        example: '2026-03-26T13:00:00.000Z',
+        description: 'Data de criação da organização',
+        required: false,
+    })
+    createdAt?: Date;
+
+    @ApiProperty({
+        example: '2026-03-26T13:00:00.000Z',
+        description: 'Data da última atualização da organização',
+        required: false,
+    })
+    updatedAt?: Date;
 }
 
 export class DeleteOrganizationResponseDto {
@@ -85,6 +131,20 @@ export class DeleteOrganizationResponseDto {
         description: 'Confirmação de deleção',
     })
     deleted: boolean;
+}
+
+export class LeaveOrganizationResponseDto {
+    @ApiProperty({
+        example: '123e4567-e89b-12d3-a456-426614174000',
+        description: 'ID da organização deixada pelo usuário',
+    })
+    organizationId: string;
+
+    @ApiProperty({
+        example: true,
+        description: 'Confirmação de saída da organização',
+    })
+    left: boolean;
 }
 
 export class InviteMemberRequestDto {

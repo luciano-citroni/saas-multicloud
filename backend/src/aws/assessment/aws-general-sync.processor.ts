@@ -13,6 +13,8 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { AwsAssessmentSyncService } from './aws-assessment-sync.service';
 
 import { GENERAL_SYNC_QUEUE } from './constants';
+import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
+import { CloudProvider } from '../../db/entites/cloud-account.entity';
 
 export interface GeneralSyncJobPayload {
     cloudAccountId: string;
@@ -25,6 +27,9 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
     constructor(
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
+
+        @InjectRepository(CloudSyncJob)
+        private readonly syncJobRepository: Repository<CloudSyncJob>,
 
         private readonly syncService: AwsAssessmentSyncService
     ) {
@@ -44,6 +49,17 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
 
         await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: true });
 
+        const syncRecord = this.syncJobRepository.create({
+            cloudAccountId,
+            organizationId: cloudAccount.organizationId,
+            provider: CloudProvider.AWS,
+            status: 'running',
+            error: null,
+            completedAt: null,
+        });
+
+        const savedSyncRecord = await this.syncJobRepository.save(syncRecord);
+
         try {
             const hasPreviousSync = cloudAccount.lastGeneralSyncAt !== null;
 
@@ -53,9 +69,28 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
                 await this.syncService.syncAll(cloudAccountId, cloudAccount.organizationId);
             }
 
-            await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: new Date() });
+            const completedAt = new Date();
+
+            await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: completedAt });
+
+            await this.syncJobRepository.update(savedSyncRecord.id, {
+                status: 'completed',
+                completedAt,
+            });
 
             this.logger.log(`[sync:${job.id}] Sync geral concluido para conta ${cloudAccountId}`);
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+
+            this.logger.error(`[sync:${job.id}] Sync geral falhou para conta ${cloudAccountId}: ${error}`);
+
+            await this.syncJobRepository.update(savedSyncRecord.id, {
+                status: 'failed',
+                error,
+                completedAt: new Date(),
+            });
+
+            throw err;
         } finally {
             await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: false });
         }

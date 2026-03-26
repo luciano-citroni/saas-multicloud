@@ -159,7 +159,7 @@ export function AccountSwitcher({
                                 <span className="truncate text-xs text-muted-foreground">
                                     {selectedCloudAccount
                                         ? `${selectedCloudAccount.provider.toUpperCase()} · ${selectedCloudAccount.alias}`
-                                        : 'Sem cloud account'}
+                                        : 'Sem conta cloud selecionada'}
                                 </span>
                             </div>
                             <ChevronsUpDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -179,7 +179,7 @@ export function AccountSwitcher({
                                 className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
                             >
                                 <Plus className="size-3.5" />
-                                Nova
+                                Nova Conta Cloud
                             </Link>
                         </div>
 
@@ -218,15 +218,15 @@ export function AccountSwitcher({
 
                         <DropdownMenuSeparator />
 
-                        {/* ── Cloud account ── */}
+                        {/* ── Conta Cloud ── */}
                         <div className="flex items-center justify-between px-1.5 pt-1 pb-0.5">
-                            <DropdownMenuLabel className="px-0 py-0 text-xs font-medium text-muted-foreground">Cloud account</DropdownMenuLabel>
+                            <DropdownMenuLabel className="px-0 py-0 text-xs font-medium text-muted-foreground">Conta Cloud</DropdownMenuLabel>
                             <Link
                                 href={createCloudAccountHref}
                                 className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
                             >
                                 <Plus className="size-3.5" />
-                                Nova
+                                Nova Conta Cloud
                             </Link>
                         </div>
 
@@ -235,7 +235,7 @@ export function AccountSwitcher({
                                 <div className="relative">
                                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
                                     <input
-                                        placeholder="Filtrar cloud account…"
+                                        placeholder="Filtrar conta cloud…"
                                         value={cloudSearch}
                                         onChange={(e) => setCloudSearch(e.target.value)}
                                         onKeyDown={stopPropagation}
@@ -260,7 +260,7 @@ export function AccountSwitcher({
                             ))
                         ) : (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                                {cloudSearch ? 'Nenhum resultado.' : 'Sem cloud account para esta enterprise.'}
+                                {cloudSearch ? 'Nenhum resultado.' : 'Sem conta cloud para esta enterprise.'}
                             </p>
                         )}
                     </DropdownMenuContent>

@@ -3,13 +3,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { canManageCloudAccounts, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
-import { enqueueGeneralSync, fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
-import { CloudCog, RefreshCw } from 'lucide-react';
-import { OrganizationCloudTable } from './organiztion-cloud-table';
+import {
+    enqueueGeneralSync,
+    fetchOrganizationCloudAccounts,
+    isAwsProvider,
+    type OrganizationCloudAccount as CloudAccount,
+} from '@/app/actions/organization';
+import { Plus } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { CloudAccountTable } from './cloud-account-table';
 
 type ApiErrorPayload = {
     message?: string | string[];
@@ -23,10 +30,11 @@ type SidebarContextPayload = {
     organizations?: Array<{
         id?: string;
         currentRole?: string | null;
+        maxCloudAccounts?: number;
     }>;
 };
 
-type CloudAccountApiItem = OrganizationCloudAccount & {
+type CloudAccountApiItem = CloudAccount & {
     is_sync_in_progress?: boolean;
     last_general_sync_at?: string | null;
 };
@@ -49,26 +57,22 @@ function normalizeDateValue(value: unknown): string | null {
     return null;
 }
 
-function normalizeCloudAccounts(payload: unknown): OrganizationCloudAccount[] {
+function normalizeCloudAccounts(payload: unknown): CloudAccount[] {
     const normalizedPayload = payload as CloudAccountsApiPayload;
-    const items = Array.isArray(normalizedPayload)
-        ? normalizedPayload
-        : Array.isArray(normalizedPayload?.items)
-          ? normalizedPayload.items
-          : [];
+    const items = Array.isArray(normalizedPayload) ? normalizedPayload : Array.isArray(normalizedPayload?.items) ? normalizedPayload.items : [];
 
     if (!Array.isArray(items)) {
         return [];
     }
 
     return items
-        .filter((item): item is OrganizationCloudAccount => {
+        .filter((item): item is CloudAccount => {
             return (
                 typeof item === 'object' &&
                 item !== null &&
-                typeof (item as OrganizationCloudAccount).id === 'string' &&
-                typeof (item as OrganizationCloudAccount).alias === 'string' &&
-                typeof (item as OrganizationCloudAccount).provider === 'string'
+                typeof (item as CloudAccount).id === 'string' &&
+                typeof (item as CloudAccount).alias === 'string' &&
+                typeof (item as CloudAccount).provider === 'string'
             );
         })
         .map((item) => {
@@ -82,13 +86,14 @@ function normalizeCloudAccounts(payload: unknown): OrganizationCloudAccount[] {
         });
 }
 
-export function OrganizationCloudSync() {
+export function CloudAccountSync() {
+    const router = useRouter();
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [organizationRole, setOrganizationRole] = useState<OrganizationRole | null>(null);
-    const [accounts, setAccounts] = useState<OrganizationCloudAccount[]>([]);
+    const [maxCloudAccounts, setMaxCloudAccounts] = useState(0);
+    const [accounts, setAccounts] = useState<CloudAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [resolvingRole, setResolvingRole] = useState(true);
-    const [syncing, setSyncing] = useState(false);
     const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -130,7 +135,7 @@ export function OrganizationCloudSync() {
                 setAccounts(cloudAccountsList);
             } catch {
                 if (!silentErrors) {
-                    toast.error('Não foi possível carregar as contas cloud da organização.');
+                    toast.error('Não foi possível carregar as contas Cloud da Organização.');
                 }
 
                 if (!background) {
@@ -163,8 +168,10 @@ export function OrganizationCloudSync() {
             const activeOrganization = payload?.organizations?.find((organization) => organization?.id === orgId);
 
             setOrganizationRole(normalizeOrganizationRole(activeOrganization?.currentRole ?? null));
+            setMaxCloudAccounts(typeof activeOrganization?.maxCloudAccounts === 'number' ? activeOrganization.maxCloudAccounts : 0);
         } catch {
             setOrganizationRole(null);
+            setMaxCloudAccounts(0);
         } finally {
             setResolvingRole(false);
         }
@@ -232,71 +239,8 @@ export function OrganizationCloudSync() {
     }, [hasSyncInProgress, loadAccounts, organizationId]);
 
     const canManageAccounts = canManageCloudAccounts(organizationRole);
-
-    const handleSyncAll = useCallback(async () => {
-        if (!organizationId || !accounts.length || syncing || !canManageAccounts) {
-            return;
-        }
-
-        const syncableAccounts = accounts.filter((account) => account.isSyncInProgress !== true);
-
-        if (syncableAccounts.length === 0) {
-            toast.info('Todas as contas já possuem sync em andamento.');
-            return;
-        }
-
-        setSyncing(true);
-        setAccounts((currentAccounts) =>
-            currentAccounts.map((account) =>
-                syncableAccounts.some((syncableAccount) => syncableAccount.id === account.id)
-                    ? {
-                          ...account,
-                          isSyncInProgress: true,
-                      }
-                    : account
-            )
-        );
-
-        try {
-            const syncResults = await Promise.all(
-                syncableAccounts.map(async (account) => {
-                    const response = await enqueueGeneralSync(organizationId, account.id, account.provider);
-                    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
-
-                    return {
-                        account,
-                        ok: response.ok,
-                        status: response.status,
-                        payload,
-                    };
-                })
-            );
-
-            const successCount = syncResults.filter((result) => result.ok).length;
-            const alreadyRunningCount = syncResults.filter((result) => result.status === 409).length;
-            const failed = syncResults.filter((result) => !result.ok && result.status !== 409);
-
-            if (successCount > 0) {
-                toast.success(`Sync geral enfileirado para ${successCount} conta(s).`);
-            }
-
-            if (alreadyRunningCount > 0) {
-                toast.info(`${alreadyRunningCount} conta(s) já possuem sync em andamento.`);
-            }
-
-            if (failed.length > 0) {
-                const firstFailure = failed[0];
-                const message = extractErrorMessage(firstFailure.payload ?? null);
-                toast.error(`Falha em ${failed.length} conta(s): ${message}`);
-            }
-
-            await loadAccounts(organizationId, { nextRefreshing: true });
-        } catch {
-            toast.error('Não foi possível iniciar o sync geral da organização.');
-        } finally {
-            setSyncing(false);
-        }
-    }, [accounts, canManageAccounts, loadAccounts, organizationId, syncing]);
+    const hasCloudAccountLimit = maxCloudAccounts > 0;
+    const hasReachedCloudAccountLimit = hasCloudAccountLimit && accounts.length >= maxCloudAccounts;
 
     const handleSyncAccount = useCallback(
         async (cloudAccountId: string) => {
@@ -333,10 +277,14 @@ export function OrganizationCloudSync() {
                     return;
                 }
 
-                toast.success('Sync da conta enfileirado com sucesso.');
+                if (isAwsProvider(account?.provider)) {
+                    toast.success('Sync da conta AWS foi iniciado. O processamento vai considerar todas as regiões cadastradas nessa conta Cloud.');
+                } else {
+                    toast.success('Sync da conta Cloud foi iniciado com sucesso.');
+                }
                 await loadAccounts(organizationId, { nextRefreshing: true });
             } catch {
-                toast.error('Não foi possível enfileirar o sync da conta.');
+                toast.error('Não foi possível iniciar o sync da conta.');
             } finally {
                 setSyncingAccountId(null);
             }
@@ -344,20 +292,39 @@ export function OrganizationCloudSync() {
         [accounts, canManageAccounts, loadAccounts, organizationId, syncingAccountId]
     );
 
-    const handleEditAccount = useCallback(() => {
-        if (!canManageAccounts) {
-            return;
-        }
+    const handleEditAccount = useCallback(
+        (cloudAccountId: string) => {
+            if (!canManageAccounts) {
+                return;
+            }
 
-        toast.info('Fluxo de edição de cloud account será disponibilizado em breve.');
-    }, [canManageAccounts]);
+            router.push(`/cloud-accounts/${encodeURIComponent(cloudAccountId)}/edit`);
+        },
+        [canManageAccounts, router]
+    );
+
+    const connectAccountButton = canManageAccounts ? (
+        hasReachedCloudAccountLimit ? (
+            <Button size="sm" disabled>
+                <Plus className="mr-1 h-4 w-4" />
+                Nova conta
+            </Button>
+        ) : (
+            <Link href="/cloud-accounts/new">
+                <Button size="sm">
+                    <Plus className="mr-1 h-4 w-4" />
+                    Nova conta
+                </Button>
+            </Link>
+        )
+    ) : null;
 
     if (!organizationId) {
         return (
             <Card>
                 <CardHeader>
                     <CardTitle>Organização</CardTitle>
-                    <CardDescription>Selecione uma organização na sidebar para visualizar as contas cloud e sincronizações.</CardDescription>
+                    <CardDescription>Selecione uma organização na sidebar para visualizar as contas Cloud e sincronizações.</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -365,54 +332,50 @@ export function OrganizationCloudSync() {
 
     return (
         <div className="flex flex-col gap-4">
-            <Card>
-                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                        <CardTitle className="flex items-center gap-2">
-                            <CloudCog className="size-5" />
-                            Organização
-                        </CardTitle>
-                        <CardDescription>Visualize suas contas cloud e dispare um sync geral.</CardDescription>
+            <div className="rounded-xl border">
+                <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium">Contas Cloud da Organização</p>
+                        {hasReachedCloudAccountLimit ? (
+                            <p className="text-xs text-muted-foreground">
+                                Limite de contas cloud do plano atingido. Faça upgrade em Billing para conectar uma nova conta.
+                            </p>
+                        ) : null}
                     </div>
-                    <Button onClick={handleSyncAll} isLoading={syncing} disabled={!accounts.length || loading || !canManageAccounts || resolvingRole}>
-                        <RefreshCw className="size-4" />
-                        Sync geral
-                    </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="rounded-xl border">
-                        <div className="flex items-center justify-between border-b px-4 py-3">
-                            <p className="text-sm font-medium">Cloud accounts da organizacao</p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void loadAccounts(organizationId, { nextRefreshing: true })}
-                                isLoading={refreshing}
-                            >
-                                Atualizar
-                            </Button>
-                        </div>
 
-                        {loading || resolvingRole ? (
-                            <div className="px-4 py-6 text-sm text-muted-foreground">Carregando contas cloud...</div>
-                        ) : accounts.length === 0 ? (
-                            <div className="px-4 py-6 text-sm text-muted-foreground">
-                                Nenhuma conta cloud conectada ainda. Conecte uma conta para habilitar o sync geral.
-                            </div>
-                        ) : (
-                            <div className="p-4">
-                                <OrganizationCloudTable
-                                    data={accounts}
-                                    canManageAccounts={canManageAccounts}
-                                    syncingAccountId={syncingAccountId}
-                                    onSyncAccount={(id) => void handleSyncAccount(id)}
-                                    onEditAccount={handleEditAccount}
-                                />
-                            </div>
-                        )}
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                        {connectAccountButton}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void loadAccounts(organizationId, { nextRefreshing: true })}
+                            isLoading={refreshing}
+                        >
+                            Atualizar
+                        </Button>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+
+                {loading || resolvingRole ? (
+                    <div className="px-4 py-6 text-sm text-muted-foreground">Carregando contas...</div>
+                ) : accounts.length === 0 ? (
+                    <div className="px-4 py-6">
+                        <p className="text-sm text-muted-foreground">
+                            Nenhuma conta cloud conectada ainda. Conecte uma conta para habilitar o sync geral.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="p-4">
+                        <CloudAccountTable
+                            data={accounts}
+                            canManageAccounts={canManageAccounts}
+                            syncingAccountId={syncingAccountId}
+                            onSyncAccount={(id) => void handleSyncAccount(id)}
+                            onEditAccount={handleEditAccount}
+                        />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

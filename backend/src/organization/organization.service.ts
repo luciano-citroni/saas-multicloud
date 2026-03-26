@@ -122,7 +122,7 @@ export class OrganizationService {
             throw new NotFoundException(ErrorMessages.TENANT.NO_ACCESS);
         }
 
-        await this.ensureUserIsOwner(id, userId);
+        await this.ensureUserCanManageOrganization(id, userId);
 
         const organization = await this.organizationRepository.preload({ id, ...payload });
 
@@ -141,6 +141,27 @@ export class OrganizationService {
         await this.organizationRepository.remove(organization);
 
         return { id, deleted: true };
+    }
+
+    async leave(organizationId: string, userId: string): Promise<{ organizationId: string; left: true }> {
+        const membership = await this.memberRepository.findOne({
+            where: {
+                organizationId,
+                userId,
+            },
+        });
+
+        if (!membership) {
+            throw new NotFoundException(ErrorMessages.MEMBERS.NOT_FOUND);
+        }
+
+        if (membership.role === OrgRole.OWNER) {
+            throw new ForbiddenException(ErrorMessages.ORGANIZATIONS.OWNER_CANNOT_LEAVE);
+        }
+
+        await this.memberRepository.remove(membership);
+
+        return { organizationId, left: true };
     }
 
     // ─── Member Management ────────────────────────────────────────────────────
@@ -515,6 +536,21 @@ export class OrganizationService {
         });
 
         if (!membership || membership.role !== OrgRole.OWNER) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+    }
+
+    private async ensureUserCanManageOrganization(organizationId: string, userId: string): Promise<void> {
+        const membership = await this.memberRepository.findOne({
+            where: {
+                organizationId,
+                userId,
+            },
+        });
+
+        const role = membership?.role as OrgRole | undefined;
+
+        if (!role || (ROLE_HIERARCHY[role] ?? 0) < ROLE_HIERARCHY[OrgRole.ADMIN]) {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
     }

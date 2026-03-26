@@ -1,8 +1,12 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ClientSecretCredential } from '@azure/identity';
 import { ResourceGraphClient } from '@azure/arm-resourcegraph';
 import { CloudService } from '../../cloud/cloud.service';
 import { CloudProvider } from '../../db/entites/cloud-account.entity';
+import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
 import { AzureSubscriptionsService } from '../subscriptions/azure-subscriptions.service';
 import { AzureComputeService } from '../compute/azure-compute.service';
 import { AzureNetworkingService } from '../networking/azure-networking.service';
@@ -64,12 +68,13 @@ export class AzureSyncService {
         private readonly databases: AzureDatabasesService,
         private readonly web: AzureWebService,
         private readonly security: AzureSecurityService,
+        @InjectRepository(CloudAccount)
+        private readonly cloudAccountRepository: Repository<CloudAccount>,
+        @InjectRepository(CloudSyncJob)
+        private readonly syncJobRepository: Repository<CloudSyncJob>
     ) {}
 
-    async syncResources(
-        cloudAccountId: string,
-        organizationId: string,
-    ): Promise<{ message: string; totalSynced: number; syncedAt: Date }> {
+    async syncResources(cloudAccountId: string, organizationId: string): Promise<{ message: string; totalSynced: number; syncedAt: Date }> {
         // 1. Validate the CloudAccount exists and belongs to the organization
         const account = await this.cloudService.findByIdAndOrganization(cloudAccountId, organizationId);
 
@@ -79,158 +84,129 @@ export class AzureSyncService {
 
         // 2. Ensure the provider is AZURE
         if (account.provider !== CloudProvider.AZURE) {
-            throw new BadRequestException(
-                `A conta '${cloudAccountId}' não é uma conta Azure (provider: ${account.provider}).`,
-            );
+            throw new BadRequestException(`A conta '${cloudAccountId}' não é uma conta Azure (provider: ${account.provider}).`);
         }
 
-        // 3. Retrieve decrypted credentials
-        const credentials = await this.cloudService.getDecryptedCredentials(cloudAccountId, organizationId);
+        await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: true });
 
-        const { tenantId, clientId, clientSecret, subscriptionId, subscriptionIds } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId?: string;
-            subscriptionIds?: string[];
-        };
+        const syncRecord = this.syncJobRepository.create({
+            cloudAccountId,
+            organizationId,
+            provider: CloudProvider.AZURE,
+            status: 'running',
+            error: null,
+            completedAt: null,
+        });
 
-        // 4. Build subscriptions array
-        const subscriptionList: string[] = subscriptionIds ?? (subscriptionId ? [subscriptionId] : []);
+        const savedSyncRecord = await this.syncJobRepository.save(syncRecord);
 
-        if (subscriptionList.length === 0) {
-            throw new BadRequestException('As credenciais Azure não contêm nenhuma subscriptionId válida.');
-        }
+        try {
+            // 3. Retrieve decrypted credentials
+            const credentials = await this.cloudService.getDecryptedCredentials(cloudAccountId, organizationId);
 
-        // 5. Authenticate with Azure
-        const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-        const client = new ResourceGraphClient(credential);
+            const { tenantId, clientId, clientSecret, subscriptionId, subscriptionIds } = credentials as {
+                tenantId: string;
+                clientId: string;
+                clientSecret: string;
+                subscriptionId?: string;
+                subscriptionIds?: string[];
+            };
 
-        // 6. Paginate and collect all resources from ARG
-        const allResources: ArgResource[] = [];
-        let skipToken: string | undefined;
+            // 4. Build subscriptions array
+            const subscriptionList: string[] = subscriptionIds ?? (subscriptionId ? [subscriptionId] : []);
 
-        do {
-            const response = await client.resources({
-                query: ARG_KQL_QUERY,
-                subscriptions: subscriptionList,
-                options: { resultFormat: 'objectArray', skipToken },
+            if (subscriptionList.length === 0) {
+                throw new BadRequestException('As credenciais Azure não contêm nenhuma subscriptionId válida.');
+            }
+
+            // 5. Authenticate with Azure
+            const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+            const client = new ResourceGraphClient(credential);
+
+            // 6. Paginate and collect all resources from ARG
+            const allResources: ArgResource[] = [];
+            let skipToken: string | undefined;
+
+            do {
+                const response = await client.resources({
+                    query: ARG_KQL_QUERY,
+                    subscriptions: subscriptionList,
+                    options: { resultFormat: 'objectArray', skipToken },
+                });
+
+                if (Array.isArray(response.data)) {
+                    allResources.push(...(response.data as ArgResource[]));
+                }
+
+                skipToken = response.skipToken;
+            } while (skipToken);
+
+            this.logger.log(`[Azure Sync] CloudAccount ${cloudAccountId}: ${allResources.length} recursos retornados pelo ARG.`);
+
+            // 7. Group resources by type (lowercase)
+            const byType = new Map<string, ArgResource[]>();
+
+            for (const resource of allResources) {
+                const key = resource.type.toLowerCase();
+
+                if (!byType.has(key)) {
+                    byType.set(key, []);
+                }
+
+                byType.get(key)!.push(resource);
+            }
+
+            // 8. Route each resource type to the appropriate domain service
+            await this.subscriptions.upsertSubscriptions(cloudAccountId, byType.get('microsoft.resources/subscriptions') ?? []);
+            await this.subscriptions.upsertResourceGroups(cloudAccountId, byType.get('microsoft.resources/resourcegroups') ?? []);
+            await this.compute.upsertVirtualMachines(cloudAccountId, byType.get('microsoft.compute/virtualmachines') ?? []);
+            await this.compute.upsertVmss(cloudAccountId, byType.get('microsoft.compute/virtualmachinescalesets') ?? []);
+            await this.compute.upsertAksClusters(cloudAccountId, byType.get('microsoft.containerservice/managedclusters') ?? []);
+            await this.compute.upsertDisks(cloudAccountId, byType.get('microsoft.compute/disks') ?? []);
+            await this.web.upsertWebApps(cloudAccountId, byType.get('microsoft.web/sites') ?? []);
+            await this.web.upsertAppServicePlans(cloudAccountId, byType.get('microsoft.web/serverfarms') ?? []);
+            await this.networking.upsertVirtualNetworks(cloudAccountId, byType.get('microsoft.network/virtualnetworks') ?? []);
+            await this.networking.upsertNetworkInterfaces(cloudAccountId, byType.get('microsoft.network/networkinterfaces') ?? []);
+            await this.networking.upsertPublicIps(cloudAccountId, byType.get('microsoft.network/publicipaddresses') ?? []);
+            await this.networking.upsertNsgs(cloudAccountId, byType.get('microsoft.network/networksecuritygroups') ?? []);
+            await this.networking.upsertLoadBalancers(cloudAccountId, byType.get('microsoft.network/loadbalancers') ?? []);
+            await this.networking.upsertApplicationGateways(cloudAccountId, byType.get('microsoft.network/applicationgateways') ?? []);
+            await this.storage.upsertStorageAccounts(cloudAccountId, byType.get('microsoft.storage/storageaccounts') ?? []);
+            await this.databases.upsertSqlServers(cloudAccountId, byType.get('microsoft.sql/servers') ?? []);
+            await this.databases.upsertSqlDatabases(cloudAccountId, byType.get('microsoft.sql/servers/databases') ?? []);
+            await this.databases.upsertPostgresServers(cloudAccountId, byType.get('microsoft.dbforpostgresql/flexibleservers') ?? []);
+            await this.databases.upsertCosmosDbAccounts(cloudAccountId, byType.get('microsoft.documentdb/databaseaccounts') ?? []);
+            await this.security.upsertKeyVaults(cloudAccountId, byType.get('microsoft.keyvault/vaults') ?? []);
+            await this.security.upsertRecoveryVaults(cloudAccountId, byType.get('microsoft.recoveryservices/vaults') ?? []);
+
+            const syncedAt = new Date();
+
+            await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: syncedAt, isGeneralSyncInProgress: false });
+
+            await this.syncJobRepository.update(savedSyncRecord.id, {
+                status: 'completed',
+                completedAt: syncedAt,
             });
 
-            if (Array.isArray(response.data)) {
-                allResources.push(...(response.data as ArgResource[]));
-            }
+            return {
+                message: 'Sincronização concluída com sucesso.',
+                totalSynced: allResources.length,
+                syncedAt,
+            };
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
 
-            skipToken = response.skipToken;
-        } while (skipToken);
+            this.logger.error(`[Azure Sync] CloudAccount ${cloudAccountId} falhou: ${error}`);
 
-        this.logger.log(
-            `[Azure Sync] CloudAccount ${cloudAccountId}: ${allResources.length} recursos retornados pelo ARG.`,
-        );
+            await this.syncJobRepository.update(savedSyncRecord.id, {
+                status: 'failed',
+                error,
+                completedAt: new Date(),
+            });
 
-        // 7. Group resources by type (lowercase)
-        const byType = new Map<string, ArgResource[]>();
+            await this.cloudAccountRepository.update({ id: cloudAccountId }, { isGeneralSyncInProgress: false });
 
-        for (const resource of allResources) {
-            const key = resource.type.toLowerCase();
-
-            if (!byType.has(key)) {
-                byType.set(key, []);
-            }
-
-            byType.get(key)!.push(resource);
+            throw err;
         }
-
-        // 8. Route each resource type to the appropriate domain service
-        await this.subscriptions.upsertSubscriptions(
-            cloudAccountId,
-            byType.get('microsoft.resources/subscriptions') ?? [],
-        );
-        await this.subscriptions.upsertResourceGroups(
-            cloudAccountId,
-            byType.get('microsoft.resources/resourcegroups') ?? [],
-        );
-        await this.compute.upsertVirtualMachines(
-            cloudAccountId,
-            byType.get('microsoft.compute/virtualmachines') ?? [],
-        );
-        await this.compute.upsertVmss(
-            cloudAccountId,
-            byType.get('microsoft.compute/virtualmachinescalesets') ?? [],
-        );
-        await this.compute.upsertAksClusters(
-            cloudAccountId,
-            byType.get('microsoft.containerservice/managedclusters') ?? [],
-        );
-        await this.compute.upsertDisks(
-            cloudAccountId,
-            byType.get('microsoft.compute/disks') ?? [],
-        );
-        await this.web.upsertWebApps(
-            cloudAccountId,
-            byType.get('microsoft.web/sites') ?? [],
-        );
-        await this.web.upsertAppServicePlans(
-            cloudAccountId,
-            byType.get('microsoft.web/serverfarms') ?? [],
-        );
-        await this.networking.upsertVirtualNetworks(
-            cloudAccountId,
-            byType.get('microsoft.network/virtualnetworks') ?? [],
-        );
-        await this.networking.upsertNetworkInterfaces(
-            cloudAccountId,
-            byType.get('microsoft.network/networkinterfaces') ?? [],
-        );
-        await this.networking.upsertPublicIps(
-            cloudAccountId,
-            byType.get('microsoft.network/publicipaddresses') ?? [],
-        );
-        await this.networking.upsertNsgs(
-            cloudAccountId,
-            byType.get('microsoft.network/networksecuritygroups') ?? [],
-        );
-        await this.networking.upsertLoadBalancers(
-            cloudAccountId,
-            byType.get('microsoft.network/loadbalancers') ?? [],
-        );
-        await this.networking.upsertApplicationGateways(
-            cloudAccountId,
-            byType.get('microsoft.network/applicationgateways') ?? [],
-        );
-        await this.storage.upsertStorageAccounts(
-            cloudAccountId,
-            byType.get('microsoft.storage/storageaccounts') ?? [],
-        );
-        await this.databases.upsertSqlServers(
-            cloudAccountId,
-            byType.get('microsoft.sql/servers') ?? [],
-        );
-        await this.databases.upsertSqlDatabases(
-            cloudAccountId,
-            byType.get('microsoft.sql/servers/databases') ?? [],
-        );
-        await this.databases.upsertPostgresServers(
-            cloudAccountId,
-            byType.get('microsoft.dbforpostgresql/flexibleservers') ?? [],
-        );
-        await this.databases.upsertCosmosDbAccounts(
-            cloudAccountId,
-            byType.get('microsoft.documentdb/databaseaccounts') ?? [],
-        );
-        await this.security.upsertKeyVaults(
-            cloudAccountId,
-            byType.get('microsoft.keyvault/vaults') ?? [],
-        );
-        await this.security.upsertRecoveryVaults(
-            cloudAccountId,
-            byType.get('microsoft.recoveryservices/vaults') ?? [],
-        );
-
-        return {
-            message: 'Sincronização concluída com sucesso.',
-            totalSynced: allResources.length,
-            syncedAt: new Date(),
-        };
     }
 }

@@ -44,6 +44,8 @@ export const ErrorMessages = {
         NOT_FOUND: 'Organization not found',
 
         CNPJ_ALREADY_IN_USE: 'This CNPJ is already in use',
+
+        OWNER_CANNOT_LEAVE: 'The organization owner cannot leave without transferring ownership or deleting the organization.',
     },
 
     // Organization members

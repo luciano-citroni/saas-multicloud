@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, GitBranch, LayoutDashboard } from 'lucide-react';
+import { Building2, Cloudy, GitBranch, LayoutDashboard } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
@@ -22,6 +22,11 @@ const baseData = {
             title: 'Dashboard',
             url: '/',
             icon: LayoutDashboard,
+        },
+        {
+            title: 'Contas Cloud',
+            url: '/cloud-accounts',
+            icon: Cloudy,
         },
         {
             title: 'Organização',
@@ -228,7 +233,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 if (!response.ok) {
                     setCloudAccounts([]);
                     setActiveCloudAccountId(undefined);
-                    toast.error('Não foi possível carregar as cloud accounts.');
+                    toast.error('Não foi possível carregar as contas cloud.');
                     return;
                 }
 
@@ -258,7 +263,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             } catch {
                 setCloudAccounts([]);
                 setActiveCloudAccountId(undefined);
-                toast.error('Não foi possível carregar as cloud accounts.');
+                toast.error('Não foi possível carregar as contas cloud.');
             }
         },
         [router]

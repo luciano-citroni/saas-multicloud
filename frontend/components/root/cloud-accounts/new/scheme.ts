@@ -3,6 +3,12 @@ import { z } from 'zod';
 const awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const normalizeRegions = (values?: Array<{ value?: string }>): string[] => {
+    if (!values) return [];
+
+    return values.map((item) => (item.value ?? '').trim()).filter((region) => region.length > 0);
+};
+
 export const cloudAccountFormScheme = z
     .object({
         alias: z.string().min(1, 'Informe um nome para a conta.').max(100, 'Nome muito longo.'),
@@ -13,6 +19,7 @@ export const cloudAccountFormScheme = z
             .string()
             .optional()
             .refine((val) => !val || awsRegionRegex.test(val), 'Região AWS inválida (ex: us-east-1).'),
+        awsRegions: z.array(z.object({ value: z.string().optional() })).optional(),
         // Azure fields
         tenantId: z.string().optional(),
         clientId: z.string().optional(),
@@ -28,12 +35,28 @@ export const cloudAccountFormScheme = z
                     path: ['roleArn'],
                 });
             }
+
+            const additionalRegions = normalizeRegions(data.awsRegions);
+            additionalRegions.forEach((region, index) => {
+                if (!awsRegionRegex.test(region)) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: 'Região AWS inválida (ex: us-east-1).',
+                        path: ['awsRegions', index, 'value'],
+                    });
+                }
+            });
+
             if (!data.region || data.region.trim().length === 0) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    message: 'Informe a região principal (ex: us-east-1).',
-                    path: ['region'],
-                });
+                const hasAdditionalRegions = additionalRegions.length > 0;
+
+                if (!hasAdditionalRegions) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: 'Informe a região principal ou adicione ao menos uma região AWS.',
+                        path: ['region'],
+                    });
+                }
             }
         }
 

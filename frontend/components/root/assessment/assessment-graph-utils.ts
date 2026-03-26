@@ -1,6 +1,12 @@
 import type { Edge, Node } from '@xyflow/react';
 import dagre from 'dagre';
-import type { ArchitectureNodeData, AssessmentProvider, GroupingMode, ResourceVisibilityFilterId } from '@/components/root/assessment/types';
+import type {
+    ArchitectureNodeData,
+    AssessmentProvider,
+    GroupingDimension,
+    GroupingMode,
+    ResourceVisibilityFilterId,
+} from '@/components/root/assessment/types';
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 88;
@@ -112,6 +118,50 @@ function normalizeGroupId(label: string): string {
         .replace(/^-+|-+$/g, '');
 }
 
+function regionFromAvailabilityZone(value: string): string | null {
+    const trimmed = value.trim().toLowerCase();
+
+    // AWS AZ: us-east-1a -> us-east-1
+    const awsMatch = trimmed.match(/^([a-z]{2}(?:-gov)?-[a-z]+-\d)[a-z]$/i);
+    if (awsMatch?.[1]) {
+        return awsMatch[1];
+    }
+
+    // Azure zones may look like: brazilsouth-1
+    const azureMatch = trimmed.match(/^([a-z0-9-]+)-\d+$/i);
+    if (azureMatch?.[1]) {
+        return azureMatch[1];
+    }
+
+    return null;
+}
+
+function inferNodeRegion(data: ArchitectureNodeData): string | null {
+    const groupRegion = data.group?.region;
+    if (typeof groupRegion === 'string' && groupRegion.trim().length > 0) {
+        return groupRegion.trim();
+    }
+
+    const details = data.details as Record<string, unknown> | undefined;
+
+    const explicitRegion = details?.region;
+    if (typeof explicitRegion === 'string' && explicitRegion.trim().length > 0) {
+        return explicitRegion.trim();
+    }
+
+    const location = details?.location;
+    if (typeof location === 'string' && location.trim().length > 0) {
+        return location.trim();
+    }
+
+    const az = details?.availabilityZone;
+    if (typeof az === 'string' && az.trim().length > 0) {
+        return regionFromAvailabilityZone(az) ?? az.trim();
+    }
+
+    return null;
+}
+
 function getNodeGroupLabel(node: Node, groupingMode: GroupingMode): string {
     const data = (node.data ?? {}) as ArchitectureNodeData;
 
@@ -133,7 +183,7 @@ function getNodeGroupLabel(node: Node, groupingMode: GroupingMode): string {
     }
 
     if (groupingMode === 'region') {
-        const region = data.group?.region;
+        const region = inferNodeRegion(data);
         if (typeof region === 'string' && region.trim().length > 0) {
             return `Region: ${region}`;
         }
@@ -271,10 +321,10 @@ function buildVpcHierarchyNodes(resourceNodes: Node[], allEdges: Edge[]): Node[]
     }
 
     // Layout constants
-    const COLUMN_GAP = 64;      // horizontal gap between columns
-    const ROW_ITEM_GAP = 10;    // vertical gap between stacked items within a subnet row
-    const SUBNET_ROW_GAP = 28;  // vertical gap between distinct subnet rows
-    const SECTION_GAP_Y = 36;   // gap between subnet section and VPC-level extras
+    const COLUMN_GAP = 64; // horizontal gap between columns
+    const ROW_ITEM_GAP = 10; // vertical gap between stacked items within a subnet row
+    const SUBNET_ROW_GAP = 28; // vertical gap between distinct subnet rows
+    const SECTION_GAP_Y = 36; // gap between subnet section and VPC-level extras
 
     const preparedGroups = Array.from(groups.entries())
         .sort((a, b) => (labelsById.get(a[0]) ?? a[0]).localeCompare(labelsById.get(b[0]) ?? b[0], 'pt-BR'))
@@ -458,24 +508,27 @@ function buildVpcHierarchyNodes(resourceNodes: Node[], allEdges: Edge[]): Node[]
     return grouped;
 }
 
-export function buildGroupedNodes(resourceNodes: Node[], allEdges: Edge[], groupingMode: GroupingMode): Node[] {
+export function buildGroupedNodesByModes(resourceNodes: Node[], allEdges: Edge[], groupingModes: GroupingDimension[]): Node[] {
     if (!resourceNodes.length) {
         return [];
     }
 
-    if (groupingMode === 'none') {
+    if (groupingModes.length === 0) {
         return resourceNodes;
     }
 
-    if (groupingMode === 'vpc') {
+    if (groupingModes.length === 1 && groupingModes[0] === 'vpc') {
         return buildVpcHierarchyNodes(resourceNodes, allEdges);
     }
+
+    const selectedModes = groupingModes;
 
     const groups = new Map<string, Node[]>();
     const labelsById = new Map<string, string>();
 
     for (const node of resourceNodes) {
-        const label = getNodeGroupLabel(node, groupingMode);
+        const labels = selectedModes.map((mode) => getNodeGroupLabel(node, mode));
+        const label = labels.join(' • ');
         const groupId = `group:${normalizeGroupId(label) || 'default'}`;
 
         const list = groups.get(groupId) ?? [];
@@ -488,7 +541,7 @@ export function buildGroupedNodes(resourceNodes: Node[], allEdges: Edge[], group
         const aLabel = labelsById.get(a[0]) ?? a[0].replace('group:', '');
         const bLabel = labelsById.get(b[0]) ?? b[0].replace('group:', '');
 
-        if (groupingMode === 'resourceType') {
+        if (selectedModes.length === 1 && selectedModes[0] === 'resourceType') {
             return getGroupPriority(aLabel) - getGroupPriority(bLabel);
         }
 
@@ -553,6 +606,14 @@ export function buildGroupedNodes(resourceNodes: Node[], allEdges: Edge[], group
     }
 
     return grouped;
+}
+
+export function buildGroupedNodes(resourceNodes: Node[], allEdges: Edge[], groupingMode: GroupingMode): Node[] {
+    if (groupingMode === 'none') {
+        return buildGroupedNodesByModes(resourceNodes, allEdges, []);
+    }
+
+    return buildGroupedNodesByModes(resourceNodes, allEdges, [groupingMode]);
 }
 
 export function autoLayout(nodes: Node[], edges: Edge[]): Node[] {

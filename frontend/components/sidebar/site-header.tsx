@@ -12,6 +12,8 @@ const routeNames: Record<string, string> = {
     new: 'Nova',
     billing: 'Planos e Regras',
     settings: 'Configurações',
+    'cloud-accounts': 'Contas Cloud',
+    edit: 'Editar',
 };
 
 function isId(segment: string) {
@@ -41,7 +43,7 @@ export function SiteHeader() {
             endIndex = i + 1;
         }
 
-        const url = `/${rawSegments.slice(0, endIndex + 1).join('/')}`;
+        const url = `/${rawSegments.slice(0, i + 1).join('/')}`;
 
         const found = navMain.find((item) => item.url === url);
 

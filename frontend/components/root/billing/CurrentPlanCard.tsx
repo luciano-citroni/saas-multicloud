@@ -72,7 +72,7 @@ export default function CurrentPlanCard({ loading, subscription }: { loading: bo
                 ) : (
                     <div className="grid gap-3 md:grid-cols-3">
                         <div className="rounded-lg border p-3">
-                            <p className="text-xs text-muted-foreground">Cloud accounts</p>
+                            <p className="text-xs text-muted-foreground">Contas Cloud</p>
                             <p className="mt-1 text-sm font-semibold">{subscription.plan.metadata?.maxCloudAccounts ?? '0'}</p>
                         </div>
                         <div className="rounded-lg border p-3">

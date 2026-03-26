@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     }
 
     const payload = await parseJsonSafe<unknown>(response);
-    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao criar cloud account' }, { status: response.status });
+    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao criar conta cloud' }, { status: response.status });
 
     if (rotatedTokens) {
         setAuthCookies(nextResponse, rotatedTokens);

@@ -4,7 +4,6 @@ import type { MutableRefObject } from 'react';
 import { Background, Controls, MiniMap, ReactFlow } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { assessmentNodeTypes } from '@/components/root/assessment/assessment-graph-nodes';
 
 const EDGE_LEGEND = [
@@ -31,13 +30,18 @@ type AssessmentGraphCardProps = {
 };
 
 export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode, graphWrapperRef }: AssessmentGraphCardProps) {
+    const isLargeGraph = nodes.length > 450;
+
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Grafo da arquitetura</CardTitle>
-                <CardDescription>Visualização carregada após a execução do assessment, com organização visual por tipo, rede ou região.</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <div className="rounded-xl border">
+            <div className="border-b px-4 py-3">
+                <p className="text-sm font-medium">Grafo da arquitetura</p>
+                <p className="text-xs text-muted-foreground">
+                    Visualização carregada após a execução do assessment, com organização visual por múltiplos critérios.
+                </p>
+            </div>
+
+            <div className="p-4">
                 {nodes.length === 0 ? (
                     <div className="flex min-h-130 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
                         Rode o assessment para montar o grafo.
@@ -48,6 +52,7 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
                             <Badge variant="secondary">Layout automático com Dagre</Badge>
                             <Badge variant="secondary">Agrupamento: {groupingModeLabel}</Badge>
                             <Badge variant="secondary">Pan e zoom habilitados</Badge>
+                            {isLargeGraph ? <Badge variant="secondary">Mini mapa ocultado para otimizar renderização</Badge> : null}
                         </div>
 
                         {/* Edge legend */}
@@ -94,14 +99,14 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
                                 elevateEdgesOnSelect
                                 connectionLineType={'smoothstep' as never}
                             >
-                                <MiniMap pannable zoomable />
+                                {!isLargeGraph ? <MiniMap pannable zoomable /> : null}
                                 <Controls />
                                 <Background color="var(--border)" gap={20} size={1} />
                             </ReactFlow>
                         </div>
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }

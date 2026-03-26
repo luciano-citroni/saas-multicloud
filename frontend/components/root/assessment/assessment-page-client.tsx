@@ -13,7 +13,7 @@ import { AssessmentGraphCard } from '@/components/root/assessment/assessment-gra
 import { AssessmentToolbar, getGroupingModeLabel } from '@/components/root/assessment/assessment-toolbar';
 import {
     autoLayout,
-    buildGroupedNodes,
+    buildGroupedNodesByModes,
     filterNodesByVisibility,
     formatAssessmentProvider,
     normalizeAssessmentProvider,
@@ -21,7 +21,7 @@ import {
     normalizeNodes,
     removeOrphanNodesByType,
 } from '@/components/root/assessment/assessment-graph-utils';
-import type { AssessmentGraphPayload, GroupingMode, ResourceVisibilityFilterId, SidebarContextPayload } from '@/components/root/assessment/types';
+import type { AssessmentGraphPayload, GroupingDimension, ResourceVisibilityFilterId, SidebarContextPayload } from '@/components/root/assessment/types';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import { canManageCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
@@ -278,7 +278,7 @@ export function AssessmentPageClient() {
     const [downloading, setDownloading] = useState(false);
     const [resourceNodes, setResourceNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
-    const [groupingMode, setGroupingMode] = useState<GroupingMode>('resourceType');
+    const [groupingModes, setGroupingModes] = useState<GroupingDimension[]>(['resourceType']);
     const [hiddenResourceFilterIds, setHiddenResourceFilterIds] = useState<Set<ResourceVisibilityFilterId>>(new Set(['securityGroups']));
     const [layoutNonce, setLayoutNonce] = useState(0);
 
@@ -297,8 +297,8 @@ export function AssessmentPageClient() {
     }, [edges, hiddenResourceFilterIds, layoutNonce, resourceNodes]);
 
     const nodes = useMemo(
-        () => buildGroupedNodes(filteredGraph.resourceNodes, filteredGraph.edges, groupingMode),
-        [filteredGraph.edges, filteredGraph.resourceNodes, groupingMode]
+        () => buildGroupedNodesByModes(filteredGraph.resourceNodes, filteredGraph.edges, groupingModes),
+        [filteredGraph.edges, filteredGraph.resourceNodes, groupingModes]
     );
 
     const visualGroupCount = useMemo(() => {
@@ -306,12 +306,22 @@ export function AssessmentPageClient() {
             return 0;
         }
 
-        if (groupingMode === 'none') {
+        if (groupingModes.length === 0) {
             return 1;
         }
 
         return nodes.filter((node) => node.type === 'resourceGroup').length;
-    }, [filteredGraph.resourceNodes.length, groupingMode, nodes]);
+    }, [filteredGraph.resourceNodes.length, groupingModes.length, nodes]);
+
+    const toggleGroupingMode = useCallback((mode: GroupingDimension) => {
+        setGroupingModes((current) => {
+            if (current.includes(mode)) {
+                return current.filter((value) => value !== mode);
+            }
+
+            return [...current, mode];
+        });
+    }, []);
 
     const loadContext = useCallback(async () => {
         const nextOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -424,7 +434,7 @@ export function AssessmentPageClient() {
 
     const runAssessmentRequest = useCallback(async () => {
         if (!organizationId || !cloudAccountId) {
-            toast.error('Selecione organização e cloud account para executar o assessment.');
+            toast.error('Selecione organização e conta cloud para executar o assessment.');
             return;
         }
 
@@ -434,7 +444,7 @@ export function AssessmentPageClient() {
         }
 
         if (activeProvider === 'unknown') {
-            toast.error('Não foi possível identificar o provider da cloud account ativa.');
+            toast.error('Não foi possível identificar o provider da conta cloud ativa.');
             return;
         }
 
@@ -481,11 +491,11 @@ export function AssessmentPageClient() {
         }
 
         if (!cloudAccountId || !activeCloudAccount) {
-            return 'Selecione uma cloud account na sidebar para habilitar o assessment.';
+            return 'Selecione uma conta cloud na sidebar para habilitar o assessment.';
         }
 
         if (!canRun) {
-            return 'Selecione uma organização e uma cloud account válidas na sidebar para habilitar o assessment.';
+            return 'Selecione uma organização e uma conta cloud válidas na sidebar para habilitar o assessment.';
         }
 
         return `Execute o assessment para gerar e visualizar o grafo de arquitetura da conta ${activeCloudAccount.alias} em ${providerLabel}.`;
@@ -563,21 +573,14 @@ export function AssessmentPageClient() {
     }, [activeProvider, colorMode, filteredGraph.resourceNodes.length, nodes, providerLabel]);
 
     const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
-    const groupingModeLabel = getGroupingModeLabel(groupingMode);
+    const groupingModeLabel = getGroupingModeLabel(groupingModes);
 
     if (hasAssessmentModule === null || canCreateCloudAccount === null) {
         return null;
     }
 
     return (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-            <div className="space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight">Assessment</h1>
-                <p className="text-sm text-muted-foreground">
-                    Execute análises de arquitetura para AWS e Azure e visualize o grafo com agrupamentos mais densos.
-                </p>
-            </div>
-
+        <div className="flex flex-col gap-4">
             <AssessmentToolbar
                 title={toolbarTitle}
                 subtitle={subtitle}
@@ -588,12 +591,12 @@ export function AssessmentPageClient() {
                 canCreateCloudAccount={Boolean(canCreateCloudAccount)}
                 running={running}
                 downloading={downloading}
-                groupingMode={groupingMode}
+                groupingModes={groupingModes}
                 hiddenResourceFilterIds={hiddenResourceFilterIds}
                 onRun={() => void runAssessmentRequest()}
                 onReorganize={reorganizeGraph}
                 onDownload={() => void downloadDiagram()}
-                onGroupingModeChange={setGroupingMode}
+                onToggleGroupingMode={toggleGroupingMode}
                 onToggleResourceFilter={toggleResourceFilter}
                 onConnectCloudAccount={() => router.push('/cloud-accounts/new')}
             />

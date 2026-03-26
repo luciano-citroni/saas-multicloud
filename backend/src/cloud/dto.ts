@@ -113,6 +113,17 @@ export const createCloudAccountSchema = z
         }
     );
 
+export const updateCloudAccountSchema = z
+    .object({
+        alias: z.string().min(1).max(100).optional(),
+        credentials: z.record(z.any()).optional(),
+        isActive: z.boolean().optional(),
+    })
+    .refine((data) => data.alias !== undefined || data.credentials !== undefined || data.isActive !== undefined, {
+        message: 'Informe ao menos um campo para atualização',
+        path: ['alias'],
+    });
+
 export const cloudAccountIdParamSchema = z.object({
     id: z.string().uuid(),
 });
@@ -123,6 +134,7 @@ export const listCloudAccountsQuerySchema = z.object({
 });
 
 export type CreateCloudAccountDto = z.infer<typeof createCloudAccountSchema>;
+export type UpdateCloudAccountDto = z.infer<typeof updateCloudAccountSchema>;
 
 export type CloudAccountIdParam = z.infer<typeof cloudAccountIdParamSchema>;
 

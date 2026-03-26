@@ -1,8 +1,9 @@
-import { OrganizationCloudAccount } from '@/app/actions/organization';
+import { type OrganizationCloudAccount as CloudAccount } from '@/app/actions/organization';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Clock3, Edit, RefreshCw } from 'lucide-react';
+import { Clock3, EllipsisVertical, RefreshCw } from 'lucide-react';
 
 function formatProvider(provider: string) {
     const normalized = provider.toLowerCase();
@@ -28,16 +29,32 @@ type CloudColumnOptions = {
     canManageAccounts: boolean;
     syncingAccountId: string | null;
     onSyncAccount: (id: string) => void;
-    onEditAccount: () => void;
+    onEditAccount: (id: string) => void;
 };
 
-export const organizationCloudColumns = ({ canManageAccounts, syncingAccountId, onSyncAccount, onEditAccount }: CloudColumnOptions) => {
-    const columns: ColumnDef<OrganizationCloudAccount>[] = [
+export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyncAccount, onEditAccount }: CloudColumnOptions) => {
+    const columns: ColumnDef<CloudAccount>[] = [
         {
             id: 'alias',
             header: 'Alias',
             accessorKey: 'alias',
-            cell: ({ getValue }) => <span className="font-medium">{getValue() as string}</span>,
+            cell: ({ getValue, row }) => {
+                const alias = getValue() as string;
+
+                if (!canManageAccounts) {
+                    return <span className="font-medium">{alias}</span>;
+                }
+
+                return (
+                    <button
+                        type="button"
+                        onClick={() => onEditAccount(row.original.id)}
+                        className="cursor-pointer text-left font-medium text-foreground  hover:underline"
+                    >
+                        {alias}
+                    </button>
+                );
+            },
         },
         {
             id: 'provider',
@@ -91,30 +108,35 @@ export const organizationCloudColumns = ({ canManageAccounts, syncingAccountId, 
                       : 'Sincronizar conta';
 
                 return (
-                    <div className="flex items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={onEditAccount}
-                            disabled={!canManageAccounts}
-                            title={!canManageAccounts ? 'Apenas OWNER/ADMIN pode editar a conta.' : 'Editar conta'}
-                        >
-                            <Edit className="size-3.5" />
-                            Editar
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => onSyncAccount(row.original.id)}
-                            isLoading={syncingAccountId === row.original.id}
-                            disabled={syncDisabled}
-                            title={syncTitle}
-                        >
-                            <RefreshCw className="size-3.5" />
-                            {isSyncInProgress ? 'Processando...' : 'Sync conta'}
-                        </Button>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant={'ghost'} className="h-8 w-8 p-0">
+                                <EllipsisVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onSelect={() => onEditAccount(row.original.id)}
+                                disabled={!canManageAccounts}
+                                title={!canManageAccounts ? 'Apenas OWNER/ADMIN pode editar a conta.' : 'Editar conta'}
+                            >
+                                Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onSelect={() => onSyncAccount(row.original.id)}
+                                disabled={syncDisabled}
+                                title={syncTitle}
+                            >
+                                Sincronizar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive">
+                                Excluir
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 );
             },
         },

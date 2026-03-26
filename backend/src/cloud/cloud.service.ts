@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
 
@@ -12,7 +12,7 @@ import { Queue } from 'bullmq';
 
 import { CloudAccount, CloudProvider } from '../db/entites/cloud-account.entity';
 
-import type { CreateCloudAccountDto, ListCloudAccountsQueryDto } from './dto';
+import type { CreateCloudAccountDto, ListCloudAccountsQueryDto, UpdateCloudAccountDto } from './dto';
 
 import * as crypto from 'crypto';
 
@@ -51,7 +51,10 @@ export class CloudService {
         const regionFromField = typeof credentials.region === 'string' ? credentials.region.trim().toLowerCase() : '';
 
         const regionsFromField = Array.isArray(credentials.regions)
-            ? credentials.regions.filter((region): region is string => typeof region === 'string').map((region) => region.trim().toLowerCase())
+            ? credentials.regions
+                  .filter((region): region is string => typeof region === 'string')
+                  .flatMap((region) => region.split(/[\n,;]/))
+                  .map((region) => region.trim().toLowerCase())
             : [];
 
         const mergedRegions = [regionFromField, ...regionsFromField].filter((region) => region.length > 0);
@@ -357,6 +360,65 @@ export class CloudService {
         return result as Omit<CloudAccount, 'credentialsEncrypted'>;
     }
 
+    async getAccountForEdit(
+        organizationId: string,
+        id: string
+    ): Promise<Omit<CloudAccount, 'credentialsEncrypted'> & { credentials: Record<string, any> }> {
+        const account = await this.findByIdAndOrganization(id, organizationId, true);
+
+        if (!account) {
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+        }
+
+        const credentials = this.decryptCredentials(account.credentialsEncrypted);
+        const { credentialsEncrypted: _, ...result } = account;
+
+        return {
+            ...(result as Omit<CloudAccount, 'credentialsEncrypted'>),
+            credentials,
+        };
+    }
+
+    async updateCloudAccount(organizationId: string, id: string, dto: UpdateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
+        const existingAccount = await this.findByIdAndOrganization(id, organizationId, true);
+
+        if (!existingAccount) {
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+        }
+
+        if (dto.alias !== undefined) {
+            existingAccount.alias = dto.alias;
+        }
+
+        if (dto.credentials !== undefined) {
+            const normalizedCredentials = existingAccount.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : dto.credentials;
+
+            this.validateCredentialsForProvider(existingAccount.provider, normalizedCredentials);
+            existingAccount.credentialsEncrypted = this.encryptCredentials(normalizedCredentials);
+        }
+
+        if (dto.isActive !== undefined) {
+            existingAccount.isActive = dto.isActive;
+        }
+
+        const updatedAccount = await this.cloudAccountRepository.save(existingAccount);
+        const { credentialsEncrypted: _, ...result } = updatedAccount;
+
+        return result as Omit<CloudAccount, 'credentialsEncrypted'>;
+    }
+
+    async deleteCloudAccount(organizationId: string, id: string): Promise<{ id: string; deleted: true }> {
+        const existingAccount = await this.findByIdAndOrganization(id, organizationId, true);
+
+        if (!existingAccount) {
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+        }
+
+        await this.cloudAccountRepository.delete({ id, organizationId });
+
+        return { id, deleted: true };
+    }
+
     /**
 
 
@@ -422,9 +484,7 @@ export class CloudService {
             },
         });
 
-        const staleSyncingIds = persistedSyncingAccounts
-            .map((account) => account.id)
-            .filter((accountId) => !syncingIds.has(accountId));
+        const staleSyncingIds = persistedSyncingAccounts.map((account) => account.id).filter((accountId) => !syncingIds.has(accountId));
 
         if (staleSyncingIds.length > 0) {
             await this.cloudAccountRepository.update({ id: In(staleSyncingIds) }, { isGeneralSyncInProgress: false });

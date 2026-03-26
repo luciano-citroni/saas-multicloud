@@ -40,23 +40,23 @@ export default function PlanCard({
                     <CardTitle className="text-lg">{plan.name}</CardTitle>
                     {isCurrent ? <Badge>Atual</Badge> : null}
                 </div>
-                <CardDescription>{plan.description ?? 'Plano sem descricao'}</CardDescription>
+                <CardDescription>{plan.description ?? 'Plano sem descrição'}</CardDescription>
                 <p className="text-2xl font-semibold">
                     {(plan.unitAmount / 100).toLocaleString('pt-BR', { style: 'currency', currency: plan.currency.toUpperCase() })}
-                    <span className="text-sm font-normal text-muted-foreground"> {plan.interval === 'year' ? '/ano' : '/mes'}</span>
+                    <span className="text-sm font-normal text-muted-foreground"> {plan.interval === 'year' ? '/ano' : '/mês'}</span>
                 </p>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2 rounded-lg border p-3">
                     <p className="text-xs text-muted-foreground">Regras deste plano</p>
                     <p className="text-sm">
-                        <span className="font-medium">Cloud accounts:</span> {plan.metadata.maxCloudAccounts}
+                        <span className="font-medium">Contas Cloud:</span> {plan.metadata.maxCloudAccounts}
                     </p>
                     <p className="text-sm">
-                        <span className="font-medium">Usuarios:</span> {plan.metadata.maxUsers}
+                        <span className="font-medium">Usuários:</span> {plan.metadata.maxUsers}
                     </p>
                     <p className="text-sm">
-                        <span className="font-medium">Modulos:</span> {modulesLabel(plan.metadata.modules)}
+                        <span className="font-medium">Módulos:</span> {modulesLabel(plan.metadata.modules)}
                     </p>
                 </div>
 

@@ -1,15 +1,13 @@
 import { Download, FolderTree, Layers3, LayoutGrid, Play, Radar, ScanSearch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { GroupingMode, ResourceVisibilityFilterId } from '@/components/root/assessment/types';
+import type { GroupingDimension, ResourceVisibilityFilterId } from '@/components/root/assessment/types';
 import { RESOURCE_VISIBILITY_FILTER_OPTIONS } from '@/components/root/assessment/assessment-graph-utils';
 
-export const GROUPING_MODE_OPTIONS: Array<{ value: GroupingMode; label: string; icon: typeof Layers3 }> = [
+export const GROUPING_MODE_OPTIONS: Array<{ value: GroupingDimension; label: string; icon: typeof Layers3 }> = [
     { value: 'resourceType', label: 'Por tipo', icon: Layers3 },
     { value: 'vpc', label: 'Por rede', icon: FolderTree },
     { value: 'region', label: 'Por região', icon: Radar },
-    { value: 'none', label: 'Sem grupos', icon: ScanSearch },
 ];
 
 type AssessmentToolbarProps = {
@@ -22,18 +20,22 @@ type AssessmentToolbarProps = {
     canCreateCloudAccount: boolean;
     running: boolean;
     downloading: boolean;
-    groupingMode: GroupingMode;
+    groupingModes: GroupingDimension[];
     hiddenResourceFilterIds: Set<ResourceVisibilityFilterId>;
     onRun: () => void;
     onReorganize: () => void;
     onDownload: () => void;
-    onGroupingModeChange: (mode: GroupingMode) => void;
+    onToggleGroupingMode: (mode: GroupingDimension) => void;
     onToggleResourceFilter: (filterId: ResourceVisibilityFilterId) => void;
     onConnectCloudAccount: () => void;
 };
 
-export function getGroupingModeLabel(mode: GroupingMode): string {
-    return GROUPING_MODE_OPTIONS.find((item) => item.value === mode)?.label ?? 'Sem grupos';
+export function getGroupingModeLabel(modes: GroupingDimension[]): string {
+    if (modes.length === 0) {
+        return 'Sem grupos';
+    }
+
+    return modes.map((mode) => GROUPING_MODE_OPTIONS.find((item) => item.value === mode)?.label ?? mode).join(' + ');
 }
 
 export function AssessmentToolbar({
@@ -46,29 +48,30 @@ export function AssessmentToolbar({
     canCreateCloudAccount,
     running,
     downloading,
-    groupingMode,
+    groupingModes,
     hiddenResourceFilterIds,
     onRun,
     onReorganize,
     onDownload,
-    onGroupingModeChange,
+    onToggleGroupingMode,
     onToggleResourceFilter,
     onConnectCloudAccount,
 }: AssessmentToolbarProps) {
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle>{title}</CardTitle>
-                    <div className="flex items-center gap-2">
-                        <Badge variant="outline">Nós: {nodeCount}</Badge>
-                        <Badge variant="outline">Arestas: {edgeCount}</Badge>
-                        <Badge variant="outline">Grupos visuais: {groupCount}</Badge>
-                    </div>
+        <div className="rounded-xl border">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+                <div className="space-y-0.5">
+                    <p className="text-sm font-medium">{title}</p>
+                    <p className="text-xs text-muted-foreground">{subtitle}</p>
                 </div>
-                <CardDescription>{subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline">Nós: {nodeCount}</Badge>
+                    <Badge variant="outline">Arestas: {edgeCount}</Badge>
+                    <Badge variant="outline">Grupos visuais: {groupCount}</Badge>
+                </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 p-4">
                 <Button type="button" onClick={onRun} isLoading={running} disabled={!canRun}>
                     <Play className="size-4" />
                     Rodar assessment
@@ -82,9 +85,24 @@ export function AssessmentToolbar({
                     Baixar diagrama
                 </Button>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={groupingModes.length === 0 ? 'default' : 'ghost'}
+                        onClick={() => {
+                            for (const selected of groupingModes) {
+                                onToggleGroupingMode(selected);
+                            }
+                        }}
+                        disabled={nodeCount === 0 || running}
+                        className="rounded-md"
+                    >
+                        <ScanSearch className="size-4" />
+                        Sem grupos
+                    </Button>
                     {GROUPING_MODE_OPTIONS.map((option) => {
                         const Icon = option.icon;
-                        const selected = groupingMode === option.value;
+                        const selected = groupingModes.includes(option.value);
 
                         return (
                             <Button
@@ -92,7 +110,7 @@ export function AssessmentToolbar({
                                 type="button"
                                 size="sm"
                                 variant={selected ? 'default' : 'ghost'}
-                                onClick={() => onGroupingModeChange(option.value)}
+                                onClick={() => onToggleGroupingMode(option.value)}
                                 disabled={nodeCount === 0 || running}
                                 className="rounded-md"
                             >
@@ -128,12 +146,12 @@ export function AssessmentToolbar({
                         variant="outline"
                         onClick={onConnectCloudAccount}
                         disabled={!canCreateCloudAccount}
-                        title={!canCreateCloudAccount ? 'Apenas OWNER/ADMIN pode conectar cloud accounts.' : 'Conectar cloud account'}
+                        title={!canCreateCloudAccount ? 'Apenas OWNER/ADMIN pode conectar contas cloud.' : 'Conectar conta cloud'}
                     >
-                        Conectar cloud account
+                        Conectar Conta Cloud
                     </Button>
                 ) : null}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }

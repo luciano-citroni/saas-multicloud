@@ -34,5 +34,6 @@ export type GroupNodeData = {
 };
 
 export type GroupingMode = 'resourceType' | 'vpc' | 'region' | 'none';
+export type GroupingDimension = Exclude<GroupingMode, 'none'>;
 export type AssessmentProvider = 'aws' | 'azure' | 'gcp' | 'unknown';
 export type ResourceVisibilityFilterId = 'securityGroups' | 'taskDefinitions' | 'managedIdentities';

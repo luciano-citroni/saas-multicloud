@@ -66,3 +66,5 @@ export { AzureCosmosDb } from './azure-cosmos-db.entity';
 export { AzureKeyVault } from './azure-key-vault.entity';
 export { AzureAssessmentJob } from './azure-assessment-job.entity';
 export type { AzureAssessmentStatus } from './azure-assessment-job.entity';
+export { CloudSyncJob } from './cloud-sync-job.entity';
+export type { SyncJobStatus } from './cloud-sync-job.entity';

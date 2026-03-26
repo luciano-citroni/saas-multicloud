@@ -16,6 +16,7 @@ import { ASSESSMENT_QUEUE, GENERAL_SYNC_QUEUE } from './constants';
 // Entities
 import { AwsAssessmentJob } from '../../db/entites/aws-assessment-job.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
 import {
     AwsVpc,
     AwsSubnet,
@@ -87,6 +88,7 @@ import { BillingModule } from '../../billing/billing.module';
         TypeOrmModule.forFeature([
             AwsAssessmentJob,
             CloudAccount,
+            CloudSyncJob,
             AwsVpc,
             AwsSubnet,
             AwsRouteTable,
