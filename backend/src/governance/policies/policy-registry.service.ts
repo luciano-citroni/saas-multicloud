@@ -8,6 +8,8 @@ import { SgNoOpenSshPolicy } from './aws/sg-no-open-ssh.policy';
 import { SgNoOpenRdpPolicy } from './aws/sg-no-open-rdp.policy';
 import { Ec2RequiredTagsPolicy } from './aws/ec2-required-tags.policy';
 import { CloudTrailEnabledPolicy } from './aws/cloudtrail-enabled.policy';
+import { RdsNotPubliclyAccessiblePolicy } from './aws/rds-not-publicly-accessible.policy';
+import { SgNoOpenDatabasePortsPolicy } from './aws/sg-no-open-database-ports.policy';
 
 /**
  * Registro central de todas as políticas de governança disponíveis.
@@ -26,16 +28,20 @@ export class PolicyRegistryService {
         private readonly s3EncryptionEnabled: S3EncryptionEnabledPolicy,
         private readonly sgNoOpenSsh: SgNoOpenSshPolicy,
         private readonly sgNoOpenRdp: SgNoOpenRdpPolicy,
+        private readonly sgNoOpenDatabasePorts: SgNoOpenDatabasePortsPolicy,
         private readonly ec2RequiredTags: Ec2RequiredTagsPolicy,
-        private readonly cloudTrailEnabled: CloudTrailEnabledPolicy
+        private readonly cloudTrailEnabled: CloudTrailEnabledPolicy,
+        private readonly rdsNotPubliclyAccessible: RdsNotPubliclyAccessiblePolicy
     ) {
         this.policies = [
             this.s3NoPublicAccess,
             this.s3EncryptionEnabled,
             this.sgNoOpenSsh,
             this.sgNoOpenRdp,
+            this.sgNoOpenDatabasePorts,
             this.ec2RequiredTags,
             this.cloudTrailEnabled,
+            this.rdsNotPubliclyAccessible,
         ];
     }
 

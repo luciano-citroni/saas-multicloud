@@ -37,6 +37,34 @@ export class GovernanceJobStatusDto {
     completedAt?: Date | null;
 }
 
+export class PaginationMetaDto {
+    @ApiProperty({ example: 1 })
+    page!: number;
+
+    @ApiProperty({ example: 25 })
+    limit!: number;
+
+    @ApiProperty({ example: 42 })
+    totalItems!: number;
+
+    @ApiProperty({ example: 2 })
+    totalPages!: number;
+
+    @ApiProperty({ example: true })
+    hasNextPage!: boolean;
+
+    @ApiProperty({ example: false })
+    hasPreviousPage!: boolean;
+}
+
+export class GovernanceJobsPaginatedResponseDto {
+    @ApiProperty({ type: [GovernanceJobStatusDto] })
+    items!: GovernanceJobStatusDto[];
+
+    @ApiProperty({ type: PaginationMetaDto })
+    pagination!: PaginationMetaDto;
+}
+
 export class GovernanceFindingDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
@@ -84,6 +112,12 @@ export class GovernanceScoreDto {
 
     @ApiProperty({ example: 42, description: 'Total de verificações executadas' })
     totalChecks!: number;
+
+    @ApiProperty({ example: 2, description: 'Achados críticos não-conformes no último scan' })
+    criticalFindings!: number;
+
+    @ApiProperty({ example: 3, description: 'Achados altos não-conformes no último scan' })
+    highFindings!: number;
 
     @ApiProperty({ description: 'Data da última avaliação completa' })
     evaluatedAt!: Date;

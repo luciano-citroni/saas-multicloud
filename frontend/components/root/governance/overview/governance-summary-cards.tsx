@@ -1,6 +1,6 @@
-import { PlayCircle, RefreshCw } from 'lucide-react';
+﻿import { AlertCircle, PlayCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { formatDate, scoreColor, scoreLabel } from '@/components/root/governance/overview/helpers';
 import type { GovernanceScore } from '@/components/root/governance/overview/types';
 
@@ -16,57 +16,83 @@ type GovernanceSummaryCardsProps = {
 
 export function GovernanceSummaryCards({ score, canRunScan, scanning, hasRunningJob, refreshing, onStartScan, onRefresh }: GovernanceSummaryCardsProps) {
     return (
-        <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="sm:col-span-1">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Score de Governança</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {score ? (
-                        <div className="flex flex-col gap-1">
-                            <span className={`text-5xl font-bold ${scoreColor(score.score)}`}>{score.score}</span>
-                            <span className="text-sm text-muted-foreground">
-                                {scoreLabel(score.score)} — atualizado {formatDate(score.evaluatedAt)}
-                            </span>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-1">
-                            <span className="text-5xl font-bold text-muted-foreground">--</span>
-                            <span className="text-sm text-muted-foreground">Nenhuma varredura realizada ainda</span>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            <Card className="sm:col-span-1">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Achados</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <span className="text-4xl font-bold">{score?.totalFindings ?? '—'}</span>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {score ? `não-conformes em ${score.totalChecks} verificações` : 'Execute uma varredura para ver os achados'}
+        <div className="rounded-xl border">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+                <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Visão Geral</p>
+                    <p className="text-xs text-muted-foreground">
+                        {score ? `Última varredura: ${formatDate(score.evaluatedAt)}` : 'Nenhuma varredura realizada'}
                     </p>
-                </CardContent>
-            </Card>
-
-            <Card className="sm:col-span-1 flex flex-col justify-between">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Ações</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2">
+                </div>
+                <div className="flex items-center gap-2">
                     {canRunScan && (
                         <Button size="sm" onClick={onStartScan} isLoading={scanning || hasRunningJob} disabled={scanning || hasRunningJob}>
-                            <PlayCircle className="mr-2 h-4 w-4" />
-                            {scanning || hasRunningJob ? 'Varredura em andamento...' : 'Executar Varredura'}
+                            <PlayCircle className="size-4" />
+                            {scanning || hasRunningJob ? 'Executando...' : 'Executar varredura'}
                         </Button>
                     )}
                     <Button variant="outline" size="sm" onClick={onRefresh} isLoading={refreshing}>
-                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <RefreshCw className="size-4" />
                         Atualizar
                     </Button>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-3">
+                <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground">Score de Governança</p>
+                    {score ? (
+                        <>
+                            <p className={cn('mt-1 text-3xl font-bold', scoreColor(score.score))}>{score.score}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{scoreLabel(score.score)}</p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="mt-1 text-3xl font-bold text-muted-foreground">--</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">Execute uma varredura</p>
+                        </>
+                    )}
+                </div>
+
+                <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground">Não-conformidades</p>
+                    {score ? (
+                        <>
+                            <p className="mt-1 text-3xl font-bold">{score.totalFindings}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">em {score.totalChecks} verificações</p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="mt-1 text-3xl font-bold text-muted-foreground">--</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">Execute uma varredura</p>
+                        </>
+                    )}
+                </div>
+
+                <div className="rounded-lg border p-3">
+                    <div className="flex items-center gap-1.5">
+                        <AlertCircle className="size-3.5 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Severidade Alta</p>
+                    </div>
+                    {score ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded border border-destructive/20 bg-destructive/5 px-2 py-1.5">
+                                <p className="text-xl font-bold text-destructive">{score.criticalFindings}</p>
+                                <p className="text-xs text-muted-foreground">Críticos</p>
+                            </div>
+                            <div className="rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1.5">
+                                <p className="text-xl font-bold text-orange-500">{score.highFindings}</p>
+                                <p className="text-xs text-muted-foreground">Altos</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="mt-1 text-3xl font-bold text-muted-foreground">--</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">Execute uma varredura</p>
+                        </>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

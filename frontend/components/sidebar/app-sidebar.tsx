@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Cloudy, GitBranch, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { Building2, Cloudy, GitBranch, LayoutDashboard, ShieldCheck, DollarSign } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
@@ -44,6 +44,12 @@ const baseData = {
             url: '/governance',
             icon: ShieldCheck,
             module: PlanModule.GOVERNANCE,
+        },
+        {
+            title: 'FinOps',
+            url: '/finops',
+            icon: DollarSign,
+            module: PlanModule.FINOPS,
         },
     ],
 };

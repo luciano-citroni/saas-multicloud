@@ -1,19 +1,23 @@
+import { Skeleton } from '@/components/ui/skeleton';
+
 export function GovernanceLoadingSkeleton() {
     return (
         <div className="flex flex-col gap-6">
             <div className="grid gap-4 sm:grid-cols-3">
-                <div className="h-40 animate-pulse rounded-xl border bg-muted/30" />
-                <div className="h-40 animate-pulse rounded-xl border bg-muted/30" />
-                <div className="h-40 animate-pulse rounded-xl border bg-muted/30" />
+                <Skeleton className="h-40 rounded-xl" />
+                <Skeleton className="h-40 rounded-xl" />
+                <Skeleton className="h-40 rounded-xl" />
             </div>
 
             <div className="rounded-xl border">
-                <div className="h-14 animate-pulse border-b bg-muted/30" />
+                <div className="border-b px-4 py-3">
+                    <Skeleton className="h-6 w-48" />
+                </div>
                 <div className="space-y-3 p-4">
-                    <div className="h-12 animate-pulse rounded-md bg-muted/30" />
-                    <div className="h-12 animate-pulse rounded-md bg-muted/30" />
-                    <div className="h-12 animate-pulse rounded-md bg-muted/30" />
-                    <div className="h-12 animate-pulse rounded-md bg-muted/30" />
+                    <Skeleton className="h-12 rounded-md" />
+                    <Skeleton className="h-12 rounded-md" />
+                    <Skeleton className="h-12 rounded-md" />
+                    <Skeleton className="h-12 rounded-md" />
                 </div>
             </div>
         </div>

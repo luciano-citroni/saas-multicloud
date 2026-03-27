@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { type UserOrganization, fetchUserOrganizations } from '@/app/actions/organization';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { Skeleton } from '@/components/ui/skeleton';
 import { OrganizationTable } from './organization-table';
 
 type ApiErrorPayload = {
@@ -115,7 +116,11 @@ export function OrganizationOverview() {
                 </div>
 
                 {loading ? (
-                    <div className="px-4 py-6 text-sm text-muted-foreground">Carregando organizações...</div>
+                    <div className="space-y-3 p-4">
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                    </div>
                 ) : organizations.length === 0 ? (
                     <div className="px-4 py-6">
                         <p className="text-sm text-muted-foreground">Nenhuma organização encontrada para este usuário.</p>

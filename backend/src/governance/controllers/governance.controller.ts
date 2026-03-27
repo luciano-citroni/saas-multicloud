@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -17,10 +17,12 @@ import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
 
 import { GovernanceService } from '../services/governance.service';
+import type { GovernanceScoreResult } from '../services/governance.service';
 
 import {
     GovernanceScanResponseDto,
     GovernanceJobStatusDto,
+    GovernanceJobsPaginatedResponseDto,
     GovernanceFindingDto,
     GovernanceScoreDto,
     GovernancePolicyDto,
@@ -87,12 +89,17 @@ export class GovernanceController {
         description: 'Retorna os jobs de governança para a conta, incluindo status, score e totais. Suporta paginação via page e limit.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
-    @ApiResponse({ status: 200, description: 'Lista de jobs', type: [GovernanceJobStatusDto] })
+    @ApiResponse({ status: 200, description: 'Lista de jobs paginada', type: GovernanceJobsPaginatedResponseDto })
     async listJobs(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
-    ): Promise<GovernanceJobStatusDto[]> {
-        return this.governanceService.listJobs(cloudAccountId, org.id);
+        @CurrentOrganization() org: Organization,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ): Promise<GovernanceJobsPaginatedResponseDto> {
+        const parsedPage = page ? Number.parseInt(page, 10) : undefined;
+        const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+
+        return this.governanceService.listJobs(cloudAccountId, org.id, parsedPage, parsedLimit);
     }
 
     @Get('accounts/:cloudAccountId/jobs/:jobId')
@@ -131,8 +138,7 @@ export class GovernanceController {
     @ApiPaginationQuery()
     @ApiOperation({
         summary: 'Listar achados (findings) de um job',
-        description:
-            'Retorna todos os achados não-conformes e warnings gerados pelo scan. Ordenados por severidade (crítico primeiro).',
+        description: 'Retorna todos os achados não-conformes e warnings gerados pelo scan. Ordenados por severidade (crítico primeiro).',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiParam({ name: 'jobId', type: 'string', format: 'uuid' })
@@ -164,24 +170,28 @@ export class GovernanceController {
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @CurrentOrganization() org: Organization
     ): Promise<GovernanceScoreDto> {
-        const job = await this.governanceService.getLatestScore(cloudAccountId, org.id);
+        const result = await this.governanceService.getLatestScore(cloudAccountId, org.id);
 
-        if (!job) {
-            return {
-                jobId: '',
-                score: 0,
-                totalFindings: 0,
-                totalChecks: 0,
-                evaluatedAt: new Date(0),
-            };
-        }
+        const empty: GovernanceScoreResult = {
+            jobId: '',
+            score: 0,
+            totalFindings: 0,
+            totalChecks: 0,
+            criticalFindings: 0,
+            highFindings: 0,
+            evaluatedAt: new Date(0),
+        };
+
+        const data = result ?? empty;
 
         return {
-            jobId: job.id,
-            score: job.score ?? 0,
-            totalFindings: job.totalFindings ?? 0,
-            totalChecks: job.totalChecks ?? 0,
-            evaluatedAt: job.completedAt ?? job.createdAt,
+            jobId: data.jobId,
+            score: data.score,
+            totalFindings: data.totalFindings,
+            totalChecks: data.totalChecks,
+            criticalFindings: data.criticalFindings,
+            highFindings: data.highFindings,
+            evaluatedAt: data.evaluatedAt,
         };
     }
 }

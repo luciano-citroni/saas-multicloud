@@ -20,6 +20,8 @@ import { SgNoOpenSshPolicy } from './policies/aws/sg-no-open-ssh.policy';
 import { SgNoOpenRdpPolicy } from './policies/aws/sg-no-open-rdp.policy';
 import { Ec2RequiredTagsPolicy } from './policies/aws/ec2-required-tags.policy';
 import { CloudTrailEnabledPolicy } from './policies/aws/cloudtrail-enabled.policy';
+import { RdsNotPubliclyAccessiblePolicy } from './policies/aws/rds-not-publicly-accessible.policy';
+import { SgNoOpenDatabasePortsPolicy } from './policies/aws/sg-no-open-database-ports.policy';
 
 // Entities
 import { GovernanceJob } from '../db/entites/governance-job.entity';
@@ -30,6 +32,7 @@ import { AwsEc2Instance } from '../db/entites/aws-ec2.entity';
 import { AwsS3Bucket } from '../db/entites/aws-s3-bucket.entity';
 import { AwsSecurityGroup } from '../db/entites/aws-security-group.entity';
 import { AwsCloudTrailTrail } from '../db/entites/aws-cloudtrail-trail.entity';
+import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
 
 // Supporting modules
 import { TenantModule } from '../tenant/tenant.module';
@@ -51,6 +54,7 @@ import { GOVERNANCE_QUEUE } from './constants';
             AwsS3Bucket,
             AwsSecurityGroup,
             AwsCloudTrailTrail,
+            AwsRdsInstance,
         ]),
 
         // Módulo de tenant para guards e decorators
@@ -71,8 +75,10 @@ import { GOVERNANCE_QUEUE } from './constants';
         S3EncryptionEnabledPolicy,
         SgNoOpenSshPolicy,
         SgNoOpenRdpPolicy,
+        SgNoOpenDatabasePortsPolicy,
         Ec2RequiredTagsPolicy,
         CloudTrailEnabledPolicy,
+        RdsNotPubliclyAccessiblePolicy,
     ],
 })
 export class GovernanceModule {}

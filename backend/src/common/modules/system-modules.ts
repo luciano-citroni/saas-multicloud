@@ -1,11 +1,12 @@
 export const ALL_MODULES_TOKEN = '*';
 
-export const SYSTEM_MODULES = ['assessment', 'cloud_inventory', 'governance'] as const;
+export const SYSTEM_MODULES = ['assessment', 'cloud_inventory', 'governance', 'finops'] as const;
 
 export const SystemModule = {
     ASSESSMENT: 'assessment',
     CLOUD_INVENTORY: 'cloud_inventory',
     GOVERNANCE: 'governance',
+    FINOPS: 'finops',
 } as const;
 
 export type SystemModuleName = (typeof SYSTEM_MODULES)[number];

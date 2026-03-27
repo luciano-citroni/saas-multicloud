@@ -12,7 +12,7 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 import { AwsAssessmentSyncService } from './aws-assessment-sync.service';
 
-import { GENERAL_SYNC_QUEUE } from './constants';
+import { AWS_GENERAL_SYNC_WORKER_CONCURRENCY, GENERAL_SYNC_QUEUE } from './constants';
 import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
 import { CloudProvider } from '../../db/entites/cloud-account.entity';
 
@@ -20,7 +20,7 @@ export interface GeneralSyncJobPayload {
     cloudAccountId: string;
 }
 
-@Processor(GENERAL_SYNC_QUEUE)
+@Processor(GENERAL_SYNC_QUEUE, { concurrency: AWS_GENERAL_SYNC_WORKER_CONCURRENCY })
 export class AwsGeneralSyncProcessor extends WorkerHost {
     private readonly logger = new Logger(AwsGeneralSyncProcessor.name);
 

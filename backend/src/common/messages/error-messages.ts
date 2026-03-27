@@ -142,6 +142,18 @@ export const ErrorMessages = {
         PASSWORD_REQUIREMENTS: 'Password must be at least 8 characters with uppercase, lowercase, number and special character',
     },
 
+    // FinOps
+
+    FINOPS: {
+        CONSENT_REQUIRED: 'FinOps consent is required before collecting cost data. Accept the terms at POST /finops/accounts/:id/consent.',
+
+        CONSENT_NOT_FOUND: 'No active FinOps consent found for this cloud account and provider.',
+
+        JOB_NOT_FOUND: 'FinOps sync job not found.',
+
+        BUDGET_NOT_FOUND: 'FinOps budget not found.',
+    },
+
     // Governance
 
     GOVERNANCE: {

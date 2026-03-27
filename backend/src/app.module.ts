@@ -18,6 +18,7 @@ import { AzureModule } from './azure/azure.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { BillingModule } from './billing/billing.module';
 import { GovernanceModule } from './governance/governance.module';
+import { FinopsModule } from './finops/finops.module';
 
 @Module({
     imports: [
@@ -43,6 +44,7 @@ import { GovernanceModule } from './governance/governance.module';
         AzureModule,
         BillingModule,
         GovernanceModule,
+        FinopsModule,
     ],
     controllers: [AppController],
     providers: [

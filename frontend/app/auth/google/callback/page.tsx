@@ -31,9 +31,7 @@ function GoogleCallbackContent() {
 
                 if (!response.ok) {
                     const shouldReplayOnBackendCallback =
-                        response.status === 401 &&
-                        isLikelyGoogleAuthorizationCode(code) &&
-                        sessionStorage.getItem(CALLBACK_REPLAY_STORAGE_KEY) !== code;
+                        response.status === 401 && isLikelyGoogleAuthorizationCode(code) && sessionStorage.getItem(CALLBACK_REPLAY_STORAGE_KEY) !== code;
 
                     if (shouldReplayOnBackendCallback) {
                         sessionStorage.setItem(CALLBACK_REPLAY_STORAGE_KEY, code);

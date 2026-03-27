@@ -16,7 +16,12 @@
       "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/components/ui//**)",
       "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/lib/**)",
       "Bash(find \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/organizations/[organizationId]\" -type f)",
-      "Bash(ls -la \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/billing/\")"
+      "Bash(ls -la \"/c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\(root\\)/billing/\")",
+      "Read(//c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/**)",
+      "Bash(ls -la /c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\\\\\(root\\\\\\)/)",
+      "Bash(find /c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/components/root -type f -name *.tsx)",
+      "Bash(test -f c:UsersluciaDocumentsGitHubsaas-multicloudfrontendapp\\\\\\\\\\(root\\\\\\\\\\)/finops/page.tsx)",
+      "Bash(grep -rn 'export const metadata' c:/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app --include=*.tsx --include=*.ts)"
     ]
   }
 }

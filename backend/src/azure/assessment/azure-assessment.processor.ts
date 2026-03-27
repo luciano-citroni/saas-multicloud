@@ -16,7 +16,7 @@ import { AzureAssessmentReportService } from './azure-assessment-report.service'
 
 import { AzureAssessmentExcelService } from './azure-assessment-excel.service';
 
-import { AZURE_ASSESSMENT_QUEUE } from './constants';
+import { AZURE_ASSESSMENT_QUEUE, AZURE_ASSESSMENT_WORKER_CONCURRENCY } from './constants';
 
 export interface AzureAssessmentJobPayload {
     jobId: string;
@@ -28,7 +28,7 @@ export interface AzureAssessmentJobPayload {
     runSync: boolean;
 }
 
-@Processor(AZURE_ASSESSMENT_QUEUE)
+@Processor(AZURE_ASSESSMENT_QUEUE, { concurrency: AZURE_ASSESSMENT_WORKER_CONCURRENCY })
 export class AzureAssessmentProcessor extends WorkerHost {
     private readonly logger = new Logger(AzureAssessmentProcessor.name);
 

@@ -14,8 +14,10 @@ const routeNames: Record<string, string> = {
     settings: 'Configurações',
     'cloud-accounts': 'Contas Cloud',
     edit: 'Editar',
+    assessment: 'Assessment',
     governance: 'Governança',
     analysis: 'Análise',
+    finops: 'FinOps',
 };
 
 function isId(segment: string) {

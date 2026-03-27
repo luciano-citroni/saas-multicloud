@@ -17,6 +17,7 @@ import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CloudAccountTable } from './cloud-account-table';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type ApiErrorPayload = {
     message?: string | string[];
@@ -357,7 +358,11 @@ export function CloudAccountSync() {
                 </div>
 
                 {loading || resolvingRole ? (
-                    <div className="px-4 py-6 text-sm text-muted-foreground">Carregando contas...</div>
+                    <div className="space-y-3 p-4">
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                    </div>
                 ) : accounts.length === 0 ? (
                     <div className="px-4 py-6">
                         <p className="text-sm text-muted-foreground">

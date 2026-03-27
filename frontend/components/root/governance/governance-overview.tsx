@@ -41,10 +41,15 @@ export function GovernanceOverview() {
     const [jobsLimit, setJobsLimit] = useState(DEFAULT_JOBS_LIMIT);
 
     const [loadingInitial, setLoadingInitial] = useState(true);
+    const [loadingTable, setLoadingTable] = useState(false);
     const [scanning, setScanning] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const prevOrgCloudRef = useRef<{ organizationId: string | null; cloudAccountId: string | null }>({
+        organizationId: null,
+        cloudAccountId: null,
+    });
 
     const syncPaginationUrlState = useCallback((nextPage: number, nextLimit: number) => {
         if (typeof window === 'undefined') {
@@ -149,48 +154,81 @@ export function GovernanceOverview() {
     // -- Load data --------------------------------------------------------------
 
     const loadData = useCallback(
-        async (orgId: string, cloudId: string, options: { silent?: boolean; page?: number; limit?: number } = {}) => {
-            if (!options.silent) setLoadingInitial(true);
+        async (orgId: string, cloudId: string, options: { silent?: boolean; tableOnly?: boolean; page?: number; limit?: number } = {}) => {
+            if (options.tableOnly) {
+                setLoadingTable(true);
+            } else if (!options.silent) {
+                setLoadingInitial(true);
+            }
 
             const page = options.page ?? jobsPage;
             const limit = options.limit ?? jobsLimit;
 
             try {
-                const [scoreRes, jobsRes] = await Promise.all([
-                    fetchGovernanceScore(orgId, cloudId),
-                    fetchGovernanceJobs(orgId, cloudId, { page, limit }),
-                ]);
+                if (options.tableOnly) {
+                    const jobsRes = await fetchGovernanceJobs(orgId, cloudId, { page, limit });
 
-                if (scoreRes.status === 401 || jobsRes.status === 401) {
-                    toast.error('Sua sessão expirou.');
-                    router.replace('/auth/sign-in');
-                    return;
-                }
+                    if (jobsRes.status === 401) {
+                        toast.error('Sua sessão expirou.');
+                        router.replace('/auth/sign-in');
+                        return;
+                    }
 
-                if (scoreRes.ok) {
-                    const scorePayload = await scoreRes.json().catch(() => null);
-                    setScore(scorePayload as GovernanceScore | null);
-                }
+                    if (jobsRes.ok) {
+                        const jobsPayload = await jobsRes.json().catch(() => null);
+                        setJobs(normalizeJobs(jobsPayload));
+                        setJobsPagination(normalizePagination(jobsPayload));
+                    }
+                } else {
+                    const [scoreRes, jobsRes] = await Promise.all([
+                        fetchGovernanceScore(orgId, cloudId),
+                        fetchGovernanceJobs(orgId, cloudId, { page, limit }),
+                    ]);
 
-                if (jobsRes.ok) {
-                    const jobsPayload = await jobsRes.json().catch(() => null);
-                    setJobs(normalizeJobs(jobsPayload));
-                    setJobsPagination(normalizePagination(jobsPayload));
+                    if (scoreRes.status === 401 || jobsRes.status === 401) {
+                        toast.error('Sua sessão expirou.');
+                        router.replace('/auth/sign-in');
+                        return;
+                    }
+
+                    if (scoreRes.ok) {
+                        const scorePayload = await scoreRes.json().catch(() => null);
+                        setScore(scorePayload as GovernanceScore | null);
+                    }
+
+                    if (jobsRes.ok) {
+                        const jobsPayload = await jobsRes.json().catch(() => null);
+                        setJobs(normalizeJobs(jobsPayload));
+                        setJobsPagination(normalizePagination(jobsPayload));
+                    }
                 }
             } catch {
-                if (!options.silent) toast.error('Não foi possível carregar dados de governança.');
+                if (!options.silent && !options.tableOnly) toast.error('Não foi possível carregar dados de governança.');
             } finally {
-                if (!options.silent) setLoadingInitial(false);
+                if (options.tableOnly) {
+                    setLoadingTable(false);
+                } else if (!options.silent) {
+                    setLoadingInitial(false);
+                }
             }
         },
         [jobsLimit, jobsPage, router]
     );
 
     useEffect(() => {
-        if (organizationId && cloudAccountId) {
+        if (!organizationId || !cloudAccountId) {
+            setLoadingInitial(false);
+            return;
+        }
+
+        const prev = prevOrgCloudRef.current;
+        const isContextChange = prev.organizationId !== organizationId || prev.cloudAccountId !== cloudAccountId;
+        prevOrgCloudRef.current = { organizationId, cloudAccountId };
+
+        if (isContextChange) {
             void loadData(organizationId, cloudAccountId, { page: jobsPage, limit: jobsLimit });
         } else {
-            setLoadingInitial(false);
+            void loadData(organizationId, cloudAccountId, { tableOnly: true, page: jobsPage, limit: jobsLimit });
         }
     }, [organizationId, cloudAccountId, jobsLimit, jobsPage, loadData]);
 
@@ -326,6 +364,7 @@ export function GovernanceOverview() {
                 jobsPage={jobsPage}
                 jobsLimit={jobsLimit}
                 jobsPagination={jobsPagination}
+                loadingTable={loadingTable}
                 onOpenAnalysis={handleOpenAnalysis}
                 onChangeLimit={(limit) => {
                     const nextLimit = normalizeJobsLimit(limit);

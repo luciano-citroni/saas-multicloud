@@ -14,6 +14,8 @@ export type GovernanceScore = {
     score: number;
     totalFindings: number;
     totalChecks: number;
+    criticalFindings: number;
+    highFindings: number;
     evaluatedAt: string;
 };
 

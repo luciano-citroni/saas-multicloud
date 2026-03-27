@@ -6,15 +6,17 @@ import { Repository } from 'typeorm';
 
 import { InjectQueue } from '@nestjs/bullmq';
 
-import { Queue } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 
 import { GovernanceJob, GovernanceJobStatus } from '../../db/entites/governance-job.entity';
 import { GovernanceFinding } from '../../db/entites/governance-finding.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
-import { GOVERNANCE_QUEUE, GOVERNANCE_JOB_NAME } from '../constants';
+import { GOVERNANCE_QUEUE, GOVERNANCE_JOB_NAME, GOVERNANCE_PENDING_STATES } from '../constants';
 
 import { ErrorMessages } from '../../common/messages/error-messages';
+
+import { DEFAULT_LIMIT, DEFAULT_PAGE, MAX_LIMIT } from '../../common/middlewares/pagination.middleware';
 
 import { PolicyRegistryService } from '../policies/policy-registry.service';
 
@@ -22,6 +24,40 @@ export interface GovernanceScanResponse {
     jobId: string;
     status: GovernanceJobStatus;
     message: string;
+}
+
+export interface GovernanceScoreResult {
+    jobId: string;
+    score: number;
+    totalFindings: number;
+    totalChecks: number;
+    criticalFindings: number;
+    highFindings: number;
+    evaluatedAt: Date;
+}
+
+export interface GovernanceScoreResult {
+    jobId: string;
+    score: number;
+    totalFindings: number;
+    totalChecks: number;
+    criticalFindings: number;
+    highFindings: number;
+    evaluatedAt: Date;
+}
+
+export interface GovernancePaginationMeta {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+}
+
+export interface PaginatedGovernanceJobsResponse {
+    items: GovernanceJob[];
+    pagination: GovernancePaginationMeta;
 }
 
 @Injectable()
@@ -50,6 +86,16 @@ export class GovernanceService {
      */
     async startScan(cloudAccountId: string, organizationId: string): Promise<GovernanceScanResponse> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
+
+        const existingJob = await this.findPendingScanJob(cloudAccountId, organizationId);
+
+        if (existingJob) {
+            return {
+                jobId: String(existingJob.id),
+                status: 'pending',
+                message: `Já existe um scan de governança em andamento para esta conta. Acompanhe em GET /governance/accounts/${cloudAccountId}/jobs/${existingJob.data.jobId}`,
+            };
+        }
 
         const job = this.jobRepo.create({
             cloudAccountId,
@@ -97,15 +143,39 @@ export class GovernanceService {
 
     /**
      * Lista os jobs de governança para uma conta.
-     * A paginação é aplicada pelo PaginationInterceptor.
+     * Ordena por data mais recente e aplica paginação no banco.
      */
-    async listJobs(cloudAccountId: string, organizationId: string): Promise<GovernanceJob[]> {
+    async listJobs(cloudAccountId: string, organizationId: string, page?: number, limit?: number): Promise<PaginatedGovernanceJobsResponse> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
-        return this.jobRepo.find({
-            where: { cloudAccountId, organizationId },
-            order: { createdAt: 'DESC' },
-        });
+        const safeLimit = this.normalizeLimit(limit);
+        const safePage = this.normalizePage(page);
+
+        const query = this.jobRepo
+            .createQueryBuilder('job')
+            .where('job.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('job.organizationId = :organizationId', { organizationId })
+            .orderBy('COALESCE(job.completedAt, job.createdAt)', 'DESC')
+            .addOrderBy('job.createdAt', 'DESC');
+
+        const totalItems = await query.getCount();
+        const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
+        const resolvedPage = totalPages === 0 ? DEFAULT_PAGE : Math.min(safePage, totalPages);
+        const resolvedOffset = (resolvedPage - DEFAULT_PAGE) * safeLimit;
+
+        const items = await query.skip(resolvedOffset).take(safeLimit).getMany();
+
+        return {
+            items,
+            pagination: {
+                page: resolvedPage,
+                limit: safeLimit,
+                totalItems,
+                totalPages,
+                hasNextPage: resolvedPage < totalPages,
+                hasPreviousPage: resolvedPage > DEFAULT_PAGE,
+            },
+        };
     }
 
     /**
@@ -122,15 +192,43 @@ export class GovernanceService {
     }
 
     /**
-     * Retorna o score e resumo do último scan completo para a conta.
+     * Retorna o score e resumo do último scan completo para a conta,
+     * incluindo contagem de achados críticos e altos não-conformes.
      */
-    async getLatestScore(cloudAccountId: string, organizationId: string): Promise<GovernanceJob | null> {
+    async getLatestScore(cloudAccountId: string, organizationId: string): Promise<GovernanceScoreResult | null> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
-        return this.jobRepo.findOne({
+        const job = await this.jobRepo.findOne({
             where: { cloudAccountId, organizationId, status: 'completed' },
             order: { completedAt: 'DESC' },
         });
+
+        if (!job) {
+            return null;
+        }
+
+        const severityCounts = await this.findingRepo
+            .createQueryBuilder('f')
+            .select('f.severity', 'severity')
+            .addSelect('COUNT(f.id)', 'count')
+            .where('f.jobId = :jobId', { jobId: job.id })
+            .andWhere('f.severity IN (:...severities)', { severities: ['critical', 'high'] })
+            .andWhere('f.status = :status', { status: 'non_compliant' })
+            .groupBy('f.severity')
+            .getRawMany<{ severity: string; count: string }>();
+
+        const criticalFindings = Number(severityCounts.find((r) => r.severity === 'critical')?.count ?? 0);
+        const highFindings = Number(severityCounts.find((r) => r.severity === 'high')?.count ?? 0);
+
+        return {
+            jobId: job.id,
+            score: job.score ?? 0,
+            totalFindings: job.totalFindings ?? 0,
+            totalChecks: job.totalChecks ?? 0,
+            criticalFindings,
+            highFindings,
+            evaluatedAt: job.completedAt ?? job.createdAt,
+        };
     }
 
     /**
@@ -157,5 +255,31 @@ export class GovernanceService {
         }
 
         return cloudAccount;
+    }
+
+    private async findPendingScanJob(cloudAccountId: string, organizationId: string): Promise<Job | undefined> {
+        const jobs = await this.governanceQueue.getJobs([...GOVERNANCE_PENDING_STATES], 0, 49, false);
+
+        return jobs.find((job) => {
+            const payload = job.data as { cloudAccountId?: string; organizationId?: string };
+
+            return job.name === GOVERNANCE_JOB_NAME && payload.cloudAccountId === cloudAccountId && payload.organizationId === organizationId;
+        });
+    }
+
+    private normalizePage(page?: number): number {
+        if (!Number.isInteger(page) || !page || page < DEFAULT_PAGE) {
+            return DEFAULT_PAGE;
+        }
+
+        return page;
+    }
+
+    private normalizeLimit(limit?: number): number {
+        if (!Number.isInteger(limit) || !limit || limit < 1) {
+            return DEFAULT_LIMIT;
+        }
+
+        return Math.min(limit, MAX_LIMIT);
     }
 }

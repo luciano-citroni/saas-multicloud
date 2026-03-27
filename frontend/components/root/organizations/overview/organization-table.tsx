@@ -31,19 +31,15 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
     const [pageIndex, setPageIndex] = useState(0);
     const [pageSize, setPageSize] = useState(10);
 
+    // Atualizar URL quando filtros mudarem
     useEffect(() => {
         const params = new URLSearchParams();
-
-        if (nameFilter) {
-            params.set('name', nameFilter);
-        }
-
-        if (roleFilter !== 'all') {
-            params.set('role', roleFilter);
-        }
+        if (nameFilter) params.set('name', nameFilter);
+        if (roleFilter !== 'all') params.set('role', roleFilter);
 
         const queryString = params.toString();
-        router.push(queryString ? `?${queryString}` : '?');
+        const newUrl = queryString ? `?${queryString}` : '';
+        router.push(newUrl);
     }, [nameFilter, roleFilter, router]);
 
     const columns = useMemo(() => OrganizationColumns({ onEditOrganization }), [onEditOrganization]);
@@ -79,12 +75,13 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
 
     return (
         <div className="flex flex-col gap-4">
+            {/* Barra de filtros */}
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                     <Input
                         value={nameFilter}
-                        onChange={(event) => {
-                            setNameFilter(event.target.value);
+                        onChange={(e) => {
+                            setNameFilter(e.target.value);
                             setPageIndex(0);
                         }}
                         placeholder="Filtrar por nome..."
@@ -133,6 +130,7 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
                 </DropdownMenu>
             </div>
 
+            {/* Tabela */}
             <div className="rounded-lg border">
                 <Table>
                     <TableHeader className="bg-muted/50">
@@ -152,7 +150,7 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
                             table.getRowModel().rows.map((row) => (
                                 <TableRow key={row.id}>
                                     {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id} className="px-4 align-top">
+                                        <TableCell key={cell.id} className="px-4">
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </TableCell>
                                     ))}
@@ -169,13 +167,14 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
                 </Table>
             </div>
 
+            {/* Paginação */}
             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
                     <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
                     <Select
                         value={`${pageSize}`}
-                        onValueChange={(value) => {
-                            setPageSize(Number(value));
+                        onValueChange={(v) => {
+                            setPageSize(Number(v));
                             setPageIndex(0);
                         }}
                     >

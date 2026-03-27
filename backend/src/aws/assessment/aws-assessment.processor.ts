@@ -20,7 +20,7 @@ import { AwsAssessmentReportService } from './aws-assessment-report.service';
 
 import { AwsAssessmentExcelService } from './aws-assessment-excel.service';
 
-import { ASSESSMENT_QUEUE } from './constants';
+import { ASSESSMENT_QUEUE, AWS_ASSESSMENT_WORKER_CONCURRENCY } from './constants';
 
 export interface AssessmentJobPayload {
     jobId: string;
@@ -32,7 +32,7 @@ export interface AssessmentJobPayload {
     runSync: boolean;
 }
 
-@Processor(ASSESSMENT_QUEUE)
+@Processor(ASSESSMENT_QUEUE, { concurrency: AWS_ASSESSMENT_WORKER_CONCURRENCY })
 export class AwsAssessmentProcessor extends WorkerHost {
     private readonly logger = new Logger(AwsAssessmentProcessor.name);
 

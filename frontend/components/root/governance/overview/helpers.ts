@@ -27,7 +27,15 @@ export function readPaginationFromLocation(): { page: number; limit: number } {
 
 export function normalizeJobs(payload: unknown): GovernanceJob[] {
     const items = Array.isArray(payload) ? payload : Array.isArray((payload as { items?: unknown })?.items) ? (payload as { items: unknown[] }).items : [];
-    return items.filter((item): item is GovernanceJob => typeof (item as GovernanceJob)?.id === 'string');
+
+    const parsedJobs = items.filter((item): item is GovernanceJob => typeof (item as GovernanceJob)?.id === 'string');
+
+    return parsedJobs.sort((left, right) => {
+        const leftDate = Date.parse(left.completedAt ?? left.createdAt);
+        const rightDate = Date.parse(right.completedAt ?? right.createdAt);
+
+        return rightDate - leftDate;
+    });
 }
 
 export function normalizePagination(payload: unknown): PaginationMeta | null {

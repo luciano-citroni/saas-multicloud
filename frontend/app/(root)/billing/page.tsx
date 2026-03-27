@@ -1,4 +1,5 @@
 import { BillingPlansRules } from '@/components/root/billing/billing-plans-rules';
+import { BillingLoadingSkeleton } from '@/components/root/billing/billing-loading-skeleton';
 import { CreditCard } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -13,7 +14,7 @@ export default function BillingPage() {
                 <p className="text-sm text-muted-foreground">Acompanhe o plano atual da organização e gerencie mudanças de assinatura.</p>
             </div>
 
-            <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando billing...</div>}>
+            <Suspense fallback={<BillingLoadingSkeleton />}>
                 <BillingPlansRules />
             </Suspense>
         </div>

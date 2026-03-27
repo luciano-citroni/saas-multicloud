@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { LogoutButton } from '@/components/auth/logout-button';
 
 type CurrentUser = {
@@ -52,7 +53,11 @@ export function PrivateHome() {
             </CardHeader>
             <CardContent className="space-y-4">
                 {loading ? (
-                    <p className="text-sm text-muted-foreground">Carregando sua sessão...</p>
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-4 w-56" />
+                        <Skeleton className="h-4 w-36" />
+                    </div>
                 ) : (
                     <div className="space-y-1 text-sm">
                         <p>

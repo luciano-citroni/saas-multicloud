@@ -5,6 +5,7 @@ import { DataSourceOptions, DataSource } from 'typeorm';
 config();
 
 const configService = new ConfigService();
+const dbTimezone = configService.get<string>('DB_TIMEZONE') ?? 'America/Sao_Paulo';
 
 const dataSourceOptions: DataSourceOptions = {
     type: 'postgres',
@@ -16,6 +17,9 @@ const dataSourceOptions: DataSourceOptions = {
     entities: [__dirname + '/entites/**/*{.ts,.js}'],
     migrations: [__dirname + '/migrations/*.ts', __dirname + '/migrations/*.js'],
     synchronize: false,
+    extra: {
+        options: `-c timezone=${dbTimezone}`,
+    },
 };
 
 export default new DataSource(dataSourceOptions);

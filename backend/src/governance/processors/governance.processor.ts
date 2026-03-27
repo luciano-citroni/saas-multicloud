@@ -12,7 +12,7 @@ import { GovernanceJob } from '../../db/entites/governance-job.entity';
 
 import { GovernanceScanService } from '../services/governance-scan.service';
 
-import { GOVERNANCE_QUEUE } from '../constants';
+import { GOVERNANCE_QUEUE, GOVERNANCE_WORKER_CONCURRENCY } from '../constants';
 
 export interface GovernanceJobPayload {
     jobId: string;
@@ -20,7 +20,7 @@ export interface GovernanceJobPayload {
     organizationId: string;
 }
 
-@Processor(GOVERNANCE_QUEUE)
+@Processor(GOVERNANCE_QUEUE, { concurrency: GOVERNANCE_WORKER_CONCURRENCY })
 export class GovernanceProcessor extends WorkerHost {
     private readonly logger = new Logger(GovernanceProcessor.name);
 
