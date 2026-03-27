@@ -363,9 +363,12 @@ export function FinopsCostDetails() {
                                         dataKey="currentMonthCost"
                                         position="right"
                                         style={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                                        formatter={(v: number) =>
-                                            v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`
-                                        }
+                                        formatter={(value) => {
+                                            const numericValue = Number(value ?? 0);
+                                            return numericValue >= 1000
+                                                ? `$${(numericValue / 1000).toFixed(1)}k`
+                                                : `$${numericValue.toFixed(0)}`;
+                                        }}
                                     />
                                 </Bar>
                             </BarChart>

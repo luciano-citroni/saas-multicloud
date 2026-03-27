@@ -100,7 +100,7 @@ export class FinopsProcessor extends WorkerHost {
                         region: entry.region ?? '',
                         cost: entry.cost,
                         currency: entry.currency,
-                        date: new Date(entry.date),
+                        date: entry.date,
                         granularity: granularity.toLowerCase() as 'daily' | 'monthly',
                         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                         tags: (entry.tags ?? null) as Record<string, any> | null,

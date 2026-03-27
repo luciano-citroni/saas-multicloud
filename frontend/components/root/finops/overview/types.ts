@@ -15,7 +15,12 @@ export type FinopsDashboard = {
     totalCost: number;
     currency: string;
     topServices: Array<{ service: string; cost: number; percentage: number }>;
-    costTrend: number;
+    trend: {
+        currentPeriodCost: number;
+        previousPeriodCost: number;
+        growthAmount: number;
+        growthPercentage: number;
+    };
     lastSyncAt: string | null;
 };
 

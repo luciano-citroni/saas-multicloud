@@ -34,9 +34,11 @@ export class AwsFinopsProvider implements IFinopsProvider {
         this.logger.log(`[AWS FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
         const awsClient = await this.buildCostExplorerClient(roleArn, externalId, region ?? 'us-east-1');
+        const exclusiveEndDate = this.toExclusiveEndDate(endDate);
 
         const input: GetCostAndUsageCommandInput = {
-            TimePeriod: { Start: startDate, End: endDate },
+            // AWS Cost Explorer interpreta End como exclusivo.
+            TimePeriod: { Start: startDate, End: exclusiveEndDate },
             Granularity: granularity,
             Metrics: ['UnblendedCost'],
             GroupBy: [
@@ -74,6 +76,16 @@ export class AwsFinopsProvider implements IFinopsProvider {
         this.logger.log(`[AWS FinOps] ${entries.length} registros coletados para conta ${cloudAccountId}`);
 
         return { entries, currency };
+    }
+
+    private toExclusiveEndDate(endDate: string): string {
+        const [yearStr, monthStr, dayStr] = endDate.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr);
+        const day = Number(dayStr);
+        const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+
+        return nextDay.toISOString().slice(0, 10);
     }
 
     private async buildCostExplorerClient(

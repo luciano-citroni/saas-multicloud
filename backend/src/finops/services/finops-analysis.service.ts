@@ -123,18 +123,34 @@ export class FinopsAnalysisService {
 
     /**
      * Retorna o resumo de custos para o dashboard FinOps de uma conta.
-     * Considera os últimos 30 dias por padrão.
+     * Considera o mês atual e compara com o mês anterior.
      */
     async getDashboardSummary(cloudAccountId: string, organizationId: string): Promise<CostSummary> {
         const now = new Date();
-        // Use start-of-day to get clean date boundaries for the DATE column
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); // exclusive upper bound
-        const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
-        const sixtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 59);
+        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        const [currentGranularity, previousGranularity] = await Promise.all([
+            this.resolveGranularityForPeriod(
+                cloudAccountId,
+                organizationId,
+                this.formatDateOnly(startOfCurrentMonth),
+                this.formatDateOnly(startOfNextMonth),
+                'daily-first',
+            ),
+            this.resolveGranularityForPeriod(
+                cloudAccountId,
+                organizationId,
+                this.formatDateOnly(startOfPreviousMonth),
+                this.formatDateOnly(startOfCurrentMonth),
+                'monthly-first',
+            ),
+        ]);
 
         const [currentRecords, previousRecords] = await Promise.all([
-            this.getRecordsForPeriod(cloudAccountId, organizationId, thirtyDaysAgo, today),
-            this.getRecordsForPeriod(cloudAccountId, organizationId, sixtyDaysAgo, thirtyDaysAgo),
+            this.getRecordsForPeriod(cloudAccountId, organizationId, startOfCurrentMonth, startOfNextMonth, currentGranularity),
+            this.getRecordsForPeriod(cloudAccountId, organizationId, startOfPreviousMonth, startOfCurrentMonth, previousGranularity),
         ]);
 
         const totalCost = currentRecords.reduce((sum, r) => sum + Number(r.cost), 0);
@@ -158,13 +174,16 @@ export class FinopsAnalysisService {
         startDate: Date,
         endDate: Date,
     ): Promise<Array<{ date: string; cost: number; currency: string }>> {
+        const start = this.formatDateOnly(startDate);
+        const exclusiveEnd = this.formatDateOnly(this.addDays(endDate, 1));
+
         const records = await this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
             .andWhere('r.granularity = :granularity', { granularity })
-            .andWhere('r.date >= :startDate', { startDate })
-            .andWhere('r.date <= :endDate', { endDate })
+            .andWhere('r.date >= :startDate', { startDate: start })
+            .andWhere('r.date < :endDate', { endDate: exclusiveEnd })
             .orderBy('r.date', 'ASC')
             .getMany();
 
@@ -344,11 +363,19 @@ export class FinopsAnalysisService {
         const prevMonth = month === 1 ? 12 : month - 1;
         const prevYear = month === 1 ? year - 1 : year;
         const startOfPrevMonth = `${prevYear}-${pad(prevMonth)}-01`;
+        const now = new Date();
+        const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
 
         // Resolve granularity independently for each period to avoid double-counting
         const [currentGranularity, prevGranularity] = await Promise.all([
-            this.resolveGranularity(cloudAccountId, organizationId, startOfMonth, endOfMonth),
-            this.resolveGranularity(cloudAccountId, organizationId, startOfPrevMonth, startOfMonth),
+            this.resolveGranularityForPeriod(
+                cloudAccountId,
+                organizationId,
+                startOfMonth,
+                endOfMonth,
+                isCurrentMonth ? 'daily-first' : 'monthly-first',
+            ),
+            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfPrevMonth, startOfMonth, 'monthly-first'),
         ]);
 
         interface RawServiceRow { service: string; totalCost: string; currency: string }
@@ -380,14 +407,29 @@ export class FinopsAnalysisService {
                 .getRawMany<RawServiceRow>(),
         ]);
 
-        const prevMap = new Map<string, number>();
-        for (const row of previousRows) {
-            prevMap.set(row.service, Number(row.totalCost));
+        const currentMap = new Map<string, { cost: number; currency: string }>();
+        for (const row of currentRows) {
+            currentMap.set(row.service, {
+                cost: Number(row.totalCost),
+                currency: row.currency ?? 'USD',
+            });
         }
 
-        return currentRows.map((row) => {
-            const currentMonthCost = Number(row.totalCost);
-            const previousMonthCost = prevMap.get(row.service) ?? 0;
+        const prevMap = new Map<string, { cost: number; currency: string }>();
+        for (const row of previousRows) {
+            prevMap.set(row.service, {
+                cost: Number(row.totalCost),
+                currency: row.currency ?? 'USD',
+            });
+        }
+
+        const services = Array.from(new Set([...currentMap.keys(), ...prevMap.keys()]));
+
+        const items = services.map((service) => {
+            const current = currentMap.get(service);
+            const previous = prevMap.get(service);
+            const currentMonthCost = current?.cost ?? 0;
+            const previousMonthCost = previous?.cost ?? 0;
             const change = currentMonthCost - previousMonthCost;
             const changePercentage =
                 previousMonthCost > 0
@@ -399,14 +441,21 @@ export class FinopsAnalysisService {
                 Math.abs(changePercentage) < 5 ? 'stable' : change > 0 ? 'up' : 'down';
 
             return {
-                service: row.service,
+                service,
                 currentMonthCost,
                 previousMonthCost,
                 change,
                 changePercentage,
                 trend,
-                currency: row.currency ?? 'USD',
+                currency: current?.currency ?? previous?.currency ?? 'USD',
             };
+        });
+
+        return items.sort((left, right) => {
+            if (right.currentMonthCost !== left.currentMonthCost) {
+                return right.currentMonthCost - left.currentMonthCost;
+            }
+            return right.previousMonthCost - left.previousMonthCost;
         });
     }
 
@@ -436,25 +485,58 @@ export class FinopsAnalysisService {
      * Prefere 'daily' quando há registros diários; senão usa 'monthly'.
      * Evita dupla contagem quando o scheduler cria registros de ambas as granularidades.
      */
-    private async resolveGranularity(
+    private async hasGranularityRecords(
         cloudAccountId: string,
         organizationId: string,
         from: string,
         to: string,
-    ): Promise<'daily' | 'monthly'> {
+        granularity: 'daily' | 'monthly',
+    ): Promise<boolean> {
         const count = await this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.granularity = :granularity', { granularity: 'daily' })
+            .andWhere('r.granularity = :granularity', { granularity })
             .andWhere('r.date >= :from', { from })
             .andWhere('r.date < :to', { to })
             .getCount();
-        return count > 0 ? 'daily' : 'monthly';
+
+        return count > 0;
     }
 
-    private toIsoDate(d: Date): string {
-        return d.toISOString().slice(0, 10);
+    private async resolveGranularityForPeriod(
+        cloudAccountId: string,
+        organizationId: string,
+        from: string,
+        to: string,
+        preference: 'daily-first' | 'monthly-first',
+    ): Promise<'daily' | 'monthly'> {
+        const [hasDaily, hasMonthly] = await Promise.all([
+            this.hasGranularityRecords(cloudAccountId, organizationId, from, to, 'daily'),
+            this.hasGranularityRecords(cloudAccountId, organizationId, from, to, 'monthly'),
+        ]);
+
+        if (preference === 'daily-first') {
+            if (hasDaily) return 'daily';
+            if (hasMonthly) return 'monthly';
+            return 'daily';
+        }
+
+        if (hasMonthly) return 'monthly';
+        if (hasDaily) return 'daily';
+        return 'monthly';
+    }
+
+    private formatDateOnly(date: Date): string {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    }
+
+    private addDays(date: Date, days: number): Date {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
     }
 
     private async getRecordsForPeriod(
@@ -462,16 +544,18 @@ export class FinopsAnalysisService {
         organizationId: string,
         from: Date,
         to: Date,
+        granularity?: 'daily' | 'monthly',
     ): Promise<FinopsCostRecord[]> {
-        const fromStr = this.toIsoDate(from);
-        const toStr = this.toIsoDate(to);
-        const granularity = await this.resolveGranularity(cloudAccountId, organizationId, fromStr, toStr);
+        const fromStr = this.formatDateOnly(from);
+        const toStr = this.formatDateOnly(to);
+        const resolvedGranularity = granularity
+            ?? await this.resolveGranularityForPeriod(cloudAccountId, organizationId, fromStr, toStr, 'daily-first');
 
         return this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.granularity = :granularity', { granularity })
+            .andWhere('r.granularity = :granularity', { granularity: resolvedGranularity })
             .andWhere('r.date >= :from', { from: fromStr })
             .andWhere('r.date < :to', { to: toStr })
             .getMany();
@@ -512,7 +596,7 @@ export class FinopsAnalysisService {
 
     private computeTrend(current: number, previous: number): CostTrend {
         const growthAmount = current - previous;
-        const growthPercentage = previous > 0 ? (growthAmount / previous) * 100 : 0;
+        const growthPercentage = previous > 0 ? (growthAmount / previous) * 100 : current > 0 ? 100 : 0;
 
         return {
             currentPeriodCost: current,

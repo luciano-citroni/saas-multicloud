@@ -21,7 +21,8 @@
       "Bash(ls -la /c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app/\\\\\\(root\\\\\\)/)",
       "Bash(find /c/Users/lucia/Documents/GitHub/saas-multicloud/frontend/components/root -type f -name *.tsx)",
       "Bash(test -f c:UsersluciaDocumentsGitHubsaas-multicloudfrontendapp\\\\\\\\\\(root\\\\\\\\\\)/finops/page.tsx)",
-      "Bash(grep -rn 'export const metadata' c:/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app --include=*.tsx --include=*.ts)"
+      "Bash(grep -rn 'export const metadata' c:/Users/lucia/Documents/GitHub/saas-multicloud/frontend/app --include=*.tsx --include=*.ts)",
+      "Bash(cat frontend/.env*)"
     ]
   }
 }

@@ -31,7 +31,11 @@ export function FinopsSummaryCards({
     onAcceptTerms,
     onRefresh,
 }: FinopsSummaryCardsProps) {
-    const trendPositive = (dashboard?.costTrend ?? 0) <= 0;
+    const trendPercentage = Number.isFinite(dashboard?.trend?.growthPercentage)
+        ? dashboard?.trend?.growthPercentage ?? 0
+        : 0;
+    const trendPositive = trendPercentage <= 0;
+    const trendLabel = trendPercentage === 0 ? 'sem variação' : trendPositive ? 'de redução' : 'de aumento';
     const isBusy = acceptingConsent || syncing || hasRunningJob;
 
     function renderSubtitle() {
@@ -91,13 +95,17 @@ export function FinopsSummaryCards({
 
             <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-3">
                 <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground">Custo Total (período)</p>
+                    <p className="text-xs text-muted-foreground">Custo Total (mês atual)</p>
                     {dashboard ? (
                         <>
                             <p className="mt-1 truncate text-2xl font-bold">{formatCurrency(dashboard.totalCost, dashboard.currency)}</p>
                             <div className={cn('mt-1 flex items-center gap-1 text-xs', trendPositive ? 'text-green-500' : 'text-destructive')}>
                                 {trendPositive ? <TrendingDown className="size-3.5" /> : <TrendingUp className="size-3.5" />}
-                                <span>{Math.abs(dashboard.costTrend).toFixed(1)}% vs período anterior</span>
+                                <span>
+                                    {trendPercentage === 0
+                                        ? '0,0% sem variação vs período anterior'
+                                        : `${Math.abs(trendPercentage).toFixed(1)}% ${trendLabel} vs período anterior`}
+                                </span>
                             </div>
                         </>
                     ) : (

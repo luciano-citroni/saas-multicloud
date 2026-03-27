@@ -81,7 +81,7 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
                                     <FormLabel>Granularidade</FormLabel>
                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
-                                            <SelectTrigger>
+                                            <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Selecione" />
                                             </SelectTrigger>
                                         </FormControl>

@@ -4,13 +4,7 @@ import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
 // Deve espelhar o valor de FINOPS_CONSENT_TERMS no backend (backend/src/finops/constants.ts)
@@ -43,7 +37,7 @@ export function FinopsConsentDialog({ open, cloudProvider, onAccept, onCancel, i
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="min-w-xl max-w-3xl">
                 <DialogHeader>
                     <div className="flex items-center gap-2">
                         <AlertTriangle className="size-5 shrink-0 text-yellow-500" />
@@ -51,16 +45,15 @@ export function FinopsConsentDialog({ open, cloudProvider, onAccept, onCancel, i
                     </div>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="space-y-4 ">
                     {/* Provider info */}
                     <p className="text-sm text-muted-foreground">
-                        Para coletar dados de custo desta conta via{' '}
-                        <span className="font-medium text-foreground">{providerLabel}</span>, você
-                        precisa ler e aceitar o termo abaixo.
+                        Para coletar dados de custo desta conta via <span className="font-medium text-foreground">{providerLabel}</span>, você precisa ler
+                        e aceitar o termo abaixo.
                     </p>
 
                     {/* Terms text */}
-                    <div className="max-h-44 overflow-y-auto rounded-lg border bg-muted/50 p-4 text-sm leading-relaxed text-muted-foreground">
+                    <div className="max-h-64 overflow-y-auto rounded-lg border bg-muted/50 p-4 text-sm leading-relaxed text-muted-foreground">
                         {CONSENT_TERMS}
                     </div>
 
@@ -74,8 +67,8 @@ export function FinopsConsentDialog({ open, cloudProvider, onAccept, onCancel, i
                             <li>Sincronizações diárias automáticas serão ativadas</li>
                         </ul>
                         <p className="pt-1">
-                            Nenhuma credencial é exposta. Apenas dados de custo agregados são armazenados.
-                            O consentimento pode ser revogado a qualquer momento.
+                            Nenhuma credencial é exposta. Apenas dados de custo agregados são armazenados. O consentimento pode ser revogado a qualquer
+                            momento.
                         </p>
                     </div>
 
@@ -86,14 +79,10 @@ export function FinopsConsentDialog({ open, cloudProvider, onAccept, onCancel, i
                             checked={checked}
                             onCheckedChange={(value) => setChecked(value === true)}
                             disabled={isLoading}
-                            className="mt-0.5"
+                            className="mt-0.5 shrink-0"
                         />
-                        <Label
-                            htmlFor="finops-consent-checkbox"
-                            className="cursor-pointer text-sm leading-relaxed"
-                        >
-                            Li e aceito os termos acima e autorizo a coleta de dados de custo desta
-                            conta via <span className="font-medium">{providerLabel}</span>.
+                        <Label htmlFor="finops-consent-checkbox" className="flex-1 cursor-pointer text-sm leading-relaxed">
+                            {`Li e aceito os termos acima e autorizo a coleta de dados de custo desta conta via ${providerLabel}.`}
                         </Label>
                     </div>
                 </div>
