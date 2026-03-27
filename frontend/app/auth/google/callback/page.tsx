@@ -4,6 +4,12 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
+const CALLBACK_REPLAY_STORAGE_KEY = 'smc_google_callback_replay_code';
+
+function isLikelyGoogleAuthorizationCode(code: string): boolean {
+    return code.startsWith('4/') || code.includes('/');
+}
+
 function GoogleCallbackContent() {
     const searchParams = useSearchParams();
 
@@ -24,9 +30,24 @@ function GoogleCallbackContent() {
                 });
 
                 if (!response.ok) {
+                    const shouldReplayOnBackendCallback =
+                        response.status === 401 &&
+                        isLikelyGoogleAuthorizationCode(code) &&
+                        sessionStorage.getItem(CALLBACK_REPLAY_STORAGE_KEY) !== code;
+
+                    if (shouldReplayOnBackendCallback) {
+                        sessionStorage.setItem(CALLBACK_REPLAY_STORAGE_KEY, code);
+                        const query = searchParams.toString();
+                        const replayUrl = query ? `/api/auth/google/callback/replay?${query}` : '/api/auth/google/callback/replay';
+                        window.location.replace(replayUrl);
+                        return;
+                    }
+
                     window.location.replace('/auth/sign-in?error=google_auth_failed');
                     return;
                 }
+
+                sessionStorage.removeItem(CALLBACK_REPLAY_STORAGE_KEY);
 
                 window.location.replace('/');
             } catch {

@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { GoogleButton } from '@/components/auth/google-button';
 import { Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const loginScheme = z.object({
     email: z.email('E-mail inválido'),
@@ -25,6 +25,25 @@ export function LoginForm() {
     const [viewPassword, setViewPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const error = searchParams.get('error');
+
+        if (!error) {
+            return;
+        }
+
+        if (error === 'google_auth_failed') {
+            toast.error('Não foi possível concluir o login com Google. Tente novamente.');
+        } else {
+            toast.error('Não foi possível concluir o login. Tente novamente.');
+        }
+
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.delete('error');
+        window.history.replaceState({}, '', currentUrl.toString());
+    }, [searchParams]);
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginScheme),
