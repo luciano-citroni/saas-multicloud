@@ -3,7 +3,7 @@
 import { extractErrorMessage, type ApiErrorResponse } from '@/lib/error-messages';
 import { z } from 'zod';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4880';
 
 /**
  * Esquema de validação para login

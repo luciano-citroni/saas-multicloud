@@ -9,8 +9,12 @@ export interface AuthTokens {
     refreshToken: string;
 }
 
-export function getBackendUrl(): string {
-    return process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4880';
+export function getBackendPublicUrl(): string {
+    return process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? 'http://localhost:4880';
+}
+
+export function getBackendInternalUrl(): string {
+    return process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4880';
 }
 
 export async function getAccessTokenFromCookies(): Promise<string | null> {
@@ -70,7 +74,7 @@ export async function parseJsonSafe<T>(response: Response): Promise<T | null> {
 }
 
 export async function backendFetch(path: string, init?: RequestInit): Promise<Response> {
-    return fetch(`${getBackendUrl()}${path}`, {
+    return fetch(`${getBackendInternalUrl()}${path}`, {
         ...init,
         headers: {
             ...(init?.headers ?? {}),
