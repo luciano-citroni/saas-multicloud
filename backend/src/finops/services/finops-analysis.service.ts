@@ -1,8 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
+
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
+
+import { ConfigService } from '@nestjs/config';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsRecommendation } from '../../db/entites/finops-recommendation.entity';
@@ -11,6 +15,9 @@ import { AwsRdsInstance } from '../../db/entites/aws-rds-instance.entity';
 import { AwsS3Bucket } from '../../db/entites/aws-s3-bucket.entity';
 import { AzureVirtualMachine } from '../../db/entites/azure-virtual-machine.entity';
 import { AzureDisk } from '../../db/entites/azure-disk.entity';
+import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { AwsFinopsProvider } from '../providers/aws-finops.provider';
+import { ErrorMessages } from '../../common/messages/error-messages';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +95,36 @@ export interface SavingOpportunity {
     }>;
 }
 
+// ─── Debug types ──────────────────────────────────────────────────────────────
+
+export interface FinopsDebugServiceBreakdown {
+    service: string;
+    region: string;
+    cost: number;
+}
+
+export interface FinopsDebugComparison {
+    period: { start: string; end: string; granularity: string };
+    aws: {
+        totalCost: number;
+        currency: string;
+        entryCount: number;
+        negativeEntries: number;
+        services: FinopsDebugServiceBreakdown[];
+    };
+    database: {
+        totalCost: number;
+        currency: string;
+        recordCount: number;
+        services: FinopsDebugServiceBreakdown[];
+    };
+    diff: {
+        amount: number;
+        percentageError: number;
+        recommendation: string;
+    };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -115,6 +152,13 @@ export class FinopsAnalysisService {
 
         @InjectRepository(AzureDisk)
         private readonly azureDiskRepo: Repository<AzureDisk>,
+
+        @InjectRepository(CloudAccount)
+        private readonly cloudAccountRepo: Repository<CloudAccount>,
+
+        private readonly awsFinopsProvider: AwsFinopsProvider,
+
+        private readonly configService: ConfigService,
     ) {}
 
     // =========================================================================
@@ -477,8 +521,151 @@ export class FinopsAnalysisService {
     }
 
     // =========================================================================
+    // Debug / Validação
+    // =========================================================================
+
+    /**
+     * Compara os custos retornados em tempo real pela AWS Cost Explorer com
+     * os registros armazenados no banco de dados para o mesmo período.
+     *
+     * Útil para diagnosticar divergências de valores.
+     * Requer role OWNER — consome 1 chamada à API AWS Cost Explorer.
+     */
+    async compareWithAws(
+        cloudAccountId: string,
+        organizationId: string,
+        granularity: 'daily' | 'monthly',
+        startDate: string,
+        endDate: string,
+    ): Promise<FinopsDebugComparison> {
+        const cloudAccount = await this.cloudAccountRepo
+            .createQueryBuilder('ca')
+            .addSelect('ca.credentialsEncrypted')
+            .where('ca.id = :id', { id: cloudAccountId })
+            .andWhere('ca.organizationId = :organizationId', { organizationId })
+            .getOne();
+
+        if (!cloudAccount) {
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+        }
+
+        if (cloudAccount.provider !== 'aws') {
+            throw new BadRequestException('O debug de comparação suporta apenas contas AWS.');
+        }
+
+        const decryptedCredentials = this.decryptCloudCredentials(cloudAccount.credentialsEncrypted);
+
+        this.logger.log(`[Debug] Coletando custos AWS em tempo real para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
+
+        const awsGranularity = granularity.toUpperCase() as 'DAILY' | 'MONTHLY';
+        const { entries: awsEntries, currency } = await this.awsFinopsProvider.collectCosts(
+            { credentials: decryptedCredentials, cloudAccountId },
+            startDate,
+            endDate,
+            awsGranularity,
+        );
+
+        const dbRecords = await this.costRecordRepo
+            .createQueryBuilder('r')
+            .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.granularity = :granularity', { granularity })
+            .andWhere('r.date >= :startDate', { startDate })
+            .andWhere('r.date <= :endDate', { endDate })
+            .getMany();
+
+        // Agregar entradas AWS por serviço+região
+        const awsMap = new Map<string, { service: string; region: string; cost: number }>();
+        for (const entry of awsEntries) {
+            const key = `${entry.service}|${entry.region ?? ''}`;
+            const existing = awsMap.get(key);
+            if (existing) {
+                existing.cost += entry.cost;
+            } else {
+                awsMap.set(key, { service: entry.service, region: entry.region ?? '', cost: entry.cost });
+            }
+        }
+
+        // Agregar registros do banco por serviço+região
+        const dbMap = new Map<string, { service: string; region: string; cost: number }>();
+        for (const record of dbRecords) {
+            const key = `${record.service}|${record.region}`;
+            const existing = dbMap.get(key);
+            if (existing) {
+                existing.cost += Number(record.cost);
+            } else {
+                dbMap.set(key, { service: record.service, region: record.region, cost: Number(record.cost) });
+            }
+        }
+
+        const awsTotalCost = Array.from(awsMap.values()).reduce((sum, e) => sum + e.cost, 0);
+        const dbTotalCost = Array.from(dbMap.values()).reduce((sum, e) => sum + e.cost, 0);
+        const diffAmount = dbTotalCost - awsTotalCost;
+        const percentageError = awsTotalCost !== 0 ? (diffAmount / Math.abs(awsTotalCost)) * 100 : 0;
+
+        const recommendation =
+            Math.abs(percentageError) > 5
+                ? `Divergência de ${percentageError.toFixed(2)}% detectada. Execute POST /finops/accounts/${cloudAccountId}/sync com o mesmo período para corrigir.`
+                : `Valores dentro da margem aceitável (${percentageError.toFixed(2)}%).`;
+
+        this.logger.log(
+            `[Debug] Comparação concluída: AWS=$${awsTotalCost.toFixed(4)}, DB=$${dbTotalCost.toFixed(4)}, diff=${percentageError.toFixed(2)}%`,
+        );
+
+        return {
+            period: { start: startDate, end: endDate, granularity },
+            aws: {
+                totalCost: awsTotalCost,
+                currency,
+                entryCount: awsEntries.length,
+                negativeEntries: awsEntries.filter((e) => e.cost < 0).length,
+                services: Array.from(awsMap.values()).sort((a, b) => b.cost - a.cost),
+            },
+            database: {
+                totalCost: dbTotalCost,
+                currency: dbRecords[0]?.currency ?? 'USD',
+                recordCount: dbRecords.length,
+                services: Array.from(dbMap.values()).sort((a, b) => b.cost - a.cost),
+            },
+            diff: {
+                amount: diffAmount,
+                percentageError,
+                recommendation,
+            },
+        };
+    }
+
+    // =========================================================================
     // Private helpers
     // =========================================================================
+
+    /**
+     * Descriptografa as credenciais usando AES-256-GCM.
+     * Replica a lógica de CloudService para evitar dependências circulares.
+     */
+    private decryptCloudCredentials(encrypted: string): Record<string, any> {
+        const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
+
+        if (!keyHex) {
+            throw new Error('CREDENTIALS_ENCRYPTION_KEY não configurada');
+        }
+
+        const key = Buffer.from(keyHex, 'hex');
+        const combined = Buffer.from(encrypted, 'base64').toString('utf8');
+        const [ivHex, authTagHex, ciphertext] = combined.split(':');
+
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+
+        let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        return JSON.parse(decrypted);
+    }
+
 
     /**
      * Detecta a granularidade dominante no período.

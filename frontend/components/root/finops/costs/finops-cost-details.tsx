@@ -203,12 +203,20 @@ export function FinopsCostDetails() {
     };
 
     const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
-    const totalCost = items.reduce((s, i) => s + i.currentMonthCost, 0);
-    const increasingServices = items.filter((i) => i.trend === 'up' && i.changePercentage > 10);
+
+    // Separate credits (negative cost) from regular service costs
+    const serviceItems = items.filter((i) => i.currentMonthCost >= 0);
+    const creditItems = items.filter((i) => i.currentMonthCost < 0);
+    const grossCost = serviceItems.reduce((s, i) => s + i.currentMonthCost, 0);
+    const totalCredits = creditItems.reduce((s, i) => s + i.currentMonthCost, 0); // negative number
+    const totalCost = grossCost + totalCredits; // net cost
+    const hasCredits = creditItems.length > 0;
+
+    const increasingServices = serviceItems.filter((i) => i.trend === 'up' && i.changePercentage > 10);
     const currency = items[0]?.currency ?? 'USD';
 
-    // Chart: top 8 services, horizontal bars
-    const chartItems = items.slice(0, 8).map((i) => ({
+    // Chart: top 8 services (exclude credits — negative bars break layout)
+    const chartItems = serviceItems.slice(0, 8).map((i) => ({
         ...i,
         label: shortenServiceName(i.service),
     }));
@@ -248,7 +256,7 @@ export function FinopsCostDetails() {
                         <p className="text-sm font-medium">Custos por Serviço</p>
                         <p className="text-xs text-muted-foreground">
                             {MONTH_NAMES[month - 1]} {year}
-                            {!loading && ` — ${items.length} serviço${items.length !== 1 ? 's' : ''}`}
+                            {!loading && ` — ${serviceItems.length} serviço${serviceItems.length !== 1 ? 's' : ''}${hasCredits ? `, ${creditItems.length} crédito${creditItems.length !== 1 ? 's' : ''}` : ''}`}
                         </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -267,35 +275,52 @@ export function FinopsCostDetails() {
                 {/* ── Summary cards ── */}
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Total do mês</p>
+                        <p className="text-xs text-muted-foreground">{hasCredits ? 'Custo bruto' : 'Total do mês'}</p>
                         <p className="mt-1 text-xl font-bold">
-                            {loading ? <span className="text-muted-foreground">—</span> : formatCurrency(totalCost, currency)}
+                            {loading ? <span className="text-muted-foreground">—</span> : formatCurrency(hasCredits ? grossCost : totalCost, currency)}
                         </p>
-                    </div>
-
-                    <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Em alta (&gt;10%)</p>
-                        <p className={cn('mt-1 text-xl font-bold', !loading && increasingServices.length > 0 ? 'text-destructive' : '')}>
-                            {loading ? '—' : increasingServices.length}
-                        </p>
-                        {!loading && increasingServices.length > 0 && (
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {increasingServices.slice(0, 2).map((s) => shortenServiceName(s.service)).join(', ')}
-                                {increasingServices.length > 2 ? ` +${increasingServices.length - 2}` : ''}
+                        {!loading && hasCredits && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                líquido: <span className="font-medium text-foreground">{formatCurrency(totalCost, currency)}</span>
                             </p>
                         )}
                     </div>
 
+                    {hasCredits ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50/60 p-3 dark:border-green-900 dark:bg-green-950/30">
+                            <p className="text-xs text-green-700 dark:text-green-400">Créditos aplicados</p>
+                            <p className="mt-1 text-xl font-bold text-green-700 dark:text-green-400">
+                                {loading ? '—' : formatCurrency(totalCredits, currency)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-green-600/70 dark:text-green-500/70">
+                                {creditItems.length} item{creditItems.length !== 1 ? 's' : ''}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="rounded-lg border p-3">
+                            <p className="text-xs text-muted-foreground">Em alta (&gt;10%)</p>
+                            <p className={cn('mt-1 text-xl font-bold', !loading && increasingServices.length > 0 ? 'text-destructive' : '')}>
+                                {loading ? '—' : increasingServices.length}
+                            </p>
+                            {!loading && increasingServices.length > 0 && (
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                    {increasingServices.slice(0, 2).map((s) => shortenServiceName(s.service)).join(', ')}
+                                    {increasingServices.length > 2 ? ` +${increasingServices.length - 2}` : ''}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     <div className="col-span-2 rounded-lg border p-3 sm:col-span-1">
                         <p className="text-xs text-muted-foreground">Maior serviço</p>
-                        {!loading && items.length > 0 ? (
+                        {!loading && serviceItems.length > 0 ? (
                             <>
                                 <p className="mt-1 truncate text-base font-bold">
-                                    {shortenServiceName(items[0].service)}
+                                    {shortenServiceName(serviceItems[0].service)}
                                 </p>
                                 <p className="mt-0.5 text-xs text-muted-foreground">
-                                    {formatCurrency(items[0].currentMonthCost, currency)}
-                                    {totalCost > 0 && ` · ${((items[0].currentMonthCost / totalCost) * 100).toFixed(1)}%`}
+                                    {formatCurrency(serviceItems[0].currentMonthCost, currency)}
+                                    {grossCost > 0 && ` · ${((serviceItems[0].currentMonthCost / grossCost) * 100).toFixed(1)}%`}
                                 </p>
                             </>
                         ) : (
@@ -408,11 +433,12 @@ export function FinopsCostDetails() {
                             <span className="text-right">Var.</span>
                         </div>
 
+                        {/* Regular service rows */}
                         <div className="divide-y">
-                            {items.map((item) => {
+                            {serviceItems.map((item) => {
                                 const isRising = item.trend === 'up' && item.changePercentage > 10;
-                                const share = totalCost > 0
-                                    ? ((item.currentMonthCost / totalCost) * 100).toFixed(1)
+                                const share = grossCost > 0
+                                    ? ((item.currentMonthCost / grossCost) * 100).toFixed(1)
                                     : '0';
 
                                 return (
@@ -423,7 +449,6 @@ export function FinopsCostDetails() {
                                             isRising && 'bg-destructive/5',
                                         )}
                                     >
-                                        {/* Service name */}
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-medium">
                                                 {shortenServiceName(item.service)}
@@ -431,19 +456,16 @@ export function FinopsCostDetails() {
                                             <p className="text-xs text-muted-foreground">{share}% do total</p>
                                         </div>
 
-                                        {/* Current cost */}
                                         <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
                                             {formatCurrency(item.currentMonthCost, item.currency)}
                                         </span>
 
-                                        {/* Previous cost — hidden on mobile */}
                                         <span className="hidden shrink-0 text-right text-sm text-muted-foreground tabular-nums sm:block">
                                             {item.previousMonthCost > 0
                                                 ? formatCurrency(item.previousMonthCost, item.currency)
                                                 : '—'}
                                         </span>
 
-                                        {/* Trend */}
                                         <div className="shrink-0 text-right">
                                             <TrendBadge trend={item.trend} changePercentage={item.changePercentage} />
                                         </div>
@@ -451,6 +473,48 @@ export function FinopsCostDetails() {
                                 );
                             })}
                         </div>
+
+                        {/* Credits section */}
+                        {hasCredits && (
+                            <>
+                                <div className="flex items-center gap-2 border-t bg-green-50/60 px-4 py-2 dark:bg-green-950/20">
+                                    <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                                        Créditos &amp; Reembolsos
+                                    </span>
+                                    <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
+                                        {creditItems.length}
+                                    </span>
+                                </div>
+                                <div className="divide-y">
+                                    {creditItems.map((item) => (
+                                        <div
+                                            key={item.service}
+                                            className="grid grid-cols-[1fr_auto_auto] items-center gap-2 bg-green-50/40 px-4 py-2.5 dark:bg-green-950/10 sm:grid-cols-[1fr_auto_auto_auto]"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-medium text-green-800 dark:text-green-300">
+                                                    {shortenServiceName(item.service)}
+                                                </p>
+                                                <p className="text-xs text-green-600/70 dark:text-green-500/60">crédito aplicado</p>
+                                            </div>
+
+                                            <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-green-700 dark:text-green-400">
+                                                {formatCurrency(item.currentMonthCost, item.currency)}
+                                            </span>
+
+                                            <span className="hidden shrink-0 text-right text-sm text-muted-foreground tabular-nums sm:block">—</span>
+
+                                            <div className="shrink-0 text-right">
+                                                <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-green-700 dark:text-green-400">
+                                                    <TrendingDown className="size-3 shrink-0" />
+                                                    crédito
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
             </div>

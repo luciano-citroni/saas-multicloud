@@ -3,6 +3,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DbModule } from './db/db.module';
@@ -24,6 +25,20 @@ import { FinopsModule } from './finops/finops.module';
     imports: [
         ConfigModule.forRoot({ isGlobal: true }),
         ScheduleModule.forRoot(),
+        ThrottlerModule.forRoot([
+            {
+                // Limite global padrão: 120 req por minuto por IP
+                name: 'default',
+                ttl: 60_000,
+                limit: 120,
+            },
+            {
+                // Limite estrito para endpoints de autenticação: 10 req por minuto por IP
+                name: 'auth',
+                ttl: 60_000,
+                limit: 10,
+            },
+        ]),
         BullModule.forRootAsync({
             inject: [ConfigService],
             useFactory: (config: ConfigService) => ({
@@ -49,6 +64,7 @@ import { FinopsModule } from './finops/finops.module';
     controllers: [AppController],
     providers: [
         AppService,
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: JwtGuard },
         { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
     ],

@@ -172,5 +172,11 @@ export const PERMISSIONS_POLICY = {
             Action: ['apigateway:GET'],
             Resource: '*',
         },
+        {
+            Sid: 'CostExplorerReadAccess',
+            Effect: 'Allow',
+            Action: ['ce:GetCostAndUsage', 'ce:GetCostForecast', 'ce:GetReservationUtilization', 'ce:GetRightsizingRecommendation'],
+            Resource: '*',
+        },
     ],
 };

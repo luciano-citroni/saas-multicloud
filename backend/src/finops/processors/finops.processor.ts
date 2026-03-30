@@ -1,3 +1,5 @@
+import * as crypto from 'crypto';
+
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 
 import { Logger } from '@nestjs/common';
@@ -144,10 +146,12 @@ export class FinopsProcessor extends WorkerHost {
      * Replica a lógica de CloudService para evitar dependências circulares.
      */
     private decryptCloudCredentials(encrypted: string): Record<string, any> {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const crypto = require('crypto') as typeof import('crypto');
+        const keyHex = process.env['CREDENTIALS_ENCRYPTION_KEY'];
 
-        const keyHex = process.env['CREDENTIALS_ENCRYPTION_KEY'] ?? '0'.repeat(64);
+        if (!keyHex) {
+            throw new Error('CREDENTIALS_ENCRYPTION_KEY não configurada');
+        }
+
         const key = Buffer.from(keyHex, 'hex');
 
         if (key.length !== 32) {

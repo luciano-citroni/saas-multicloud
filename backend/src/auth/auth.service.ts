@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef, Logger } from '@nestjs/common';
 
 import { JwtService } from '@nestjs/jwt';
 
@@ -48,6 +48,8 @@ const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         @InjectRepository(UserSession)
         private readonly sessionRepository: Repository<UserSession>,
@@ -148,7 +150,7 @@ export class AuthService {
 
                 // (o usuário foi criado, mas o convite pode ter expirado, etc.)
 
-                console.error(`Failed to accept invite for user ${user.id}:`, error);
+                this.logger.warn(`Failed to accept invite for user ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
             }
 
             // Emitir tokens para o novo usuário

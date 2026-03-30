@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
 
@@ -131,12 +131,16 @@ export class CloudService {
      */
 
     private encryptCredentials(credentials: Record<string, any>): string {
-        const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY') || '0'.repeat(64);
+        const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
+
+        if (!keyHex) {
+            throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY não configurada');
+        }
 
         const key = Buffer.from(keyHex, 'hex');
 
         if (key.length !== 32) {
-            throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
+            throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
         }
 
         const iv = crypto.randomBytes(16);
@@ -196,12 +200,16 @@ export class CloudService {
 
             const [ivHex, authTagHex, ciphertext] = combined.split(':');
 
-            const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY') || '0'.repeat(64);
+            const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
+
+            if (!keyHex) {
+                throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY não configurada');
+            }
 
             const key = Buffer.from(keyHex, 'hex');
 
             if (key.length !== 32) {
-                throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
+                throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
             }
 
             const iv = Buffer.from(ivHex, 'hex');

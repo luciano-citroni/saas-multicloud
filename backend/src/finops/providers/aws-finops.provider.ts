@@ -59,8 +59,17 @@ export class AwsFinopsProvider implements IFinopsProvider {
                 const [service, region] = group.Keys ?? ['Unknown', ''];
                 const amount = Number(group.Metrics?.['UnblendedCost']?.Amount ?? '0');
 
-                if (amount <= 0) {
+                // Ignorar somente custo exatamente zero.
+                // Valores negativos (créditos, reembolsos, descontos EDP) DEVEM ser incluídos
+                // para que o total do sistema bata com o total real da AWS.
+                if (amount === 0) {
                     continue;
+                }
+
+                if (amount < 0) {
+                    this.logger.log(
+                        `[AWS FinOps] Crédito/reembolso detectado para conta ${cloudAccountId}: service="${service}", region="${region}", valor=${amount} ${currency}`,
+                    );
                 }
 
                 entries.push({

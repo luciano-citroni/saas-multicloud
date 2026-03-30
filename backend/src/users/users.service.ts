@@ -33,7 +33,7 @@ export class UsersService {
 
     private sanitizeUser(user: User): Omit<User, 'password' | 'sessions' | 'organizationMemberships'> {
         const { password: _password, sessions: _sessions, organizationMemberships: _members, ...sanitized } = user;
-        return sanitized as any;
+        return sanitized;
     }
 
     private canManageOtherUsers(role: string): boolean {

@@ -150,14 +150,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
             };
         }
 
-        // Log the actual database error for debugging
+        // Log the actual database error for debugging (never expose raw detail to the client)
         const dbErrorDetails = `Code: ${error.code}, Detail: ${error.detail || 'N/A'}, Message: ${error.message}`;
         this.logger.warn(`Database constraint error: ${dbErrorDetails}`);
 
         return {
             statusCode: HttpStatus.BAD_REQUEST,
             error: 'DatabaseError',
-            message: `Database constraint violation: ${error.detail || error.message || 'Unknown error'}`,
+            message: 'Database constraint violation',
         };
     }
 }

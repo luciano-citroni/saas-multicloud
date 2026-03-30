@@ -500,4 +500,55 @@ export class FinopsController {
     ): Promise<void> {
         return this.budgetService.remove(budgetId, cloudAccountId, org.id);
     }
+
+    // =========================================================================
+    // Debug / Validação de divergência de custos
+    // =========================================================================
+
+    @Get('debug/aws-cost/:cloudAccountId')
+    @Roles(OrgRole.OWNER)
+    @ApiOperation({
+        summary: '[Debug] Comparar custos AWS em tempo real vs banco de dados',
+        description:
+            'Faz uma chamada em tempo real ao AWS Cost Explorer e compara com os registros armazenados no banco para o mesmo período. ' +
+            'Útil para diagnosticar divergências de valores. Requer role OWNER. ' +
+            'Consome 1 requisição à API AWS Cost Explorer.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiResponse({
+        status: 200,
+        description: 'Comparação AWS vs banco de dados',
+        schema: {
+            example: {
+                period: { start: '2025-03-01', end: '2025-03-31', granularity: 'monthly' },
+                aws: { totalCost: 450.0, currency: 'USD', entryCount: 46, negativeEntries: 1, services: [] },
+                database: { totalCost: 500.0, currency: 'USD', recordCount: 45, services: [] },
+                diff: { amount: 50.0, percentageError: 11.11, recommendation: 'Divergência detectada. Execute um novo sync.' },
+            },
+        },
+    })
+    @ApiResponse({ status: 400, description: 'Conta não é AWS ou não encontrada' })
+    @ApiResponse({ status: 403, description: 'Requer role OWNER' })
+    async debugAwsCost(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @Query('granularity') granularity: string,
+        @Query('startDate') startDate: string,
+        @Query('endDate') endDate: string,
+        @CurrentOrganization() org: Organization,
+    ) {
+        const gran = (granularity === 'monthly' ? 'monthly' : 'daily') as 'daily' | 'monthly';
+        const now = new Date();
+
+        // Default: mês anterior completo (em UTC para consistência com o scheduler)
+        const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+        const defaultEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
+
+        return this.analysisService.compareWithAws(
+            cloudAccountId,
+            org.id,
+            gran,
+            startDate ?? defaultStart,
+            endDate ?? defaultEnd,
+        );
+    }
 }

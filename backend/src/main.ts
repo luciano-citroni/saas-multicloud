@@ -82,36 +82,37 @@ async function bootstrap() {
 
         methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
 
-        allowedHeaders: ['Authorization', 'Content-Type'],
+        allowedHeaders: ['Authorization', 'Content-Type', 'x-organization-id'],
     });
 
-    // Configuração Swagger
+    // Swagger — desabilitado em produção
+    if (process.env.NODE_ENV !== 'production') {
+        const config = new DocumentBuilder()
 
-    const config = new DocumentBuilder()
+            .setTitle('SaaS MultiCloud API')
 
-        .setTitle('SaaS MultiCloud API')
+            .setDescription('API de gerenciamento de usuários, organizações e autenticação')
 
-        .setDescription('API de gerenciamento de usuários, organizações e autenticação')
+            .setVersion('1.0')
 
-        .setVersion('1.0')
+            .addBearerAuth(
+                {
+                    type: 'http',
 
-        .addBearerAuth(
-            {
-                type: 'http',
+                    scheme: 'bearer',
 
-                scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                },
 
-                bearerFormat: 'JWT',
-            },
+                'access-token'
+            )
 
-            'access-token'
-        )
+            .build();
 
-        .build();
+        const document = SwaggerModule.createDocument(app, config);
 
-    const document = SwaggerModule.createDocument(app, config);
-
-    SwaggerModule.setup('api/docs', app, document);
+        SwaggerModule.setup('api/docs', app, document);
+    }
 
     await app.listen(process.env.PORT ?? 3000);
 }

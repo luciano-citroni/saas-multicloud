@@ -142,22 +142,37 @@ export class FinopsSchedulerService {
     }
 
     /**
-     * Retorna a data de ontem no formato YYYY-MM-DD.
+     * Retorna a data de ontem no formato YYYY-MM-DD (sempre em UTC).
+     *
+     * Usa construtores UTC explícitos para evitar divergência entre o timezone
+     * local do servidor e o formato ISO retornado por toISOString().
+     * Se o servidor estiver em UTC+3 e o código usar new Date() local,
+     * toISOString() pode retornar o dia anterior ao esperado.
      */
     private getYesterdayDateString(): string {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
+        const now = new Date();
+        const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
         return yesterday.toISOString().slice(0, 10);
     }
 
     /**
-     * Retorna o intervalo completo do mês anterior (primeiro e último dia).
+     * Retorna o intervalo completo do mês anterior (primeiro e último dia) em UTC.
      * Usado pelo fechamento mensal para garantir dados íntegros de billing.
+     *
+     * Usa construtores UTC explícitos: new Date(year, month, day) cria uma data
+     * em timezone local, e ao converter com toISOString() (UTC) o resultado pode
+     * ser um dia antes em servidores com timezone UTC+ (ex: UTC+3 converte
+     * "01/03 00:00 local" para "28/02 21:00 UTC", resultando em startDate errada).
      */
     private getPreviousMonthDateRange(): { startDate: string; endDate: string } {
         const now = new Date();
-        const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        const year = now.getUTCFullYear();
+        const month = now.getUTCMonth(); // 0-indexed: mês atual
+
+        // Primeiro dia do mês anterior (UTC)
+        const firstDayPrevMonth = new Date(Date.UTC(year, month - 1, 1));
+        // Último dia do mês anterior = dia 0 do mês atual (UTC)
+        const lastDayPrevMonth = new Date(Date.UTC(year, month, 0));
 
         return {
             startDate: firstDayPrevMonth.toISOString().slice(0, 10),
