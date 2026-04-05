@@ -25,22 +25,22 @@ export class AwsFinopsProvider implements IFinopsProvider {
         granularity: 'DAILY' | 'MONTHLY',
     ): Promise<FinopsCostCollectionResult> {
         const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId, region } = credentials as {
+        const { roleArn, externalId } = credentials as {
             roleArn: string;
             externalId?: string;
-            region?: string;
         };
 
         this.logger.log(`[AWS FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
-        const awsClient = await this.buildCostExplorerClient(roleArn, externalId, region ?? 'us-east-1');
+        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
         const exclusiveEndDate = this.toExclusiveEndDate(endDate);
 
+        // AmortizedCost distribui RIs e Savings Plans proporcionalmente — mais preciso para FinOps
+        // AWS Cost Explorer permite no máximo 2 GroupBy — usamos SERVICE + REGION
         const input: GetCostAndUsageCommandInput = {
-            // AWS Cost Explorer interpreta End como exclusivo.
             TimePeriod: { Start: startDate, End: exclusiveEndDate },
             Granularity: granularity,
-            Metrics: ['UnblendedCost'],
+            Metrics: ['AmortizedCost', 'UsageQuantity'],
             GroupBy: [
                 { Type: 'DIMENSION', Key: 'SERVICE' },
                 { Type: 'DIMENSION', Key: 'REGION' },
@@ -49,7 +49,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
         const response = await awsClient.send(new GetCostAndUsageCommand(input));
 
-        const entries: Array<{ service: string; region: string | null; cost: number; currency: string; date: string }> = [];
+        const entries: FinopsCostCollectionResult['entries'] = [];
         const currency = 'USD';
 
         for (const result of response.ResultsByTime ?? []) {
@@ -57,26 +57,30 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
             for (const group of result.Groups ?? []) {
                 const [service, region] = group.Keys ?? ['Unknown', ''];
-                const amount = Number(group.Metrics?.['UnblendedCost']?.Amount ?? '0');
+                const usageType = '';
+                const amount = Number(group.Metrics?.['AmortizedCost']?.Amount ?? '0');
+                const usageQty = Number(group.Metrics?.['UsageQuantity']?.Amount ?? '0');
+                const unit = group.Metrics?.['UsageQuantity']?.Unit ?? '';
 
-                // Ignorar somente custo exatamente zero.
-                // Valores negativos (créditos, reembolsos, descontos EDP) DEVEM ser incluídos
-                // para que o total do sistema bata com o total real da AWS.
-                if (amount === 0) {
-                    continue;
-                }
+                // Zero cost = irrelevante. Créditos (negativos) SÃO incluídos para precisão total.
+                if (amount === 0) continue;
 
                 if (amount < 0) {
                     this.logger.log(
-                        `[AWS FinOps] Crédito/reembolso detectado para conta ${cloudAccountId}: service="${service}", region="${region}", valor=${amount} ${currency}`,
+                        `[AWS FinOps] Crédito detectado: service="${service}", region="${region}", valor=${amount} ${currency}`,
                     );
                 }
 
                 entries.push({
                     service: service ?? 'Unknown',
+                    resourceId: '',
                     region: region || null,
+                    usageType: usageType ?? '',
+                    operation: '',
                     cost: amount,
                     currency,
+                    usageQuantity: usageQty,
+                    usageUnit: unit,
                     date: periodStart,
                 });
             }
@@ -89,45 +93,35 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
     private toExclusiveEndDate(endDate: string): string {
         const [yearStr, monthStr, dayStr] = endDate.split('-');
-        const year = Number(yearStr);
-        const month = Number(monthStr);
-        const day = Number(dayStr);
-        const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-
+        const nextDay = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr) + 1));
         return nextDay.toISOString().slice(0, 10);
     }
 
-    private async buildCostExplorerClient(
-        roleArn: string,
-        externalId: string | undefined,
-        region: string,
-    ): Promise<CostExplorerClient> {
+    private async buildCostExplorerClient(roleArn: string, externalId?: string): Promise<CostExplorerClient> {
         const stsRegion = this.configService.get<string>('AWS_STS_REGION', 'us-east-1');
-
         const sts = new STSClient({ region: stsRegion });
 
-        const assumeRoleInput: AssumeRoleCommandInput = {
+        const assumeInput: AssumeRoleCommandInput = {
             RoleArn: roleArn,
             RoleSessionName: 'FinopsSession',
             DurationSeconds: 3600,
             ...(externalId ? { ExternalId: externalId } : {}),
         };
 
-        const assumed = await sts.send(new AssumeRoleCommand(assumeRoleInput));
+        const assumed = await sts.send(new AssumeRoleCommand(assumeInput));
+        const awsCreds = assumed.Credentials;
 
-        const credentials = assumed.Credentials;
-
-        if (!credentials?.AccessKeyId || !credentials.SecretAccessKey || !credentials.SessionToken) {
-            throw new Error(`[AWS FinOps] Falha ao assumir role ${roleArn}: credenciais inválidas retornadas pelo STS`);
+        if (!awsCreds?.AccessKeyId || !awsCreds.SecretAccessKey || !awsCreds.SessionToken) {
+            throw new Error(`[AWS FinOps] Falha ao assumir role ${roleArn}`);
         }
 
-        // Cost Explorer está disponível apenas em us-east-1
+        // Cost Explorer disponível apenas em us-east-1
         return new CostExplorerClient({
             region: 'us-east-1',
             credentials: {
-                accessKeyId: credentials.AccessKeyId,
-                secretAccessKey: credentials.SecretAccessKey,
-                sessionToken: credentials.SessionToken,
+                accessKeyId: awsCreds.AccessKeyId,
+                secretAccessKey: awsCreds.SecretAccessKey,
+                sessionToken: awsCreds.SessionToken,
             },
         });
     }

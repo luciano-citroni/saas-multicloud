@@ -1,18 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { BarChart2 } from 'lucide-react';
+import { AlertTriangle, DollarSign, Lightbulb, TrendingUp } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSummaryCards } from '@/components/root/finops/overview/finops-summary-cards';
 import { FinopsJobsTable } from '@/components/root/finops/overview/finops-jobs-table';
 import { FinopsRecommendations } from '@/components/root/finops/overview/finops-recommendations';
 import { FinopsConsentDialog } from '@/components/root/finops/overview/finops-consent-dialog';
 import { FinopsSyncDialog } from '@/components/root/finops/overview/finops-sync-dialog';
+import { FinopsDashboardPanels } from '@/components/root/finops/overview/finops-dashboard-panels';
+import { FinopsAggregatedDashboard } from '@/components/root/finops/overview/finops-aggregated-dashboard';
+import { FinopsCloudAccountSelector } from '@/components/root/finops/overview/finops-cloud-account-selector';
+import { FinopsCloudAccountsManagement } from '@/components/root/finops/overview/finops-cloud-accounts-management';
+import { aggregateFinopsData, type AggregatedFinopsData } from '@/components/root/finops/overview/finops-aggregator';
 import {
     DEFAULT_JOBS_LIMIT,
     DEFAULT_JOBS_PAGE,
@@ -23,14 +27,25 @@ import {
 } from '@/components/root/finops/overview/helpers';
 import type {
     FinopsConsent,
+    FinopsAnomaly,
+    ForecastResult,
+    OptimizationInsight,
+    BillingRecord,
+    CostByServiceItem,
     FinopsDashboard,
     FinopsJob,
     FinopsRecommendation,
     FinopsScore,
+    ForecastMonthProjection,
     PaginationMeta,
     SidebarContextPayload,
 } from '@/components/root/finops/overview/types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT, ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_ORG_STORAGE_KEY,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
+    notifyActiveCloudAccountChanged,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
@@ -42,18 +57,78 @@ import {
     fetchFinopsDashboard,
     fetchFinopsScore,
     fetchFinopsRecommendations,
+    fetchFinopsCostByService,
+    fetchFinopsForecast,
+    fetchFinopsAnomalies,
+    fetchFinopsInsights,
+    fetchFinopsBillingHistory,
 } from '@/app/actions/finops';
+import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const CLOUD_PROVIDER_STORAGE_KEY = 'smc_active_cloud_provider';
+const SELECTED_ACCOUNT_STORAGE_KEY = 'smc_finops_selected_account';
 
-export function FinopsOverview() {
+type FinopsOverviewProps = {
+    mode?: 'all' | 'individual';
+};
+
+export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
+    type DashboardPeriod = 'last7days' | 'last30days' | 'last90days' | 'currentmonth' | 'lastmonth' | 'ytd';
+
+    const isDashboardPeriod = (value: string | null): value is DashboardPeriod => {
+        return (
+            value === 'last7days' ||
+            value === 'last30days' ||
+            value === 'last90days' ||
+            value === 'currentmonth' ||
+            value === 'lastmonth' ||
+            value === 'ytd'
+        );
+    };
+
+    const getPeriodFilters = (period: DashboardPeriod) => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        if (period === 'last7days') {
+            return { anomalyDays: 7, year: currentYear, month: currentMonth };
+        }
+        if (period === 'last30days') {
+            return { anomalyDays: 30, year: currentYear, month: currentMonth };
+        }
+        if (period === 'last90days') {
+            return { anomalyDays: 90, year: currentYear, month: currentMonth };
+        }
+        if (period === 'currentmonth') {
+            return { anomalyDays: Math.max(1, now.getDate()), year: currentYear, month: currentMonth };
+        }
+        if (period === 'lastmonth') {
+            const reference = new Date(currentYear, now.getMonth() - 1, 1);
+            return {
+                anomalyDays: 30,
+                year: reference.getFullYear(),
+                month: reference.getMonth() + 1,
+            };
+        }
+
+        return { anomalyDays: 365, year: currentYear, month: currentMonth };
+    };
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
     const [cloudProvider, setCloudProvider] = useState<string>('aws');
     const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
+
+    const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
+    const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+    const [loadingCloudAccounts, setLoadingCloudAccounts] = useState(false);
+    const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>('lastmonth');
 
     const [hasConsent, setHasConsent] = useState<boolean | null>(null);
     const [dashboard, setDashboard] = useState<FinopsDashboard | null>(null);
@@ -61,8 +136,24 @@ export function FinopsOverview() {
     const [jobs, setJobs] = useState<FinopsJob[]>([]);
     const [jobsPagination, setJobsPagination] = useState<PaginationMeta | null>(null);
     const [recommendations, setRecommendations] = useState<FinopsRecommendation[]>([]);
+    const [costByService, setCostByService] = useState<CostByServiceItem[]>([]);
+    const [forecast, setForecast] = useState<ForecastResult | null>(null);
+    const [forecastNextMonths, setForecastNextMonths] = useState<ForecastMonthProjection[]>([]);
+    const [anomalies, setAnomalies] = useState<FinopsAnomaly[]>([]);
+    const [insights, setInsights] = useState<OptimizationInsight | null>(null);
+    const [billingHistory, setBillingHistory] = useState<BillingRecord[]>([]);
     const [jobsPage, setJobsPage] = useState(DEFAULT_JOBS_PAGE);
     const [jobsLimit, setJobsLimit] = useState(DEFAULT_JOBS_LIMIT);
+
+    // Multi-account aggregated data
+    const [aggregatedDashboards, setAggregatedDashboards] = useState<(FinopsDashboard | null)[]>([]);
+    const [aggregatedCostByServices, setAggregatedCostByServices] = useState<CostByServiceItem[][]>([]);
+    const [aggregatedAnomalies, setAggregatedAnomalies] = useState<FinopsAnomaly[][]>([]);
+    const [aggregatedRecommendations, setAggregatedRecommendations] = useState<FinopsRecommendation[][]>([]);
+    const [aggregatedForecasts, setAggregatedForecasts] = useState<(ForecastResult | null)[]>([]);
+    const [aggregatedInsights, setAggregatedInsights] = useState<(OptimizationInsight | null)[]>([]);
+    const [aggregatedBillingHistory, setAggregatedBillingHistory] = useState<BillingRecord[][]>([]);
+    const [aggregatedData, setAggregatedData] = useState<AggregatedFinopsData | null>(null);
 
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [loadingTable, setLoadingTable] = useState(false);
@@ -78,6 +169,7 @@ export function FinopsOverview() {
         organizationId: null,
         cloudAccountId: null,
     });
+    const accountFromQuery = searchParams.get('account');
 
     const syncPaginationUrlState = useCallback((nextPage: number, nextLimit: number) => {
         if (typeof window === 'undefined') return;
@@ -123,10 +215,56 @@ export function FinopsOverview() {
         const activeOrgId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         const activeCloudId = window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
         const activeProvider = window.localStorage.getItem(CLOUD_PROVIDER_STORAGE_KEY) ?? 'aws';
+        const savedSelectedAccount = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY);
+        const requestedAccountId = accountFromQuery ?? savedSelectedAccount ?? activeCloudId;
+
         setOrganizationId(activeOrgId);
         setCloudAccountId(activeCloudId);
         setCloudProvider(activeProvider);
-    }, []);
+        setSelectedAccountId(requestedAccountId);
+
+        const periodParam = searchParams.get('period');
+        if (isDashboardPeriod(periodParam)) {
+            setDashboardPeriod(periodParam);
+        }
+    }, [accountFromQuery, searchParams]);
+
+    useEffect(() => {
+        if (mode !== 'individual') return;
+
+        if (accountFromQuery) {
+            setSelectedAccountId(accountFromQuery);
+        }
+    }, [accountFromQuery, mode]);
+
+    useEffect(() => {
+        if (!organizationId) return;
+
+        const loadCloudAccounts = async () => {
+            setLoadingCloudAccounts(true);
+            try {
+                const response = await fetchOrganizationCloudAccounts(organizationId);
+                if (!response.ok) {
+                    setCloudAccounts([]);
+                    return;
+                }
+
+                const payload = await response.json().catch(() => null);
+                const accounts = Array.isArray(payload)
+                    ? payload
+                    : Array.isArray((payload as { items?: unknown })?.items)
+                      ? (payload as { items: OrganizationCloudAccount[] }).items
+                      : [];
+                setCloudAccounts(accounts);
+            } catch {
+                setCloudAccounts([]);
+            } finally {
+                setLoadingCloudAccounts(false);
+            }
+        };
+
+        void loadCloudAccounts();
+    }, [organizationId]);
 
     useEffect(() => {
         const handleContextChange = () => {
@@ -215,6 +353,11 @@ export function FinopsOverview() {
                     setJobs([]);
                     setJobsPagination(null);
                     setRecommendations([]);
+                    setCostByService([]);
+                    setForecast(null);
+                    setAnomalies([]);
+                    setInsights(null);
+                    setBillingHistory([]);
                     return;
                 }
 
@@ -229,11 +372,16 @@ export function FinopsOverview() {
                     setJobs([]);
                     setJobsPagination(null);
                     setRecommendations([]);
+                    setCostByService([]);
+                    setForecast(null);
+                    setAnomalies([]);
+                    setInsights(null);
+                    setBillingHistory([]);
                     return;
                 }
 
                 if (options.tableOnly) {
-                    const jobsRes = await fetchFinopsJobs(orgId, cloudId);
+                    const jobsRes = await fetchFinopsJobs(orgId, cloudId, page, limit);
 
                     if (jobsRes.ok) {
                         const jobsPayload = await jobsRes.json().catch(() => null);
@@ -241,11 +389,17 @@ export function FinopsOverview() {
                         setJobsPagination(normalizePagination(jobsPayload));
                     }
                 } else {
-                    const [dashRes, scoreRes, jobsRes, recsRes] = await Promise.all([
-                        fetchFinopsDashboard(orgId, cloudId),
-                        fetchFinopsScore(orgId, cloudId),
-                        fetchFinopsJobs(orgId, cloudId),
+                    const periodFilters = getPeriodFilters(dashboardPeriod);
+                    const [dashRes, scoreRes, jobsRes, recsRes, costsRes, forecastRes, anomaliesRes, insightsRes, billingRes] = await Promise.all([
+                        fetchFinopsDashboard(orgId, cloudId, periodFilters.year, periodFilters.month),
+                        fetchFinopsScore(orgId, cloudId, periodFilters.year, periodFilters.month),
+                        fetchFinopsJobs(orgId, cloudId, page, limit),
                         fetchFinopsRecommendations(orgId, cloudId),
+                        fetchFinopsCostByService(orgId, cloudId, periodFilters.year, periodFilters.month),
+                        fetchFinopsForecast(orgId, cloudId),
+                        fetchFinopsAnomalies(orgId, cloudId, 'open', periodFilters.anomalyDays),
+                        fetchFinopsInsights(orgId, cloudId),
+                        fetchFinopsBillingHistory(orgId, cloudId, periodFilters.anomalyDays > 30 ? 3 : 1),
                     ]);
 
                     if (dashRes.ok) {
@@ -273,6 +427,46 @@ export function FinopsOverview() {
                               : [];
                         setRecommendations(items);
                     }
+
+                    if (costsRes.ok) {
+                        const costsPayload = await costsRes.json().catch(() => null);
+                        const items = Array.isArray(costsPayload)
+                            ? costsPayload
+                            : Array.isArray((costsPayload as { items?: unknown })?.items)
+                              ? (costsPayload as { items: CostByServiceItem[] }).items
+                              : [];
+                        setCostByService(items);
+                    }
+
+                    if (forecastRes.ok) {
+                        const forecastPayload = await forecastRes.json().catch(() => null);
+                        setForecast((forecastPayload as ForecastResult | null) ?? null);
+                    }
+
+                    if (anomaliesRes.ok) {
+                        const anomaliesPayload = await anomaliesRes.json().catch(() => null);
+                        const items = Array.isArray(anomaliesPayload)
+                            ? anomaliesPayload
+                            : Array.isArray((anomaliesPayload as { items?: unknown })?.items)
+                              ? (anomaliesPayload as { items: FinopsAnomaly[] }).items
+                              : [];
+                        setAnomalies(items);
+                    }
+
+                    if (insightsRes.ok) {
+                        const insightsPayload = await insightsRes.json().catch(() => null);
+                        setInsights((insightsPayload as OptimizationInsight | null) ?? null);
+                    }
+
+                    if (billingRes.ok) {
+                        const billingPayload = await billingRes.json().catch(() => null);
+                        const items = Array.isArray(billingPayload)
+                            ? billingPayload
+                            : Array.isArray((billingPayload as { items?: unknown })?.items)
+                              ? (billingPayload as { items: BillingRecord[] }).items
+                              : [];
+                        setBillingHistory(items);
+                    }
                 }
             } catch {
                 if (!options.silent && !options.tableOnly) toast.error('Não foi possível carregar dados de FinOps.');
@@ -284,25 +478,168 @@ export function FinopsOverview() {
                 }
             }
         },
-        [jobsLimit, jobsPage, router]
+        [dashboardPeriod, jobsLimit, jobsPage, router]
+    );
+
+    const loadAggregatedData = useCallback(
+        async (orgId: string, accounts: OrganizationCloudAccount[], options: { silent?: boolean } = {}) => {
+            if (!options.silent) {
+                setLoadingInitial(true);
+            }
+
+            try {
+                const periodFilters = getPeriodFilters(dashboardPeriod);
+                const dashboards: (FinopsDashboard | null)[] = [];
+                const costByServices: CostByServiceItem[][] = [];
+                const allAnomalies: FinopsAnomaly[][] = [];
+                const allRecommendations: FinopsRecommendation[][] = [];
+                const forecasts: (ForecastResult | null)[] = [];
+                const insights: (OptimizationInsight | null)[] = [];
+                const billingHistories: BillingRecord[][] = [];
+
+                // Load data for all accounts in parallel
+                const results = await Promise.allSettled(
+                    accounts.map(async (account) => {
+                        const [dashRes, costsRes, anomaliesRes, recsRes, forecastRes, insightsRes, billingRes] = await Promise.all([
+                            fetchFinopsDashboard(orgId, account.id, periodFilters.year, periodFilters.month),
+                            fetchFinopsCostByService(orgId, account.id, periodFilters.year, periodFilters.month),
+                            fetchFinopsAnomalies(orgId, account.id, 'open', periodFilters.anomalyDays),
+                            fetchFinopsRecommendations(orgId, account.id),
+                            fetchFinopsForecast(orgId, account.id),
+                            fetchFinopsInsights(orgId, account.id),
+                            fetchFinopsBillingHistory(orgId, account.id, periodFilters.anomalyDays > 30 ? 3 : 1),
+                        ]);
+
+                        return {
+                            dashboard: dashRes.ok ? await dashRes.json().catch(() => null) : null,
+                            costs: costsRes.ok
+                                ? Array.isArray(await costsRes.json().catch(() => null))
+                                    ? await costsRes.json().catch(() => [])
+                                    : Array.isArray((await costsRes.json().catch(() => null))?.items)
+                                      ? (await costsRes.json().catch(() => null)).items
+                                      : []
+                                : [],
+                            anomalies: anomaliesRes.ok
+                                ? Array.isArray(await anomaliesRes.json().catch(() => null))
+                                    ? await anomaliesRes.json().catch(() => [])
+                                    : Array.isArray((await anomaliesRes.json().catch(() => null))?.items)
+                                      ? (await anomaliesRes.json().catch(() => null)).items
+                                      : []
+                                : [],
+                            recommendations: recsRes.ok
+                                ? Array.isArray(await recsRes.json().catch(() => null))
+                                    ? await recsRes.json().catch(() => [])
+                                    : Array.isArray((await recsRes.json().catch(() => null))?.items)
+                                      ? (await recsRes.json().catch(() => null)).items
+                                      : []
+                                : [],
+                            forecast: forecastRes.ok ? await forecastRes.json().catch(() => null) : null,
+                            insights: insightsRes.ok ? await insightsRes.json().catch(() => null) : null,
+                            billing: billingRes.ok
+                                ? Array.isArray(await billingRes.json().catch(() => null))
+                                    ? await billingRes.json().catch(() => [])
+                                    : Array.isArray((await billingRes.json().catch(() => null))?.items)
+                                      ? (await billingRes.json().catch(() => null)).items
+                                      : []
+                                : [],
+                        };
+                    })
+                );
+
+                // Collect results
+                results.forEach((result) => {
+                    if (result.status === 'fulfilled') {
+                        dashboards.push(result.value.dashboard);
+                        costByServices.push(result.value.costs);
+                        allAnomalies.push(result.value.anomalies);
+                        allRecommendations.push(result.value.recommendations);
+                        forecasts.push(result.value.forecast);
+                        insights.push(result.value.insights);
+                        billingHistories.push(result.value.billing);
+                    }
+                });
+
+                setAggregatedDashboards(dashboards);
+                setAggregatedCostByServices(costByServices);
+                setAggregatedAnomalies(allAnomalies);
+                setAggregatedRecommendations(allRecommendations);
+                setAggregatedForecasts(forecasts);
+                setAggregatedInsights(insights);
+                setAggregatedBillingHistory(billingHistories);
+            } catch {
+                if (!options.silent) toast.error('Não foi possível carregar dados de FinOps.');
+            } finally {
+                if (!options.silent) {
+                    setLoadingInitial(false);
+                }
+            }
+        },
+        [dashboardPeriod]
     );
 
     useEffect(() => {
-        if (!organizationId || !cloudAccountId) {
+        if (!organizationId) {
             setLoadingInitial(false);
             return;
         }
 
-        const prev = prevOrgCloudRef.current;
-        const isContextChange = prev.organizationId !== organizationId || prev.cloudAccountId !== cloudAccountId;
-        prevOrgCloudRef.current = { organizationId, cloudAccountId };
-
-        if (isContextChange) {
-            void loadData(organizationId, cloudAccountId, cloudProvider, { page: jobsPage, limit: jobsLimit });
+        if (mode === 'all') {
+            if (cloudAccounts.length > 0) {
+                void loadAggregatedData(organizationId, cloudAccounts);
+            } else if (!loadingCloudAccounts) {
+                setLoadingInitial(false);
+            }
         } else {
-            void loadData(organizationId, cloudAccountId, cloudProvider, { tableOnly: true, page: jobsPage, limit: jobsLimit });
+            const requestedAccountId = accountFromQuery ?? selectedAccountId ?? cloudAccountId;
+            const fallbackAccountId = cloudAccounts[0]?.id ?? null;
+            const accountToUse = requestedAccountId ?? fallbackAccountId;
+
+            if (!accountToUse) {
+                setLoadingInitial(false);
+                return;
+            }
+
+            const account = cloudAccounts.find((acc) => acc.id === accountToUse);
+            if (!account) {
+                if (!loadingCloudAccounts && fallbackAccountId && fallbackAccountId !== accountToUse) {
+                    setSelectedAccountId(fallbackAccountId);
+                }
+                setLoadingInitial(false);
+                return;
+            }
+
+            const prev = prevOrgCloudRef.current;
+            const isContextChange = prev.organizationId !== organizationId || prev.cloudAccountId !== accountToUse;
+            prevOrgCloudRef.current = { organizationId, cloudAccountId: accountToUse };
+
+            if (isContextChange) {
+                void loadData(organizationId, accountToUse, account.provider, {
+                    page: jobsPage,
+                    limit: jobsLimit,
+                });
+            } else {
+                void loadData(organizationId, accountToUse, account.provider, {
+                    tableOnly: true,
+                    page: jobsPage,
+                    limit: jobsLimit,
+                });
+            }
         }
-    }, [organizationId, cloudAccountId, cloudProvider, jobsLimit, jobsPage, loadData]);
+    }, [
+        organizationId,
+        cloudAccountId,
+        cloudProvider,
+        jobsLimit,
+        jobsPage,
+        loadData,
+        loadAggregatedData,
+        mode,
+        accountFromQuery,
+        selectedAccountId,
+        cloudAccounts,
+        loadingCloudAccounts,
+        dashboardPeriod,
+    ]);
 
     const stopPolling = useCallback(() => {
         if (pollingRef.current) {
@@ -345,13 +682,17 @@ export function FinopsOverview() {
     }, [stopPolling]);
 
     const handleStartSync = async (granularity: 'daily' | 'monthly', startDate: string, endDate: string) => {
-        if (!organizationId || !cloudAccountId) return;
+        const accountToUse = accountFromQuery ?? selectedAccountId ?? cloudAccountId;
+        if (!organizationId || !accountToUse) return;
+
+        const account = cloudAccounts.find((acc) => acc.id === accountToUse);
+        if (!account) return;
 
         setSyncing(true);
         setShowSyncDialog(false);
 
         try {
-            const response = await startFinopsSync(organizationId, cloudAccountId, cloudProvider, granularity, startDate, endDate);
+            const response = await startFinopsSync(organizationId, accountToUse, account.provider, granularity, startDate, endDate);
             const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
@@ -368,11 +709,11 @@ export function FinopsOverview() {
 
             toast.success('Sincronização de custos iniciada!');
 
-            await loadData(organizationId, cloudAccountId, cloudProvider, { silent: true, page: jobsPage, limit: jobsLimit });
+            await loadData(organizationId, accountToUse, account.provider, { silent: true, page: jobsPage, limit: jobsLimit });
 
             stopPolling();
             pollingRef.current = setInterval(() => {
-                void pollJobStatus(organizationId, cloudAccountId, jobId, cloudProvider);
+                void pollJobStatus(organizationId, accountToUse, jobId, account.provider);
             }, 3000);
         } catch {
             toast.error('Não foi possível iniciar a sincronização.');
@@ -381,12 +722,16 @@ export function FinopsOverview() {
     };
 
     const handleAcceptConsent = async () => {
-        if (!organizationId || !cloudAccountId) return;
+        const accountToUse = accountFromQuery ?? selectedAccountId ?? cloudAccountId;
+        if (!organizationId || !accountToUse) return;
+
+        const account = cloudAccounts.find((acc) => acc.id === accountToUse);
+        if (!account) return;
 
         setAcceptingConsent(true);
 
         try {
-            const response = await acceptFinopsConsent(organizationId, cloudAccountId, cloudProvider);
+            const response = await acceptFinopsConsent(organizationId, accountToUse, account.provider);
             const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
@@ -414,11 +759,44 @@ export function FinopsOverview() {
     };
 
     const handleRefresh = async () => {
-        if (!organizationId || !cloudAccountId) return;
-        setRefreshing(true);
-        await loadData(organizationId, cloudAccountId, cloudProvider, { silent: true, page: jobsPage, limit: jobsLimit });
-        setRefreshing(false);
+        if (mode === 'all') {
+            setRefreshing(true);
+            await loadAggregatedData(organizationId!, cloudAccounts, { silent: true });
+            setRefreshing(false);
+        } else {
+            const accountToUse = accountFromQuery ?? selectedAccountId ?? cloudAccountId;
+            if (!accountToUse) return;
+            const account = cloudAccounts.find((item) => item.id === accountToUse);
+            if (!account) return;
+            setRefreshing(true);
+            await loadData(organizationId!, accountToUse, account.provider, { silent: true, page: jobsPage, limit: jobsLimit });
+            setRefreshing(false);
+        }
     };
+
+    // Sync aggregated data when its components change
+    useEffect(() => {
+        if (mode === 'all') {
+            void aggregateFinopsData(
+                aggregatedDashboards,
+                aggregatedCostByServices,
+                aggregatedAnomalies,
+                aggregatedRecommendations,
+                aggregatedForecasts,
+                aggregatedInsights,
+                aggregatedBillingHistory
+            ).then(setAggregatedData);
+        }
+    }, [
+        mode,
+        aggregatedDashboards,
+        aggregatedCostByServices,
+        aggregatedAnomalies,
+        aggregatedRecommendations,
+        aggregatedForecasts,
+        aggregatedInsights,
+        aggregatedBillingHistory,
+    ]);
 
     const handleSyncClick = () => {
         if (!hasConsent) {
@@ -428,10 +806,34 @@ export function FinopsOverview() {
         }
     };
 
+    const handleIndividualAccountChange = (accountId: string) => {
+        const account = cloudAccounts.find((item) => item.id === accountId);
+
+        setSelectedAccountId(accountId);
+
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, accountId);
+            window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, accountId);
+            if (account?.provider) {
+                window.localStorage.setItem(CLOUD_PROVIDER_STORAGE_KEY, account.provider);
+                setCloudProvider(account.provider);
+            }
+            notifyActiveCloudAccountChanged();
+        }
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('account', accountId);
+        const nextQuery = params.toString();
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    };
+
     const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
     const hasRunningJob = jobs.some((j) => j.status === 'pending' || j.status === 'running');
 
-    if (!organizationId || !cloudAccountId) {
+    const accountToUse = accountFromQuery ?? selectedAccountId ?? cloudAccountId ?? cloudAccounts[0]?.id;
+    const currentCloudProvider = cloudAccounts.find((acc) => acc.id === accountToUse)?.provider || cloudProvider;
+
+    if (!organizationId || (mode === 'individual' && !accountToUse)) {
         return (
             <Card>
                 <CardHeader>
@@ -449,70 +851,138 @@ export function FinopsOverview() {
     return (
         <>
             <div className="flex flex-col gap-6">
-                <FinopsSummaryCards
-                    dashboard={dashboard}
-                    score={score}
-                    hasConsent={hasConsent}
-                    canSync={canSync}
-                    syncing={syncing}
-                    acceptingConsent={acceptingConsent}
-                    hasRunningJob={hasRunningJob}
-                    refreshing={refreshing}
-                    onStartSync={handleSyncClick}
-                    onAcceptTerms={() => setShowConsentDialog(true)}
-                    onRefresh={() => void handleRefresh()}
-                />
-
-                <FinopsJobsTable
-                    jobs={jobs}
-                    jobsPage={jobsPage}
-                    jobsLimit={jobsLimit}
-                    jobsPagination={jobsPagination}
-                    loadingTable={loadingTable}
-                    onChangeLimit={(limit) => {
-                        const nextLimit = normalizeJobsLimit(limit);
-                        setJobsLimit(nextLimit);
-                        setJobsPage(DEFAULT_JOBS_PAGE);
-                        syncPaginationUrlState(DEFAULT_JOBS_PAGE, nextLimit);
-                    }}
-                    onGoFirst={() => {
-                        setJobsPage(DEFAULT_JOBS_PAGE);
-                        syncPaginationUrlState(DEFAULT_JOBS_PAGE, jobsLimit);
-                    }}
-                    onGoPrevious={() => {
-                        const nextPage = Math.max(jobsPage - 1, DEFAULT_JOBS_PAGE);
-                        setJobsPage(nextPage);
-                        syncPaginationUrlState(nextPage, jobsLimit);
-                    }}
-                    onGoNext={() => {
-                        const nextPage = jobsPage + 1;
-                        setJobsPage(nextPage);
-                        syncPaginationUrlState(nextPage, jobsLimit);
-                    }}
-                    onGoLast={() => {
-                        const nextPage = jobsPagination?.totalPages ?? DEFAULT_JOBS_PAGE;
-                        setJobsPage(nextPage);
-                        syncPaginationUrlState(nextPage, jobsLimit);
-                    }}
-                />
-
-                {hasConsent && (
-                    <div className="flex justify-end">
-                        <Button variant="outline" size="sm" asChild>
-                            <Link href="/finops/costs">
-                                <BarChart2 className="size-4" />
-                                Ver detalhes de custos
-                            </Link>
-                        </Button>
-                    </div>
+                {mode === 'individual' && cloudAccounts.length > 1 && (
+                    <FinopsCloudAccountSelector
+                        cloudAccounts={cloudAccounts}
+                        selectedAccountId={selectedAccountId}
+                        onAccountChange={handleIndividualAccountChange}
+                    />
                 )}
 
-                <FinopsRecommendations recommendations={recommendations} />
+                {mode === 'individual' && (
+                    <>
+                        <FinopsSummaryCards
+                            dashboard={dashboard}
+                            score={score}
+                            hasConsent={hasConsent}
+                            canSync={canSync}
+                            syncing={syncing}
+                            acceptingConsent={acceptingConsent}
+                            hasRunningJob={hasRunningJob}
+                            refreshing={refreshing}
+                            onStartSync={handleSyncClick}
+                            onAcceptTerms={() => setShowConsentDialog(true)}
+                            onRefresh={() => void handleRefresh()}
+                        />
+
+                        {hasConsent && (
+                            <FinopsDashboardPanels
+                                dashboard={dashboard}
+                                costByService={costByService}
+                                anomalies={anomalies}
+                                recommendations={recommendations}
+                                forecast={forecast}
+                                insights={insights}
+                                billingHistory={billingHistory}
+                                onPeriodChange={setDashboardPeriod}
+                            />
+                        )}
+
+                        <FinopsJobsTable
+                            jobs={jobs}
+                            jobsPage={jobsPage}
+                            jobsLimit={jobsLimit}
+                            jobsPagination={jobsPagination}
+                            loadingTable={loadingTable}
+                            title="Histórico de Sincronizações"
+                            description="Últimos 5 syncs executados para esta conta"
+                            previewLimit={5}
+                            actionHref="/finops/history"
+                            actionLabel="Ver histórico completo"
+                            onChangeLimit={(limit) => {
+                                const nextLimit = normalizeJobsLimit(limit);
+                                setJobsLimit(nextLimit);
+                                setJobsPage(DEFAULT_JOBS_PAGE);
+                                syncPaginationUrlState(DEFAULT_JOBS_PAGE, nextLimit);
+                            }}
+                            onGoFirst={() => {
+                                setJobsPage(DEFAULT_JOBS_PAGE);
+                                syncPaginationUrlState(DEFAULT_JOBS_PAGE, jobsLimit);
+                            }}
+                            onGoPrevious={() => {
+                                const nextPage = Math.max(jobsPage - 1, DEFAULT_JOBS_PAGE);
+                                setJobsPage(nextPage);
+                                syncPaginationUrlState(nextPage, jobsLimit);
+                            }}
+                            onGoNext={() => {
+                                const nextPage = jobsPage + 1;
+                                setJobsPage(nextPage);
+                                syncPaginationUrlState(nextPage, jobsLimit);
+                            }}
+                            onGoLast={() => {
+                                const nextPage = jobsPagination?.totalPages ?? DEFAULT_JOBS_PAGE;
+                                setJobsPage(nextPage);
+                                syncPaginationUrlState(nextPage, jobsLimit);
+                            }}
+                        />
+
+                        <FinopsRecommendations
+                            recommendations={recommendations}
+                            previewLimit={5}
+                            actionHref="/finops/recommendations"
+                            actionLabel="Ver todas"
+                        />
+
+                        {hasConsent && (
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <Link
+                                    href={`/finops/anomalies?account=${encodeURIComponent(accountToUse!)}`}
+                                    className="flex flex-col gap-1.5 rounded-xl border p-3 transition-colors hover:bg-muted/50"
+                                >
+                                    <AlertTriangle className="size-4 text-muted-foreground" />
+                                    <p className="text-sm font-medium">Anomalias</p>
+                                    <p className="text-xs text-muted-foreground">Desvios de custo</p>
+                                </Link>
+                                <Link
+                                    href={`/finops/forecast?account=${encodeURIComponent(accountToUse!)}`}
+                                    className="flex flex-col gap-1.5 rounded-xl border p-3 transition-colors hover:bg-muted/50"
+                                >
+                                    <TrendingUp className="size-4 text-muted-foreground" />
+                                    <p className="text-sm font-medium">Forecast</p>
+                                    <p className="text-xs text-muted-foreground">Projeção do mês</p>
+                                </Link>
+                                <Link
+                                    href={`/finops/insights?account=${encodeURIComponent(accountToUse!)}`}
+                                    className="flex flex-col gap-1.5 rounded-xl border p-3 transition-colors hover:bg-muted/50"
+                                >
+                                    <Lightbulb className="size-4 text-muted-foreground" />
+                                    <p className="text-sm font-medium">Insights</p>
+                                    <p className="text-xs text-muted-foreground">Otimização avançada</p>
+                                </Link>
+                                <Link
+                                    href={`/finops/billing?account=${encodeURIComponent(accountToUse!)}`}
+                                    className="flex flex-col gap-1.5 rounded-xl border p-3 transition-colors hover:bg-muted/50"
+                                >
+                                    <DollarSign className="size-4 text-muted-foreground" />
+                                    <p className="text-sm font-medium">Billing</p>
+                                    <p className="text-xs text-muted-foreground">Markup & margem</p>
+                                </Link>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {mode === 'all' && (
+                    <>
+                        <FinopsAggregatedDashboard data={aggregatedData} isLoading={loadingInitial} onPeriodChange={setDashboardPeriod} />
+                        <FinopsCloudAccountsManagement cloudAccounts={cloudAccounts} dashboards={aggregatedDashboards} isLoading={loadingInitial} />
+                    </>
+                )}
             </div>
 
             <FinopsConsentDialog
                 open={showConsentDialog}
-                cloudProvider={cloudProvider}
+                cloudProvider={currentCloudProvider}
                 onAccept={() => void handleAcceptConsent()}
                 onCancel={() => setShowConsentDialog(false)}
                 isLoading={acceptingConsent}
@@ -520,7 +990,7 @@ export function FinopsOverview() {
 
             <FinopsSyncDialog
                 open={showSyncDialog}
-                cloudProvider={cloudProvider}
+                cloudProvider={currentCloudProvider}
                 onConfirm={(granularity, startDate, endDate) => void handleStartSync(granularity, startDate, endDate)}
                 onCancel={() => setShowSyncDialog(false)}
                 isLoading={syncing}

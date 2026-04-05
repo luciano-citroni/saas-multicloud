@@ -10,6 +10,12 @@ import { FinopsService } from './services/finops.service';
 import { FinopsAnalysisService } from './services/finops-analysis.service';
 import { FinopsBudgetService } from './services/finops-budget.service';
 import { FinopsSchedulerService } from './services/finops-scheduler.service';
+import { FinopsCostIngestionService } from './services/finops-cost-ingestion.service';
+import { FinopsCostAggregationService } from './services/finops-cost-aggregation.service';
+import { FinopsAnomalyDetectionService } from './services/finops-anomaly-detection.service';
+import { FinopsForecastService } from './services/finops-forecast.service';
+import { FinopsMonetizationService } from './services/finops-monetization.service';
+import { FinopsOptimizationService } from './services/finops-optimization.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -18,14 +24,20 @@ import { FinopsProcessor } from './processors/finops.processor';
 import { AwsFinopsProvider } from './providers/aws-finops.provider';
 import { AzureFinopsProvider } from './providers/azure-finops.provider';
 
-// FinOps Entities
+// FinOps core entities
 import { FinopsConsent } from '../db/entites/finops-consent.entity';
 import { FinopsCostRecord } from '../db/entites/finops-cost-record.entity';
 import { FinopsBudget } from '../db/entites/finops-budget.entity';
 import { FinopsJob } from '../db/entites/finops-job.entity';
 import { FinopsRecommendation } from '../db/entites/finops-recommendation.entity';
 
-// Supporting entities (cloud account + aws/azure resources for analysis)
+// FinOps enterprise entities
+import { FinopsCostAggregate } from '../db/entites/finops-cost-aggregate.entity';
+import { FinopsCostSyncRun } from '../db/entites/finops-cost-sync-run.entity';
+import { FinopsCostAnomaly } from '../db/entites/finops-cost-anomaly.entity';
+import { FinopsTenantBilling } from '../db/entites/finops-tenant-billing.entity';
+
+// Supporting entities
 import { CloudAccount } from '../db/entites/cloud-account.entity';
 import { AwsEc2Instance } from '../db/entites/aws-ec2.entity';
 import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
@@ -44,12 +56,17 @@ import { FINOPS_QUEUE } from './constants';
         BullModule.registerQueue({ name: FINOPS_QUEUE }),
 
         TypeOrmModule.forFeature([
-            // FinOps entities
+            // FinOps core entities
             FinopsConsent,
             FinopsCostRecord,
             FinopsBudget,
             FinopsJob,
             FinopsRecommendation,
+            // FinOps enterprise entities
+            FinopsCostAggregate,
+            FinopsCostSyncRun,
+            FinopsCostAnomaly,
+            FinopsTenantBilling,
             // Supporting entities
             CloudAccount,
             AwsEc2Instance,
@@ -64,14 +81,30 @@ import { FINOPS_QUEUE } from './constants';
     ],
     controllers: [FinopsController],
     providers: [
+        // Core services
         FinopsService,
         FinopsAnalysisService,
         FinopsBudgetService,
         FinopsSchedulerService,
+        // Enterprise services
+        FinopsCostIngestionService,
+        FinopsCostAggregationService,
+        FinopsAnomalyDetectionService,
+        FinopsForecastService,
+        FinopsMonetizationService,
+        FinopsOptimizationService,
+        // Processor
         FinopsProcessor,
+        // Providers
         AwsFinopsProvider,
         AzureFinopsProvider,
     ],
-    exports: [FinopsService, FinopsAnalysisService],
+    exports: [
+        FinopsService,
+        FinopsAnalysisService,
+        FinopsCostIngestionService,
+        FinopsAnomalyDetectionService,
+        FinopsForecastService,
+    ],
 })
 export class FinopsModule {}

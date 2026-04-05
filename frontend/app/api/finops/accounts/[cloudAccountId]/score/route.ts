@@ -40,13 +40,20 @@ export async function GET(request: Request, { params }: Params) {
     const { cloudAccountId } = await params;
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
+    const year = searchParams.get('year');
+    const month = searchParams.get('month');
 
     if (!organizationId) return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
+
+    const query = new URLSearchParams();
+    if (year) query.set('year', year);
+    if (month) query.set('month', month);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
 
     const resolved = await resolveAccessToken();
     if (!resolved.accessToken) return buildUnauthorizedResponse();
 
-    let response = await backendFetch(`/api/finops/accounts/${cloudAccountId}/score`, {
+    let response = await backendFetch(`/api/finops/accounts/${cloudAccountId}/score${queryString}`, {
         headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
@@ -56,7 +63,7 @@ export async function GET(request: Request, { params }: Params) {
         const refreshResult = await refreshAccessToken(resolved.refreshToken);
         if (!refreshResult) return buildUnauthorizedResponse();
         rotatedTokens = refreshResult;
-        response = await backendFetch(`/api/finops/accounts/${cloudAccountId}/score`, {
+        response = await backendFetch(`/api/finops/accounts/${cloudAccountId}/score${queryString}`, {
             headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }

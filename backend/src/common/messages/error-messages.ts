@@ -152,6 +152,12 @@ export const ErrorMessages = {
         JOB_NOT_FOUND: 'FinOps sync job not found.',
 
         BUDGET_NOT_FOUND: 'FinOps budget not found.',
+
+        RECOMMENDATION_NOT_FOUND: 'FinOps recommendation not found.',
+
+        ANOMALY_NOT_FOUND: 'FinOps anomaly not found.',
+
+        BILLING_NOT_FOUND: 'FinOps billing record not found.',
     },
 
     // Governance

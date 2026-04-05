@@ -1,8 +1,13 @@
 export interface FinopsCostEntry {
     service: string;
+    resourceId: string;
     region: string | null;
+    usageType: string;
+    operation: string;
     cost: number;
     currency: string;
+    usageQuantity: number;
+    usageUnit: string;
     date: string; // ISO date string 'YYYY-MM-DD'
     tags?: Record<string, string>;
 }
@@ -31,7 +36,7 @@ export interface IFinopsProvider {
      * @param creds Credenciais descriptografadas da conta.
      * @param startDate Data de início no formato YYYY-MM-DD.
      * @param endDate Data de fim no formato YYYY-MM-DD.
-     * @param granularity Granularidade da coleta (daily | monthly).
+     * @param granularity Granularidade da coleta (DAILY | MONTHLY).
      */
     collectCosts(
         creds: FinopsProviderCredentials,

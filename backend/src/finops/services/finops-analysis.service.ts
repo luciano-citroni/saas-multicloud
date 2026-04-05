@@ -125,6 +125,11 @@ export interface FinopsDebugComparison {
     };
 }
 
+interface ReferenceMonth {
+    year: number;
+    month: number;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -158,7 +163,7 @@ export class FinopsAnalysisService {
 
         private readonly awsFinopsProvider: AwsFinopsProvider,
 
-        private readonly configService: ConfigService,
+        private readonly configService: ConfigService
     ) {}
 
     // =========================================================================
@@ -169,11 +174,11 @@ export class FinopsAnalysisService {
      * Retorna o resumo de custos para o dashboard FinOps de uma conta.
      * Considera o mês atual e compara com o mês anterior.
      */
-    async getDashboardSummary(cloudAccountId: string, organizationId: string): Promise<CostSummary> {
-        const now = new Date();
-        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    async getDashboardSummary(cloudAccountId: string, organizationId: string, referenceYear?: number, referenceMonth?: number): Promise<CostSummary> {
+        const reference = this.resolveReferenceMonth(referenceYear, referenceMonth);
+        const startOfCurrentMonth = new Date(reference.year, reference.month - 1, 1);
+        const startOfNextMonth = new Date(reference.year, reference.month, 1);
+        const startOfPreviousMonth = new Date(reference.year, reference.month - 2, 1);
 
         const [currentGranularity, previousGranularity] = await Promise.all([
             this.resolveGranularityForPeriod(
@@ -181,14 +186,14 @@ export class FinopsAnalysisService {
                 organizationId,
                 this.formatDateOnly(startOfCurrentMonth),
                 this.formatDateOnly(startOfNextMonth),
-                'daily-first',
+                'daily-first'
             ),
             this.resolveGranularityForPeriod(
                 cloudAccountId,
                 organizationId,
                 this.formatDateOnly(startOfPreviousMonth),
                 this.formatDateOnly(startOfCurrentMonth),
-                'monthly-first',
+                'monthly-first'
             ),
         ]);
 
@@ -216,7 +221,7 @@ export class FinopsAnalysisService {
         organizationId: string,
         granularity: 'daily' | 'monthly',
         startDate: Date,
-        endDate: Date,
+        endDate: Date
     ): Promise<Array<{ date: string; cost: number; currency: string }>> {
         const start = this.formatDateOnly(startDate);
         const exclusiveEnd = this.formatDateOnly(this.addDays(endDate, 1));
@@ -234,9 +239,7 @@ export class FinopsAnalysisService {
         const grouped = new Map<string, { cost: number; currency: string }>();
 
         for (const r of records) {
-            const dateKey = r.date instanceof Date
-                ? r.date.toISOString().slice(0, 10)
-                : String(r.date);
+            const dateKey = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date);
             const existing = grouped.get(dateKey);
 
             if (existing) {
@@ -257,8 +260,8 @@ export class FinopsAnalysisService {
      * Calcula o score FinOps da conta com base em eficiência, desperdício
      * e crescimento de custo.
      */
-    async computeFinopsScore(cloudAccountId: string, organizationId: string): Promise<FinopsScore> {
-        const summary = await this.getDashboardSummary(cloudAccountId, organizationId);
+    async computeFinopsScore(cloudAccountId: string, organizationId: string, referenceYear?: number, referenceMonth?: number): Promise<FinopsScore> {
+        const summary = await this.getDashboardSummary(cloudAccountId, organizationId, referenceYear, referenceMonth);
         const openRecommendations = await this.recommendationRepo.find({
             where: { cloudAccountId, organizationId, status: 'open' },
         });
@@ -276,7 +279,7 @@ export class FinopsAnalysisService {
         // Desperdício: proporção inversa de recomendações abertas vs custo total
         const wasteScore = Math.max(0, Math.round(100 - wasteRatio * 150));
 
-        const score = Math.round((efficiencyScore * 0.5) + (growthScore * 0.3) + (wasteScore * 0.2));
+        const score = Math.round(efficiencyScore * 0.5 + growthScore * 0.3 + wasteScore * 0.2);
 
         const label = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 50 ? 'Fair' : 'Poor';
 
@@ -380,9 +383,7 @@ export class FinopsAnalysisService {
             return [];
         }
 
-        const saved = await this.recommendationRepo.save(
-            recommendations.map((r) => this.recommendationRepo.create(r as FinopsRecommendation)),
-        );
+        const saved = await this.recommendationRepo.save(recommendations.map((r) => this.recommendationRepo.create(r as FinopsRecommendation)));
 
         this.logger.log(`${saved.length} recomendações geradas para conta ${cloudAccountId}`);
 
@@ -392,12 +393,7 @@ export class FinopsAnalysisService {
     /**
      * Retorna custo por serviço para o mês especificado, comparado ao mês anterior.
      */
-    async getCostByService(
-        cloudAccountId: string,
-        organizationId: string,
-        year: number,
-        month: number,
-    ): Promise<CostByServiceItem[]> {
+    async getCostByService(cloudAccountId: string, organizationId: string, year: number, month: number): Promise<CostByServiceItem[]> {
         // Use ISO date strings to avoid timezone conversion issues with DATE columns
         const pad = (n: number) => String(n).padStart(2, '0');
         const startOfMonth = `${year}-${pad(month)}-01`;
@@ -412,17 +408,15 @@ export class FinopsAnalysisService {
 
         // Resolve granularity independently for each period to avoid double-counting
         const [currentGranularity, prevGranularity] = await Promise.all([
-            this.resolveGranularityForPeriod(
-                cloudAccountId,
-                organizationId,
-                startOfMonth,
-                endOfMonth,
-                isCurrentMonth ? 'daily-first' : 'monthly-first',
-            ),
+            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfMonth, endOfMonth, isCurrentMonth ? 'daily-first' : 'monthly-first'),
             this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfPrevMonth, startOfMonth, 'monthly-first'),
         ]);
 
-        interface RawServiceRow { service: string; totalCost: string; currency: string }
+        interface RawServiceRow {
+            service: string;
+            totalCost: string;
+            currency: string;
+        }
 
         const [currentRows, previousRows] = await Promise.all([
             this.costRecordRepo
@@ -475,14 +469,8 @@ export class FinopsAnalysisService {
             const currentMonthCost = current?.cost ?? 0;
             const previousMonthCost = previous?.cost ?? 0;
             const change = currentMonthCost - previousMonthCost;
-            const changePercentage =
-                previousMonthCost > 0
-                    ? (change / previousMonthCost) * 100
-                    : currentMonthCost > 0
-                      ? 100
-                      : 0;
-            const trend: 'up' | 'down' | 'stable' =
-                Math.abs(changePercentage) < 5 ? 'stable' : change > 0 ? 'up' : 'down';
+            const changePercentage = previousMonthCost > 0 ? (change / previousMonthCost) * 100 : currentMonthCost > 0 ? 100 : 0;
+            const trend: 'up' | 'down' | 'stable' = Math.abs(changePercentage) < 5 ? 'stable' : change > 0 ? 'up' : 'down';
 
             return {
                 service,
@@ -536,7 +524,7 @@ export class FinopsAnalysisService {
         organizationId: string,
         granularity: 'daily' | 'monthly',
         startDate: string,
-        endDate: string,
+        endDate: string
     ): Promise<FinopsDebugComparison> {
         const cloudAccount = await this.cloudAccountRepo
             .createQueryBuilder('ca')
@@ -562,7 +550,7 @@ export class FinopsAnalysisService {
             { credentials: decryptedCredentials, cloudAccountId },
             startDate,
             endDate,
-            awsGranularity,
+            awsGranularity
         );
 
         const dbRecords = await this.costRecordRepo
@@ -609,7 +597,7 @@ export class FinopsAnalysisService {
                 : `Valores dentro da margem aceitável (${percentageError.toFixed(2)}%).`;
 
         this.logger.log(
-            `[Debug] Comparação concluída: AWS=$${awsTotalCost.toFixed(4)}, DB=$${dbTotalCost.toFixed(4)}, diff=${percentageError.toFixed(2)}%`,
+            `[Debug] Comparação concluída: AWS=$${awsTotalCost.toFixed(4)}, DB=$${dbTotalCost.toFixed(4)}, diff=${percentageError.toFixed(2)}%`
         );
 
         return {
@@ -666,7 +654,6 @@ export class FinopsAnalysisService {
         return JSON.parse(decrypted);
     }
 
-
     /**
      * Detecta a granularidade dominante no período.
      * Prefere 'daily' quando há registros diários; senão usa 'monthly'.
@@ -677,7 +664,7 @@ export class FinopsAnalysisService {
         organizationId: string,
         from: string,
         to: string,
-        granularity: 'daily' | 'monthly',
+        granularity: 'daily' | 'monthly'
     ): Promise<boolean> {
         const count = await this.costRecordRepo
             .createQueryBuilder('r')
@@ -696,7 +683,7 @@ export class FinopsAnalysisService {
         organizationId: string,
         from: string,
         to: string,
-        preference: 'daily-first' | 'monthly-first',
+        preference: 'daily-first' | 'monthly-first'
     ): Promise<'daily' | 'monthly'> {
         const [hasDaily, hasMonthly] = await Promise.all([
             this.hasGranularityRecords(cloudAccountId, organizationId, from, to, 'daily'),
@@ -722,6 +709,20 @@ export class FinopsAnalysisService {
         return `${year}-${month}-${day}`;
     }
 
+    private resolveReferenceMonth(referenceYear?: number, referenceMonth?: number): ReferenceMonth {
+        if (referenceYear !== undefined && referenceMonth !== undefined) {
+            return { year: referenceYear, month: referenceMonth };
+        }
+
+        const now = new Date();
+        const fallbackDate = now.getDate() === 1 ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : now;
+
+        return {
+            year: fallbackDate.getFullYear(),
+            month: fallbackDate.getMonth() + 1,
+        };
+    }
+
     private addDays(date: Date, days: number): Date {
         return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
     }
@@ -731,12 +732,11 @@ export class FinopsAnalysisService {
         organizationId: string,
         from: Date,
         to: Date,
-        granularity?: 'daily' | 'monthly',
+        granularity?: 'daily' | 'monthly'
     ): Promise<FinopsCostRecord[]> {
         const fromStr = this.formatDateOnly(from);
         const toStr = this.formatDateOnly(to);
-        const resolvedGranularity = granularity
-            ?? await this.resolveGranularityForPeriod(cloudAccountId, organizationId, fromStr, toStr, 'daily-first');
+        const resolvedGranularity = granularity ?? (await this.resolveGranularityForPeriod(cloudAccountId, organizationId, fromStr, toStr, 'daily-first'));
 
         return this.costRecordRepo
             .createQueryBuilder('r')
@@ -797,20 +797,19 @@ export class FinopsAnalysisService {
         const insights: string[] = [];
 
         if (summary.trend.growthPercentage > 20) {
-            insights.push(
-                `Seu custo aumentou ${summary.trend.growthPercentage.toFixed(1)}% comparado ao período anterior.`,
-            );
+            insights.push(`Seu custo aumentou ${summary.trend.growthPercentage.toFixed(1)}% comparado ao período anterior.`);
         }
 
         if (summary.topServices.length > 0) {
-            const top3 = summary.topServices.slice(0, 3).map((s) => s.service).join(', ');
+            const top3 = summary.topServices
+                .slice(0, 3)
+                .map((s) => s.service)
+                .join(', ');
             insights.push(`Top 3 serviços por custo: ${top3}.`);
         }
 
         if (openRecsCount > 0 && totalSaving > 0) {
-            insights.push(
-                `Você pode economizar até ${totalSaving.toFixed(2)} ${summary.currency} com ${openRecsCount} otimizações disponíveis.`,
-            );
+            insights.push(`Você pode economizar até ${totalSaving.toFixed(2)} ${summary.currency} com ${openRecsCount} otimizações disponíveis.`);
         }
 
         if (summary.totalCost === 0) {
@@ -822,10 +821,7 @@ export class FinopsAnalysisService {
 
     // ─── AWS Resource Analysis ────────────────────────────────────────────────
 
-    private async analyzeAwsResources(
-        cloudAccountId: string,
-        organizationId: string,
-    ): Promise<Partial<FinopsRecommendation>[]> {
+    private async analyzeAwsResources(cloudAccountId: string, organizationId: string): Promise<Partial<FinopsRecommendation>[]> {
         const recommendations: Partial<FinopsRecommendation>[] = [];
 
         // EC2: instâncias stopped — podem gerar custos de EBS anexado.
@@ -868,8 +864,9 @@ export class FinopsAnalysisService {
                 resourceId: rds.awsDbInstanceIdentifier,
                 resourceType: 'RDSInstance',
                 description: `Instância RDS ${rds.awsDbInstanceIdentifier} está acessível publicamente, o que pode indicar superdimensionamento ou má configuração.`,
-                recommendation: 'Avalie se a instância RDS precisa de acesso público. Restrinja o acesso para reduzir custos de transferência de dados e risco de segurança.',
-                potentialSaving: 25.00,
+                recommendation:
+                    'Avalie se a instância RDS precisa de acesso público. Restrinja o acesso para reduzir custos de transferência de dados e risco de segurança.',
+                potentialSaving: 25.0,
                 currency: 'USD',
                 priority: 'high',
                 metadata: { engine: rds.engine, dbInstanceClass: rds.dbInstanceClass },
@@ -884,17 +881,17 @@ export class FinopsAnalysisService {
 
     /** Estima custo mensal de EBS para instância EC2 parada (baseado no tipo). */
     private estimateEc2EbsSaving(instanceType: string | null): number {
-        if (!instanceType) return 10.00;
+        if (!instanceType) return 10.0;
         const type = instanceType.toLowerCase();
-        if (type.startsWith('t2.nano') || type.startsWith('t3.nano')) return 5.00;
-        if (type.startsWith('t2.micro') || type.startsWith('t3.micro')) return 8.00;
-        if (type.startsWith('t2.small') || type.startsWith('t3.small')) return 10.00;
-        if (type.startsWith('t2.medium') || type.startsWith('t3.medium')) return 15.00;
-        if (type.startsWith('t2.large') || type.startsWith('t3.large')) return 20.00;
-        if (type.startsWith('m5') || type.startsWith('m6')) return 25.00;
-        if (type.startsWith('c5') || type.startsWith('c6')) return 20.00;
-        if (type.startsWith('r5') || type.startsWith('r6')) return 30.00;
-        return 15.00;
+        if (type.startsWith('t2.nano') || type.startsWith('t3.nano')) return 5.0;
+        if (type.startsWith('t2.micro') || type.startsWith('t3.micro')) return 8.0;
+        if (type.startsWith('t2.small') || type.startsWith('t3.small')) return 10.0;
+        if (type.startsWith('t2.medium') || type.startsWith('t3.medium')) return 15.0;
+        if (type.startsWith('t2.large') || type.startsWith('t3.large')) return 20.0;
+        if (type.startsWith('m5') || type.startsWith('m6')) return 25.0;
+        if (type.startsWith('c5') || type.startsWith('c6')) return 20.0;
+        if (type.startsWith('r5') || type.startsWith('r6')) return 30.0;
+        return 15.0;
     }
 
     /** Estima custo mensal de disco Azure não anexado (baseado em tamanho e SKU). */
@@ -906,10 +903,7 @@ export class FinopsAnalysisService {
 
     // ─── Azure Resource Analysis ──────────────────────────────────────────────
 
-    private async analyzeAzureResources(
-        cloudAccountId: string,
-        organizationId: string,
-    ): Promise<Partial<FinopsRecommendation>[]> {
+    private async analyzeAzureResources(cloudAccountId: string, organizationId: string): Promise<Partial<FinopsRecommendation>[]> {
         const recommendations: Partial<FinopsRecommendation>[] = [];
 
         // VMs deallocated (provisioningState indica estado de provisionamento; recursos parados têm Deallocated)
@@ -927,7 +921,7 @@ export class FinopsAnalysisService {
                 resourceType: 'VirtualMachine',
                 description: `VM Azure ${vm.name} está desalocada e pode estar gerando custos de disco gerenciado.`,
                 recommendation: 'Considere deletar a VM ou fazer snapshot dos discos e deletá-los para reduzir custos de armazenamento.',
-                potentialSaving: 20.00,
+                potentialSaving: 20.0,
                 currency: 'USD',
                 priority: 'medium',
                 metadata: { vmSize: vm.vmSize, location: vm.location },

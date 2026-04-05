@@ -80,3 +80,83 @@ export type PaginationMeta = {
 export type SidebarContextPayload = {
     organizations?: Array<{ id?: string; currentRole?: string | null }>;
 };
+
+export type FinopsAnomaly = {
+    id: string;
+    cloudProvider: string;
+    service: string;
+    region: string;
+    anomalyDate: string;
+    expectedCost: number;
+    actualCost: number;
+    deviationPercentage: number;
+    financialImpact: number;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    status: 'open' | 'acknowledged' | 'resolved';
+    currency: string;
+    description: string | null;
+    createdAt: string;
+};
+
+export type ForecastResult = {
+    cloudAccountId: string;
+    periodStart: string;
+    periodEnd: string;
+    forecastedCost: number;
+    avgDailyCost: number;
+    daysElapsed: number;
+    daysRemaining: number;
+    currency: string;
+    confidence: 'low' | 'medium' | 'high';
+    byService: Array<{ service: string; forecastedCost: number }>;
+};
+
+export type ForecastMonthProjection = {
+    month: string;
+    forecastedCost: number;
+    currency: string;
+};
+
+export type OptimizationInsight = {
+    cloudAccountId: string;
+    topExpensiveServices: Array<{ service: string; cost: number; currency: string }>;
+    highestGrowthService: { service: string; growthPercentage: number; cost: number } | null;
+    costIncreaseReasons: string[];
+    totalWaste: number;
+    currency: string;
+};
+
+export type ChargebackItem = {
+    groupKey: string;
+    groupType: 'tag' | 'service' | 'region';
+    cost: number;
+    percentage: number;
+    currency: string;
+};
+
+export type BillingRecord = {
+    cloudAccountId: string;
+    periodStart: string;
+    periodEnd: string;
+    cloudCost: number;
+    markupPercentage: number;
+    markupAmount: number;
+    finalPrice: number;
+    margin: number;
+    marginPercentage: number;
+    currency: string;
+    chargebackBreakdown: ChargebackItem[] | null;
+};
+
+export type SyncRun = {
+    id: string;
+    cloudProvider: string;
+    startDate: string;
+    endDate: string;
+    status: 'running' | 'completed' | 'failed' | 'partial';
+    recordsUpserted: number;
+    errorMessage: string | null;
+    completedAt: string | null;
+    triggerType: 'manual' | 'scheduled_daily' | 'scheduled_monthly_close';
+    createdAt: string;
+};

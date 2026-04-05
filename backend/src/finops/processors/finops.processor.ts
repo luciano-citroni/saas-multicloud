@@ -11,13 +11,15 @@ import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 
 import { FinopsJob } from '../../db/entites/finops-job.entity';
-import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { AzureFinopsProvider } from '../providers/azure-finops.provider';
 
-import { FinopsAnalysisService } from '../services/finops-analysis.service';
+import { FinopsCostIngestionService } from '../services/finops-cost-ingestion.service';
+import { FinopsCostAggregationService } from '../services/finops-cost-aggregation.service';
+import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detection.service';
+import { FinopsOptimizationService } from '../services/finops-optimization.service';
 
 import { FINOPS_QUEUE, FINOPS_WORKER_CONCURRENCY } from '../constants';
 
@@ -31,17 +33,16 @@ export class FinopsProcessor extends WorkerHost {
         @InjectRepository(FinopsJob)
         private readonly jobRepo: Repository<FinopsJob>,
 
-        @InjectRepository(FinopsCostRecord)
-        private readonly costRecordRepo: Repository<FinopsCostRecord>,
-
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepo: Repository<CloudAccount>,
 
         private readonly awsProvider: AwsFinopsProvider,
-
         private readonly azureProvider: AzureFinopsProvider,
 
-        private readonly analysisService: FinopsAnalysisService,
+        private readonly ingestionService: FinopsCostIngestionService,
+        private readonly aggregationService: FinopsCostAggregationService,
+        private readonly anomalyService: FinopsAnomalyDetectionService,
+        private readonly optimizationService: FinopsOptimizationService,
     ) {
         super();
     }
@@ -54,8 +55,8 @@ export class FinopsProcessor extends WorkerHost {
         await this.jobRepo.update(jobId, { status: 'running' });
 
         try {
-            // ── 1. Carregar credenciais da conta ─────────────────────────────
-            this.logger.log(`[${jobId}] Fase 1/4: Carregando credenciais da conta...`);
+            // ── 1. Carregar credenciais ───────────────────────────────────────
+            this.logger.log(`[${jobId}] Fase 1/5: Carregando credenciais...`);
             await job.updateProgress(10);
 
             const cloudAccount = await this.cloudAccountRepo
@@ -66,15 +67,14 @@ export class FinopsProcessor extends WorkerHost {
                 .getOne();
 
             if (!cloudAccount) {
-                throw new Error(`CloudAccount ${cloudAccountId} não encontrada para organização ${organizationId}`);
+                throw new Error(`CloudAccount ${cloudAccountId} não encontrada`);
             }
 
             // ── 2. Coletar custos via provider ────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 2/4: Coletando custos via API do provider ${cloudProvider}...`);
-            await job.updateProgress(30);
+            this.logger.log(`[${jobId}] Fase 2/5: Coletando custos via ${cloudProvider}...`);
+            await job.updateProgress(25);
 
             const provider = cloudProvider === 'aws' ? this.awsProvider : this.azureProvider;
-
             const decryptedCredentials = this.decryptCloudCredentials(cloudAccount.credentialsEncrypted);
 
             const { entries } = await provider.collectCosts(
@@ -84,59 +84,85 @@ export class FinopsProcessor extends WorkerHost {
                 granularity,
             );
 
-            // ── 3. Persistir registros de custo ───────────────────────────────
-            this.logger.log(`[${jobId}] Fase 3/4: Persistindo ${entries.length} registros de custo...`);
-            await job.updateProgress(60);
+            // ── 3. Ingestão (normalize + persist) ────────────────────────────
+            this.logger.log(`[${jobId}] Fase 3/5: Persistindo ${entries.length} registros...`);
+            await job.updateProgress(50);
 
-            const BATCH_SIZE = 100;
+            const { recordsUpserted } = await this.ingestionService.ingest(
+                organizationId,
+                cloudAccountId,
+                cloudProvider,
+                startDate,
+                endDate,
+                granularity,
+                entries,
+                'manual',
+            );
 
-            for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-                const batch = entries.slice(i, i + BATCH_SIZE);
+            // ── 4. Agregar (atualiza cost_aggregates) ─────────────────────────
+            this.logger.log(`[${jobId}] Fase 4/5: Calculando agregados mensais...`);
+            await job.updateProgress(70);
 
-                await this.costRecordRepo.upsert(
-                    batch.map((entry) => ({
-                        organizationId,
-                        cloudAccountId,
-                        cloudProvider,
-                        service: entry.service,
-                        region: entry.region ?? '',
-                        cost: entry.cost,
-                        currency: entry.currency,
-                        date: entry.date,
-                        granularity: granularity.toLowerCase() as 'daily' | 'monthly',
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                        tags: (entry.tags ?? null) as Record<string, any> | null,
-                    })) as any,
-                    {
-                        conflictPaths: ['cloudAccountId', 'service', 'region', 'date', 'granularity'],
-                        skipUpdateIfNoValuesChanged: true,
-                    },
+            const start = new Date(startDate + 'T00:00:00Z');
+            const end = new Date(endDate + 'T00:00:00Z');
+
+            // Agregar todos os meses no range
+            const months = new Set<string>();
+            const cursor = new Date(start);
+            while (cursor <= end) {
+                months.add(`${cursor.getUTCFullYear()}-${cursor.getUTCMonth() + 1}`);
+                cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+            }
+
+            for (const monthKey of months) {
+                const [yearStr, monthStr] = monthKey.split('-');
+                await this.aggregationService.aggregateForPeriod(
+                    organizationId,
+                    cloudAccountId,
+                    Number(yearStr),
+                    Number(monthStr),
                 );
             }
 
-            // ── 4. Gerar recomendações de otimização ──────────────────────────
-            this.logger.log(`[${jobId}] Fase 4/4: Gerando recomendações de otimização...`);
+            // ── 5. Detecção de anomalias + recomendações ──────────────────────
+            this.logger.log(`[${jobId}] Fase 5/5: Detectando anomalias e gerando recomendações...`);
             await job.updateProgress(85);
 
-            await this.analysisService.generateRecommendations(cloudAccountId, organizationId, cloudProvider);
+            // Detectar anomalias para cada dia no range (apenas granularity DAILY)
+            if (granularity === 'DAILY') {
+                const daysCursor = new Date(start);
+                while (daysCursor <= end) {
+                    const dateStr = daysCursor.toISOString().slice(0, 10);
+                    await this.anomalyService.detectForDate(
+                        organizationId,
+                        cloudAccountId,
+                        cloudProvider,
+                        dateStr,
+                    );
+                    daysCursor.setUTCDate(daysCursor.getUTCDate() + 1);
+                }
+            }
+
+            await this.optimizationService.generateCrossModuleRecommendations(
+                cloudAccountId,
+                organizationId,
+                cloudProvider,
+            );
 
             // ── Finalizar ─────────────────────────────────────────────────────
             await this.jobRepo.update(jobId, {
                 status: 'completed',
-                recordsCollected: entries.length,
+                recordsCollected: recordsUpserted,
                 completedAt: new Date(),
             });
 
             await job.updateProgress(100);
 
-            this.logger.log(`[${jobId}] Coleta de custos concluída: ${entries.length} registros coletados`);
+            this.logger.log(`[${jobId}] Coleta concluída: ${recordsUpserted} registros`);
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-
-            this.logger.error(`[${jobId}] Coleta de custos falhou: ${error}`);
-
+            this.logger.error(`[${jobId}] Falha: ${error}`);
             await this.jobRepo.update(jobId, { status: 'failed', error });
-
             throw err;
         }
     }
@@ -148,15 +174,11 @@ export class FinopsProcessor extends WorkerHost {
     private decryptCloudCredentials(encrypted: string): Record<string, any> {
         const keyHex = process.env['CREDENTIALS_ENCRYPTION_KEY'];
 
-        if (!keyHex) {
-            throw new Error('CREDENTIALS_ENCRYPTION_KEY não configurada');
-        }
+        if (!keyHex) throw new Error('CREDENTIALS_ENCRYPTION_KEY não configurada');
 
         const key = Buffer.from(keyHex, 'hex');
 
-        if (key.length !== 32) {
-            throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
-        }
+        if (key.length !== 32) throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida');
 
         const combined = Buffer.from(encrypted, 'base64').toString('utf8');
         const [ivHex, authTagHex, ciphertext] = combined.split(':');

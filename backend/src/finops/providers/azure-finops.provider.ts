@@ -43,11 +43,10 @@ export class AzureFinopsProvider implements IFinopsProvider {
         this.logger.log(`[Azure FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
         const azureCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-
         const token = await azureCredential.getToken('https://management.azure.com/.default');
 
         if (!token?.token) {
-            throw new Error('[Azure FinOps] Falha ao obter token de acesso do Azure AD');
+            throw new Error('[Azure FinOps] Falha ao obter token do Azure AD');
         }
 
         const scope = `subscriptions/${subscriptionId}`;
@@ -62,10 +61,12 @@ export class AzureFinopsProvider implements IFinopsProvider {
                 granularity,
                 aggregation: {
                     totalCost: { name: 'Cost', function: 'Sum' },
+                    totalUsage: { name: 'UsageQuantity', function: 'Sum' },
                 },
                 grouping: [
                     { type: 'Dimension', name: 'ServiceName' },
                     { type: 'Dimension', name: 'ResourceLocation' },
+                    { type: 'Dimension', name: 'MeterCategory' },
                 ],
             },
         };
@@ -92,35 +93,40 @@ export class AzureFinopsProvider implements IFinopsProvider {
         const colIndex = (name: string) => columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
 
         const costIdx = colIndex('Cost');
+        const usageQtyIdx = colIndex('UsageQuantity');
         const serviceIdx = colIndex('ServiceName');
         const regionIdx = colIndex('ResourceLocation');
+        const meterIdx = colIndex('MeterCategory');
         const dateIdx = colIndex('UsageDate');
         const currencyIdx = colIndex('Currency');
 
-        const entries: Array<{ service: string; region: string | null; cost: number; currency: string; date: string }> = [];
+        const entries: FinopsCostCollectionResult['entries'] = [];
         let currency = 'USD';
 
         for (const row of rows) {
             const cost = Number(row[costIdx] ?? 0);
 
-            if (cost <= 0) {
-                continue;
-            }
+            if (cost <= 0) continue;
 
             const rawDate = String(row[dateIdx] ?? startDate);
-            // Azure retorna datas no formato YYYYMMDD (daily) ou YYYY-MM-01 (monthly)
-            const formattedDate = rawDate.length === 8
-                ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
-                : rawDate;
+            const formattedDate =
+                rawDate.length === 8
+                    ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+                    : rawDate;
 
             const rowCurrency = currencyIdx >= 0 ? String(row[currencyIdx] ?? 'USD') : 'USD';
             currency = rowCurrency;
 
             entries.push({
                 service: String(row[serviceIdx] ?? 'Unknown'),
+                resourceId: '',
                 region: regionIdx >= 0 ? (String(row[regionIdx] ?? '') || null) : null,
+                usageType: meterIdx >= 0 ? String(row[meterIdx] ?? '') : '',
+                operation: '',
                 cost,
                 currency: rowCurrency,
+                usageQuantity: usageQtyIdx >= 0 ? Number(row[usageQtyIdx] ?? 0) : 0,
+                usageUnit: '',
                 date: formattedDate,
             });
         }

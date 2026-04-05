@@ -25,6 +25,14 @@ import { startGovernanceScan, fetchGovernanceJobs, fetchGovernanceJobStatus, fet
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
+function normalizeScore(payload: GovernanceScore | null): GovernanceScore | null {
+    if (!payload?.jobId) {
+        return null;
+    }
+
+    return payload;
+}
+
 // --- Component ----------------------------------------------------------------
 
 export function GovernanceOverview() {
@@ -193,7 +201,7 @@ export function GovernanceOverview() {
 
                     if (scoreRes.ok) {
                         const scorePayload = await scoreRes.json().catch(() => null);
-                        setScore(scorePayload as GovernanceScore | null);
+                        setScore(normalizeScore(scorePayload as GovernanceScore | null));
                     }
 
                     if (jobsRes.ok) {
