@@ -52,12 +52,16 @@ function getResourceGroup(resourceType: string | undefined): string {
         return 'Network / Edge';
     }
 
-    if (matches(value, ['ec2', 'ecs', 'eks', 'container', 'vm', 'virtual machine', 'scale set', 'aks', 'app service', 'web app', 'kubernetes'])) {
+    if (matches(value, ['ec2', 'ecs', 'eks', 'gke', 'container', 'vm', 'virtual machine', 'scale set', 'aks', 'app service', 'web app', 'kubernetes'])) {
         return 'Compute / Containers';
     }
 
-    if (matches(value, ['lambda', 'function app', 'azure function', 'api gateway'])) {
+    if (matches(value, ['lambda', 'function app', 'azure function', 'api gateway', 'cloud run'])) {
         return 'Serverless';
+    }
+
+    if (matches(value, ['cdn', 'backend service', 'cloudfront'])) {
+        return 'Network / Edge';
     }
 
     if (

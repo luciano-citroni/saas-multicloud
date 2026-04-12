@@ -19,6 +19,7 @@ import { RbacModule } from '../rbac/rbac.module';
 import { BillingModule } from '../billing/billing.module';
 
 import { GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
+import { GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
 
 /**
 
@@ -35,6 +36,7 @@ import { GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
     imports: [
         TypeOrmModule.forFeature([CloudAccount, AzureAssessmentJob]),
         BullModule.registerQueue({ name: GENERAL_SYNC_QUEUE }),
+        BullModule.registerQueue({ name: GCP_GENERAL_SYNC_QUEUE }),
         TenantModule,
         RbacModule,
         BillingModule,

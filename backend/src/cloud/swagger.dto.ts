@@ -94,6 +94,22 @@ export class AwsCredentialsDto {
     externalId?: string;
 }
 
+export class GcpCredentialsDto {
+    @ApiProperty({
+        example: 'meu-projeto-gcp-123',
+        description: 'ID do projeto GCP (6-30 chars, letras minúsculas, dígitos e hifens)',
+    })
+    projectId: string;
+
+    @ApiProperty({
+        example: 'saas-multicloud@meu-projeto-gcp-123.iam.gserviceaccount.com',
+        description:
+            'E-mail da Service Account GCP que a plataforma irá impersonar. ' +
+            'O SA da plataforma precisa ter o papel roles/iam.serviceAccountTokenCreator nesta SA.',
+    })
+    serviceAccountEmail: string;
+}
+
 export class CreateCloudAccountRequestDto {
     @ApiProperty({ example: CloudProvider.AWS, description: 'Provider da conta de cloud', enum: Object.values(CloudProvider) })
     provider: CloudProvider;
@@ -102,9 +118,16 @@ export class CreateCloudAccountRequestDto {
     alias: string;
 
     @ApiProperty({
-        description: 'Objeto com credenciais específicas do provider. Se `provider` for `aws`, enviar o formato de `AwsCredentialsDto`',
+        description:
+            'Objeto com credenciais específicas do provider. ' +
+            'Para `aws`: usar `AwsCredentialsDto`. ' +
+            'Para `gcp`: usar `GcpCredentialsDto` (Service Account Impersonation, sem chaves de longa duração).',
 
-        oneOf: [{ $ref: '#/components/schemas/AwsCredentialsDto' }, { type: 'object', description: 'Formato genérico para outros providers' }],
+        oneOf: [
+            { $ref: '#/components/schemas/AwsCredentialsDto' },
+            { $ref: '#/components/schemas/GcpCredentialsDto' },
+            { type: 'object', description: 'Formato genérico para outros providers' },
+        ],
     })
     credentials: any;
 }

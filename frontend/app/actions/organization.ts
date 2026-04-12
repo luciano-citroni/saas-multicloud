@@ -86,6 +86,10 @@ function isAzureProvider(provider: string | undefined | null): boolean {
     return (provider ?? '').trim().toLowerCase() === 'azure';
 }
 
+function isGcpProvider(provider: string | undefined | null): boolean {
+    return (provider ?? '').trim().toLowerCase() === 'gcp';
+}
+
 type FetchOrganizationCloudAccountsOptions = {
     page?: number;
     limit?: number;
@@ -114,9 +118,14 @@ export async function fetchOrganizationCloudAccounts(organizationId: string, opt
 }
 
 export async function enqueueGeneralSync(organizationId: string, cloudAccountId: string, provider = 'aws') {
-    const url = isAzureProvider(provider)
-        ? `/api/azure/assessment/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`
-        : `/api/aws/assessment/accounts/${encodeURIComponent(cloudAccountId)}/sync?organizationId=${encodeURIComponent(organizationId)}`;
+    let url: string;
+    if (isAzureProvider(provider)) {
+        url = `/api/azure/assessment/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`;
+    } else if (isGcpProvider(provider)) {
+        url = `/api/gcp/assessment/accounts/${encodeURIComponent(cloudAccountId)}/sync?organizationId=${encodeURIComponent(organizationId)}`;
+    } else {
+        url = `/api/aws/assessment/accounts/${encodeURIComponent(cloudAccountId)}/sync?organizationId=${encodeURIComponent(organizationId)}`;
+    }
 
     return fetch(url, {
         method: 'POST',

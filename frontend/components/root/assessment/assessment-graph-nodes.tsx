@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react';
-import { Box, Cloud, Cpu, Database, FileJson, Globe, HardDrive, Layers, Lock, Network, Route, Server, Shield } from 'lucide-react';
+import { Box, Cloud, Cpu, Database, FileJson, Globe, HardDrive, Layers, Lock, Network, Route, Server, Shield, Zap } from 'lucide-react';
 import type { ArchitectureNodeData, GroupNodeData } from '@/components/root/assessment/types';
 
 function getResourceVisuals(resourceType: string) {
@@ -20,8 +20,10 @@ function getResourceVisuals(resourceType: string) {
         return { icon: Box, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
     if (type.includes('s3') || type.includes('bucket') || type.includes('storage') || type.includes('blob'))
         return { icon: HardDrive, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' };
-    if (type.includes('lambda') || type.includes('function'))
+    if (type.includes('lambda') || type.includes('function') || type.includes('cloud run'))
         return { icon: Cpu, color: 'text-pink-500', bg: 'bg-pink-500/10', border: 'border-pink-500/20' };
+    if (type.includes('cdn') || type.includes('backend service') || type.includes('cloudfront'))
+        return { icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' };
     if (type.includes('route table') || type.includes('dns'))
         return { icon: Layers, color: 'text-teal-500', bg: 'bg-teal-500/10', border: 'border-teal-500/20' };
     if (type.includes('iam') || type.includes('role') || type.includes('identity') || type.includes('key vault'))
@@ -72,9 +74,7 @@ export function ArchitectureNode({ data }: { data: ArchitectureNodeData }) {
                     <Icon className={`h-5 w-5 ${visuals.color}`} strokeWidth={1.5} />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                    <p className="line-clamp-2 break-all text-xs font-bold leading-tight text-card-foreground">
-                        {data.label ?? 'Resource'}
-                    </p>
+                    <p className="line-clamp-2 break-all text-xs font-bold leading-tight text-card-foreground">{data.label ?? 'Resource'}</p>
                     <p className="mt-0.5 truncate text-[10px] font-medium text-muted-foreground">{data.resourceType ?? 'Unknown'}</p>
                     {data.status ? (
                         <div className="mt-0.5 flex items-center gap-1">

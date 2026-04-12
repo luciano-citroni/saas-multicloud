@@ -13,6 +13,8 @@ export class RdsNotPubliclyAccessiblePolicy implements GovernancePolicy {
     readonly resourceType = 'RDSInstance';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'aws';
+    readonly category = 'network' as const;
+    readonly frameworks = ['CIS_AWS_1_4', 'PCI_DSS_3_2_1', 'NIST_800_53'] as const;
 
     evaluate(instance: AwsRdsInstance, _context: PolicyContext): PolicyEvaluationResult[] {
         if (instance.publiclyAccessible) {

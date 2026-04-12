@@ -7,7 +7,7 @@ import { getViewportForBounds } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
-import { runAssessment } from '@/app/actions/assessment';
+import { runAssessment, triggerGcpExcelReport, pollGcpJobStatus, buildGcpExcelDownloadUrl } from '@/app/actions/assessment';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { AssessmentGraphCard } from '@/components/root/assessment/assessment-graph-card';
 import { AssessmentToolbar, getGroupingModeLabel } from '@/components/root/assessment/assessment-toolbar';
@@ -332,6 +332,8 @@ export function AssessmentPageClient() {
     const [canCreateCloudAccount, setCanCreateCloudAccount] = useState<boolean | null>(null);
     const [running, setRunning] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [generatingExcel, setGeneratingExcel] = useState(false);
+    const excelPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [resourceNodes, setResourceNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [groupingModes, setGroupingModes] = useState<GroupingDimension[]>(() => normalizeGroupingModesFromUrl(searchParams.get(GROUP_BY_QUERY_PARAM)));
@@ -669,6 +671,69 @@ export function AssessmentPageClient() {
         }
     }, [activeProvider, colorMode, filteredGraph.resourceNodes.length, nodes, providerLabel]);
 
+    const downloadGcpExcel = useCallback(async () => {
+        if (!organizationId || !cloudAccountId) return;
+
+        setGeneratingExcel(true);
+
+        try {
+            const triggerRes = await triggerGcpExcelReport(organizationId, cloudAccountId);
+
+            if (!triggerRes.ok) {
+                const body = await triggerRes.json().catch(() => null);
+                toast.error(extractErrorMessage(body, 'pt'));
+                return;
+            }
+
+            const { id: jobId } = (await triggerRes.json()) as { id: string };
+
+            await new Promise<void>((resolve, reject) => {
+                let attempts = 0;
+
+                excelPollTimerRef.current = setInterval(async () => {
+                    attempts++;
+
+                    try {
+                        const statusRes = await pollGcpJobStatus(organizationId, cloudAccountId, jobId);
+
+                        if (!statusRes.ok) {
+                            clearInterval(excelPollTimerRef.current!);
+                            reject(new Error('Falha ao consultar status do relatório.'));
+                            return;
+                        }
+
+                        const job = (await statusRes.json()) as { status: string; error?: string };
+
+                        if (job.status === 'completed') {
+                            clearInterval(excelPollTimerRef.current!);
+                            resolve();
+                        } else if (job.status === 'failed') {
+                            clearInterval(excelPollTimerRef.current!);
+                            reject(new Error(job.error ?? 'Geração do relatório falhou.'));
+                        } else if (attempts >= 60) {
+                            clearInterval(excelPollTimerRef.current!);
+                            reject(new Error('Tempo esgotado aguardando o relatório.'));
+                        }
+                    } catch {
+                        clearInterval(excelPollTimerRef.current!);
+                        reject(new Error('Erro ao verificar status do relatório.'));
+                    }
+                }, 3000);
+            });
+
+            const downloadUrl = buildGcpExcelDownloadUrl(organizationId, cloudAccountId, jobId);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `gcp-assessment-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            link.click();
+            toast.success('Relatório Excel baixado com sucesso.');
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Não foi possível gerar o relatório Excel.');
+        } finally {
+            setGeneratingExcel(false);
+        }
+    }, [cloudAccountId, organizationId]);
+
     const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
     const groupingModeLabel = getGroupingModeLabel(groupingModes);
 
@@ -688,11 +753,14 @@ export function AssessmentPageClient() {
                 canCreateCloudAccount={Boolean(canCreateCloudAccount)}
                 running={running}
                 downloading={downloading}
+                generatingExcel={generatingExcel}
+                showExcelButton={activeProvider === 'gcp'}
                 groupingModes={groupingModes}
                 hiddenResourceFilterIds={hiddenResourceFilterIds}
                 onRun={() => void runAssessmentRequest()}
                 onReorganize={reorganizeGraph}
                 onDownload={() => void downloadDiagram()}
+                onExcelDownload={() => void downloadGcpExcel()}
                 onToggleGroupingMode={toggleGroupingMode}
                 onToggleResourceFilter={toggleResourceFilter}
                 onConnectCloudAccount={() => router.push('/cloud-accounts/new')}

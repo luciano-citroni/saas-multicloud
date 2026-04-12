@@ -12,6 +12,8 @@ export class S3EncryptionEnabledPolicy implements GovernancePolicy {
     readonly resourceType = 'S3Bucket';
     readonly severity: FindingSeverity = 'high';
     readonly provider = 'aws';
+    readonly category = 'encryption' as const;
+    readonly frameworks = ['CIS_AWS_1_4', 'PCI_DSS_3_2_1', 'NIST_800_53'] as const;
 
     evaluate(bucket: AwsS3Bucket, _context: PolicyContext): PolicyEvaluationResult[] {
         if (!bucket.encryptionEnabled) {

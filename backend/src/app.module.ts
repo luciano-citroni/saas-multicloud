@@ -20,6 +20,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { BillingModule } from './billing/billing.module';
 import { GovernanceModule } from './governance/governance.module';
 import { FinopsModule } from './finops/finops.module';
+import { GcpModule } from './gcp/gcp.module';
 
 @Module({
     imports: [
@@ -60,6 +61,7 @@ import { FinopsModule } from './finops/finops.module';
         BillingModule,
         GovernanceModule,
         FinopsModule,
+        GcpModule,
     ],
     controllers: [AppController],
     providers: [

@@ -12,6 +12,8 @@ export class CloudTrailEnabledPolicy implements GovernancePolicy {
     readonly resourceType = 'CloudTrailTrail';
     readonly severity: FindingSeverity = 'high';
     readonly provider = 'aws';
+    readonly category = 'logging' as const;
+    readonly frameworks = ['CIS_AWS_1_4', 'SOC2', 'NIST_800_53', 'ISO_27001'] as const;
 
     evaluate(trail: AwsCloudTrailTrail, _context: PolicyContext): PolicyEvaluationResult[] {
         if (!trail.isLogging) {

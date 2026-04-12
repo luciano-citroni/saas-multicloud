@@ -1,4 +1,4 @@
-import { Download, FolderTree, Layers3, LayoutGrid, Play, Radar, ScanSearch } from 'lucide-react';
+import { Download, FileSpreadsheet, FolderTree, Layers3, LayoutGrid, Play, Radar, ScanSearch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { GroupingDimension, ResourceVisibilityFilterId } from '@/components/root/assessment/types';
@@ -20,11 +20,14 @@ type AssessmentToolbarProps = {
     canCreateCloudAccount: boolean;
     running: boolean;
     downloading: boolean;
+    generatingExcel: boolean;
+    showExcelButton: boolean;
     groupingModes: GroupingDimension[];
     hiddenResourceFilterIds: Set<ResourceVisibilityFilterId>;
     onRun: () => void;
     onReorganize: () => void;
     onDownload: () => void;
+    onExcelDownload: () => void;
     onToggleGroupingMode: (mode: GroupingDimension) => void;
     onToggleResourceFilter: (filterId: ResourceVisibilityFilterId) => void;
     onConnectCloudAccount: () => void;
@@ -48,11 +51,14 @@ export function AssessmentToolbar({
     canCreateCloudAccount,
     running,
     downloading,
+    generatingExcel,
+    showExcelButton,
     groupingModes,
     hiddenResourceFilterIds,
     onRun,
     onReorganize,
     onDownload,
+    onExcelDownload,
     onToggleGroupingMode,
     onToggleResourceFilter,
     onConnectCloudAccount,
@@ -84,6 +90,12 @@ export function AssessmentToolbar({
                     <Download className="size-4" />
                     Baixar diagrama
                 </Button>
+                {showExcelButton && (
+                    <Button type="button" variant="outline" onClick={onExcelDownload} isLoading={generatingExcel} disabled={!canRun || running}>
+                        <FileSpreadsheet className="size-4" />
+                        {generatingExcel ? 'Gerando relatório…' : 'Baixar relatório Excel'}
+                    </Button>
+                )}
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1">
                     <Button
                         type="button"

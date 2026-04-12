@@ -166,6 +166,8 @@ export const ErrorMessages = {
         JOB_NOT_FOUND: 'Governance scan job not found.',
 
         SCAN_ALREADY_RUNNING: 'A governance scan is already running for this account.',
+
+        SUPPRESSION_NOT_FOUND: 'Governance suppression not found.',
     },
 
     // General

@@ -35,6 +35,8 @@ export class SgNoOpenDatabasePortsPolicy implements GovernancePolicy {
     readonly resourceType = 'SecurityGroup';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'aws';
+    readonly category = 'network' as const;
+    readonly frameworks = ['CIS_AWS_1_4', 'PCI_DSS_3_2_1', 'NIST_800_53'] as const;
 
     evaluate(sg: AwsSecurityGroup, _context: PolicyContext): PolicyEvaluationResult[] {
         const matchedPorts = DATABASE_PORTS.filter(({ port }) =>

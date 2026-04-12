@@ -139,6 +139,8 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
             clientId: '',
             clientSecret: '',
             subscriptionId: '',
+            gcpProjectId: '',
+            gcpServiceAccountEmail: '',
         },
     });
 
@@ -186,6 +188,8 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                     clientId: typeof credentials.clientId === 'string' ? credentials.clientId : '',
                     clientSecret: typeof credentials.clientSecret === 'string' ? credentials.clientSecret : '',
                     subscriptionId: typeof credentials.subscriptionId === 'string' ? credentials.subscriptionId : '',
+                    gcpProjectId: typeof credentials.projectId === 'string' ? credentials.projectId : '',
+                    gcpServiceAccountEmail: typeof credentials.serviceAccountEmail === 'string' ? credentials.serviceAccountEmail : '',
                 };
 
                 setCloudAccount(account);
@@ -235,6 +239,11 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                 if (data.clientId) credentials.clientId = data.clientId.trim();
                 if (data.clientSecret) credentials.clientSecret = data.clientSecret.trim();
                 if (data.subscriptionId) credentials.subscriptionId = data.subscriptionId.trim();
+            }
+
+            if (data.provider === 'gcp') {
+                if (data.gcpProjectId) credentials.projectId = data.gcpProjectId.trim();
+                if (data.gcpServiceAccountEmail) credentials.serviceAccountEmail = data.gcpServiceAccountEmail.trim();
             }
 
             const response = await updateOrganizationCloudAccount(organizationId, cloudAccountId, {
@@ -524,6 +533,47 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                                         <FormLabel>Subscription ID</FormLabel>
                                         <FormControl>
                                             <IconInput placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" StartIcon={Globe} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    )}
+
+                    {selectedProvider === 'gcp' && (
+                        <div className="flex flex-col gap-4 rounded-xl border border-border/70 p-4 sm:p-5">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                <ShieldCheck className="size-3.5" />
+                                Credenciais GCP (Service Account Impersonation)
+                            </p>
+
+                            <FormField
+                                control={form.control}
+                                name="gcpProjectId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Project ID</FormLabel>
+                                        <FormControl>
+                                            <IconInput placeholder="meu-projeto-gcp-123" StartIcon={Globe} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="gcpServiceAccountEmail"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Service Account Email</FormLabel>
+                                        <FormControl>
+                                            <IconInput
+                                                placeholder="sa@meu-projeto-gcp-123.iam.gserviceaccount.com"
+                                                StartIcon={KeyRound}
+                                                {...field}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

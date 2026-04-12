@@ -10,6 +10,11 @@ const awsRegionSchema = z.string({ invalid_type_error: 'região inválida' }).tr
 
 const azureGuidSchema = z.string({ invalid_type_error: 'GUID inválido' }).trim().uuid('GUID Azure inválido');
 
+// GCP project IDs: 6–30 chars, lowercase letters/digits/hyphens, starts with letter, no trailing hyphen
+const gcpProjectIdRegex = /^[a-z][a-z0-9\-]{4,28}[a-z0-9]$/;
+// GCP service account emails: <name>@<project>.iam.gserviceaccount.com
+const gcpServiceAccountEmailRegex = /^.+@.+\.iam\.gserviceaccount\.com$/;
+
 // Schema para credenciais AWS
 
 const awsCredentialsSchema = z
@@ -35,6 +40,22 @@ const awsCredentialsSchema = z
             });
         }
     });
+
+// Schema para credenciais GCP (Service Account Impersonation — sem chaves de longa duração)
+export const gcpCredentialSchema = z.object({
+    projectId: z
+        .string({ required_error: 'projectId é obrigatório', invalid_type_error: 'projectId inválido' })
+        .trim()
+        .min(6, 'projectId inválido (mín. 6 caracteres)')
+        .max(30, 'projectId inválido (máx. 30 caracteres)')
+        .regex(gcpProjectIdRegex, 'projectId inválido (ex: meu-projeto-123, apenas letras minúsculas, números e hifens)'),
+
+    serviceAccountEmail: z
+        .string({ required_error: 'serviceAccountEmail é obrigatório', invalid_type_error: 'serviceAccountEmail inválido' })
+        .trim()
+        .email('serviceAccountEmail deve ser um e-mail válido')
+        .regex(gcpServiceAccountEmailRegex, 'serviceAccountEmail deve ser uma Service Account GCP (ex: sa@projeto.iam.gserviceaccount.com)'),
+});
 
 export const azureCredentialSchema = z
     .object({
@@ -78,18 +99,16 @@ export const createCloudAccountSchema = z
 
     .refine(
         (data) => {
-            // Se o provider for AWS, validar as credenciais
-
             if (data.provider === CloudProvider.AWS) {
-                const result = awsCredentialsSchema.safeParse(data.credentials);
-
-                return result.success;
+                return awsCredentialsSchema.safeParse(data.credentials).success;
             }
 
             if (data.provider === CloudProvider.AZURE) {
-                const result = azureCredentialSchema.safeParse(data.credentials);
+                return azureCredentialSchema.safeParse(data.credentials).success;
+            }
 
-                return result.success;
+            if (data.provider === CloudProvider.GCP) {
+                return gcpCredentialSchema.safeParse(data.credentials).success;
             }
 
             return true;
@@ -99,15 +118,16 @@ export const createCloudAccountSchema = z
             const result =
                 data.provider === CloudProvider.AZURE
                     ? azureCredentialSchema.safeParse(data.credentials)
-                    : awsCredentialsSchema.safeParse(data.credentials);
+                    : data.provider === CloudProvider.GCP
+                      ? gcpCredentialSchema.safeParse(data.credentials)
+                      : awsCredentialsSchema.safeParse(data.credentials);
 
             const firstIssue = result.error?.errors[0];
 
             const issuePath = firstIssue?.path && firstIssue.path.length > 0 ? ['credentials', ...firstIssue.path.map(String)] : ['credentials'];
 
             return {
-                message: firstIssue?.message || 'Credenciais AWS inválidas',
-
+                message: firstIssue?.message || 'Credenciais inválidas',
                 path: issuePath,
             };
         }

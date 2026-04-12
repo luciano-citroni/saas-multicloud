@@ -1,19 +1,15 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 
-import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
-
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-
 import { Organization } from '../../db/entites/organization.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
-
 import { Roles } from '../../rbac/roles.decorator';
-
 import { OrgRole } from '../../rbac/roles.enum';
 
 import { GovernanceService } from '../services/governance.service';
@@ -26,6 +22,9 @@ import {
     GovernanceFindingDto,
     GovernanceScoreDto,
     GovernancePolicyDto,
+    GovernanceSuppressionDto,
+    CreateGovernanceSuppressionDto,
+    GovernanceScoreHistoryDto,
 } from '../dto/swagger.dto';
 
 @ApiTags('Governance')
@@ -47,11 +46,13 @@ export class GovernanceController {
     @Get('policies')
     @ApiOperation({
         summary: 'Listar políticas de governança disponíveis',
-        description: 'Retorna todas as políticas registradas no motor de governança, com severidade, tipo de recurso e provider.',
+        description: 'Retorna todas as políticas registradas. Suporta filtro por provider (aws, gcp) e framework de compliance (CIS_AWS_1_4, PCI_DSS_3_2_1, SOC2, NIST_800_53, ISO_27001).',
     })
+    @ApiQuery({ name: 'provider', required: false, example: 'aws', description: 'Filtrar por provider' })
+    @ApiQuery({ name: 'framework', required: false, example: 'CIS_AWS_1_4', description: 'Filtrar por framework de compliance' })
     @ApiResponse({ status: 200, description: 'Lista de políticas', type: [GovernancePolicyDto] })
-    listPolicies() {
-        return this.governanceService.listPolicies();
+    listPolicies(@Query('provider') provider?: string, @Query('framework') framework?: string) {
+        return this.governanceService.listPolicies(provider, framework);
     }
 
     // =========================================================================
@@ -64,12 +65,11 @@ export class GovernanceController {
     @ApiOperation({
         summary: 'Iniciar scan de governança',
         description:
-            'Inicia um scan assíncrono que avalia todos os recursos sincronizados da conta contra as políticas de governança registradas. Retorna o jobId para acompanhamento.',
+            'Inicia um scan assíncrono que avalia todos os recursos sincronizados da conta contra as políticas de governança. O provider é detectado automaticamente da conta. Retorna o jobId para acompanhamento.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 202, description: 'Scan enfileirado com sucesso', type: GovernanceScanResponseDto })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
-    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
     async startScan(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
@@ -86,7 +86,7 @@ export class GovernanceController {
     @ApiPaginationQuery()
     @ApiOperation({
         summary: 'Listar jobs de governança',
-        description: 'Retorna os jobs de governança para a conta, incluindo status, score e totais. Suporta paginação via page e limit.',
+        description: 'Retorna os jobs de governança para a conta com paginação.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Lista de jobs paginada', type: GovernanceJobsPaginatedResponseDto })
@@ -103,10 +103,7 @@ export class GovernanceController {
     }
 
     @Get('accounts/:cloudAccountId/jobs/:jobId')
-    @ApiOperation({
-        summary: 'Consultar status de um job de governança',
-        description: 'Retorna o status atual do job, incluindo score, totais e erro (se falhou).',
-    })
+    @ApiOperation({ summary: 'Consultar status de um job de governança' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiParam({ name: 'jobId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Status do job', type: GovernanceJobStatusDto })
@@ -120,6 +117,7 @@ export class GovernanceController {
 
         return {
             id: job.id,
+            provider: job.provider,
             status: job.status,
             score: job.score,
             totalFindings: job.totalFindings,
@@ -159,39 +157,102 @@ export class GovernanceController {
     @Get('accounts/:cloudAccountId/score')
     @ApiOperation({
         summary: 'Obter score de governança mais recente',
-        description:
-            'Retorna o score, totais e data do último scan de governança concluído com sucesso para a conta. Retorna 404 se nenhum scan foi concluído ainda.',
+        description: 'Retorna o score, totais e breakdown por categoria do último scan concluído. Inclui contagem de achados críticos e altos.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Score do último scan completo', type: GovernanceScoreDto })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
-    @ApiResponse({ status: 404, description: 'Nenhum scan concluído encontrado para esta conta' })
+    @ApiResponse({ status: 404, description: 'Nenhum scan concluído encontrado' })
     async getLatestScore(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @CurrentOrganization() org: Organization
     ): Promise<GovernanceScoreDto> {
         const result = await this.governanceService.getLatestScore(cloudAccountId, org.id);
 
-        const empty: GovernanceScoreResult = {
-            jobId: '',
-            score: 0,
-            totalFindings: 0,
-            totalChecks: 0,
-            criticalFindings: 0,
-            highFindings: 0,
-            evaluatedAt: new Date(0),
-        };
+        if (!result) {
+            throw new NotFoundException('Nenhum scan de governança concluído encontrado para esta conta.');
+        }
 
-        const data = result ?? empty;
+        return result;
+    }
 
-        return {
-            jobId: data.jobId,
-            score: data.score,
-            totalFindings: data.totalFindings,
-            totalChecks: data.totalChecks,
-            criticalFindings: data.criticalFindings,
-            highFindings: data.highFindings,
-            evaluatedAt: data.evaluatedAt,
-        };
+    @Get('accounts/:cloudAccountId/score/history')
+    @ApiOperation({
+        summary: 'Histórico de scores de governança',
+        description: 'Retorna os últimos N scores de scans concluídos para a conta, do mais recente ao mais antigo. Permite visualizar a evolução da conformidade ao longo do tempo.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiQuery({ name: 'limit', required: false, example: 10, description: 'Quantidade de registros (máx 50, padrão 10)' })
+    @ApiResponse({ status: 200, description: 'Histórico de scores', type: [GovernanceScoreHistoryDto] })
+    async getScoreHistory(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Organization,
+        @Query('limit') limit?: string
+    ): Promise<GovernanceScoreHistoryDto[]> {
+        const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+        return this.governanceService.getScoreHistory(cloudAccountId, org.id, parsedLimit);
+    }
+
+    // =========================================================================
+    // Suppressions (false positive management)
+    // =========================================================================
+
+    @Get('accounts/:cloudAccountId/suppressions')
+    @ApiOperation({
+        summary: 'Listar supressões de findings',
+        description: 'Retorna todas as supressões ativas para a conta. Supressões excluem achados específicos do score e dos relatórios.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 200, description: 'Lista de supressões', type: [GovernanceSuppressionDto] })
+    async listSuppressions(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Organization
+    ): Promise<GovernanceSuppressionDto[]> {
+        return this.governanceService.listSuppressions(org.id, cloudAccountId);
+    }
+
+    @Post('accounts/:cloudAccountId/suppressions')
+    @HttpCode(201)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Criar supressão de finding',
+        description:
+            'Cria uma supressão que exclui um achado específico do score de governança. Use para gerenciar false positives ou exceções aprovadas. Requer justificativa obrigatória.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiBody({ type: CreateGovernanceSuppressionDto })
+    @ApiResponse({ status: 201, description: 'Supressão criada com sucesso', type: GovernanceSuppressionDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos ou CloudAccount não encontrada' })
+    @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
+    async createSuppression(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @Body() body: CreateGovernanceSuppressionDto,
+        @CurrentOrganization() org: Organization
+    ): Promise<GovernanceSuppressionDto> {
+        return this.governanceService.createSuppression(org.id, {
+            cloudAccountId,
+            policyId: body.policyId,
+            resourceId: body.resourceId ?? null,
+            reason: body.reason,
+            expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        });
+    }
+
+    @Delete('suppressions/:suppressionId')
+    @HttpCode(204)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Remover supressão de finding',
+        description: 'Remove uma supressão existente. O achado voltará a impactar o score no próximo scan.',
+    })
+    @ApiParam({ name: 'suppressionId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 204, description: 'Supressão removida com sucesso' })
+    @ApiResponse({ status: 404, description: 'Supressão não encontrada' })
+    @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
+    async deleteSuppression(
+        @Param('suppressionId', ParseUUIDPipe) suppressionId: string,
+        @CurrentOrganization() org: Organization
+    ): Promise<void> {
+        return this.governanceService.deleteSuppression(suppressionId, org.id);
     }
 }

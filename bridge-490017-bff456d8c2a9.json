@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "bridge-490017",
+  "private_key_id": "bff456d8c2a9ec107b1a809533ad51a58447be86",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDX/VgjIkP7gkbw\nRJkgrtLQQvDhy5SxQKbs9Ti45s+3mMJijoHNioR4sQaNZUSdxBaPZTnaW8Az5ze7\n2Ova9ZRl7aUmxR0CMA5bbcATx8xI4nLtM0M3/KGmnduO9m/1+DS2drGuzrPnkGuy\nog9602rA2KRIxVoxNRrWQpmVonYx946KOsPrsFXOhPe+ftvobnh8Z2iI3jY49B6p\n0AQjCMgLFU5wmnvRLcm/6GhHiNO+D9ToXpdf5YoIntXYnW/kYXHO+Hr+uqCO0DUb\nOqR+H/WzPzQyghqZZ1DcjsqN680Nhk/YSOwus0Cjh6Yux6Tl7vsJXhkDDqu5YJu7\nHSldetE3AgMBAAECggEABITOLjZNHn/nXpNo1JN8YTrSOT8eE9gKxf+CARmLakeR\nYxS0j1rNMAM59+ffl9J3N7/L6LaQASEP1Mo5wP8XADf+74Dn1bsmzqrM9EvB69/7\nHwScp9Q+b9pLY65sI+xKkDAU/VecbvF1mdKkss25TE65i/AN/QvLHCKuVnGX4V+f\no2Bh0WbjDGYi9jsm6GMQQAQSE50WKoHHngVmvZjM9PhRI+legD1fdhuODbKoD1IJ\n8AbG3e9pXmabStAUDU4WUuVsOKykGBTrhik23SQl+IzCmrks7RHS1BRHvYG+xXII\nHXhH9cl5nYjHb3V09Hzs3q2BYQkcvxPEhs2NJIeicQKBgQDyqXDFIV+QqWWazU9k\nCAFKbrckIhwpDbvZ95V3qECgS3OISc8Js+8aOeSRZWpAKFkDcywin1NSW462BaDY\nCQNqfjViuOnf1sXKd4kthApAAsRpm52VvGXaPfk0k4yU1J6w+ROlnuhLP6piFekt\niUGmGOie9W0H/SDQlbSdKS74kQKBgQDj3JdrDrEdO5f3pCHZNaZ5XIrFiK/lRknU\n7FlqJaCmJoeI/1qs4OznwzWjnssGt4pVTFxvbzxpMGOMHcJbot5yN4Ki+PA+AJp1\nGCmZsiYw5u1JhNgwmOdQeiQvvKrQTfQavSctg/waVdLJh0GAvmJhVDw33USkQL7b\nywxPHu5RRwKBgDM4EoZ5cdtt9fVDyrMZgXQ9hEiLLph3vqPWP2U/TUzIQD2PHrU0\nlo5Zk+Ygmtmp6ofw4mr4aDTlAG1pKLcQx/jNZOVOlIbbpWoD6x+BVEyIiP6lixCU\n8IatOBGh5zVu34QJPt1hejSP3p3PdCVZaFLvxQHwWbAq/KcqQjI+BB0RAoGBAMKl\nvfOGKWZ/ceHqI8AZRIyHsUPs79U7pfZtsDQs0H8eislM2Xi066tP5pJPI8ApKdKT\n2KKYs1JoM6GOCmmdR8jqAn6ViSRt/4PnkCHrPRSpMCqNgOCCvZbRv/fHg2NONChj\nTQRkqwcUKWxeTmZcPE5IVuih6/EkHeZEHc+47HwhAoGAWIrxX+VNQssifnuVN13u\nwGbRT/O/XFKT+deucMQlUkkVxuoFViIpFDxagHHbI8hwVxiGP9dg4QrDK0/Wq7In\n7QiNcv/6ex87I+OBVejTYq/6pkW6ShQB1db/Fxbj5Xx5TPRksd/A+zONTzzncU6H\n2nRksyupILlHosArjAnTnp8=\n-----END PRIVATE KEY-----\n",
+  "client_email": "saas-multcloud@bridge-490017.iam.gserviceaccount.com",
+  "client_id": "101144468358465680733",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/saas-multcloud%40bridge-490017.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

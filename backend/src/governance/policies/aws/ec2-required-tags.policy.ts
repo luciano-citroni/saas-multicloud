@@ -15,6 +15,8 @@ export class Ec2RequiredTagsPolicy implements GovernancePolicy {
     readonly resourceType = 'EC2Instance';
     readonly severity: FindingSeverity = 'medium';
     readonly provider = 'aws';
+    readonly category = 'compute' as const;
+    readonly frameworks = ['SOC2'] as const;
 
     evaluate(instance: AwsEc2Instance, _context: PolicyContext): PolicyEvaluationResult[] {
         const tags = instance.tags ?? {};

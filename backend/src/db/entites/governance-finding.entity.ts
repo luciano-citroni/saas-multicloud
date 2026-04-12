@@ -1,11 +1,16 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
 import { GovernanceJob } from './governance-job.entity';
 
 export type FindingSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type FindingStatus = 'compliant' | 'non_compliant' | 'warning';
+export type FindingStatus = 'compliant' | 'non_compliant' | 'warning' | 'suppressed';
 
 @Entity('governance_findings')
+@Index('IDX_governance_findings_job_id', ['jobId'])
+@Index('IDX_governance_findings_cloud_account_id', ['cloudAccountId'])
+@Index('IDX_governance_findings_status', ['status'])
+@Index('IDX_governance_findings_severity', ['severity'])
+@Index('IDX_governance_findings_category', ['category'])
 export class GovernanceFinding {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
@@ -54,6 +59,13 @@ export class GovernanceFinding {
     /** Metadados adicionais sobre o achado (contexto específico do recurso). */
     @Column({ type: 'jsonb', nullable: true })
     metadata!: Record<string, any> | null;
+
+    /**
+     * Categoria funcional da política que gerou o achado.
+     * Permite agrupamento de score por domínio (network, storage, identity, etc).
+     */
+    @Column({ type: 'varchar', length: 30, nullable: true })
+    category!: string | null;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, HttpCode, HttpStatus
 
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
+import { SkipThrottle } from '@nestjs/throttler';
+
 import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 
 import { OrganizationService } from './organization.service';
@@ -24,6 +26,7 @@ import {
     LeaveOrganizationResponseDto,
 } from './swagger.dto';
 
+@SkipThrottle()
 @SkipTenant()
 @ApiTags('Organizations')
 @ApiBearerAuth('access-token')

@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Clock3, EllipsisVertical, RefreshCw } from 'lucide-react';
+import { Clock3, EllipsisVertical, LayoutList, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 
 function formatProvider(provider: string) {
     const normalized = provider.toLowerCase();
@@ -115,6 +116,14 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                            {row.original.provider?.toLowerCase() === 'gcp' && (
+                                <DropdownMenuItem asChild className="cursor-pointer">
+                                    <Link href={`/cloud-accounts/${row.original.id}`} className="flex items-center gap-2">
+                                        <LayoutList className="size-4" />
+                                        Ver inventário
+                                    </Link>
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                                 className="cursor-pointer"
                                 onSelect={() => onEditAccount(row.original.id)}

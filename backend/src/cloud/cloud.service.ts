@@ -23,6 +23,7 @@ import { ErrorMessages } from '../common/messages/error-messages';
 import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 
 import { GENERAL_SYNC_JOB_NAME, GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
+import { GCP_GENERAL_SYNC_JOB_NAME, GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
 
 type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
     isSyncInProgress: boolean;
@@ -41,6 +42,9 @@ export class CloudService {
 
         @InjectQueue(GENERAL_SYNC_QUEUE)
         private readonly generalSyncQueue: Queue,
+
+        @InjectQueue(GCP_GENERAL_SYNC_QUEUE)
+        private readonly gcpGeneralSyncQueue: Queue,
 
         private readonly configService: ConfigService,
 
@@ -301,7 +305,43 @@ export class CloudService {
             }
         }
 
-        // Adicionar validações para outros providers aqui conforme necessário
+        if (provider === CloudProvider.GCP) {
+            if (!credentials.projectId || typeof credentials.projectId !== 'string' || credentials.projectId.trim().length === 0) {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial GCP inválida: campo "projectId" ausente ou inválido.',
+                    details: { field: 'credentials.projectId' },
+                });
+            }
+
+            const gcpProjectIdRegex = /^[a-z][a-z0-9\-]{4,28}[a-z0-9]$/;
+
+            if (!gcpProjectIdRegex.test(credentials.projectId.trim())) {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial GCP inválida: "projectId" deve ter 6-30 caracteres, iniciar com letra minúscula (ex: meu-projeto-123).',
+                    details: { field: 'credentials.projectId' },
+                });
+            }
+
+            if (!credentials.serviceAccountEmail || typeof credentials.serviceAccountEmail !== 'string' || credentials.serviceAccountEmail.trim().length === 0) {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial GCP inválida: campo "serviceAccountEmail" ausente ou inválido.',
+                    details: { field: 'credentials.serviceAccountEmail' },
+                });
+            }
+
+            const gcpSaEmailRegex = /^.+@.+\.iam\.gserviceaccount\.com$/;
+
+            if (!gcpSaEmailRegex.test(credentials.serviceAccountEmail.trim())) {
+                throw new BadRequestException({
+                    error: 'ValidationException',
+                    message: 'Credencial GCP inválida: "serviceAccountEmail" deve ser uma Service Account GCP válida (ex: sa@projeto.iam.gserviceaccount.com).',
+                    details: { field: 'credentials.serviceAccountEmail' },
+                });
+            }
+        }
     }
 
     /**
@@ -335,7 +375,7 @@ export class CloudService {
             });
         }
 
-        const normalizedCredentials = dto.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : dto.credentials;
+        const normalizedCredentials = dto.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : { ...dto.credentials };
 
         // Validar credenciais específicas do provider
 
@@ -459,14 +499,15 @@ export class CloudService {
             return [];
         }
 
-        const [awsSyncingAccountIds, azureSyncingAccountIds] = await Promise.all([
+        const [awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds] = await Promise.all([
             this.findAwsAccountsWithSyncInProgress(accountIds),
             this.findAzureAccountsWithSyncInProgress(accountIds),
+            this.findGcpAccountsWithSyncInProgress(accountIds),
         ]);
 
         return accounts.map(({ credentialsEncrypted: _, ...acc }) => ({
             ...acc,
-            isSyncInProgress: awsSyncingAccountIds.has(acc.id) || azureSyncingAccountIds.has(acc.id),
+            isSyncInProgress: awsSyncingAccountIds.has(acc.id) || azureSyncingAccountIds.has(acc.id) || gcpSyncingAccountIds.has(acc.id),
         }));
     }
 
@@ -522,6 +563,37 @@ export class CloudService {
 
             throw error;
         }
+    }
+
+    private async findGcpAccountsWithSyncInProgress(accountIds: string[]): Promise<Set<string>> {
+        const jobs = await this.gcpGeneralSyncQueue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'paused'], 0, 199, false);
+
+        const syncingIds = new Set<string>();
+        const accountIdsSet = new Set(accountIds);
+
+        for (const job of jobs) {
+            const jobCloudAccountId = (job.data as { cloudAccountId?: string }).cloudAccountId;
+
+            if (job.name === GCP_GENERAL_SYNC_JOB_NAME && jobCloudAccountId && accountIdsSet.has(jobCloudAccountId)) {
+                syncingIds.add(jobCloudAccountId);
+            }
+        }
+
+        const persistedSyncingAccounts = await this.cloudAccountRepository.find({
+            select: ['id'],
+            where: {
+                id: In(accountIds),
+                isGeneralSyncInProgress: true,
+            },
+        });
+
+        const staleSyncingIds = persistedSyncingAccounts.map((account) => account.id).filter((accountId) => !syncingIds.has(accountId));
+
+        if (staleSyncingIds.length > 0) {
+            await this.cloudAccountRepository.update({ id: In(staleSyncingIds) }, { isGeneralSyncInProgress: false });
+        }
+
+        return syncingIds;
     }
 
     /**
