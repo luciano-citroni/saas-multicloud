@@ -200,6 +200,26 @@ export const ErrorMessages = {
         },
     },
 
+    // Automation
+    AUTOMATION: {
+        NOT_FOUND: {
+            en: 'Automation execution not found',
+            pt: 'Execução de automação não encontrada',
+        },
+        UNSUPPORTED_RESOURCE_TYPE: {
+            en: 'Unsupported resource type for provisioning',
+            pt: 'Tipo de recurso não suportado para provisionamento',
+        },
+        FLOW_INVALID: {
+            en: 'The flow definition is invalid',
+            pt: 'A definição do fluxo é inválida',
+        },
+        PROVISIONING_FAILED: {
+            en: 'Failed to provision one or more resources',
+            pt: 'Falha ao provisionar um ou mais recursos',
+        },
+    },
+
     // General (mapeado por HTTP status code)
     GENERAL: {
         UNEXPECTED_ERROR: {

@@ -180,3 +180,75 @@ export const PERMISSIONS_POLICY = {
         },
     ],
 };
+
+/**
+ * Permissões adicionais necessárias para o módulo de Automação.
+ * Conceda essas permissões somente se quiser usar o provisionamento
+ * automático de recursos EC2, S3, RDS e Lambda pela plataforma.
+ */
+export const AUTOMATION_PERMISSIONS_POLICY = {
+    Version: '2012-10-17',
+    Statement: [
+        {
+            Sid: 'EC2AutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'ec2:RunInstances',
+                'ec2:CreateTags',
+                'ec2:DescribeImages',
+                'ec2:DescribeKeyPairs',
+                'ec2:DescribeAvailabilityZones',
+                'ec2:DescribeInstanceTypes',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'S3AutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                's3:CreateBucket',
+                's3:PutBucketVersioning',
+                's3:PutEncryptionConfiguration',
+                's3:PutBucketTagging',
+                's3:DeleteBucket',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'RDSAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'rds:CreateDBInstance',
+                'rds:AddTagsToResource',
+                'rds:DescribeDBSubnetGroups',
+                'rds:DescribeDBParameterGroups',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'LambdaAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'lambda:CreateFunction',
+                'lambda:TagResource',
+                'lambda:GetFunction',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'IAMPassRoleForAutomation',
+            Effect: 'Allow',
+            Action: ['iam:PassRole'],
+            Resource: '*',
+            Condition: {
+                StringEquals: {
+                    'iam:PassedToService': [
+                        'lambda.amazonaws.com',
+                        'rds.amazonaws.com',
+                        'ec2.amazonaws.com',
+                    ],
+                },
+            },
+        },
+    ],
+};

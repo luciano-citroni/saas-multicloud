@@ -21,6 +21,7 @@ import { BillingModule } from './billing/billing.module';
 import { GovernanceModule } from './governance/governance.module';
 import { FinopsModule } from './finops/finops.module';
 import { GcpModule } from './gcp/gcp.module';
+import { AutomationModule } from './automation/automation.module';
 
 @Module({
     imports: [
@@ -62,6 +63,7 @@ import { GcpModule } from './gcp/gcp.module';
         GovernanceModule,
         FinopsModule,
         GcpModule,
+        AutomationModule,
     ],
     controllers: [AppController],
     providers: [

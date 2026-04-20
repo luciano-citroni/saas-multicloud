@@ -16,7 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
-import { buildTrustPolicy, PERMISSIONS_POLICY } from '@/lib/role-permissions';
+import { buildTrustPolicy, PERMISSIONS_POLICY, AUTOMATION_PERMISSIONS_POLICY } from '@/lib/role-permissions';
 
 type Props = {
     organizationId: string;
@@ -394,7 +394,50 @@ export function FormCloudAccount({ organizationId }: Props) {
                                         </ol>
 
                                         <PolicyBlock label="Trust Policy — cole ao criar a role" json={buildTrustPolicy(externalId)} />
-                                        <PolicyBlock label="Permissions Policy — cole como inline policy" json={PERMISSIONS_POLICY} />
+                                        <PolicyBlock label="Permissions Policy (Assessment / FinOps) — cole como inline policy" json={PERMISSIONS_POLICY} />
+
+                                        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
+                                            <div className="flex items-start gap-2">
+                                                <span className="text-amber-600 dark:text-amber-400 text-sm font-medium mt-0.5">⚡</span>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                                        Permissões de Automação (opcional)
+                                                    </p>
+                                                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                                        Adicione esta policy <strong>somente se quiser usar o módulo de Automação</strong> para provisionar
+                                                        recursos EC2, S3, RDS e Lambda diretamente pela plataforma. Cole como uma segunda inline policy na
+                                                        mesma role.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-md border border-amber-200 bg-white dark:border-amber-800 dark:bg-amber-950/10">
+                                                <div className="border-b border-amber-200 dark:border-amber-800 px-3 py-2">
+                                                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                                                        Serviços cobertos por esta policy:
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3 py-2.5">
+                                                    {[
+                                                        { service: 'EC2', actions: 'RunInstances, CreateTags, DescribeImages' },
+                                                        { service: 'S3', actions: 'CreateBucket, PutBucketVersioning, PutEncryptionConfiguration' },
+                                                        { service: 'RDS', actions: 'CreateDBInstance, AddTagsToResource' },
+                                                        { service: 'Lambda', actions: 'CreateFunction, TagResource' },
+                                                        { service: 'IAM', actions: 'PassRole (para EC2, RDS, Lambda)' },
+                                                    ].map(({ service, actions }) => (
+                                                        <div key={service} className="flex flex-col py-0.5">
+                                                            <span className="text-xs font-semibold text-foreground">{service}</span>
+                                                            <span className="text-[10px] text-muted-foreground">{actions}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <PolicyBlock
+                                                label="Automation Permissions Policy — cole como 2ª inline policy (opcional)"
+                                                json={AUTOMATION_PERMISSIONS_POLICY}
+                                            />
+                                        </div>
 
                                         <p className="text-xs text-muted-foreground">
                                             Substitua <code className="bg-muted px-1 rounded">&lt;PLATFORM_ACCOUNT_ID&gt;</code> pelo Account ID da

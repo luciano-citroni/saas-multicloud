@@ -170,6 +170,18 @@ export const ErrorMessages = {
         SUPPRESSION_NOT_FOUND: 'Governance suppression not found.',
     },
 
+    // Automation
+
+    AUTOMATION: {
+        NOT_FOUND: 'Automation execution not found.',
+
+        UNSUPPORTED_RESOURCE_TYPE: 'Unsupported resource type for provisioning.',
+
+        FLOW_INVALID: 'The flow definition is invalid.',
+
+        PROVISIONING_FAILED: 'Failed to provision one or more resources.',
+    },
+
     // General
 
     GENERAL: {
