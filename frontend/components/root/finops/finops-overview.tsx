@@ -64,6 +64,7 @@ import {
     fetchFinopsBillingHistory,
 } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const CLOUD_PROVIDER_STORAGE_KEY = 'smc_active_cloud_provider';
@@ -77,6 +78,8 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
 
     type DashboardPeriod = 'last7days' | 'last30days' | 'last90days' | 'currentmonth' | 'lastmonth' | 'ytd';
 
@@ -339,14 +342,14 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                 const consentRes = await fetchFinopsConsent(orgId, cloudId, provider);
 
                 if (consentRes.status === 401) {
-                    toast.error('Sua sessão expirou.');
+                    toast.error(tc.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
 
                 if (!consentRes.ok) {
                     const consentPayload = await consentRes.json().catch(() => null);
-                    toast.error(extractErrorMessage(consentPayload, 'pt'));
+                    toast.error(extractErrorMessage(consentPayload));
                     setHasConsent(false);
                     setDashboard(null);
                     setScore(null);
@@ -469,7 +472,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                     }
                 }
             } catch {
-                if (!options.silent && !options.tableOnly) toast.error('Não foi possível carregar dados de FinOps.');
+                if (!options.silent && !options.tableOnly) toast.error(tf.loadError);
             } finally {
                 if (options.tableOnly) {
                     setLoadingTable(false);
@@ -567,7 +570,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                 setAggregatedInsights(insights);
                 setAggregatedBillingHistory(billingHistories);
             } catch {
-                if (!options.silent) toast.error('Não foi possível carregar dados de FinOps.');
+                if (!options.silent) toast.error(tf.loadError);
             } finally {
                 if (!options.silent) {
                     setLoadingInitial(false);
@@ -664,10 +667,10 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                     setSyncing(false);
 
                     if (job.status === 'completed') {
-                        toast.success('Sincronização de custos concluída!');
+                        toast.success(tf.syncComplete);
                         void loadData(orgId, cloudId, provider, { silent: true, page: jobsPage, limit: jobsLimit });
                     } else {
-                        toast.error('Sincronização falhou. Tente novamente.');
+                        toast.error(tf.syncFailed);
                     }
                 }
             } catch {
@@ -696,7 +699,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
             const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 setSyncing(false);
                 return;
             }
@@ -707,7 +710,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                 return;
             }
 
-            toast.success('Sincronização de custos iniciada!');
+            toast.success(tf.syncStarted);
 
             await loadData(organizationId, accountToUse, account.provider, { silent: true, page: jobsPage, limit: jobsLimit });
 
@@ -716,7 +719,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                 void pollJobStatus(organizationId, accountToUse, jobId, account.provider);
             }, 3000);
         } catch {
-            toast.error('Não foi possível iniciar a sincronização.');
+            toast.error(tf.syncError);
             setSyncing(false);
         }
     };
@@ -735,13 +738,13 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
             const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
 
             setShowConsentDialog(false);
             setHasConsent(true);
-            toast.success('Consentimento registrado! Iniciando sincronização histórica dos últimos 3 meses...');
+            toast.success(tf.consentSuccess);
 
             // Sincronização histórica automática: últimos 3 meses com granularidade diária
             const end = new Date();
@@ -752,7 +755,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
 
             void handleStartSync('daily', startDate, endDate);
         } catch {
-            toast.error('Não foi possível registrar o consentimento.');
+            toast.error(tf.consentError);
         } finally {
             setAcceptingConsent(false);
         }
@@ -837,8 +840,8 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>FinOps</CardTitle>
-                    <CardDescription>Selecione uma organização e uma conta cloud na sidebar para visualizar o painel financeiro.</CardDescription>
+                    <CardTitle>{tf.selectOrgTitle}</CardTitle>
+                    <CardDescription>{tf.selectOrgDesc}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -894,11 +897,11 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                             jobsLimit={jobsLimit}
                             jobsPagination={jobsPagination}
                             loadingTable={loadingTable}
-                            title="Histórico de Sincronizações"
-                            description="Últimos 5 syncs executados para esta conta"
+                            title={tf.historySyncTitle}
+                            description={tf.historySyncDesc}
                             previewLimit={5}
                             actionHref="/finops/history"
-                            actionLabel="Ver histórico completo"
+                            actionLabel={tf.viewFullHistory}
                             onChangeLimit={(limit) => {
                                 const nextLimit = normalizeJobsLimit(limit);
                                 setJobsLimit(nextLimit);
@@ -930,7 +933,7 @@ export function FinopsOverview({ mode = 'all' }: FinopsOverviewProps) {
                             recommendations={recommendations}
                             previewLimit={5}
                             actionHref="/finops/recommendations"
-                            actionLabel="Ver todas"
+                            actionLabel={tf.viewAll}
                         />
 
                         {hasConsent && (

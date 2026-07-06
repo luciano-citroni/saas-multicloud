@@ -74,7 +74,7 @@ export function FinopsBilling() {
         try {
             const res = await computeFinopsBilling(organizationId, cloudAccountId, data.startDate, data.endDate, data.markupPercentage);
             const body = await res.json().catch(() => null);
-            if (!res.ok) { toast.error(extractErrorMessage(body, 'pt')); return; }
+            if (!res.ok) { toast.error(extractErrorMessage(body)); return; }
             toast.success('Billing calculado e salvo!');
             void loadHistory(organizationId, cloudAccountId);
         } catch { toast.error('Não foi possível calcular o billing.'); }

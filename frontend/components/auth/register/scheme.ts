@@ -1,30 +1,49 @@
 import { z } from 'zod';
 import { isValidPassword } from '@/lib/validators/password';
-import { isValidCPF } from '@/lib/validators/cpf';
 
-export const registerScheme = z
-    .object({
-        name: z.string().min(3, 'O nome deve conter no mínimo 3 caracteres'),
-        email: z.email('E-mail inválido'),
-        cpf: z
-            .string()
-            .transform((value) => value.trim())
-            .refine((value) => value === '' || value.replace(/\D/g, '').length === 11, 'CPF deve conter 11 dígitos')
-            .refine((value) => value === '' || isValidCPF(value), 'CPF inválido')
-            .optional(),
-        acceptTermis: z.literal(true, {
-            message: 'Você deve aceitar os termos de uso',
-        }),
-        password: z
-            .string()
-            .min(6, 'A senha deve conter no mínimo 6 caracteres')
-            .max(20, 'A senha deve conter no máximo 20 caracteres')
-            .refine(isValidPassword, {
-                message: 'A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula, 1 número e 1 caractere especial',
-            }),
-        confirmPassword: z.string().min(6, 'A senha deve conter no mínimo 6 caracteres'),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-        message: 'As senhas não coincidem',
-        path: ['confirmPassword'],
-    });
+export type RegisterFormValues = {
+    name: string;
+    email: string;
+    acceptTermis: boolean;
+    password: string;
+    confirmPassword: string;
+};
+
+export type RegisterSchemaMessages = {
+    nameMin: string;
+    emailInvalid: string;
+    acceptTerms: string;
+    passMin: string;
+    passMax: string;
+    passStrength: string;
+    passMismatch: string;
+};
+
+export function createRegisterSchema(msgs: RegisterSchemaMessages) {
+    return z
+        .object({
+            name: z.string().min(3, msgs.nameMin),
+            email: z.email(msgs.emailInvalid),
+            acceptTermis: z.boolean({ error: msgs.acceptTerms }).refine((v) => v === true, msgs.acceptTerms),
+            password: z
+                .string()
+                .min(6, msgs.passMin)
+                .max(20, msgs.passMax)
+                .refine(isValidPassword, { message: msgs.passStrength }),
+            confirmPassword: z.string().min(6, msgs.passMin),
+        })
+        .refine((data) => data.password === data.confirmPassword, {
+            message: msgs.passMismatch,
+            path: ['confirmPassword'],
+        });
+}
+
+export const registerScheme = createRegisterSchema({
+    nameMin: 'O nome deve conter no mínimo 3 caracteres',
+    emailInvalid: 'E-mail inválido',
+    acceptTerms: 'Você deve aceitar os termos de uso para continuar',
+    passMin: 'A senha deve conter no mínimo 6 caracteres',
+    passMax: 'A senha deve conter no máximo 20 caracteres',
+    passStrength: 'A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula, 1 número e 1 caractere especial',
+    passMismatch: 'As senhas não coincidem',
+});

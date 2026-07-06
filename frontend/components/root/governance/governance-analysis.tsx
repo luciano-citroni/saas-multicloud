@@ -17,6 +17,7 @@ import {
     translateGovernanceResourceType,
     translateGovernanceSeverity,
 } from '@/lib/governance-translations';
+import { useTranslations } from '@/lib/i18n';
 
 type GovernanceJob = {
     id: string;
@@ -98,6 +99,8 @@ function severityBorderClass(severity: GovernanceFinding['severity']): string {
 export function GovernanceAnalysis() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const tg = useTranslations('governance');
+    const tc = useTranslations('common');
 
     const jobId = useMemo(() => searchParams.get('jobId'), [searchParams]);
 
@@ -130,7 +133,7 @@ export function GovernanceAnalysis() {
                 ]);
 
                 if (jobResponse.status === 401 || findingsResponse.status === 401) {
-                    toast.error('Sua sessão expirou.');
+                    toast.error(tc.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
@@ -139,18 +142,18 @@ export function GovernanceAnalysis() {
                 const findingsPayload = await findingsResponse.json().catch(() => null);
 
                 if (!jobResponse.ok) {
-                    toast.error(extractErrorMessage(jobPayload, 'pt'));
+                    toast.error(extractErrorMessage(jobPayload));
                 } else {
                     setJob(jobPayload as GovernanceJob);
                 }
 
                 if (!findingsResponse.ok) {
-                    toast.error(extractErrorMessage(findingsPayload, 'pt'));
+                    toast.error(extractErrorMessage(findingsPayload));
                 } else {
                     setFindings(normalizeFindings(findingsPayload));
                 }
             } catch {
-                toast.error('Não foi possível carregar a análise da varredura.');
+                toast.error(tg.loadAnalysisError);
             } finally {
                 setLoading(false);
             }

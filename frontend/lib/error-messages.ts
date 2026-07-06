@@ -3,16 +3,15 @@
  * Mantém sincronização com backend/src/common/messages/error-messages.ts
  */
 
+import { getLocale, type AppLocale } from '@/lib/locale';
+export type { AppLocale } from '@/lib/locale';
+
 export const ErrorMessages = {
     // Auth
     AUTH: {
         EMAIL_ALREADY_REGISTERED: {
             en: 'This email is already in use',
             pt: 'Este e-mail já está sendo usado',
-        },
-        CPF_ALREADY_REGISTERED: {
-            en: 'This CPF is already in use',
-            pt: 'Este CPF já está sendo usado',
         },
         INVALID_CREDENTIALS: {
             en: 'Invalid email or password',
@@ -41,10 +40,6 @@ export const ErrorMessages = {
         EMAIL_ALREADY_IN_USE: {
             en: 'This email is already in use',
             pt: 'Este e-mail já está sendo usado',
-        },
-        CPF_ALREADY_IN_USE: {
-            en: 'This CPF is already in use',
-            pt: 'Este CPF já está sendo usado',
         },
         CANNOT_DELETE_WHILE_IN_ORGANIZATION: {
             en: 'You cannot delete your account while you are a member of an organization',
@@ -178,6 +173,10 @@ export const ErrorMessages = {
             en: 'Database constraint violation',
             pt: 'Violação de restrição do banco de dados',
         },
+        RELATION_NOT_FOUND: {
+            en: 'A required system table is missing. Please run database migrations.',
+            pt: 'Uma tabela obrigatória do sistema está ausente. Execute as migrations do banco.',
+        },
     },
 
     // Validation
@@ -185,10 +184,6 @@ export const ErrorMessages = {
         INVALID_EMAIL: {
             en: 'Invalid email format',
             pt: 'Formato de e-mail inválido',
-        },
-        INVALID_CPF: {
-            en: 'Invalid CPF',
-            pt: 'CPF inválido',
         },
         INVALID_CNPJ: {
             en: 'Invalid CNPJ',
@@ -220,6 +215,18 @@ export const ErrorMessages = {
         },
     },
 
+    // Plans / billing limits
+    PLANS: {
+        USER_LIMIT_REACHED: {
+            en: 'User limit reached for your current plan.',
+            pt: 'Limite de usuários atingido no seu plano atual.',
+        },
+        CLOUD_ACCOUNT_LIMIT_REACHED: {
+            en: 'Cloud account limit reached for your current plan.',
+            pt: 'Limite de contas cloud atingido no seu plano atual.',
+        },
+    },
+
     // General (mapeado por HTTP status code)
     GENERAL: {
         UNEXPECTED_ERROR: {
@@ -236,7 +243,7 @@ export const ErrorMessages = {
         },
         FORBIDDEN: {
             en: 'Access forbidden',
-            pt: 'Acesso prohibido',
+            pt: 'Acesso Proibido',
         },
         NOT_FOUND: {
             en: 'Resource not found',
@@ -278,6 +285,8 @@ export interface ApiErrorResponse {
     message: string | string[];
     path: string;
     timestamp: string;
+    dbCode?: string;
+    dbDetail?: string;
 }
 
 type LocalizedMessage = {
@@ -292,7 +301,7 @@ type LocalizedMessage = {
  * @param language - Idioma ('en' ou 'pt')
  * @returns Mensagem traduzida ou fallback
  */
-export function getErrorMessage(category: keyof typeof ErrorMessages, key: string, language: 'en' | 'pt' = 'pt'): string {
+export function getErrorMessage(category: keyof typeof ErrorMessages, key: string, language: AppLocale = getLocale()): string {
     const categoryMessages = ErrorMessages[category] as Record<string, LocalizedMessage>;
     const message = categoryMessages[key];
     if (!message) {
@@ -308,12 +317,20 @@ export function getErrorMessage(category: keyof typeof ErrorMessages, key: strin
  * @param language - Idioma ('en' ou 'pt')
  * @returns Mensagem traduzida
  */
-export function getApiErrorMessage(error: ApiErrorResponse | unknown, language: 'en' | 'pt' = 'pt'): string {
+export function getApiErrorMessage(error: ApiErrorResponse | unknown, language: AppLocale = getLocale()): string {
     if (!error) {
         return ErrorMessages.GENERAL.UNEXPECTED_ERROR[language];
     }
 
     const apiError = error as ApiErrorResponse;
+
+    if (apiError.dbCode === '42P01') {
+        return ErrorMessages.DATABASE.RELATION_NOT_FOUND[language];
+    }
+
+    if (apiError.error === 'DatabaseError') {
+        return ErrorMessages.DATABASE.CONSTRAINT_VIOLATION[language];
+    }
 
     // Se a mensagem vier como string simples, tenta encontrar a tradução
     if (typeof apiError.message === 'string') {
@@ -348,7 +365,7 @@ export function getApiErrorMessage(error: ApiErrorResponse | unknown, language: 
  * @param language - Idioma ('en' ou 'pt')
  * @returns Mensagem de erro traduzida
  */
-export function extractErrorMessage(error: unknown, language: 'en' | 'pt' = 'pt'): string {
+export function extractErrorMessage(error: unknown, language: AppLocale = getLocale()): string {
     if (!error) {
         return ErrorMessages.GENERAL.UNEXPECTED_ERROR[language];
     }

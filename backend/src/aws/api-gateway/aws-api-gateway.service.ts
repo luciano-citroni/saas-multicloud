@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -59,98 +59,102 @@ export class AwsApiGatewayService {
     }
 
     async syncApisFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getApiGatewayClient(cloudAccountId, organizationId);
-
-        const creds = await this.connector.resolveRoleCredentials(cloudAccountId, organizationId);
-
-        const { items } = await client.send(new GetRestApisCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar APIs do API Gateway. Verifique as permissões da role (apigateway:GET).');
-        });
-
-        if (!items || items.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsApi>[] = [];
 
-        for (const api of items) {
-            if (!api.id) continue;
+        for (const region of regions) {
+            const client = await this.connector.getApiGatewayClient(cloudAccountId, organizationId, region);
 
-            let tags: Record<string, string> = {};
+            const { items } = await client.send(new GetRestApisCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar APIs do API Gateway na região ${region}. Verifique as permissões da role (apigateway:GET).`
+                );
+            });
 
-            try {
-                const arn = `arn:aws:apigateway:${creds.region}::/restapis/${api.id}`;
-
-                const { tags: rawTags } = await client.send(new GetTagsCommand({ resourceArn: arn }));
-
-                tags = rawTags ?? {};
-            } catch {
-                console.warn(`Não foi possível obter tags da API ${api.name}.`);
+            if (!items || items.length === 0) {
+                continue;
             }
 
-            const apiData = mapAwsApi(api, tags);
+            for (const api of items) {
+                if (!api.id) continue;
 
-            mapped.push(apiData);
+                let tags: Record<string, string> = {};
 
-            const isPrivate = api.endpointConfiguration?.types?.includes('PRIVATE') ?? false;
+                try {
+                    const arn = `arn:aws:apigateway:${region}::/restapis/${api.id}`;
 
-            const vpcEndpointIds = api.endpointConfiguration?.vpcEndpointIds ?? null;
+                    const { tags: rawTags } = await client.send(new GetTagsCommand({ resourceArn: arn }));
 
-            const awsVpcId: string | null = null;
+                    tags = rawTags ?? {};
+                } catch {
+                    Logger.warn(`Não foi possível obter tags da API ${api.name}.`);
+                }
 
-            const vpc = awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId } }) : null;
+                const apiData = mapAwsApi(api, tags);
 
-            let dbApi = await this.apiRepository.findOne({ where: { awsApiId: api.id } });
+                mapped.push(apiData);
 
-            if (dbApi) {
-                dbApi.name = apiData.name;
+                const isPrivate = api.endpointConfiguration?.types?.includes('PRIVATE') ?? false;
 
-                dbApi.description = apiData.description;
+                const vpcEndpointIds = api.endpointConfiguration?.vpcEndpointIds ?? null;
 
-                dbApi.endpointType = apiData.endpointType;
+                const awsVpcId: string | null = null;
 
-                dbApi.version = apiData.version;
+                const vpc = awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId } }) : null;
 
-                dbApi.vpcEndpointIds = vpcEndpointIds;
+                let dbApi = await this.apiRepository.findOne({ where: { awsApiId: api.id } });
 
-                dbApi.awsVpcId = awsVpcId;
+                if (dbApi) {
+                    dbApi.name = apiData.name;
 
-                dbApi.vpcId = vpc?.id ?? null;
+                    dbApi.description = apiData.description;
 
-                dbApi.tags = tags;
+                    dbApi.endpointType = apiData.endpointType;
 
-                dbApi.lastSyncedAt = now;
-            } else {
-                dbApi = this.apiRepository.create({
-                    cloudAccountId,
+                    dbApi.version = apiData.version;
 
-                    awsApiId: api.id,
+                    dbApi.vpcEndpointIds = vpcEndpointIds;
 
-                    name: apiData.name,
+                    dbApi.awsVpcId = awsVpcId;
 
-                    description: apiData.description,
+                    dbApi.vpcId = vpc?.id ?? null;
 
-                    endpointType: apiData.endpointType,
+                    dbApi.tags = tags;
 
-                    version: apiData.version,
+                    dbApi.lastSyncedAt = now;
+                } else {
+                    dbApi = this.apiRepository.create({
+                        cloudAccountId,
 
-                    createdAtAws: apiData.createdAtAws,
+                        awsApiId: api.id,
 
-                    vpcEndpointIds,
+                        name: apiData.name,
 
-                    awsVpcId,
+                        description: apiData.description,
 
-                    vpcId: vpc?.id ?? null,
+                        endpointType: apiData.endpointType,
 
-                    tags,
+                        version: apiData.version,
 
-                    lastSyncedAt: now,
-                });
+                        createdAtAws: apiData.createdAtAws,
+
+                        vpcEndpointIds,
+
+                        awsVpcId,
+
+                        vpcId: vpc?.id ?? null,
+
+                        tags,
+
+                        lastSyncedAt: now,
+                    });
+                }
+
+                await this.apiRepository.save(dbApi);
             }
-
-            await this.apiRepository.save(dbApi);
         }
 
         return mapped;

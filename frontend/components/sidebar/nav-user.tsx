@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronsUpDown, Coins, LogOut, Settings, WalletCards } from 'lucide-react';
+import { ChevronsUpDown, LogOut, Settings, WalletCards } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from '@/lib/i18n';
 
 type NavUserProps = {
     loading?: boolean;
@@ -25,8 +26,9 @@ type NavUserProps = {
 
 export function NavUser({ loading = false, user, onLogout }: NavUserProps) {
     const { isMobile } = useSidebar();
+    const t = useTranslations('nav');
 
-    const userProfile = user ?? { name: 'Usuário', email: 'email@teste.com' };
+    const userProfile = user ?? { name: t.user, email: 'email@teste.com' };
 
     const handleLogout = () => {
         onLogout?.();
@@ -76,30 +78,23 @@ export function NavUser({ loading = false, user, onLogout }: NavUserProps) {
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
                             <DropdownMenuItem asChild className="cursor-pointer">
-                                <Link href="/billing">
-                                    <Coins />
-                                    Planos
-                                </Link>
-                            </DropdownMenuItem>
-
-                            <DropdownMenuItem asChild className="cursor-pointer">
                                 <Link href="/settings">
                                     <Settings />
-                                    Configurações
+                                    {t.settings}
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild className="cursor-pointer">
                                 <Link href="/ajuda">
                                     <WalletCards />
-                                    Ajuda
+                                    {t.help}
                                 </Link>
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                             <LogOut />
-                            Sair
+                            {t.logout}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

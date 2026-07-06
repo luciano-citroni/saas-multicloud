@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -452,7 +452,7 @@ export class S3Service {
 
                 await this.s3Repository.save(dbBucket);
             } catch (error) {
-                console.warn(`Erro ao sincronizar bucket ${bucket.Name}:`, error);
+                Logger.warn(`Erro ao sincronizar bucket ${bucket.Name}:`, error);
 
                 // Continua para o próximo bucket
             }

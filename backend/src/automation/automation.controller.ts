@@ -1,11 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+﻿import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
-import { Organization } from '../db/entites/organization.entity';
+import { Tenant } from '../db/entites/tenant.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { estimateCostBodySchema, runAutomationBodySchema } from './dto';
 import type { EstimateCostBodyDto, RunAutomationBodyDto } from './dto';
@@ -49,7 +49,7 @@ export class AutomationController {
     @ApiResponse({ status: 400, description: 'Fluxo inválido' })
     @ApiResponse({ status: 403, description: 'Requer role ADMIN ou OWNER' })
     async run(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Body(new ZodValidationPipe(runAutomationBodySchema)) dto: RunAutomationBodyDto,
     ) {
         return this.automationService.runAutomation(dto, org.id);
@@ -59,7 +59,7 @@ export class AutomationController {
     @ApiPaginationQuery()
     @ApiOperation({ summary: 'Listar execuções de automação da organização' })
     @ApiResponse({ status: 200, type: [AutomationExecutionResponseDto] })
-    async listExecutions(@CurrentOrganization() org: Organization) {
+    async listExecutions(@CurrentOrganization() org: Tenant) {
         return this.automationService.listExecutions(org.id);
     }
 
@@ -67,7 +67,7 @@ export class AutomationController {
     @ApiOperation({ summary: 'Obter detalhes de uma execução de automação' })
     @ApiResponse({ status: 200, type: AutomationExecutionResponseDto })
     @ApiResponse({ status: 404, description: 'Execução não encontrada' })
-    async getExecution(@CurrentOrganization() org: Organization, @Param('id') id: string) {
+    async getExecution(@CurrentOrganization() org: Tenant, @Param('id') id: string) {
         return this.automationService.getExecution(id, org.id);
     }
 }

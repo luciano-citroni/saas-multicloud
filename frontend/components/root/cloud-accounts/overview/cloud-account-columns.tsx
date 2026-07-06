@@ -5,6 +5,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { ColumnDef } from '@tanstack/react-table';
 import { Clock3, EllipsisVertical, LayoutList, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import type { AppLocale } from '@/lib/locale';
+
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 
 function formatProvider(provider: string) {
     const normalized = provider.toLowerCase();
@@ -14,30 +17,68 @@ function formatProvider(provider: string) {
     return provider;
 }
 
-function formatDateTime(dateString?: string | null) {
-    if (!dateString) return 'Ainda não sincronizado';
+function formatDateTime(dateString: string | undefined | null, locale: AppLocale, notSynced: string, invalidDate: string) {
+    if (!dateString) return notSynced;
 
     const parsed = new Date(dateString);
-    if (Number.isNaN(parsed.getTime())) return 'Data inválida';
+    if (Number.isNaN(parsed.getTime())) return invalidDate;
 
-    return new Intl.DateTimeFormat('pt-BR', {
+    return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'pt-BR', {
         dateStyle: 'short',
         timeStyle: 'short',
+        timeZone: SAO_PAULO_TIME_ZONE,
     }).format(parsed);
 }
 
-type CloudColumnOptions = {
-    canManageAccounts: boolean;
-    syncingAccountId: string | null;
-    onSyncAccount: (id: string) => void;
-    onEditAccount: (id: string) => void;
+type ColumnTranslations = {
+    notSynced: string;
+    invalidDate: string;
+    processing: string;
+    columnAlias: string;
+    columnOrganization: string;
+    columnProvider: string;
+    columnStatus: string;
+    columnLastSync: string;
+    active: string;
+    inactive: string;
+    syncPermission: string;
+    alreadySyncing: string;
+    syncTooltip: string;
+    editPermission: string;
+    editTooltip: string;
+    viewInventory: string;
+    edit: string;
+    syncAction: string;
+    delete: string;
 };
 
-export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyncAccount, onEditAccount }: CloudColumnOptions) => {
+type CloudColumnOptions = {
+    canManageAccounts: boolean;
+    canSyncAccounts: boolean;
+    syncingAccountId: string | null;
+    locale: AppLocale;
+    organizationNamesById: Record<string, string>;
+    t: ColumnTranslations;
+    onSyncAccount: (id: string) => void;
+    onEditAccount: (id: string) => void;
+    onDeleteAccount: (id: string) => void;
+};
+
+export const CloudAccountColumns = ({
+    canManageAccounts,
+    canSyncAccounts,
+    syncingAccountId,
+    locale,
+    organizationNamesById,
+    t,
+    onSyncAccount,
+    onEditAccount,
+    onDeleteAccount,
+}: CloudColumnOptions) => {
     const columns: ColumnDef<CloudAccount>[] = [
         {
             id: 'alias',
-            header: 'Alias',
+            header: t.columnAlias,
             accessorKey: 'alias',
             cell: ({ getValue, row }) => {
                 const alias = getValue() as string;
@@ -50,7 +91,7 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                     <button
                         type="button"
                         onClick={() => onEditAccount(row.original.id)}
-                        className="cursor-pointer text-left font-medium text-foreground  hover:underline"
+                        className="cursor-pointer text-left font-medium text-foreground hover:underline"
                     >
                         {alias}
                     </button>
@@ -58,23 +99,37 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
             },
         },
         {
+            id: 'organizationId',
+            header: t.columnOrganization,
+            accessorKey: 'organizationId',
+            cell: ({ row }) => {
+                const organizationId = row.original.organizationId ?? null;
+
+                if (!organizationId) {
+                    return <span className="text-muted-foreground">-</span>;
+                }
+
+                return <span className="text-muted-foreground">{organizationNamesById[organizationId] ?? '-'}</span>;
+            },
+        },
+        {
             id: 'provider',
-            header: 'Provedor',
+            header: t.columnProvider,
             accessorKey: 'provider',
             cell: ({ getValue }) => <span className="text-muted-foreground">{formatProvider(getValue() as string)}</span>,
         },
         {
             id: 'isActive',
-            header: 'Status',
+            header: t.columnStatus,
             accessorKey: 'isActive',
             cell: ({ getValue }) => {
                 const value = getValue() as boolean | undefined;
-                return <Badge variant={value === false ? 'outline' : 'secondary'}>{value === false ? 'Inativa' : 'Ativa'}</Badge>;
+                return <Badge variant={value === false ? 'outline' : 'secondary'}>{value === false ? t.inactive : t.active}</Badge>;
             },
         },
         {
             id: 'lastGeneralSyncAt',
-            header: 'Último sync',
+            header: t.columnLastSync,
             accessorKey: 'lastGeneralSyncAt',
             cell: ({ row }) => {
                 const isSyncInProgress = row.original.isSyncInProgress === true;
@@ -83,7 +138,7 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                     return (
                         <Badge variant="default" className="inline-flex items-center gap-1">
                             <RefreshCw className="size-3 animate-spin" />
-                            Processando
+                            {t.processing}
                         </Badge>
                     );
                 }
@@ -91,7 +146,7 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                 return (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                         <Clock3 className="size-3.5" />
-                        {formatDateTime(row.original.lastGeneralSyncAt)}
+                        {formatDateTime(row.original.lastGeneralSyncAt, locale, t.notSynced, t.invalidDate)}
                     </span>
                 );
             },
@@ -101,12 +156,8 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
             enableHiding: false,
             cell: ({ row }) => {
                 const isSyncInProgress = row.original.isSyncInProgress === true;
-                const syncDisabled = !canManageAccounts || Boolean(syncingAccountId) || isSyncInProgress;
-                const syncTitle = !canManageAccounts
-                    ? 'Apenas OWNER/ADMIN pode sincronizar a conta.'
-                    : isSyncInProgress
-                      ? 'Esta conta já está processando um sync.'
-                      : 'Sincronizar conta';
+                const syncDisabled = !canSyncAccounts || Boolean(syncingAccountId) || isSyncInProgress;
+                const syncTitle = !canSyncAccounts ? t.syncPermission : isSyncInProgress ? t.alreadySyncing : t.syncTooltip;
 
                 return (
                     <DropdownMenu>
@@ -120,7 +171,7 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                                 <DropdownMenuItem asChild className="cursor-pointer">
                                     <Link href={`/cloud-accounts/${row.original.id}`} className="flex items-center gap-2">
                                         <LayoutList className="size-4" />
-                                        Ver inventário
+                                        {t.viewInventory}
                                     </Link>
                                 </DropdownMenuItem>
                             )}
@@ -128,9 +179,9 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                                 className="cursor-pointer"
                                 onSelect={() => onEditAccount(row.original.id)}
                                 disabled={!canManageAccounts}
-                                title={!canManageAccounts ? 'Apenas OWNER/ADMIN pode editar a conta.' : 'Editar conta'}
+                                title={!canManageAccounts ? t.editPermission : t.editTooltip}
                             >
-                                Editar
+                                {t.edit}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="cursor-pointer"
@@ -138,11 +189,16 @@ export const CloudAccountColumns = ({ canManageAccounts, syncingAccountId, onSyn
                                 disabled={syncDisabled}
                                 title={syncTitle}
                             >
-                                Sincronizar
+                                {t.syncAction}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive">
-                                Excluir
+                            <DropdownMenuItem
+                                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive"
+                                onSelect={() => onDeleteAccount(row.original.id)}
+                                disabled={!canManageAccounts}
+                                title={!canManageAccounts ? t.editPermission : t.delete}
+                            >
+                                {t.delete}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import {
     EcsClusterResponseDto,
@@ -59,7 +59,7 @@ export class AwsEcsController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listClustersFromDatabase(cloudAccountId);
     }
 
@@ -86,7 +86,7 @@ export class AwsEcsController {
 
         @Param('clusterId', ParseUUIDPipe) clusterId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getClusterById(clusterId, cloudAccountId);
     }
@@ -109,7 +109,7 @@ export class AwsEcsController {
     @ApiResponse({ status: 400, description: 'Falha ao sincronizar clusters' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncClustersFromAws(cloudAccountId, org.id);
     }
 
@@ -143,7 +143,7 @@ export class AwsEcsController {
 
         @Query('family') family: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listTaskDefinitionsFromDatabase(cloudAccountId, family);
     }
@@ -171,7 +171,7 @@ export class AwsEcsController {
 
         @Param('taskDefinitionId', ParseUUIDPipe) taskDefinitionId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getTaskDefinitionById(taskDefinitionId, cloudAccountId);
     }
@@ -201,7 +201,7 @@ export class AwsEcsController {
 
         @Query('family') family: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.syncTaskDefinitionsFromAws(cloudAccountId, org.id, family);
     }
@@ -236,7 +236,7 @@ export class AwsEcsController {
 
         @Query('clusterId') clusterId: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listServicesFromDatabase(cloudAccountId, clusterId);
     }
@@ -264,7 +264,7 @@ export class AwsEcsController {
 
         @Param('serviceId', ParseUUIDPipe) serviceId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getServiceById(serviceId, cloudAccountId);
     }
@@ -293,7 +293,7 @@ export class AwsEcsController {
 
         @Query('clusterId') clusterId: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.syncServicesFromAws(cloudAccountId, org.id, clusterId);
     }

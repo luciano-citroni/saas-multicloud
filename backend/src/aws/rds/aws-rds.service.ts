@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -104,7 +104,7 @@ export class AwsRdsService {
     }
 
     async syncInstancesFromAws(cloudAccountId: string, organizationId: string, vpcId?: string) {
-        const rds = await this.connector.getRdsClient(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         let awsVpcIdFilter: string | undefined;
 
@@ -118,30 +118,35 @@ export class AwsRdsService {
             awsVpcIdFilter = dbVpc.awsVpcId;
         }
 
-        const allInstances: DBInstance[] = [];
-
-        let marker: string | undefined = undefined;
-
-        do {
-            const response = await rds.send(new DescribeDBInstancesCommand({ Marker: marker })).catch(() => {
-                throw new BadRequestException('Falha ao consultar instâncias RDS na AWS. Verifique as permissões da role (rds:DescribeDBInstances).');
-            });
-
-            allInstances.push(...(response.DBInstances ?? []));
-
-            marker = response.Marker;
-        } while (marker);
-
-        const filteredInstances = awsVpcIdFilter
-            ? allInstances.filter((instance) => (instance.DBSubnetGroup?.VpcId ?? null) === awsVpcIdFilter)
-            : allInstances;
-
         const now = new Date();
 
         const mappedInstances: Array<ReturnType<typeof mapAwsInstance>> = [];
 
-        for (const instance of filteredInstances) {
-            const awsMapped = mapAwsInstance(instance);
+        for (const region of regions) {
+            const rds = await this.connector.getRdsClient(cloudAccountId, organizationId, region);
+
+            const allInstances: DBInstance[] = [];
+
+            let marker: string | undefined = undefined;
+
+            do {
+                const response = await rds.send(new DescribeDBInstancesCommand({ Marker: marker })).catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao consultar instâncias RDS na região ${region}. Verifique as permissões da role (rds:DescribeDBInstances).`
+                    );
+                });
+
+                allInstances.push(...(response.DBInstances ?? []));
+
+                marker = response.Marker;
+            } while (marker);
+
+            const filteredInstances = awsVpcIdFilter
+                ? allInstances.filter((instance) => (instance.DBSubnetGroup?.VpcId ?? null) === awsVpcIdFilter)
+                : allInstances;
+
+            for (const instance of filteredInstances) {
+                const awsMapped = mapAwsInstance(instance);
 
             if (instance.DBInstanceArn) {
                 awsMapped.tags = await this.listTags(rds, instance.DBInstanceArn);
@@ -156,7 +161,7 @@ export class AwsRdsService {
             const vpc = awsMapped.awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId: awsMapped.awsVpcId } }) : null;
 
             if (awsMapped.awsVpcId && !vpc) {
-                console.warn(`VPC ${awsMapped.awsVpcId} não encontrada no banco. Sincronize as VPCs primeiro.`);
+                Logger.warn(`VPC ${awsMapped.awsVpcId} não encontrada no banco. Sincronize as VPCs primeiro.`);
             }
 
             const subnet = awsMapped.awsSubnetId
@@ -168,7 +173,7 @@ export class AwsRdsService {
                 : null;
 
             if (awsMapped.awsSubnetId && !subnet) {
-                console.warn(`Subnet ${awsMapped.awsSubnetId} não encontrada no banco. Sincronize as Subnets primeiro.`);
+                Logger.warn(`Subnet ${awsMapped.awsSubnetId} não encontrada no banco. Sincronize as Subnets primeiro.`);
             }
 
             const securityGroup = awsMapped.awsSecurityGroupId
@@ -182,7 +187,7 @@ export class AwsRdsService {
                 : null;
 
             if (awsMapped.awsSecurityGroupId && !securityGroup) {
-                console.warn(`Security Group ${awsMapped.awsSecurityGroupId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                Logger.warn(`Security Group ${awsMapped.awsSecurityGroupId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
             }
 
             const iamRole = awsMapped.roleArn
@@ -196,7 +201,7 @@ export class AwsRdsService {
                 : null;
 
             if (awsMapped.roleArn && !iamRole) {
-                console.warn(`IAM Role ${awsMapped.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                Logger.warn(`IAM Role ${awsMapped.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
             }
 
             if (dbInstance) {
@@ -315,7 +320,8 @@ export class AwsRdsService {
                 });
             }
 
-            await this.rdsRepository.save(dbInstance);
+                await this.rdsRepository.save(dbInstance);
+            }
         }
 
         return mappedInstances;

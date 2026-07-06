@@ -1,9 +1,9 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
@@ -25,7 +25,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar VPC Networks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpVpcNetworkResponseDto] })
-    async listNetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listNetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         void org;
         return this.service.listNetworksFromDatabase(cloudAccountId);
     }
@@ -36,7 +36,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Sincronizar VPC Networks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpVpcNetworkResponseDto] })
-    async syncNetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async syncNetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncNetworksFromGcp(cloudAccountId, org.id);
     }
 
@@ -45,7 +45,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar Subnetworks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpSubnetworkResponseDto] })
-    async listSubnetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listSubnetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         void org;
         return this.service.listSubnetworksFromDatabase(cloudAccountId);
     }
@@ -56,7 +56,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Sincronizar Subnetworks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpSubnetworkResponseDto] })
-    async syncSubnetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async syncSubnetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncSubnetworksFromGcp(cloudAccountId, org.id);
     }
 
@@ -65,7 +65,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar Firewall Rules GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpFirewallRuleResponseDto] })
-    async listFirewallRules(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listFirewallRules(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         void org;
         return this.service.listFirewallRulesFromDatabase(cloudAccountId);
     }
@@ -76,7 +76,7 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Sincronizar Firewall Rules GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpFirewallRuleResponseDto] })
-    async syncFirewallRules(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async syncFirewallRules(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncFirewallRulesFromGcp(cloudAccountId, org.id);
     }
 }

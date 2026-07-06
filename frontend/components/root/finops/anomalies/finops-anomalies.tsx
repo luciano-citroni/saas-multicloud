@@ -105,7 +105,7 @@ export function FinopsAnomalies() {
                 }
                 if (!res.ok) {
                     const body = await res.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+                    toast.error(extractErrorMessage(body));
                     return;
                 }
                 const data = await res.json().catch(() => []);
@@ -134,7 +134,7 @@ export function FinopsAnomalies() {
             const res = await acknowledgeFinopsAnomaly(organizationId, cloudAccountId, anomalyId);
             if (!res.ok) {
                 const body = await res.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
             toast.success('Anomalia reconhecida.');

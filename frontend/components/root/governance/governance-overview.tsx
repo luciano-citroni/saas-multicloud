@@ -16,10 +16,16 @@ import {
     readPaginationFromLocation,
 } from '@/components/root/governance/overview/helpers';
 import type { GovernanceJob, GovernanceScore, PaginationMeta, SidebarContextPayload } from '@/components/root/governance/overview/types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT, ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_ORG_STORAGE_KEY,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
+    SIDEBAR_CONTEXT_UPDATED_EVENT,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import { startGovernanceScan, fetchGovernanceJobs, fetchGovernanceJobStatus, fetchGovernanceScore } from '@/app/actions/governance';
+import { useTranslations } from '@/lib/i18n';
 
 // --- Helpers ------------------------------------------------------------------
 
@@ -37,6 +43,8 @@ function normalizeScore(payload: GovernanceScore | null): GovernanceScore | null
 
 export function GovernanceOverview() {
     const router = useRouter();
+    const tg = useTranslations('governance');
+    const tc = useTranslations('common');
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
@@ -129,11 +137,13 @@ export function GovernanceOverview() {
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
         window.addEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleContextChange);
+        window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
         window.addEventListener('storage', handleContextChange);
 
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
             window.removeEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleContextChange);
+            window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
             window.removeEventListener('storage', handleContextChange);
         };
     }, [jobsLimit, syncPaginationUrlState]);
@@ -177,7 +187,7 @@ export function GovernanceOverview() {
                     const jobsRes = await fetchGovernanceJobs(orgId, cloudId, { page, limit });
 
                     if (jobsRes.status === 401) {
-                        toast.error('Sua sessão expirou.');
+                        toast.error(tc.sessionExpired);
                         router.replace('/auth/sign-in');
                         return;
                     }
@@ -194,7 +204,7 @@ export function GovernanceOverview() {
                     ]);
 
                     if (scoreRes.status === 401 || jobsRes.status === 401) {
-                        toast.error('Sua sessão expirou.');
+                        toast.error(tc.sessionExpired);
                         router.replace('/auth/sign-in');
                         return;
                     }
@@ -211,7 +221,7 @@ export function GovernanceOverview() {
                     }
                 }
             } catch {
-                if (!options.silent && !options.tableOnly) toast.error('Não foi possível carregar dados de governança.');
+                if (!options.silent && !options.tableOnly) toast.error(tg.loadError);
             } finally {
                 if (options.tableOnly) {
                     setLoadingTable(false);
@@ -265,10 +275,10 @@ export function GovernanceOverview() {
                     setScanning(false);
 
                     if (job.status === 'completed') {
-                        toast.success('Varredura de governança concluída!');
+                        toast.success(tg.scanComplete);
                         void loadData(orgId, cloudId, { silent: true, page: jobsPage, limit: jobsLimit });
                     } else {
-                        toast.error('Varredura de governança falhou. Tente novamente.');
+                        toast.error(tg.scanFailed);
                     }
                 }
             } catch {
@@ -294,7 +304,7 @@ export function GovernanceOverview() {
             const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 setScanning(false);
                 return;
             }
@@ -305,7 +315,7 @@ export function GovernanceOverview() {
                 return;
             }
 
-            toast.success('Varredura de governança iniciada!');
+            toast.success(tg.scanStarted);
 
             // Refresh job list
             await loadData(organizationId, cloudAccountId, { silent: true, page: jobsPage, limit: jobsLimit });
@@ -316,7 +326,7 @@ export function GovernanceOverview() {
                 void pollJobStatus(organizationId, cloudAccountId, jobId);
             }, 3000);
         } catch {
-            toast.error('Não foi possível iniciar a varredura de governança.');
+            toast.error(tg.scanError);
             setScanning(false);
         }
     };
@@ -342,8 +352,8 @@ export function GovernanceOverview() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Governança</CardTitle>
-                    <CardDescription>Selecione uma organização e uma conta cloud na sidebar para visualizar o painel de governança.</CardDescription>
+                    <CardTitle>{tg.selectOrgTitle}</CardTitle>
+                    <CardDescription>{tg.selectOrgDesc}</CardDescription>
                 </CardHeader>
             </Card>
         );

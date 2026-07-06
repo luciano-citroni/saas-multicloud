@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsElastiCacheService } from './aws-elasticache.service';
 
@@ -27,7 +27,7 @@ export class AwsElastiCacheController {
     @ApiOperation({ summary: 'Listar clusters ElastiCache do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [ElastiCacheClusterResponseDto] })
-    listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listClustersFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsElastiCacheController {
 
         @Param('clusterId', ParseUUIDPipe) clusterId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getClusterById(clusterId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsElastiCacheController {
     @ApiOperation({ summary: 'Sincronizar clusters ElastiCache da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [ElastiCacheClusterSyncResponseDto] })
-    syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncClustersFromAws(cloudAccountId, org.id);
     }
 }

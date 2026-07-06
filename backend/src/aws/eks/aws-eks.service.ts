@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -72,34 +72,41 @@ export class AwsEksService {
     }
 
     async syncClustersFromAws(cloudAccountId: string, organizationId: string) {
-        const eks = await this.connector.getEksClient(cloudAccountId, organizationId);
-
-        const { clusters } = await eks.send(new ListClustersCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar clusters EKS na AWS. Verifique as permissões da role (eks:ListClusters).');
-        });
-
-        if (!clusters || clusters.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mappedClusters: ReturnType<typeof mapAwsCluster>[] = [];
 
-        for (const clusterName of clusters) {
-            if (!clusterName) continue;
+        for (const region of regions) {
+            const eks = await this.connector.getEksClient(cloudAccountId, organizationId, region);
 
-            const { cluster } = await eks.send(new DescribeClusterCommand({ name: clusterName })).catch(() => {
-                throw new BadRequestException(`Falha ao descrever o cluster EKS "${clusterName}". Verifique as permissões da role (eks:DescribeCluster).`);
+            const { clusters } = await eks.send(new ListClustersCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar clusters EKS na região ${region}. Verifique as permissões da role (eks:ListClusters).`
+                );
             });
 
-            if (!cluster) {
+            if (!clusters || clusters.length === 0) {
                 continue;
             }
 
-            const clusterData = mapAwsCluster(cluster);
+            for (const clusterName of clusters) {
+                if (!clusterName) continue;
 
-            mappedClusters.push(clusterData);
+                const { cluster } = await eks.send(new DescribeClusterCommand({ name: clusterName })).catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao descrever o cluster EKS "${clusterName}" na região ${region}. Verifique as permissões da role (eks:DescribeCluster).`
+                    );
+                });
+
+                if (!cluster) {
+                    continue;
+                }
+
+                const clusterData = mapAwsCluster(cluster);
+
+                mappedClusters.push(clusterData);
 
             const vpc = clusterData.awsVpcId
                 ? await this.vpcRepository.findOne({
@@ -108,7 +115,7 @@ export class AwsEksService {
                 : null;
 
             if (clusterData.awsVpcId && !vpc) {
-                console.warn(`VPC ${clusterData.awsVpcId} não encontrada no banco. Sincronize as VPCs primeiro.`);
+                Logger.warn(`VPC ${clusterData.awsVpcId} não encontrada no banco. Sincronize as VPCs primeiro.`);
             }
 
             const iamRole = clusterData.roleArn
@@ -118,16 +125,16 @@ export class AwsEksService {
                 : null;
 
             if (clusterData.roleArn && !iamRole) {
-                console.warn(`IAM Role ${clusterData.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                Logger.warn(`IAM Role ${clusterData.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
             }
 
             const securityGroupIds = await this.resolveSecurityGroupIds(cloudAccountId, clusterData.awsSecurityGroupIds ?? []);
 
             const ec2InstanceIds = await this.resolveEc2InstanceIds(vpc?.id ?? null, securityGroupIds);
 
-            let dbCluster = await this.eksRepository.findOne({
-                where: { clusterArn: clusterData.clusterArn },
-            });
+                let dbCluster = await this.eksRepository.findOne({
+                    where: { clusterArn: clusterData.clusterArn },
+                });
 
             if (dbCluster) {
                 dbCluster.clusterName = clusterData.clusterName;
@@ -213,7 +220,8 @@ export class AwsEksService {
                 });
             }
 
-            await this.eksRepository.save(dbCluster);
+                await this.eksRepository.save(dbCluster);
+            }
         }
 
         return mappedClusters;
@@ -238,7 +246,7 @@ export class AwsEksService {
             const missing = awsSecurityGroupIds.filter((id) => !foundAwsIds.has(id));
 
             if (missing.length > 0) {
-                console.warn(`Security Groups não encontrados no banco: ${missing.join(', ')}. Sincronize os Security Groups primeiro.`);
+                Logger.warn(`Security Groups não encontrados no banco: ${missing.join(', ')}. Sincronize os Security Groups primeiro.`);
             }
         }
 

@@ -1,9 +1,9 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
@@ -25,7 +25,7 @@ export class GcpComputeController {
     @ApiOperation({ summary: 'Listar VM instances GCP do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpVmInstanceResponseDto] })
-    async listInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         void org;
         return this.service.listInstancesFromDatabase(cloudAccountId);
     }
@@ -36,7 +36,7 @@ export class GcpComputeController {
     @ApiOperation({ summary: 'Sincronizar VM instances GCP da API' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpVmInstanceResponseDto] })
-    async syncInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async syncInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncInstancesFromGcp(cloudAccountId, org.id);
     }
 }

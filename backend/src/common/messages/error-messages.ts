@@ -15,8 +15,6 @@ export const ErrorMessages = {
     AUTH: {
         EMAIL_ALREADY_REGISTERED: 'This email is already in use',
 
-        CPF_ALREADY_REGISTERED: 'This CPF is already in use',
-
         INVALID_CREDENTIALS: 'Invalid email or password',
 
         ACCOUNT_INACTIVE: 'This account is inactive',
@@ -32,8 +30,6 @@ export const ErrorMessages = {
         NOT_FOUND: 'User not found',
 
         EMAIL_ALREADY_IN_USE: 'This email is already in use',
-
-        CPF_ALREADY_IN_USE: 'This CPF is already in use',
 
         CANNOT_DELETE_WHILE_IN_ORGANIZATION: 'You cannot delete your account while you are a member of an organization',
     },
@@ -109,11 +105,13 @@ export const ErrorMessages = {
     // Plans / subscriptions
 
     PLANS: {
-        NO_ACTIVE_PLAN: 'Your organization does not have an active plan.',
+        NO_ACTIVE_PLAN: 'Your account does not have an active plan.',
 
-        PLAN_METADATA_NOT_AVAILABLE: 'Could not resolve plan limits for this organization.',
+        PLAN_METADATA_NOT_AVAILABLE: 'Could not resolve plan limits for your account.',
 
         CLOUD_ACCOUNT_LIMIT_REACHED: 'Cloud account limit reached for your current plan.',
+
+        ORG_ACCOUNT_LIMIT_REACHED: 'Organization limit reached for your current plan.',
 
         USER_LIMIT_REACHED: 'User limit reached for your current plan.',
 
@@ -134,8 +132,6 @@ export const ErrorMessages = {
 
     VALIDATION: {
         INVALID_EMAIL: 'Invalid email format',
-
-        INVALID_CPF: 'Invalid CPF',
 
         INVALID_CNPJ: 'Invalid CNPJ',
 

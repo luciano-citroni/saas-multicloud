@@ -86,7 +86,7 @@ export function FinopsInsights() {
                 }
                 if (!res.ok) {
                     const body = await res.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+                    toast.error(extractErrorMessage(body));
                     return;
                 }
                 const data = await res.json().catch(() => null);

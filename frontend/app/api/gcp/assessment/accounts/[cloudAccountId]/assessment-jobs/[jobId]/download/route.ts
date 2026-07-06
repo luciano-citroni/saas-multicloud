@@ -4,11 +4,11 @@ import {
     clearAuthCookies,
     getAccessTokenFromCookies,
     getRefreshTokenFromCookies,
+    parseJsonSafe,
     refreshAccessToken,
     setAuthCookies,
     type AuthTokens,
 } from '@/lib/auth/session';
-import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 type Params = {
     params: Promise<{
@@ -52,11 +52,28 @@ function buildUnauthorizedResponse() {
     return response;
 }
 
-export async function GET(request: Request, { params }: Params) {
-    if (!hasTrustedOrigin(request)) {
-        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
+function buildFileResponse(upstream: Response): NextResponse {
+    const headers = new Headers();
+    const contentType = upstream.headers.get('content-type');
+    const contentDisposition = upstream.headers.get('content-disposition');
+    const contentLength = upstream.headers.get('content-length');
+
+    if (contentType) {
+        headers.set('content-type', contentType);
     }
 
+    if (contentDisposition) {
+        headers.set('content-disposition', contentDisposition);
+    }
+
+    if (contentLength) {
+        headers.set('content-length', contentLength);
+    }
+
+    return new NextResponse(upstream.body, { status: upstream.status, headers });
+}
+
+export async function GET(request: Request, { params }: Params) {
     const { cloudAccountId, jobId } = await params;
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
@@ -75,7 +92,7 @@ export async function GET(request: Request, { params }: Params) {
         headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
-    const rotatedTokens = resolved.rotatedTokens;
+    let rotatedTokens = resolved.rotatedTokens;
 
     if (response.status === 401 && resolved.refreshToken) {
         const refreshResult = await refreshAccessToken(resolved.refreshToken);
@@ -84,25 +101,25 @@ export async function GET(request: Request, { params }: Params) {
             return buildUnauthorizedResponse();
         }
 
+        rotatedTokens = refreshResult;
+
         response = await backendFetch(`/api/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${jobId}/download`, {
             headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }
 
     if (!response.ok) {
-        return NextResponse.json({ message: 'Relatório Excel não disponível.' }, { status: response.status });
+        const payload = await parseJsonSafe<unknown>(response);
+        const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao baixar relatório GCP' }, { status: response.status });
+
+        if (rotatedTokens) {
+            setAuthCookies(nextResponse, rotatedTokens);
+        }
+
+        return nextResponse;
     }
 
-    const contentDisposition = response.headers.get('content-disposition') ?? `attachment; filename="gcp-assessment-${jobId}.xlsx"`;
-    const body = await response.arrayBuffer();
-
-    const nextResponse = new NextResponse(body, {
-        status: 200,
-        headers: {
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': contentDisposition,
-        },
-    });
+    const nextResponse = buildFileResponse(response);
 
     if (rotatedTokens) {
         setAuthCookies(nextResponse, rotatedTokens);

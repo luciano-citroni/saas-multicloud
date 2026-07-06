@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsSqsService } from './aws-sqs.service';
 
@@ -27,7 +27,7 @@ export class AwsSqsController {
     @ApiOperation({ summary: 'Listar filas SQS do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SqsQueueResponseDto] })
-    listQueues(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listQueues(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listQueuesFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsSqsController {
 
         @Param('queueId', ParseUUIDPipe) queueId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getQueueById(queueId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsSqsController {
     @ApiOperation({ summary: 'Sincronizar filas SQS da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SqsQueueSyncResponseDto] })
-    syncQueues(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncQueues(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncQueuesFromAws(cloudAccountId, org.id);
     }
 }

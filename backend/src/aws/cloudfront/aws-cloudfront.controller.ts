@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { CloudFrontDistributionResponseDto, CloudFrontSyncResponseDto } from './swagger.dto';
 
@@ -52,7 +52,7 @@ export class CloudFrontController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listDistributions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listDistributions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listDistributionsFromDatabase(cloudAccountId);
     }
 
@@ -79,7 +79,7 @@ export class CloudFrontController {
 
         @Param('distributionId', ParseUUIDPipe) distributionId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getDistributionById(distributionId, cloudAccountId);
     }
@@ -107,7 +107,7 @@ export class CloudFrontController {
 
         @Param('awsDistributionId') awsDistributionId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getDistributionByAwsId(awsDistributionId, cloudAccountId);
     }
@@ -136,7 +136,7 @@ export class CloudFrontController {
 
         @Param('s3BucketId', ParseUUIDPipe) s3BucketId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listDistributionsByS3Bucket(s3BucketId, cloudAccountId);
     }
@@ -160,7 +160,7 @@ export class CloudFrontController {
     @ApiResponse({ status: 400, description: 'Falha ao sincronizar Distribuições da AWS' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    syncDistributions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncDistributions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncDistributionsFromAws(cloudAccountId, org.id);
     }
 }

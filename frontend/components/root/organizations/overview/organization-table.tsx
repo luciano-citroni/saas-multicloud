@@ -19,9 +19,10 @@ type RoleFilter = 'all' | 'owner' | 'admin' | 'member' | 'viewer';
 type OrganizationTableProps = {
     data: UserOrganization[];
     onEditOrganization: (organizationId: string) => void;
+    onViewCloudAccounts: (organizationId: string) => void;
 };
 
-export function OrganizationTable({ data, onEditOrganization }: OrganizationTableProps) {
+export function OrganizationTable({ data, onEditOrganization, onViewCloudAccounts }: OrganizationTableProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -42,7 +43,7 @@ export function OrganizationTable({ data, onEditOrganization }: OrganizationTabl
         router.push(newUrl);
     }, [nameFilter, roleFilter, router]);
 
-    const columns = useMemo(() => OrganizationColumns({ onEditOrganization }), [onEditOrganization]);
+    const columns = useMemo(() => OrganizationColumns({ onEditOrganization, onViewCloudAccounts }), [onEditOrganization, onViewCloudAccounts]);
 
     const filteredData = useMemo(() => {
         const normalizedName = nameFilter.trim().toLowerCase();

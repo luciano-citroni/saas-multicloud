@@ -3,7 +3,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DbModule } from './db/db.module';
@@ -22,6 +22,9 @@ import { GovernanceModule } from './governance/governance.module';
 import { FinopsModule } from './finops/finops.module';
 import { GcpModule } from './gcp/gcp.module';
 import { AutomationModule } from './automation/automation.module';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
+import { FileStorageModule } from './file-storage/file-storage.module';
+import { OrgsModule } from './orgs/orgs.module';
 
 @Module({
     imports: [
@@ -29,16 +32,10 @@ import { AutomationModule } from './automation/automation.module';
         ScheduleModule.forRoot(),
         ThrottlerModule.forRoot([
             {
-                // Limite global padrão: 120 req por minuto por IP
+                // Limite global para uso diário com múltiplas requisições concorrentes no frontend
                 name: 'default',
                 ttl: 60_000,
-                limit: 120,
-            },
-            {
-                // Limite estrito para endpoints de autenticação: 10 req por minuto por IP
-                name: 'auth',
-                ttl: 60_000,
-                limit: 10,
+                limit: 1200,
             },
         ]),
         BullModule.forRootAsync({
@@ -64,12 +61,14 @@ import { AutomationModule } from './automation/automation.module';
         FinopsModule,
         GcpModule,
         AutomationModule,
+        FileStorageModule,
+        OrgsModule,
     ],
     controllers: [AppController],
     providers: [
         AppService,
-        { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: JwtGuard },
+        { provide: APP_GUARD, useClass: UserThrottlerGuard },
         { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
     ],
 })

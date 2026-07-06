@@ -22,15 +22,6 @@ export class CreateUserRequestDto {
     email: string;
 
     @ApiProperty({
-        example: '12345678901',
-
-        description: 'CPF do usuário (11 dígitos)',
-
-        pattern: '^\\d{11}$',
-    })
-    cpf: string;
-
-    @ApiProperty({
         example: 'MyPassword123!',
 
         description: 'Senha com pelo menos 8 caracteres',
@@ -64,15 +55,6 @@ export class UpdateUserRequestDto {
     email?: string;
 
     @ApiProperty({
-        example: '98765432100',
-
-        description: 'Novo CPF do usuário',
-
-        required: false,
-    })
-    cpf?: string;
-
-    @ApiProperty({
         example: true,
 
         description: 'Status de ativação do usuário',
@@ -103,13 +85,6 @@ export class UserResponseDto {
         description: 'Nome completo do usuário',
     })
     name: string;
-
-    @ApiProperty({
-        example: '12345678901',
-
-        description: 'CPF do usuário',
-    })
-    cpf: string;
 
     @ApiProperty({
         example: true,

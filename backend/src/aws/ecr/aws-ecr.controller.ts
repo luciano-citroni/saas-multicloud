@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsEcrService } from './aws-ecr.service';
 
@@ -27,7 +27,7 @@ export class AwsEcrController {
     @ApiOperation({ summary: 'Listar repositórios ECR do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [EcrRepositoryResponseDto] })
-    listRepositories(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listRepositories(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listRepositoriesFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsEcrController {
 
         @Param('repositoryId', ParseUUIDPipe) repositoryId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getRepositoryById(repositoryId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsEcrController {
     @ApiOperation({ summary: 'Sincronizar repositórios ECR da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [EcrRepositorySyncResponseDto] })
-    syncRepositories(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncRepositories(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncRepositoriesFromAws(cloudAccountId, org.id);
     }
 }

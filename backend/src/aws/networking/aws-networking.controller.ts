@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { VpcResponseDto, SubnetResponseDto, VpcWithSubnetsResponseDto, VpcSyncResponseDto, SubnetSyncResponseDto } from './swagger.dto';
 
@@ -52,7 +52,7 @@ export class AwsNetworkingController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listVpcs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listVpcs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listVpcsFromDatabase(cloudAccountId);
     }
 
@@ -79,7 +79,7 @@ export class AwsNetworkingController {
 
         @Param('vpcId', ParseUUIDPipe) vpcId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getVpcWithSubnets(vpcId, cloudAccountId);
     }
@@ -102,7 +102,7 @@ export class AwsNetworkingController {
     @ApiResponse({ status: 400, description: 'Credenciais inválidas ou erro na AWS' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    syncVpcs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncVpcs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncVpcsFromAws(cloudAccountId, org.id);
     }
 
@@ -131,7 +131,7 @@ export class AwsNetworkingController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listSubnets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization, @Query('vpcId') vpcId?: string) {
+    listSubnets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant, @Query('vpcId') vpcId?: string) {
         return this.service.listSubnetsFromDatabase(cloudAccountId, vpcId);
     }
 
@@ -154,7 +154,7 @@ export class AwsNetworkingController {
     @ApiResponse({ status: 400, description: 'Credenciais inválidas ou erro na AWS' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    syncSubnets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization, @Query('vpcId') vpcId?: string) {
+    syncSubnets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant, @Query('vpcId') vpcId?: string) {
         return this.service.syncSubnetsFromAws(cloudAccountId, org.id, vpcId);
     }
 }

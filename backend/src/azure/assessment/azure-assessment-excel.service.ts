@@ -475,12 +475,7 @@ export class AzureAssessmentExcelService {
             color,
         );
 
-        const outputDir = path.join(process.cwd(), 'uploads', 'assessments');
-
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
+        const outputDir = this.getOutputDir();
         const fileName = `azure-assessment-${jobId}.xlsx`;
         const filePath = path.join(outputDir, fileName);
 
@@ -492,7 +487,36 @@ export class AzureAssessmentExcelService {
     }
 
     getExcelFilePath(fileName: string): string {
-        return path.join(process.cwd(), 'uploads', 'assessments', fileName);
+        return path.join(this.getOutputDir(), fileName);
+    }
+
+    private getOutputDir(): string {
+        // Usar variável de ambiente ou calcular caminho robusto
+        const envDir = process.env.EXCEL_UPLOADS_DIR;
+        if (envDir) {
+            return envDir;
+        }
+
+        // Encontrar a raiz do projeto
+        const projectRoot = this.getProjectRoot();
+        const outputDir = path.join(projectRoot, 'uploads', 'assessments');
+
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        return outputDir;
+    }
+
+    private getProjectRoot(): string {
+        let current = process.cwd();
+        while (current !== path.dirname(current)) {
+            if (fs.existsSync(path.join(current, 'package.json'))) {
+                return current;
+            }
+            current = path.dirname(current);
+        }
+        return process.cwd();
     }
 
     async deleteExcel(fileName: string): Promise<void> {

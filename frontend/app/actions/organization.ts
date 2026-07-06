@@ -67,6 +67,7 @@ export type OrganizationCloudAccount = {
     id: string;
     alias: string;
     provider: string;
+    organizationId?: string | null;
     isActive?: boolean;
     isSyncInProgress?: boolean;
     lastGeneralSyncAt?: string | null;
@@ -146,6 +147,7 @@ export async function updateOrganizationCloudAccount(
     body: {
         alias?: string;
         credentials?: Record<string, unknown>;
+        organizationId?: string | null;
     }
 ) {
     const url = `/api/cloud/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`;

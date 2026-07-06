@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { SecurityGroupResponseDto, SecurityGroupSyncResponseDto } from './swagger.dto';
 
@@ -52,7 +52,7 @@ export class AwsSecurityGroupController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listSecurityGroups(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listSecurityGroups(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listSecurityGroupsFromDatabase(cloudAccountId);
     }
 
@@ -80,7 +80,7 @@ export class AwsSecurityGroupController {
 
         @Param('vpcId', ParseUUIDPipe) vpcId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listSecurityGroupsByVpcFromDatabase(vpcId, cloudAccountId);
     }
@@ -108,7 +108,7 @@ export class AwsSecurityGroupController {
 
         @Param('securityGroupId', ParseUUIDPipe) securityGroupId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getSecurityGroupById(securityGroupId, cloudAccountId);
     }
@@ -152,7 +152,7 @@ export class AwsSecurityGroupController {
     syncSecurityGroups(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Query('vpcId') vpcId?: string
     ) {

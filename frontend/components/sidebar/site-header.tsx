@@ -18,6 +18,10 @@ const routeNames: Record<string, string> = {
     governance: 'Governança',
     analysis: 'Análise',
     finops: 'FinOps',
+    tenant: 'Tenant',
+    users: 'Usuários',
+    automation: 'Automação',
+    members: 'Usuários',
 };
 
 function isId(segment: string) {

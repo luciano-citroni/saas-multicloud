@@ -1,6 +1,11 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Organization, OrganizationMember, OrganizationInvite, User } from '../db/entites';
+import { Tenant } from '../db/entites/tenant.entity';
+import { TenantMember } from '../db/entites/tenant-member.entity';
+import { TenantInvite } from '../db/entites/tenant-invite.entity';
+import { User } from '../db/entites/user.entity';
+import { Organization } from '../db/entites/organization.entity';
+import { OrganizationMembership } from '../db/entites/organization-membership.entity';
 import { OrganizationService } from './organization.service';
 import { OrganizationController } from './organization.controller';
 import { MembersController } from './members.controller';
@@ -13,7 +18,7 @@ import { BillingModule } from '../billing/billing.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Organization, OrganizationMember, OrganizationInvite, User]),
+        TypeOrmModule.forFeature([Tenant, TenantMember, TenantInvite, User, Organization, OrganizationMembership]),
         MailerModule,
         TenantModule,
         RbacModule,
@@ -21,7 +26,7 @@ import { BillingModule } from '../billing/billing.module';
         forwardRef(() => BillingModule),
     ],
     providers: [OrganizationService],
-    controllers: [OrganizationController, MembersController, InvitesController],
+    controllers: [MembersController, InvitesController, OrganizationController],
     exports: [OrganizationService],
 })
 export class OrganizationModule {}

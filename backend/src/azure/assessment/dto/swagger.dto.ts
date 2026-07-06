@@ -19,6 +19,9 @@ export class AzureAssessmentJobResponseDto {
     @ApiPropertyOptional({ description: 'URL para download do Excel (só quando status=completed)' })
     excelDownloadUrl?: string;
 
+    @ApiPropertyOptional({ description: 'Data/hora limite para download do Excel (24h após conclusão)' })
+    excelExpiresAt?: Date;
+
     @ApiPropertyOptional()
     completedAt!: Date | null;
 

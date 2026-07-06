@@ -49,6 +49,7 @@ import { AwsSnsService } from '../sns/aws-sns.service';
 import { AwsWafService } from '../waf/aws-waf.service';
 
 import { AwsGuardDutyService } from '../guardduty/aws-guardduty.service';
+import { AwsConnectorService } from '../aws-connector.service';
 
 @Injectable()
 export class AwsAssessmentSyncService {
@@ -103,11 +104,17 @@ export class AwsAssessmentSyncService {
 
         private readonly wafService: AwsWafService,
 
-        private readonly guardDutyService: AwsGuardDutyService
+        private readonly guardDutyService: AwsGuardDutyService,
+
+        private readonly connector: AwsConnectorService
     ) {}
 
     async syncAll(cloudAccountId: string, organizationId: string): Promise<void> {
-        this.logger.log(`[${cloudAccountId}] Iniciando sincronização completa`);
+        const configuredRegions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
+
+        this.logger.log(
+            `[${cloudAccountId}] Iniciando sincronização completa. Regiões configuradas: ${configuredRegions.join(', ') || 'nenhuma'}`
+        );
 
         await this.runFullSync(cloudAccountId, organizationId);
 
@@ -115,7 +122,11 @@ export class AwsAssessmentSyncService {
     }
 
     async syncIncremental(cloudAccountId: string, organizationId: string): Promise<void> {
-        this.logger.log(`[${cloudAccountId}] Iniciando sincronização incremental`);
+        const configuredRegions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
+
+        this.logger.log(
+            `[${cloudAccountId}] Iniciando sincronização incremental. Regiões configuradas: ${configuredRegions.join(', ') || 'nenhuma'}`
+        );
 
         await this.runIncrementalSync(cloudAccountId, organizationId);
 
@@ -136,15 +147,23 @@ export class AwsAssessmentSyncService {
 
         await this.runStep('EC2 Instances', () => this.ec2Service.syncInstancesFromAws(cloudAccountId, organizationId));
 
-        await this.runStep('ECS Clusters', () => this.ecsService.syncClustersFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Clusters', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncClustersFromAws(cloudAccountId, organizationId, region)
+        );
 
-        await this.runStep('ECS Task Definitions', () => this.ecsService.syncTaskDefinitionsFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Task Definitions', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncTaskDefinitionsFromAws(cloudAccountId, organizationId, undefined, region)
+        );
 
-        await this.runStep('ECS Services', () => this.ecsService.syncServicesFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Services', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncServicesFromAws(cloudAccountId, organizationId, undefined, region)
+        );
 
         await this.runStep('EKS Clusters', () => this.eksService.syncClustersFromAws(cloudAccountId, organizationId));
 
-        await this.runStep('Load Balancers', () => this.loadBalancerService.syncLoadBalancersFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('Load Balancers', cloudAccountId, organizationId, (region) =>
+            this.loadBalancerService.syncLoadBalancersFromAws(cloudAccountId, organizationId, region)
+        );
 
         await this.runStep('RDS Instances', () => this.rdsService.syncInstancesFromAws(cloudAccountId, organizationId));
 
@@ -192,15 +211,23 @@ export class AwsAssessmentSyncService {
 
         await this.runStep('EC2 Instances', () => this.ec2Service.syncInstancesFromAws(cloudAccountId, organizationId));
 
-        await this.runStep('ECS Clusters', () => this.ecsService.syncClustersFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Clusters', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncClustersFromAws(cloudAccountId, organizationId, region)
+        );
 
-        await this.runStep('ECS Task Definitions', () => this.ecsService.syncTaskDefinitionsFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Task Definitions', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncTaskDefinitionsFromAws(cloudAccountId, organizationId, undefined, region)
+        );
 
-        await this.runStep('ECS Services', () => this.ecsService.syncServicesFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('ECS Services', cloudAccountId, organizationId, (region) =>
+            this.ecsService.syncServicesFromAws(cloudAccountId, organizationId, undefined, region)
+        );
 
         await this.runStep('EKS Clusters', () => this.eksService.syncClustersFromAws(cloudAccountId, organizationId));
 
-        await this.runStep('Load Balancers', () => this.loadBalancerService.syncLoadBalancersFromAws(cloudAccountId, organizationId));
+        await this.runRegionalStep('Load Balancers', cloudAccountId, organizationId, (region) =>
+            this.loadBalancerService.syncLoadBalancersFromAws(cloudAccountId, organizationId, region)
+        );
 
         await this.runStep('RDS Instances', () => this.rdsService.syncInstancesFromAws(cloudAccountId, organizationId));
 
@@ -236,6 +263,19 @@ export class AwsAssessmentSyncService {
             // Log and continue — one failing sync should not abort the entire assessment
 
             this.logger.warn(`[sync] ${name}: FALHOU — ${(err as Error).message}`);
+        }
+    }
+
+    private async runRegionalStep(
+        name: string,
+        cloudAccountId: string,
+        organizationId: string,
+        fn: (region: string) => Promise<any>
+    ): Promise<void> {
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
+
+        for (const region of regions) {
+            await this.runStep(`${name} (${region})`, () => fn(region));
         }
     }
 }

@@ -8,12 +8,13 @@ import CurrentPlanCard from './CurrentPlanCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizePlanModules } from '../../../lib/modules';
 import { fetchPlans, fetchSubscription, createChangePlanSession } from '@/app/actions/billing';
-import { canManageBilling, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
-
-const ACTIVE_ORG_STORAGE_KEY = 'smc_active_organization_id';
+import { useTranslations } from '@/lib/i18n';
+import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import { extractErrorMessage } from '@/lib/error-messages';
 
 type PlanMetadata = {
     maxCloudAccounts: number;
+    maxOrgAccounts: number;
     maxUsers: number;
     modules: string[];
 };
@@ -49,7 +50,7 @@ type BillingPlan = {
 
 type BillingSubscription = {
     id: string;
-    organizationId: string;
+    tenantId: string;
     stripePriceId: string | null;
     status: string;
     cancelAtPeriodEnd: boolean;
@@ -63,43 +64,44 @@ type ChangePlanCheckoutSession = {
     checkoutUrl: string;
 };
 
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        currentRole?: string | null;
-    }>;
-};
+async function extractResponseError(response: Response, fallbackMessage: string): Promise<string> {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    if (!payload) {
+        return fallbackMessage;
+    }
 
-// using imported modulesLabel
+    const message = extractErrorMessage(payload, 'pt');
+    return message || fallbackMessage;
+}
 
 export function BillingPlansRules() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const handledCheckoutRef = useRef(false);
-    const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const t = useTranslations('billing');
     const [loading, setLoading] = useState(true);
-    const [resolvingRole, setResolvingRole] = useState(true);
-    const [organizationRole, setOrganizationRole] = useState<OrganizationRole | null>(null);
     const [changingPriceId, setChangingPriceId] = useState<string | null>(null);
     const [plans, setPlans] = useState<BillingPlan[]>([]);
     const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
 
     const currentPriceId = subscription?.stripePriceId ?? null;
-    const canChangePlan = canManageBilling(organizationRole);
 
     const loadBillingData = useCallback(
-        async (orgId: string, checkoutSessionId?: string) => {
+        async (checkoutSessionId?: string) => {
+            const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+
+            if (!organizationId) {
+                setLoading(false);
+                return;
+            }
+
             setLoading(true);
 
             try {
-                const subscriptionUrl = new URL('/api/billing/subscription', window.location.origin);
-                subscriptionUrl.searchParams.set('organizationId', orgId);
-
-                if (checkoutSessionId) {
-                    subscriptionUrl.searchParams.set('checkoutSessionId', checkoutSessionId);
-                }
-
-                const [plansResponse, subscriptionResponse] = await Promise.all([fetchPlans(orgId), fetchSubscription(orgId, checkoutSessionId)]);
+                const [plansResponse, subscriptionResponse] = await Promise.all([
+                    fetchPlans(),
+                    fetchSubscription(organizationId, checkoutSessionId),
+                ]);
 
                 if (plansResponse.status === 401 || subscriptionResponse.status === 401) {
                     router.replace('/auth/sign-in');
@@ -108,7 +110,7 @@ export function BillingPlansRules() {
                 }
 
                 if (!plansResponse.ok) {
-                    toast.error('Não foi possível carregar os planos.');
+                    toast.error(await extractResponseError(plansResponse, t.loadPlansError));
                     setPlans([]);
                 } else {
                     const plansPayload = (await plansResponse.json()) as BillingPlan[];
@@ -121,7 +123,7 @@ export function BillingPlansRules() {
                 }
 
                 if (!subscriptionResponse.ok) {
-                    toast.error('Não foi possível carregar a assinatura da organização.');
+                    toast.error(await extractResponseError(subscriptionResponse, t.loadSubscriptionError));
                     setSubscription(null);
                     return;
                 }
@@ -129,7 +131,7 @@ export function BillingPlansRules() {
                 const subscriptionPayload = (await subscriptionResponse.json()) as BillingSubscription;
                 setSubscription(normalizeBillingSubscription(subscriptionPayload));
             } catch {
-                toast.error('Não foi possível carregar os dados de billing.');
+                toast.error(t.loadBillingError);
             } finally {
                 setLoading(false);
             }
@@ -138,41 +140,11 @@ export function BillingPlansRules() {
     );
 
     useEffect(() => {
-        const loadRole = async (orgId: string) => {
-            setResolvingRole(true);
-
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) {
-                    setOrganizationRole(null);
-                    return;
-                }
-
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const activeOrganization = payload?.organizations?.find((organization) => organization?.id === orgId);
-                setOrganizationRole(normalizeOrganizationRole(activeOrganization?.currentRole ?? null));
-            } catch {
-                setOrganizationRole(null);
-            } finally {
-                setResolvingRole(false);
-            }
-        };
-
-        const orgId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-
-        if (!orgId) {
-            toast.error('Selecione uma organização para visualizar os planos.');
-            router.replace('/');
-            return;
-        }
-
-        setOrganizationId(orgId);
-        void loadBillingData(orgId);
-        void loadRole(orgId);
-    }, [loadBillingData, router]);
+        void loadBillingData();
+    }, [loadBillingData]);
 
     useEffect(() => {
-        if (handledCheckoutRef.current || !organizationId) {
+        if (handledCheckoutRef.current) {
             return;
         }
 
@@ -181,8 +153,9 @@ export function BillingPlansRules() {
 
         if (checkoutStatus === 'success') {
             handledCheckoutRef.current = true;
-            toast.success('Pagamento confirmado. Plano atualizado com sucesso.');
-            void loadBillingData(organizationId, checkoutSessionId ?? undefined);
+            toast.success(t.paymentConfirmed);
+            notifySidebarContextUpdated();
+            void loadBillingData(checkoutSessionId ?? undefined);
             router.replace('/billing');
             router.refresh();
             return;
@@ -190,19 +163,17 @@ export function BillingPlansRules() {
 
         if (checkoutStatus === 'cancel') {
             handledCheckoutRef.current = true;
-            toast.error('Checkout cancelado. Nenhuma alteração foi aplicada.');
+            toast.error(t.checkoutCanceled);
             router.replace('/billing');
         }
-    }, [loadBillingData, organizationId, router, searchParams]);
+    }, [loadBillingData, router, searchParams]);
 
     const handleChangePlan = useCallback(
         async (priceId: string) => {
-            if (!organizationId) {
-                return;
-            }
+            const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
 
-            if (!canChangePlan) {
-                toast.error('Apenas OWNER ou ADMIN pode alterar o plano da organização.');
+            if (!organizationId) {
+                toast.error(t.loadBillingError);
                 return;
             }
 
@@ -218,32 +189,27 @@ export function BillingPlansRules() {
                 }
 
                 if (!response.ok) {
-                    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-                    toast.error(payload?.message ?? 'Não foi possível trocar o plano.');
+                    toast.error(await extractResponseError(response, t.changePlanError));
                     return;
                 }
 
                 const payload = (await response.json().catch(() => null)) as ChangePlanCheckoutSession | null;
 
                 if (!payload?.checkoutUrl) {
-                    toast.error('Checkout não retornou URL de pagamento.');
+                    toast.error(t.noCheckoutUrl);
                     return;
                 }
 
-                toast.success('Redirecionando para o checkout do Stripe...');
+                toast.success(t.redirectingToCheckout);
                 window.location.assign(payload.checkoutUrl);
             } catch {
-                toast.error('Não foi possível trocar o plano.');
+                toast.error(t.changePlanError);
             } finally {
                 setChangingPriceId(null);
             }
         },
-        [canChangePlan, organizationId, router]
+        [router]
     );
-
-    if (!organizationId) {
-        return null;
-    }
 
     return (
         <div className="flex w-full flex-col gap-4">
@@ -266,9 +232,8 @@ export function BillingPlansRules() {
                                 key={plan.priceId}
                                 plan={plan}
                                 isCurrent={isCurrent}
-                                isChanging={isChanging || resolvingRole}
-                                canChoose={canChangePlan}
-                                disabledReason={canChangePlan ? undefined : 'Apenas OWNER/ADMIN pode alterar o plano.'}
+                                isChanging={isChanging}
+                                canChoose={true}
                                 onChoose={(p) => void handleChangePlan(p)}
                             />
                         );

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsKmsService } from './aws-kms.service';
 
@@ -27,7 +27,7 @@ export class AwsKmsController {
     @ApiOperation({ summary: 'Listar chaves KMS do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [KmsKeyResponseDto] })
-    listKeys(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listKeys(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listKeysFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsKmsController {
 
         @Param('keyId', ParseUUIDPipe) keyId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getKeyById(keyId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsKmsController {
     @ApiOperation({ summary: 'Sincronizar chaves KMS da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [KmsKeySyncResponseDto] })
-    syncKeys(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncKeys(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncKeysFromAws(cloudAccountId, org.id);
     }
 }

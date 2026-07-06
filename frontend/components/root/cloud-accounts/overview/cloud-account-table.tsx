@@ -13,20 +13,37 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CloudAccountColumns } from './cloud-account-columns';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTranslations } from '@/lib/i18n';
+import { useLocale } from '@/components/providers/locale-provider';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 type CloudAccountTableProps = {
     data: CloudAccount[];
+    organizationNamesById: Record<string, string>;
     canManageAccounts: boolean;
+    canSyncAccounts: boolean;
     syncingAccountId: string | null;
     onSyncAccount: (id: string) => void;
     onEditAccount: (id: string) => void;
+    onDeleteAccount: (id: string) => void;
 };
 
-export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, onSyncAccount, onEditAccount }: CloudAccountTableProps) {
+export function CloudAccountTable({
+    data,
+    organizationNamesById,
+    canManageAccounts,
+    canSyncAccounts,
+    syncingAccountId,
+    onSyncAccount,
+    onEditAccount,
+    onDeleteAccount,
+}: CloudAccountTableProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const tca = useTranslations('cloudAccounts');
+    const tc = useTranslations('common');
+    const { locale } = useLocale();
 
     const [nameFilter, setNameFilter] = useState(() => searchParams.get('name') ?? '');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>((searchParams.get('status') as StatusFilter) ?? 'all');
@@ -45,10 +62,46 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
         router.push(newUrl);
     }, [nameFilter, statusFilter, router]);
 
+    const columnTranslations = useMemo(
+        () => ({
+            notSynced: tca.notSynced,
+            invalidDate: tca.invalidDate,
+            processing: tca.processing,
+            columnAlias: tca.columnAlias,
+            columnOrganization: tca.organizationRequired,
+            columnProvider: tca.columnProvider,
+            columnStatus: tca.columnStatus,
+            columnLastSync: tca.columnLastSync,
+            active: tca.active,
+            inactive: tca.inactive,
+            syncPermission: tca.syncPermission,
+            alreadySyncing: tca.alreadySyncing,
+            syncTooltip: tca.syncTooltip,
+            editPermission: tca.editPermission,
+            editTooltip: tca.editTooltip,
+            viewInventory: tca.viewInventory,
+            edit: tc.edit,
+            syncAction: tca.syncAction,
+            delete: tc.delete,
+        }),
+        [tca, tc]
+    );
+
     const columns = useMemo(
-        () => CloudAccountColumns({ canManageAccounts, syncingAccountId, onSyncAccount, onEditAccount }),
+        () =>
+            CloudAccountColumns({
+                canManageAccounts,
+                canSyncAccounts,
+                syncingAccountId,
+                locale,
+                organizationNamesById,
+                t: columnTranslations,
+                onSyncAccount,
+                onEditAccount,
+                onDeleteAccount,
+            }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [canManageAccounts, syncingAccountId]
+        [canManageAccounts, canSyncAccounts, syncingAccountId, locale, organizationNamesById, columnTranslations, onDeleteAccount]
     );
 
     const filteredData = useMemo(() => {
@@ -93,7 +146,7 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
                             setNameFilter(e.target.value);
                             setPageIndex(0);
                         }}
-                        placeholder="Filtrar por nome..."
+                        placeholder={tca.filterPlaceholder}
                         className="h-8 w-50"
                     />
 
@@ -105,9 +158,9 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
                         }}
                     >
                         <TabsList>
-                            <TabsTrigger value="all">Todos</TabsTrigger>
-                            <TabsTrigger value="active">Ativos</TabsTrigger>
-                            <TabsTrigger value="inactive">Inativos</TabsTrigger>
+                            <TabsTrigger value="all">{tca.tabAll}</TabsTrigger>
+                            <TabsTrigger value="active">{tca.tabActive}</TabsTrigger>
+                            <TabsTrigger value="inactive">{tca.tabInactive}</TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
@@ -116,7 +169,7 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
                     <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm">
                             <SlidersHorizontal className="h-4 w-4" />
-                            <span className="hidden sm:inline">Colunas</span>
+                            <span className="hidden sm:inline">{tc.columns}</span>
                             <ChevronDown className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -166,7 +219,7 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                                    Nenhuma conta encontrada para os filtros aplicados.
+                                    {tca.noAccounts}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -177,7 +230,7 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
             {/* Paginação */}
             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                    <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                    <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                     <Select
                         value={`${pageSize}`}
                         onValueChange={(v) => {
@@ -200,7 +253,7 @@ export function CloudAccountTable({ data, canManageAccounts, syncingAccountId, o
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                     <span className="text-sm font-medium">
-                        Página {pageIndex + 1} de {table.getPageCount() || 1}
+                        {tc.page} {pageIndex + 1} {tc.of} {table.getPageCount() || 1}
                     </span>
 
                     <div className="flex items-center gap-1 self-start sm:self-auto">

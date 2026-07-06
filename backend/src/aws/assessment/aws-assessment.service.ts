@@ -78,7 +78,7 @@ export class AwsAssessmentService {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
         const cloudAccount = await this.cloudAccountRepository.findOne({
-            where: { id: cloudAccountId, organizationId },
+            where: { id: cloudAccountId, tenantId: organizationId },
         });
 
         if (!cloudAccount) {
@@ -108,7 +108,7 @@ export class AwsAssessmentService {
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
 
         if (existingJob) {
-            await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+            await this.cloudAccountRepository.update({ id: cloudAccountId, tenantId: organizationId }, { isGeneralSyncInProgress: true });
 
             return {
                 id: String(existingJob.id),
@@ -119,7 +119,7 @@ export class AwsAssessmentService {
             };
         }
 
-        await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+        await this.cloudAccountRepository.update({ id: cloudAccountId, tenantId: organizationId }, { isGeneralSyncInProgress: true });
 
         const syncJob = await this.generalSyncQueue.add(
             GENERAL_SYNC_JOB_NAME,
@@ -186,7 +186,7 @@ export class AwsAssessmentService {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
         const cloudAccount = await this.cloudAccountRepository.findOne({
-            where: { id: cloudAccountId, organizationId },
+            where: { id: cloudAccountId, tenantId: organizationId },
         });
 
         if (!cloudAccount) {
@@ -252,6 +252,10 @@ export class AwsAssessmentService {
         await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName: null });
     }
 
+    async setJobExcelFile(jobId: string, cloudAccountId: string, organizationId: string, excelFileName: string): Promise<void> {
+        await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName });
+    }
+
     private async findPendingGeneralSyncJob(cloudAccountId: string): Promise<Job | undefined> {
         const jobs = await this.generalSyncQueue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'paused'], 0, 49, false);
 
@@ -282,7 +286,7 @@ export class AwsAssessmentService {
 
     private async requireCloudAccount(cloudAccountId: string, organizationId: string): Promise<CloudAccount> {
         const cloudAccount = await this.cloudAccountRepository.findOne({
-            where: { id: cloudAccountId, organizationId },
+            where: { id: cloudAccountId, tenantId: organizationId },
         });
 
         if (!cloudAccount) {

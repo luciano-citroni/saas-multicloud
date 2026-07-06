@@ -34,22 +34,27 @@ export class AwsSecretsManagerService {
     }
 
     async syncSecretsFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getSecretsManagerClient(cloudAccountId, organizationId);
-
-        const { SecretList } = await client.send(new ListSecretsCommand({ IncludePlannedDeletion: true })).catch(() => {
-            throw new BadRequestException('Falha ao listar secrets do Secrets Manager. Verifique as permissões da role (secretsmanager:ListSecrets).');
-        });
-
-        if (!SecretList || SecretList.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsSecret>[] = [];
 
-        for (const secret of SecretList) {
-            if (!secret.ARN) continue;
+        for (const region of regions) {
+            const client = await this.connector.getSecretsManagerClient(cloudAccountId, organizationId, region);
+
+            const { SecretList } = await client.send(new ListSecretsCommand({ IncludePlannedDeletion: true })).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar secrets do Secrets Manager na região ${region}. Verifique as permissões da role (secretsmanager:ListSecrets).`
+                );
+            });
+
+            if (!SecretList || SecretList.length === 0) {
+                continue;
+            }
+
+            for (const secret of SecretList) {
+                if (!secret.ARN) continue;
 
             const secretData = mapAwsSecret(secret);
 
@@ -87,7 +92,8 @@ export class AwsSecretsManagerService {
                 });
             }
 
-            await this.secretRepository.save(dbSecret);
+                await this.secretRepository.save(dbSecret);
+            }
         }
 
         return mapped;

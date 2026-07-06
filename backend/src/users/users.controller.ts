@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+﻿import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
@@ -9,6 +9,7 @@ import { UsersService } from './users.service';
 import { CurrentMembership, CurrentOrganization } from '../tenant/tenant.decorators';
 
 import { TenantGuard } from '../tenant/tenant.guard';
+import { RolesGuard } from '../rbac/roles.guard';
 
 import { createUserSchema, updateUserSchema, userIdParamSchema } from './dto';
 
@@ -22,7 +23,7 @@ import { Roles } from '../rbac/roles.decorator';
 
 import { OrgRole } from '../rbac/roles.enum';
 
-import { Organization } from '../db/entites';
+import { Tenant } from '../db/entites/tenant.entity';
 
 import { OrganizationMember } from '../db/entites/organization-member.entity';
 
@@ -32,7 +33,7 @@ import type { JwtPayload } from '../auth/auth.service';
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
     constructor(private readonly usersService: UsersService) {}
@@ -47,7 +48,7 @@ export class UsersController {
 
         description: 'Token inválido ou expirado',
     })
-    findAll(@CurrentOrganization() organization: Organization) {
+    findAll(@CurrentOrganization() organization: Tenant) {
         return this.usersService.findAll(organization.id);
     }
 
@@ -81,7 +82,7 @@ export class UsersController {
     findOne(
         @CurrentUser() user: JwtPayload,
 
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
         @CurrentMembership() membership: OrganizationMember,
 
@@ -95,7 +96,7 @@ export class UsersController {
 
             requesterRole: membership.role,
 
-            organizationId: organization.id,
+            tenantId: organization.id,
         });
     }
 
@@ -125,7 +126,7 @@ export class UsersController {
     update(
         @CurrentUser() user: JwtPayload,
 
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
         @CurrentMembership() membership: OrganizationMember,
 
@@ -140,7 +141,7 @@ export class UsersController {
 
             requesterRole: membership.role,
 
-            organizationId: organization.id,
+            tenantId: organization.id,
         });
     }
 
@@ -160,7 +161,7 @@ export class UsersController {
     remove(
         @CurrentUser() user: JwtPayload,
 
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
         @CurrentMembership() membership: OrganizationMember,
 
@@ -174,7 +175,7 @@ export class UsersController {
 
             requesterRole: membership.role,
 
-            organizationId: organization.id,
+            tenantId: organization.id,
         });
     }
 }

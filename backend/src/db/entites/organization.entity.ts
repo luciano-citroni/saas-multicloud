@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { OrganizationMember } from './organization-member.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Tenant } from './tenant.entity';
+import { OrganizationMembership } from './organization-membership.entity';
 
 @Entity('organizations')
 export class Organization {
@@ -9,17 +10,8 @@ export class Organization {
     @Column({ type: 'varchar', length: 100 })
     name!: string;
 
-    @Column({ type: 'varchar', length: 20, nullable: true })
-    cnpj?: string | null;
-
-    @Column({ type: 'integer', name: 'max_cloud_accounts', default: 0 })
-    maxCloudAccounts!: number;
-
-    @Column({ type: 'integer', name: 'max_users', default: 0 })
-    maxUsers!: number;
-
-    @Column('text', { name: 'plans', array: true, default: () => "'{}'" })
-    plans!: string[];
+    @Column({ type: 'uuid', name: 'tenant_id' })
+    tenantId!: string;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
@@ -27,6 +19,10 @@ export class Organization {
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt!: Date;
 
-    @OneToMany(() => OrganizationMember, (member) => member.organization)
-    members!: OrganizationMember[];
+    @ManyToOne(() => Tenant, (tenant) => tenant.members, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'tenant_id' })
+    tenant!: Tenant;
+
+    @OneToMany(() => OrganizationMembership, (member) => member.organization)
+    members!: OrganizationMembership[];
 }

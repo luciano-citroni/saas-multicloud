@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsApiGatewayService } from './aws-api-gateway.service';
 
@@ -27,7 +27,7 @@ export class AwsApiGatewayController {
     @ApiOperation({ summary: 'Listar REST APIs do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [ApiGatewayRestApiResponseDto] })
-    listApis(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listApis(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listApisFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsApiGatewayController {
 
         @Param('apiId', ParseUUIDPipe) apiId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getApiById(apiId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsApiGatewayController {
     @ApiOperation({ summary: 'Sincronizar REST APIs do API Gateway da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [ApiGatewayRestApiSyncResponseDto] })
-    syncApis(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncApis(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncApisFromAws(cloudAccountId, org.id);
     }
 }

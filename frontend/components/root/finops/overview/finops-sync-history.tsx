@@ -48,7 +48,7 @@ export function FinopsSyncHistory() {
                 const payload = await response.json().catch(() => null);
 
                 if (!response.ok) {
-                    toast.error(extractErrorMessage(payload, 'pt'));
+                    toast.error(extractErrorMessage(payload));
                     return;
                 }
 

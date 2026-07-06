@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -119,15 +119,23 @@ export class AwsSecurityGroupService {
      */
 
     async syncSecurityGroupsFromAws(cloudAccountId: string, organizationId: string, awsVpcId?: string) {
-        const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const filters = awsVpcId ? { Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }] } : {};
 
-        const { SecurityGroups } = await ec2.send(new DescribeSecurityGroupsCommand(filters)).catch(() => {
-            throw new BadRequestException('Falha ao consultar Security Groups na AWS. Verifique as permissões da role (ec2:DescribeSecurityGroups).');
-        });
+        const mappedGroups: ReturnType<typeof mapAwsSecurityGroup>[] = [];
 
-        const mappedGroups = (SecurityGroups ?? []).map(mapAwsSecurityGroup);
+        for (const region of regions) {
+            const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId, region);
+
+            const { SecurityGroups } = await ec2.send(new DescribeSecurityGroupsCommand(filters)).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao consultar Security Groups na AWS para a região ${region}. Verifique as permissões da role (ec2:DescribeSecurityGroups).`
+                );
+            });
+
+            mappedGroups.push(...(SecurityGroups ?? []).map(mapAwsSecurityGroup));
+        }
 
         const now = new Date();
 
@@ -148,7 +156,7 @@ export class AwsSecurityGroupService {
                 });
 
                 if (!vpc) {
-                    console.warn(`VPC ${groupData.awsVpcId} não encontrada. Security Group ${groupData.name} será salvo sem VPC.`);
+                    Logger.warn(`VPC ${groupData.awsVpcId} não encontrada. Security Group ${groupData.name} será salvo sem VPC.`);
                 }
             }
 

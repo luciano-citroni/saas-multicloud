@@ -35,6 +35,16 @@ type PaginatedOrganizationsPayload = {
     };
 };
 
+type BillingSubscriptionPayload = {
+    plan?: {
+        metadata?: {
+            modules?: unknown;
+            maxCloudAccounts?: number;
+            maxUsers?: number;
+        };
+    } | null;
+};
+
 const ORGANIZATIONS_PAGE_SIZE = 100;
 
 function parseOrganizationPlans(plans: unknown): string[] {
@@ -199,6 +209,77 @@ async function fetchRemainingOrganizations(accessToken: string, startPage: numbe
     return organizations;
 }
 
+async function enrichOrganizationsWithBillingSnapshot(accessToken: string, organizations: BackendOrganization[]): Promise<BackendOrganization[]> {
+    const headers = {
+        Authorization: `Bearer ${accessToken}`,
+    };
+
+    const enriched = await Promise.all(
+        organizations.map(async (organization) => {
+            const organizationId = typeof organization.id === 'string' ? organization.id : null;
+
+            if (!organizationId) {
+                return organization;
+            }
+
+            const currentPlans = parseOrganizationPlans(organization.plans);
+            const currentMaxCloudAccounts =
+                typeof organization.maxCloudAccounts === 'number'
+                    ? organization.maxCloudAccounts
+                    : typeof organization.max_cloud_accounts === 'number'
+                      ? organization.max_cloud_accounts
+                      : 0;
+            const currentMaxUsers =
+                typeof organization.maxUsers === 'number'
+                    ? organization.maxUsers
+                    : typeof organization.max_users === 'number'
+                      ? organization.max_users
+                      : 0;
+
+            const hasSnapshot = currentPlans.length > 0 || currentMaxCloudAccounts > 0 || currentMaxUsers > 0;
+
+            if (hasSnapshot) {
+                return organization;
+            }
+
+            const subscriptionResponse = await backendFetch('/api/billing/subscription', {
+                headers: {
+                    ...headers,
+                    'x-organization-id': organizationId,
+                },
+            });
+
+            if (!subscriptionResponse.ok) {
+                return organization;
+            }
+
+            const subscriptionBody = await parseJsonSafe<BillingSubscriptionPayload>(subscriptionResponse);
+            const modules = parseOrganizationPlans(subscriptionBody?.plan?.metadata?.modules);
+            const maxCloudAccounts = Number.isFinite(subscriptionBody?.plan?.metadata?.maxCloudAccounts)
+                ? Number(subscriptionBody?.plan?.metadata?.maxCloudAccounts)
+                : 0;
+            const maxUsers = Number.isFinite(subscriptionBody?.plan?.metadata?.maxUsers)
+                ? Number(subscriptionBody?.plan?.metadata?.maxUsers)
+                : 0;
+
+            if (modules.length === 0 && maxCloudAccounts <= 0 && maxUsers <= 0) {
+                return organization;
+            }
+
+            return {
+                ...organization,
+                plans: modules,
+                maxCloudAccounts,
+                maxUsers,
+                max_cloud_accounts: maxCloudAccounts,
+                max_users: maxUsers,
+            };
+        })
+    );
+
+    return enriched;
+}
+
 export async function GET() {
     const accessToken = await getAccessTokenFromCookies();
     const refreshToken = await getRefreshTokenFromCookies();
@@ -265,6 +346,14 @@ export async function GET() {
                     organizationsBody = [...initialOrganizations, ...remainingOrganizations];
                 }
             }
+        }
+    }
+
+    if (organizationsResponse.ok && organizationsBody && organizationsBody.length > 0) {
+        const nextToken = rotatedTokens?.accessToken ?? currentAccessToken;
+
+        if (nextToken) {
+            organizationsBody = await enrichOrganizationsWithBillingSnapshot(nextToken, organizationsBody);
         }
     }
 

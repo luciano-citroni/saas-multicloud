@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
+const awsRegionRegex = /^[a-z]{2}(?:-(?:gov|iso|isob|isof))?-[a-z0-9-]+-\d+$/i;
 
 const ec2ConfigSchema = z.object({
     instanceType: z.string().min(1, 'Instance type é obrigatório'),

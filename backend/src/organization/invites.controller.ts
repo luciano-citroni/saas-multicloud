@@ -2,6 +2,8 @@ import { Controller, Get, HttpCode, HttpStatus, Param } from '@nestjs/common';
 
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+import { Throttle } from '@nestjs/throttler';
+
 import { OrganizationService } from './organization.service';
 
 import { SkipTenant } from '../tenant/tenant.decorators';
@@ -67,6 +69,7 @@ export class InvitesController {
 
     @Get('accept/:token')
     @Public()
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Aceitar convite para a organização',

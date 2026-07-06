@@ -80,29 +80,6 @@ export class OrganizationResponseDto {
     currentRole?: string | null;
 
     @ApiProperty({
-        example: 10,
-        description: 'Limite de cloud accounts permitido para a organização',
-        required: false,
-    })
-    maxCloudAccounts?: number;
-
-    @ApiProperty({
-        example: 25,
-        description: 'Limite de usuários permitido para a organização',
-        required: false,
-    })
-    maxUsers?: number;
-
-    @ApiProperty({
-        example: ['assessment'],
-        description: 'Módulos liberados no plano atual da organização',
-        required: false,
-        isArray: true,
-        type: String,
-    })
-    plans?: string[];
-
-    @ApiProperty({
         example: '2026-03-26T13:00:00.000Z',
         description: 'Data de criação da organização',
         required: false,
@@ -165,6 +142,15 @@ export class InviteMemberRequestDto {
         enum: ['ADMIN', 'MEMBER', 'VIEWER'],
     })
     role: string;
+
+    @ApiProperty({
+        required: false,
+        isArray: true,
+        format: 'uuid',
+        example: ['123e4567-e89b-12d3-a456-426614174000'],
+        description: 'IDs das organizações às quais o usuário terá acesso após aceitar o convite',
+    })
+    organizationIds?: string[];
 }
 
 export class InviteResponseDto {
@@ -206,6 +192,15 @@ export class InviteResponseDto {
         description: 'Data de expiração do convite (7 dias após a criação)',
     })
     expiresAt: string;
+
+    @ApiProperty({
+        required: false,
+        isArray: true,
+        format: 'uuid',
+        example: ['123e4567-e89b-12d3-a456-426614174000'],
+        description: 'IDs das organizações selecionadas no convite',
+    })
+    organizationIds?: string[];
 }
 
 export class AcceptInviteResponseDto {
@@ -370,6 +365,81 @@ export class UpdateMemberRoleRequestDto {
     role: string;
 }
 
+export class MemberUserDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do usuário' })
+    id: string;
+
+    @ApiProperty({ example: 'Jane Doe', description: 'Nome do usuário' })
+    name: string;
+
+    @ApiProperty({ example: 'jane.doe@example.com', description: 'E-mail do usuário' })
+    email: string;
+}
+
+export class MemberWithUserResponseDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do registro de membro' })
+    id: string;
+
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do usuário' })
+    userId: string;
+
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID da organização' })
+    organizationId: string;
+
+    @ApiProperty({ example: 'MEMBER', description: 'Cargo do membro', enum: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] })
+    role: string;
+
+    @ApiProperty({ example: '2026-01-01T00:00:00.000Z', description: 'Data em que entrou na organização' })
+    joinedAt: string;
+
+    @ApiProperty({ type: () => MemberUserDto, description: 'Dados do usuário' })
+    user: MemberUserDto;
+}
+
+export class InviteListItemResponseDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do convite' })
+    id: string;
+
+    @ApiProperty({ example: 'jane.doe@example.com', description: 'E-mail convidado' })
+    email: string;
+
+    @ApiProperty({ example: 'MEMBER', description: 'Cargo atribuído ao aceitar', enum: ['ADMIN', 'MEMBER', 'VIEWER'] })
+    role: string;
+
+    @ApiProperty({ example: 'PENDING', description: 'Status do convite', enum: ['PENDING', 'ACCEPTED', 'EXPIRED'] })
+    status: string;
+
+    @ApiProperty({ example: '2026-03-10T00:00:00.000Z', description: 'Data de expiração' })
+    expiresAt: string;
+
+    @ApiProperty({ example: '2026-03-02T00:00:00.000Z', description: 'Data de criação' })
+    createdAt: string;
+}
+
+export class OrgAccessItemResponseDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID da organização' })
+    id: string;
+
+    @ApiProperty({ example: 'ACME Corp', description: 'Nome da organização' })
+    name: string;
+
+    @ApiProperty({
+        example: 'MEMBER',
+        description: 'Cargo do usuário nesta org (null se não for membro)',
+        nullable: true,
+        enum: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'],
+    })
+    memberRole: string | null;
+}
+
+export class AddToOrgRequestDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID da organização de destino' })
+    organizationId: string;
+
+    @ApiProperty({ example: 'MEMBER', description: 'Cargo a ser atribuído', enum: ['ADMIN', 'MEMBER', 'VIEWER'] })
+    role: string;
+}
+
 export class RemoveMemberResponseDto {
     @ApiProperty({
         example: '123e4567-e89b-12d3-a456-426614174000',
@@ -384,4 +454,17 @@ export class RemoveMemberResponseDto {
         description: 'Confirmação de remoção',
     })
     removed: boolean;
+}
+
+export class CancelInviteResponseDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do convite cancelado' })
+    inviteId: string;
+
+    @ApiProperty({ example: true, description: 'Confirmação de cancelamento' })
+    cancelled: boolean;
+}
+
+export class InviteIdParamDto {
+    @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'UUID do convite' })
+    inviteId: string;
 }

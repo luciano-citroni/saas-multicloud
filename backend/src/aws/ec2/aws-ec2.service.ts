@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -141,7 +141,7 @@ export class Ec2Service {
      */
 
     async syncInstancesFromAws(cloudAccountId: string, organizationId: string, vpcId?: string) {
-        const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         // Se vpcId é do banco de dados, busca o AWS VPC ID
 
@@ -157,27 +157,33 @@ export class Ec2Service {
             awsVpcId = dbVpc.awsVpcId;
         }
 
-        const { Reservations } = await ec2
-
-            .send(
-                new DescribeInstancesCommand(
-                    awsVpcId
-                        ? {
-                              Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }],
-                          }
-                        : {}
-                )
-            )
-
-            .catch(() => {
-                throw new BadRequestException('Falha ao consultar instâncias EC2 na AWS. Verifique as permissões da role (ec2:DescribeInstances).');
-            });
-
         const instanceList: Instance[] = [];
 
-        for (const reservation of Reservations ?? []) {
-            for (const instance of reservation.Instances ?? []) {
-                instanceList.push(instance);
+        for (const region of regions) {
+            const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId, region);
+
+            const { Reservations } = await ec2
+
+                .send(
+                    new DescribeInstancesCommand(
+                        awsVpcId
+                            ? {
+                                  Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }],
+                              }
+                            : {}
+                    )
+                )
+
+                .catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao consultar instâncias EC2 na AWS para a região ${region}. Verifique as permissões da role (ec2:DescribeInstances).`
+                    );
+                });
+
+            for (const reservation of Reservations ?? []) {
+                for (const instance of reservation.Instances ?? []) {
+                    instanceList.push(instance);
+                }
             }
         }
 
@@ -199,7 +205,7 @@ export class Ec2Service {
             });
 
             if (!vpc) {
-                console.warn(`VPC ${instanceData.awsVpcId} não encontrada. Pulando instância ${instanceData.awsInstanceId}.`);
+                Logger.warn(`VPC ${instanceData.awsVpcId} não encontrada. Pulando instância ${instanceData.awsInstanceId}.`);
 
                 continue;
             }
@@ -211,7 +217,7 @@ export class Ec2Service {
             });
 
             if (!subnet) {
-                console.warn(`Subnet ${instanceData.awsSubnetId} não encontrada. Pulando instância ${instanceData.awsInstanceId}.`);
+                Logger.warn(`Subnet ${instanceData.awsSubnetId} não encontrada. Pulando instância ${instanceData.awsInstanceId}.`);
 
                 continue;
             }
@@ -226,7 +232,7 @@ export class Ec2Service {
                 });
 
                 if (!sg) {
-                    console.warn(`Security Group ${instanceData.awsSecurityGroupId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                    Logger.warn(`Security Group ${instanceData.awsSecurityGroupId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
                 }
 
                 securityGroupId = sg?.id ?? null;
@@ -244,7 +250,7 @@ export class Ec2Service {
                 });
 
                 if (!iamRole) {
-                    console.warn(`IAM Role ${iamRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                    Logger.warn(`IAM Role ${iamRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
                 }
 
                 iamRoleId = iamRole?.id ?? null;

@@ -13,8 +13,13 @@ export type SystemModuleName = (typeof SYSTEM_MODULES)[number];
 
 const systemModulesSet = new Set<string>(SYSTEM_MODULES);
 
+const MODULE_ALIAS_MAP: Record<string, string> = {
+    assessement: 'assessment',
+};
+
 export function normalizeModuleName(moduleName: string): string {
-    return moduleName.trim().toLowerCase();
+    const normalized = moduleName.trim().toLowerCase();
+    return MODULE_ALIAS_MAP[normalized] ?? normalized;
 }
 
 export function isKnownSystemModule(moduleName: string): boolean {

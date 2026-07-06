@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { RdsInstanceResponseDto, RdsSyncResponseDto } from './swagger.dto';
 
@@ -40,7 +40,7 @@ export class AwsRdsController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listInstancesFromDatabase(cloudAccountId);
     }
 
@@ -62,7 +62,7 @@ export class AwsRdsController {
 
         @Param('vpcId', ParseUUIDPipe) vpcId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listInstancesByVpcFromDatabase(vpcId, cloudAccountId);
     }
@@ -84,7 +84,7 @@ export class AwsRdsController {
 
         @Param('instanceId', ParseUUIDPipe) instanceId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getInstanceById(instanceId, cloudAccountId);
     }
@@ -106,7 +106,7 @@ export class AwsRdsController {
     syncInstances(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Query('vpcId') vpcId?: string
     ) {

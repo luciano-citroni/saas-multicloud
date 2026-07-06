@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,17 +16,26 @@ import {
     type RemoveSessionResult,
 } from '@/app/actions/settings';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { updatePasswordSchema, updateProfileSchema } from '@/components/root/settings/schema';
+import {
+    createUpdateProfileSchema,
+    createUpdatePasswordSchema,
+    type UpdateProfileFormData,
+    type UpdatePasswordFormData,
+} from '@/components/root/settings/schema';
 import { ProfileSettingsForm } from '@/components/root/settings/profile-settings-form';
 import { PasswordSettingsForm } from '@/components/root/settings/password-settings-form';
 import { ActiveSessionsCard } from '@/components/root/settings/active-sessions-card';
-import { isCurrentUser, isRemoveSessionResult, normalizeOptionalCpf } from '@/components/root/settings/settings-utils';
-
-type UpdateProfileFormData = z.infer<typeof updateProfileSchema>;
-type UpdatePasswordFormData = z.infer<typeof updatePasswordSchema>;
+import { isCurrentUser, isRemoveSessionResult } from '@/components/root/settings/settings-utils';
+import { useTranslations } from '@/lib/i18n';
+import { useLocale } from '@/components/providers/locale-provider';
 
 export function AccountSecuritySettings() {
     const router = useRouter();
+    const ts = useTranslations('settings');
+    const tp = useTranslations('profile');
+    const tpw = useTranslations('password');
+    const tss = useTranslations('sessions');
+    const { locale } = useLocale();
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [hasPassword, setHasPassword] = useState(true);
     const [sessions, setSessions] = useState<ActiveSession[]>([]);
@@ -35,24 +43,26 @@ export function AccountSecuritySettings() {
 
     const dateFormatter = useMemo(
         () =>
-            new Intl.DateTimeFormat('pt-BR', {
+            new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'pt-BR', {
                 dateStyle: 'short',
                 timeStyle: 'short',
             }),
-        []
+        [locale]
     );
 
+    const profileSchema = useMemo(() => createUpdateProfileSchema(tp), [tp]);
+    const passwordSchema = useMemo(() => createUpdatePasswordSchema(tpw), [tpw]);
+
     const profileForm = useForm<UpdateProfileFormData>({
-        resolver: zodResolver(updateProfileSchema),
+        resolver: zodResolver(profileSchema),
         defaultValues: {
             name: '',
             email: '',
-            cpf: '',
         },
     });
 
     const passwordForm = useForm<UpdatePasswordFormData>({
-        resolver: zodResolver(updatePasswordSchema),
+        resolver: zodResolver(passwordSchema),
         defaultValues: {
             currentPassword: '',
             newPassword: '',
@@ -68,12 +78,12 @@ export function AccountSecuritySettings() {
             const sessionsBody = (await sessionsResponse.json().catch(() => null)) as ActiveSession[] | { message?: string } | null;
 
             if (!userResponse.ok) {
-                toast.error(extractErrorMessage(userBody, 'pt'));
+                toast.error(extractErrorMessage(userBody));
                 return;
             }
 
             if (!sessionsResponse.ok) {
-                toast.error(extractErrorMessage(sessionsBody, 'pt'));
+                toast.error(extractErrorMessage(sessionsBody));
                 return;
             }
 
@@ -83,17 +93,16 @@ export function AccountSecuritySettings() {
                 profileForm.reset({
                     name: userBody.name ?? '',
                     email: userBody.email ?? '',
-                    cpf: normalizeOptionalCpf(userBody.cpf),
                 });
             }
 
             setSessions(Array.isArray(sessionsBody) ? sessionsBody : []);
         } catch {
-            toast.error('Não foi possível carregar as configurações da conta.');
+            toast.error(ts.loadError);
         } finally {
             setIsInitialLoading(false);
         }
-    }, [profileForm]);
+    }, [profileForm, ts]);
 
     useEffect(() => {
         void loadSettingsData();
@@ -103,26 +112,24 @@ export function AccountSecuritySettings() {
         try {
             const response = await updateCurrentUser({
                 name: values.name,
-                cpf: values.cpf?.trim() ? values.cpf.trim() : undefined,
             });
 
             const body = (await response.json().catch(() => null)) as CurrentUser | { message?: string } | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
             profileForm.reset({
                 name: isCurrentUser(body) ? body.name : values.name,
                 email: isCurrentUser(body) ? body.email : values.email,
-                cpf: isCurrentUser(body) ? normalizeOptionalCpf(body.cpf) : normalizeOptionalCpf(values.cpf),
             });
 
-            toast.success('Dados do usuário atualizados com sucesso.');
+            toast.success(tp.saveSuccess);
             router.refresh();
         } catch {
-            toast.error('Não foi possível atualizar seus dados.');
+            toast.error(tp.saveError);
         }
     });
 
@@ -130,7 +137,7 @@ export function AccountSecuritySettings() {
         if (hasPassword && !values.currentPassword?.trim()) {
             passwordForm.setError('currentPassword', {
                 type: 'manual',
-                message: 'Senha atual é obrigatória',
+                message: tpw.currentPasswordRequired,
             });
             return;
         }
@@ -144,7 +151,7 @@ export function AccountSecuritySettings() {
             const body = (await response.json().catch(() => null)) as { success?: boolean; message?: string } | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
@@ -155,9 +162,9 @@ export function AccountSecuritySettings() {
             });
 
             setHasPassword(true);
-            toast.success('Senha alterada com sucesso.');
+            toast.success(tpw.changeSuccess);
         } catch {
-            toast.error('Não foi possível alterar sua senha.');
+            toast.error(tpw.changeError);
         }
     });
 
@@ -169,26 +176,26 @@ export function AccountSecuritySettings() {
             const body = (await response.json().catch(() => null)) as RemoveSessionResult | { message?: string } | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
             if (!isRemoveSessionResult(body)) {
-                toast.error('Não foi possível remover a sessão selecionada.');
+                toast.error(tss.removeError);
                 return;
             }
 
             if (body.removedCurrent) {
-                toast.success('Sessão atual encerrada. Faça login novamente.');
+                toast.success(tss.removeCurrentSuccess);
                 router.replace('/auth/sign-in');
                 router.refresh();
                 return;
             }
 
             setSessions((currentSessions) => currentSessions.filter((session) => session.id !== sessionId));
-            toast.success('Sessão removida com sucesso.');
+            toast.success(tss.removeSuccess);
         } catch {
-            toast.error('Não foi possível remover a sessão selecionada.');
+            toast.error(tss.removeError);
         } finally {
             setRemovingSessionId(null);
         }

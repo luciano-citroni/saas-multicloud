@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsCloudWatchService } from './aws-cloudwatch.service';
 
@@ -27,7 +27,7 @@ export class AwsCloudWatchController {
     @ApiOperation({ summary: 'Listar alarmes CloudWatch do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [CloudWatchAlarmResponseDto] })
-    listAlarms(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listAlarms(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listAlarmsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsCloudWatchController {
 
         @Param('alarmId', ParseUUIDPipe) alarmId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getAlarmById(alarmId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsCloudWatchController {
     @ApiOperation({ summary: 'Sincronizar alarmes CloudWatch da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [CloudWatchAlarmSyncResponseDto] })
-    syncAlarms(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncAlarms(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncAlarmsFromAws(cloudAccountId, org.id);
     }
 }

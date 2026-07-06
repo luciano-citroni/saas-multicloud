@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsGuardDutyService } from './aws-guardduty.service';
 
@@ -27,7 +27,7 @@ export class AwsGuardDutyController {
     @ApiOperation({ summary: 'Listar detectores GuardDuty do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GuardDutyDetectorResponseDto] })
-    listDetectors(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listDetectors(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listDetectorsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsGuardDutyController {
 
         @Param('detectorId', ParseUUIDPipe) detectorId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getDetectorById(detectorId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsGuardDutyController {
     @ApiOperation({ summary: 'Sincronizar detectores GuardDuty da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GuardDutyDetectorSyncResponseDto] })
-    syncDetectors(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncDetectors(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncDetectorsFromAws(cloudAccountId, org.id);
     }
 }

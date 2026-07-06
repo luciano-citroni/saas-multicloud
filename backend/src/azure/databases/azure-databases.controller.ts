@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, HttpStatus, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import {
     ApiBearerAuth,
     ApiHeader,
@@ -10,7 +10,7 @@ import {
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { AzureDatabasesService } from './azure-databases.service';
 
 @ApiTags('Azure - Databases')
@@ -29,7 +29,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listSqlServers(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.databasesService.listSqlServers(cloudAccountId, org.id);
@@ -44,7 +44,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getSqlServer(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -59,7 +59,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listSqlDatabases(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.databasesService.listSqlDatabases(cloudAccountId, org.id);
@@ -74,7 +74,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getSqlDatabase(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -89,7 +89,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listPostgresServers(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.databasesService.listPostgresServers(cloudAccountId, org.id);
@@ -104,7 +104,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getPostgresServer(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -119,7 +119,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listCosmosDbAccounts(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.databasesService.listCosmosDbAccounts(cloudAccountId, org.id);
@@ -134,7 +134,7 @@ export class AzureDatabasesController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getCosmosDbAccount(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {

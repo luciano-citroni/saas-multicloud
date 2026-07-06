@@ -1,6 +1,6 @@
 'use client';
 
-import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,6 +8,7 @@ import * as React from 'react';
 
 export function NavMain({
     items,
+    label,
 }: {
     items: {
         title: string;
@@ -16,12 +17,10 @@ export function NavMain({
         disabled?: boolean;
         disabledReason?: string;
     }[];
+    label?: string;
 }) {
     const pathname = usePathname();
 
-    /**
-     * Descobre qual é o item mais específico da rota atual.
-     */
     const activeItem = React.useMemo(() => {
         const matches = items.filter((item) => pathname === item.url || (item.url.length > 1 && pathname.includes(item.url)));
 
@@ -32,6 +31,7 @@ export function NavMain({
 
     return (
         <SidebarGroup>
+            {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
             <SidebarGroupContent className="flex flex-col gap-2">
                 <SidebarMenu>
                     {items.map((item) => {

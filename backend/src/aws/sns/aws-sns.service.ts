@@ -36,22 +36,27 @@ export class AwsSnsService {
     }
 
     async syncTopicsFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getSnsClient(cloudAccountId, organizationId);
-
-        const { Topics } = await client.send(new ListTopicsCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar tópicos SNS. Verifique as permissões da role (sns:ListTopics).');
-        });
-
-        if (!Topics || Topics.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: Record<string, any>[] = [];
 
-        for (const topic of Topics) {
-            if (!topic.TopicArn) continue;
+        for (const region of regions) {
+            const client = await this.connector.getSnsClient(cloudAccountId, organizationId, region);
+
+            const { Topics } = await client.send(new ListTopicsCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar tópicos SNS na região ${region}. Verifique as permissões da role (sns:ListTopics).`
+                );
+            });
+
+            if (!Topics || Topics.length === 0) {
+                continue;
+            }
+
+            for (const topic of Topics) {
+                if (!topic.TopicArn) continue;
 
             const { Attributes } = await client.send(new GetTopicAttributesCommand({ TopicArn: topic.TopicArn })).catch(() => {
                 this.logger.debug(`Não foi possível obter atributos do tópico ${topic.TopicArn}.`);
@@ -110,7 +115,8 @@ export class AwsSnsService {
                 dbTopic = this.topicRepository.create({ cloudAccountId, ...topicData, tags, lastSyncedAt: now });
             }
 
-            await this.topicRepository.save(dbTopic);
+                await this.topicRepository.save(dbTopic);
+            }
         }
 
         return mapped;

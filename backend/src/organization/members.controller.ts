@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -18,15 +18,35 @@ import { CurrentUser } from '../auth/decorators';
 
 import type { JwtPayload } from '../auth/auth.service';
 
-import { Organization, OrganizationMember } from '../db/entites';
+import { Tenant, TenantMember } from '../db/entites';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-import { inviteMemberSchema, memberUserIdParamSchema, updateMemberRoleSchema } from './dto';
+import {
+    addToOrgSchema,
+    inviteIdParamSchema,
+    inviteMemberSchema,
+    memberOrgAccessParamSchema,
+    memberUserIdParamSchema,
+    updateMemberRoleSchema,
+} from './dto';
 
-import type { InviteMemberDto, MemberUserIdParam, UpdateMemberRoleDto } from './dto';
+import type { AddToOrgDto, InviteIdParam, InviteMemberDto, MemberOrgAccessParam, MemberUserIdParam, UpdateMemberRoleDto } from './dto';
 
-import { InviteMemberRequestDto, InviteResponseDto, MemberResponseDto, RemoveMemberResponseDto, UpdateMemberRoleRequestDto } from './swagger.dto';
+import {
+    AddToOrgRequestDto,
+    CancelInviteResponseDto,
+    InviteMemberRequestDto,
+    InviteListItemResponseDto,
+    InviteResponseDto,
+    MemberResponseDto,
+    MemberWithUserResponseDto,
+    OrgAccessItemResponseDto,
+    RemoveMemberResponseDto,
+    UpdateMemberRoleRequestDto,
+} from './swagger.dto';
+
+import { SkipTenant } from '../tenant/tenant.decorators';
 
 /**
 
@@ -64,6 +84,92 @@ import { InviteMemberRequestDto, InviteResponseDto, MemberResponseDto, RemoveMem
 @Controller('organization/members')
 export class MembersController {
     constructor(private readonly organizationService: OrganizationService) {}
+
+    @Get()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Listar membros da organização' })
+    @ApiResponse({ status: 200, description: 'Lista de membros', type: [MemberWithUserResponseDto] })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    listMembers(@CurrentOrganization() organization: Tenant) {
+        return this.organizationService.listMembers(organization.id);
+    }
+
+    @Get('invites')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Listar convites pendentes da organização' })
+    @ApiResponse({ status: 200, description: 'Lista de convites pendentes', type: [InviteListItemResponseDto] })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    listInvites(@CurrentOrganization() organization: Tenant) {
+        return this.organizationService.listPendingInvites(organization.id);
+    }
+
+    @Post('invites/:inviteId/resend')
+    @HttpCode(HttpStatus.OK)
+    @Roles(OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Reenviar e-mail de convite pendente' })
+    @ApiResponse({ status: 200, description: 'Convite reenviado com sucesso', type: InviteResponseDto })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    @ApiResponse({ status: 404, description: 'Convite não encontrado' })
+    resendInvite(
+        @CurrentUser() user: JwtPayload,
+        @CurrentOrganization() organization: Tenant,
+        @Param(new ZodValidationPipe(inviteIdParamSchema)) params: InviteIdParam
+    ) {
+        return this.organizationService.resendInvite(params.inviteId, organization.id, user.sub);
+    }
+
+    @Delete('invites/:inviteId')
+    @HttpCode(HttpStatus.OK)
+    @Roles(OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Cancelar convite pendente' })
+    @ApiResponse({ status: 200, description: 'Convite cancelado com sucesso', type: CancelInviteResponseDto })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    @ApiResponse({ status: 404, description: 'Convite não encontrado' })
+    cancelInvite(@CurrentOrganization() organization: Tenant, @Param(new ZodValidationPipe(inviteIdParamSchema)) params: InviteIdParam) {
+        return this.organizationService.cancelInvite(params.inviteId, organization.id);
+    }
+
+    @Get(':userId/orgs')
+    @SkipTenant()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Listar organizações acessíveis por um usuário (escopo cross-org)' })
+    @ApiResponse({ status: 200, description: 'Lista de orgs que o solicitante gerencia + role do alvo em cada uma', type: [OrgAccessItemResponseDto] })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    getUserOrgAccess(@CurrentUser() user: JwtPayload, @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam) {
+        return this.organizationService.getUserCrossOrgAccess(params.userId, user.sub);
+    }
+
+    @Post(':userId/add-to-org')
+    @SkipTenant()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Adicionar usuário diretamente a uma organização (sem e-mail de convite)' })
+    @ApiBody({ type: AddToOrgRequestDto })
+    @ApiResponse({ status: 200, description: 'Usuário adicionado com sucesso', type: MemberResponseDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos' })
+    @ApiResponse({ status: 403, description: 'Sem permissão na organização de destino' })
+    @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
+    @ApiResponse({ status: 409, description: 'Usuário já é membro da organização' })
+    addMemberToOrg(
+        @CurrentUser() user: JwtPayload,
+        @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam,
+        @Body(new ZodValidationPipe(addToOrgSchema)) body: AddToOrgDto
+    ) {
+        return this.organizationService.addMemberToOrg(params.userId, body, user.sub);
+    }
+
+    @Delete(':userId/orgs/:organizationId')
+    @SkipTenant()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Remover usuário de uma organização específica (escopo cross-org)' })
+    @ApiResponse({ status: 200, description: 'Usuário removido da organização com sucesso', type: RemoveMemberResponseDto })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 403, description: 'Sem permissão na organização de destino' })
+    @ApiResponse({ status: 404, description: 'Membro não encontrado na organização' })
+    removeMemberFromOrg(@CurrentUser() user: JwtPayload, @Param(new ZodValidationPipe(memberOrgAccessParamSchema)) params: MemberOrgAccessParam) {
+        return this.organizationService.removeMemberFromOrg(params.userId, params.organizationId, user.sub);
+    }
 
     /**
 
@@ -120,7 +226,7 @@ export class MembersController {
     invite(
         @CurrentUser() user: JwtPayload,
 
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
         @Body(new ZodValidationPipe(inviteMemberSchema)) body: InviteMemberDto
     ) {
@@ -174,9 +280,9 @@ export class MembersController {
         },
     })
     removeMember(
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
-        @CurrentMembership() membership: OrganizationMember,
+        @CurrentMembership() membership: TenantMember,
 
         @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam
     ) {
@@ -226,9 +332,9 @@ export class MembersController {
         description: 'Membro não encontrado na organização',
     })
     updateMemberRole(
-        @CurrentOrganization() organization: Organization,
+        @CurrentOrganization() organization: Tenant,
 
-        @CurrentMembership() membership: OrganizationMember,
+        @CurrentMembership() membership: TenantMember,
 
         @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam,
 

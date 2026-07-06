@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,7 +29,7 @@ import {
     type GcpServiceAccount,
     type GcpGkeCluster,
 } from '@/app/actions/gcp-inventory';
-import { AlertCircle, Server, Network, HardDrive, Database, Shield, Boxes } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Server, Network, HardDrive, Database, Shield, Boxes } from 'lucide-react';
 
 type Tab = 'compute' | 'networks' | 'subnetworks' | 'firewall' | 'storage' | 'sql' | 'iam' | 'gke';
 
@@ -68,263 +71,279 @@ function LoadingSkeleton() {
 function ComputeTable({ data }: { data: GcpVmInstance[] }) {
     if (data.length === 0) return <EmptyState label="VM" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Zona</TableHead>
-                    <TableHead>Tipo de máquina</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>IP interno</TableHead>
-                    <TableHead>IP externo</TableHead>
-                    <TableHead>Criado em</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((vm) => (
-                    <TableRow key={vm.id}>
-                        <TableCell className="font-medium">{vm.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{vm.zone}</TableCell>
-                        <TableCell className="text-muted-foreground">{vm.machineType}</TableCell>
-                        <TableCell>
-                            <Badge variant={vm.status === 'RUNNING' ? 'secondary' : 'outline'}>{vm.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{vm.networkIp ?? '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">{vm.externalIp ?? '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(vm.creationTimestamp)}</TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Zona</TableHead>
+                        <TableHead className="px-4 font-medium">Tipo de máquina</TableHead>
+                        <TableHead className="px-4 font-medium">Status</TableHead>
+                        <TableHead className="px-4 font-medium">IP interno</TableHead>
+                        <TableHead className="px-4 font-medium">IP externo</TableHead>
+                        <TableHead className="px-4 font-medium">Criado em</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((vm) => (
+                        <TableRow key={vm.id}>
+                            <TableCell className="px-4 font-medium">{vm.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{vm.zone}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{vm.machineType}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={vm.status === 'RUNNING' ? 'secondary' : 'outline'}>{vm.status}</Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{vm.networkIp ?? '—'}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{vm.externalIp ?? '—'}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{formatDate(vm.creationTimestamp)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function NetworksTable({ data }: { data: GcpVpcNetwork[] }) {
     if (data.length === 0) return <EmptyState label="VPC" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Modo de roteamento</TableHead>
-                    <TableHead>Sub-redes automáticas</TableHead>
-                    <TableHead>Criado em</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((net) => (
-                    <TableRow key={net.id}>
-                        <TableCell className="font-medium">{net.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{net.routingMode ?? '—'}</TableCell>
-                        <TableCell>
-                            <Badge variant={net.autoCreateSubnetworks ? 'secondary' : 'outline'}>
-                                {net.autoCreateSubnetworks ? 'Sim' : 'Não'}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(net.creationTimestamp)}</TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Modo de roteamento</TableHead>
+                        <TableHead className="px-4 font-medium">Sub-redes automáticas</TableHead>
+                        <TableHead className="px-4 font-medium">Criado em</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((net) => (
+                        <TableRow key={net.id}>
+                            <TableCell className="px-4 font-medium">{net.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{net.routingMode ?? '—'}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={net.autoCreateSubnetworks ? 'secondary' : 'outline'}>
+                                    {net.autoCreateSubnetworks ? 'Sim' : 'Não'}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{formatDate(net.creationTimestamp)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function SubnetworksTable({ data }: { data: GcpSubnetwork[] }) {
     if (data.length === 0) return <EmptyState label="sub-rede" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Região</TableHead>
-                    <TableHead>CIDR</TableHead>
-                    <TableHead>VPC</TableHead>
-                    <TableHead>Acesso privado Google</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((sub) => (
-                    <TableRow key={sub.id}>
-                        <TableCell className="font-medium">{sub.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{sub.region}</TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs">{sub.ipCidrRange}</TableCell>
-                        <TableCell className="text-muted-foreground">{sub.networkName ?? '—'}</TableCell>
-                        <TableCell>
-                            <Badge variant={sub.privateIpGoogleAccess ? 'secondary' : 'outline'}>
-                                {sub.privateIpGoogleAccess ? 'Sim' : 'Não'}
-                            </Badge>
-                        </TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Região</TableHead>
+                        <TableHead className="px-4 font-medium">CIDR</TableHead>
+                        <TableHead className="px-4 font-medium">VPC</TableHead>
+                        <TableHead className="px-4 font-medium">Acesso privado Google</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((sub) => (
+                        <TableRow key={sub.id}>
+                            <TableCell className="px-4 font-medium">{sub.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{sub.region}</TableCell>
+                            <TableCell className="px-4 font-mono text-xs text-muted-foreground">{sub.ipCidrRange}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{sub.networkName ?? '—'}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={sub.privateIpGoogleAccess ? 'secondary' : 'outline'}>
+                                    {sub.privateIpGoogleAccess ? 'Sim' : 'Não'}
+                                </Badge>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function FirewallTable({ data }: { data: GcpFirewallRule[] }) {
     if (data.length === 0) return <EmptyState label="regra de firewall" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Direção</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>VPC</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Origens</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((rule) => (
-                    <TableRow key={rule.id}>
-                        <TableCell className="font-medium">{rule.name}</TableCell>
-                        <TableCell>
-                            <Badge variant={rule.direction === 'INGRESS' ? 'default' : 'outline'}>{rule.direction}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{rule.priority}</TableCell>
-                        <TableCell className="text-muted-foreground">{rule.networkName ?? '—'}</TableCell>
-                        <TableCell>
-                            <Badge variant={rule.disabled ? 'outline' : 'secondary'}>{rule.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs">
-                            {rule.sourceRanges?.slice(0, 2).join(', ') ?? '—'}
-                            {(rule.sourceRanges?.length ?? 0) > 2 && ` +${(rule.sourceRanges?.length ?? 0) - 2}`}
-                        </TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Direção</TableHead>
+                        <TableHead className="px-4 font-medium">Prioridade</TableHead>
+                        <TableHead className="px-4 font-medium">VPC</TableHead>
+                        <TableHead className="px-4 font-medium">Status</TableHead>
+                        <TableHead className="px-4 font-medium">Origens</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((rule) => (
+                        <TableRow key={rule.id}>
+                            <TableCell className="px-4 font-medium">{rule.name}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={rule.direction === 'INGRESS' ? 'default' : 'outline'}>{rule.direction}</Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{rule.priority}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{rule.networkName ?? '—'}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={rule.disabled ? 'outline' : 'secondary'}>{rule.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
+                            </TableCell>
+                            <TableCell className="px-4 font-mono text-xs text-muted-foreground">
+                                {rule.sourceRanges?.slice(0, 2).join(', ') ?? '—'}
+                                {(rule.sourceRanges?.length ?? 0) > 2 && ` +${(rule.sourceRanges?.length ?? 0) - 2}`}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function StorageTable({ data }: { data: GcpStorageBucket[] }) {
     if (data.length === 0) return <EmptyState label="bucket" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Localização</TableHead>
-                    <TableHead>Classe</TableHead>
-                    <TableHead>Versionamento</TableHead>
-                    <TableHead>Acesso público</TableHead>
-                    <TableHead>Criado em</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((bucket) => (
-                    <TableRow key={bucket.id}>
-                        <TableCell className="font-medium">{bucket.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{bucket.location}</TableCell>
-                        <TableCell className="text-muted-foreground">{bucket.storageClass}</TableCell>
-                        <TableCell>
-                            <Badge variant={bucket.versioningEnabled ? 'secondary' : 'outline'}>
-                                {bucket.versioningEnabled ? 'Ativo' : 'Inativo'}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{bucket.publicAccessPrevention ?? '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(bucket.timeCreated)}</TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Localização</TableHead>
+                        <TableHead className="px-4 font-medium">Classe</TableHead>
+                        <TableHead className="px-4 font-medium">Versionamento</TableHead>
+                        <TableHead className="px-4 font-medium">Acesso público</TableHead>
+                        <TableHead className="px-4 font-medium">Criado em</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((bucket) => (
+                        <TableRow key={bucket.id}>
+                            <TableCell className="px-4 font-medium">{bucket.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{bucket.location}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{bucket.storageClass}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={bucket.versioningEnabled ? 'secondary' : 'outline'}>
+                                    {bucket.versioningEnabled ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{bucket.publicAccessPrevention ?? '—'}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{formatDate(bucket.timeCreated)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function SqlTable({ data }: { data: GcpSqlInstance[] }) {
     if (data.length === 0) return <EmptyState label="instância SQL" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Versão</TableHead>
-                    <TableHead>Região</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tier</TableHead>
-                    <TableHead>Backup</TableHead>
-                    <TableHead>Disponibilidade</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((inst) => (
-                    <TableRow key={inst.id}>
-                        <TableCell className="font-medium">{inst.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{inst.databaseVersion}</TableCell>
-                        <TableCell className="text-muted-foreground">{inst.region}</TableCell>
-                        <TableCell>
-                            <Badge variant={inst.state === 'RUNNABLE' ? 'secondary' : 'outline'}>{inst.state}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{inst.tier ?? '—'}</TableCell>
-                        <TableCell>
-                            <Badge variant={inst.backupEnabled ? 'secondary' : 'outline'}>
-                                {inst.backupEnabled ? 'Ativo' : 'Inativo'}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{inst.availabilityType ?? '—'}</TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Versão</TableHead>
+                        <TableHead className="px-4 font-medium">Região</TableHead>
+                        <TableHead className="px-4 font-medium">Status</TableHead>
+                        <TableHead className="px-4 font-medium">Tier</TableHead>
+                        <TableHead className="px-4 font-medium">Backup</TableHead>
+                        <TableHead className="px-4 font-medium">Disponibilidade</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((inst) => (
+                        <TableRow key={inst.id}>
+                            <TableCell className="px-4 font-medium">{inst.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{inst.databaseVersion}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{inst.region}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={inst.state === 'RUNNABLE' ? 'secondary' : 'outline'}>{inst.state}</Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{inst.tier ?? '—'}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={inst.backupEnabled ? 'secondary' : 'outline'}>
+                                    {inst.backupEnabled ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{inst.availabilityType ?? '—'}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function IamTable({ data }: { data: GcpServiceAccount[] }) {
     if (data.length === 0) return <EmptyState label="service account" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>E-mail</TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Status</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((sa) => (
-                    <TableRow key={sa.id}>
-                        <TableCell className="font-medium font-mono text-xs">{sa.email}</TableCell>
-                        <TableCell className="text-muted-foreground">{sa.displayName ?? '—'}</TableCell>
-                        <TableCell>
-                            <Badge variant={sa.disabled ? 'outline' : 'secondary'}>{sa.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
-                        </TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">E-mail</TableHead>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Status</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((sa) => (
+                        <TableRow key={sa.id}>
+                            <TableCell className="px-4 font-mono text-xs font-medium">{sa.email}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{sa.displayName ?? '—'}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={sa.disabled ? 'outline' : 'secondary'}>{sa.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
 function GkeTable({ data }: { data: GcpGkeCluster[] }) {
     if (data.length === 0) return <EmptyState label="cluster GKE" />;
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Localização</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Nós</TableHead>
-                    <TableHead>Versão master</TableHead>
-                    <TableHead>Criado em</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {data.map((cluster) => (
-                    <TableRow key={cluster.id}>
-                        <TableCell className="font-medium">{cluster.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{cluster.location}</TableCell>
-                        <TableCell>
-                            <Badge variant={cluster.status === 'RUNNING' ? 'secondary' : 'outline'}>{cluster.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{cluster.nodeCount ?? '—'}</TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs">{cluster.currentMasterVersion ?? '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(cluster.createTime)}</TableCell>
+        <div className="rounded-lg border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="px-4 font-medium">Nome</TableHead>
+                        <TableHead className="px-4 font-medium">Localização</TableHead>
+                        <TableHead className="px-4 font-medium">Status</TableHead>
+                        <TableHead className="px-4 font-medium">Nós</TableHead>
+                        <TableHead className="px-4 font-medium">Versão master</TableHead>
+                        <TableHead className="px-4 font-medium">Criado em</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {data.map((cluster) => (
+                        <TableRow key={cluster.id}>
+                            <TableCell className="px-4 font-medium">{cluster.name}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{cluster.location}</TableCell>
+                            <TableCell className="px-4">
+                                <Badge variant={cluster.status === 'RUNNING' ? 'secondary' : 'outline'}>{cluster.status}</Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{cluster.nodeCount ?? '—'}</TableCell>
+                            <TableCell className="px-4 font-mono text-xs text-muted-foreground">{cluster.currentMasterVersion ?? '—'}</TableCell>
+                            <TableCell className="px-4 text-muted-foreground">{formatDate(cluster.createTime)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
@@ -336,6 +355,9 @@ type GcpInventoryPageProps = {
 export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryPageProps) {
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('compute');
+    const [nameFilter, setNameFilter] = useState('');
+    const [pageIndex, setPageIndex] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
 
     const [compute, setCompute] = useState<LoadState<GcpVmInstance>>({ status: 'idle' });
     const [networks, setNetworks] = useState<LoadState<GcpVpcNetwork>>({ status: 'idle' });
@@ -392,7 +414,7 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                 const body = (await response.json().catch(() => null)) as unknown;
 
                 if (!response.ok) {
-                    const message = extractErrorMessage(body, 'pt');
+                    const message = extractErrorMessage(body);
                     setters[tab]({ status: 'error', message } as LoadState<never>);
                     toast.error(message);
                     return;
@@ -415,7 +437,7 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
         }
     }, [organizationId, activeTab, loadTab]);
 
-    function renderTabContent<T>(state: LoadState<T>, renderTable: (data: T[]) => React.ReactNode) {
+    function renderTabContent<T>(state: LoadState<T>, getName: (item: T) => string, renderTable: (data: T[]) => React.ReactNode) {
         if (state.status === 'loading' || state.status === 'idle') return <LoadingSkeleton />;
         if (state.status === 'error') {
             return (
@@ -425,17 +447,72 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                 </div>
             );
         }
-        return renderTable(state.data);
+        const data = state.data;
+        const q = nameFilter.trim().toLowerCase();
+        const filtered = q ? data.filter((item) => getName(item).toLowerCase().includes(q)) : data;
+        const total = Math.ceil(filtered.length / pageSize) || 1;
+        const paginated = filtered.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+
+        return (
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                        value={nameFilter}
+                        onChange={(e) => { setNameFilter(e.target.value); setPageIndex(0); }}
+                        placeholder="Filtrar por nome..."
+                        className="h-8 w-50"
+                    />
+                </div>
+                {q !== '' && filtered.length === 0 ? (
+                    <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                        Nenhum resultado para o filtro aplicado.
+                    </div>
+                ) : (
+                    renderTable(paginated)
+                )}
+                {data.length > 0 && (
+                    <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                            <Select value={`${pageSize}`} onValueChange={(v) => { setPageSize(Number(v)); setPageIndex(0); }}>
+                                <SelectTrigger className="h-8 min-w-22"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {[5, 10, 20, 30].map((s) => <SelectItem key={s} value={`${s}`}>{s}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                            <span className="text-sm font-medium">Página {pageIndex + 1} de {total}</span>
+                            <div className="flex items-center gap-1 self-start sm:self-auto">
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>
+                                    <ChevronsLeft className="h-4 w-4" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex((p) => Math.max(p - 1, 0))} disabled={pageIndex === 0}>
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex((p) => Math.min(p + 1, total - 1))} disabled={pageIndex >= total - 1}>
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(total - 1)} disabled={pageIndex >= total - 1}>
+                                    <ChevronsRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     return (
-        <div className="flex flex-col gap-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">{accountAlias}</h1>
-                <p className="text-muted-foreground text-sm mt-1">Inventário de recursos GCP</p>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+        <div className="flex flex-col gap-4">
+            <div className="rounded-xl border">
+                <div className="border-b px-4 py-3">
+                    <p className="text-sm font-medium">{accountAlias}</p>
+                    <p className="text-xs text-muted-foreground">Inventário de recursos GCP</p>
+                </div>
+                <div className="px-4 py-4">
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as Tab); setNameFilter(''); setPageIndex(0); }}>
                 <TabsList className="flex-wrap h-auto gap-1">
                     <TabsTrigger value="compute" className="gap-1.5">
                         <Server className="size-3.5" />
@@ -472,37 +549,39 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                 </TabsList>
 
                 <TabsContent value="compute" className="mt-4">
-                    {renderTabContent(compute, (data) => <ComputeTable data={data as GcpVmInstance[]} />)}
+                    {renderTabContent(compute, (item: GcpVmInstance) => item.name, (data) => <ComputeTable data={data as GcpVmInstance[]} />)}
                 </TabsContent>
 
                 <TabsContent value="networks" className="mt-4">
-                    {renderTabContent(networks, (data) => <NetworksTable data={data as GcpVpcNetwork[]} />)}
+                    {renderTabContent(networks, (item: GcpVpcNetwork) => item.name, (data) => <NetworksTable data={data as GcpVpcNetwork[]} />)}
                 </TabsContent>
 
                 <TabsContent value="subnetworks" className="mt-4">
-                    {renderTabContent(subnetworks, (data) => <SubnetworksTable data={data as GcpSubnetwork[]} />)}
+                    {renderTabContent(subnetworks, (item: GcpSubnetwork) => item.name, (data) => <SubnetworksTable data={data as GcpSubnetwork[]} />)}
                 </TabsContent>
 
                 <TabsContent value="firewall" className="mt-4">
-                    {renderTabContent(firewall, (data) => <FirewallTable data={data as GcpFirewallRule[]} />)}
+                    {renderTabContent(firewall, (item: GcpFirewallRule) => item.name, (data) => <FirewallTable data={data as GcpFirewallRule[]} />)}
                 </TabsContent>
 
                 <TabsContent value="storage" className="mt-4">
-                    {renderTabContent(storage, (data) => <StorageTable data={data as GcpStorageBucket[]} />)}
+                    {renderTabContent(storage, (item: GcpStorageBucket) => item.name, (data) => <StorageTable data={data as GcpStorageBucket[]} />)}
                 </TabsContent>
 
                 <TabsContent value="sql" className="mt-4">
-                    {renderTabContent(sql, (data) => <SqlTable data={data as GcpSqlInstance[]} />)}
+                    {renderTabContent(sql, (item: GcpSqlInstance) => item.name, (data) => <SqlTable data={data as GcpSqlInstance[]} />)}
                 </TabsContent>
 
                 <TabsContent value="iam" className="mt-4">
-                    {renderTabContent(iam, (data) => <IamTable data={data as GcpServiceAccount[]} />)}
+                    {renderTabContent(iam, (item: GcpServiceAccount) => item.email, (data) => <IamTable data={data as GcpServiceAccount[]} />)}
                 </TabsContent>
 
                 <TabsContent value="gke" className="mt-4">
-                    {renderTabContent(gke, (data) => <GkeTable data={data as GcpGkeCluster[]} />)}
+                    {renderTabContent(gke, (item: GcpGkeCluster) => item.name, (data) => <GkeTable data={data as GcpGkeCluster[]} />)}
                 </TabsContent>
             </Tabs>
+                </div>
+            </div>
         </div>
     );
 }

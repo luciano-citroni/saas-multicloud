@@ -5,7 +5,10 @@ export class PlanMetadataDto {
     @ApiProperty({ example: 10, description: 'Maximum number of cloud accounts allowed' })
     maxCloudAccounts!: number;
 
-    @ApiProperty({ example: 20, description: 'Maximum number of users allowed' })
+    @ApiProperty({ example: 3, description: 'Maximum number of organizations the user can own' })
+    maxOrgAccounts!: number;
+
+    @ApiProperty({ example: 20, description: 'Maximum number of users allowed across organizations' })
     maxUsers!: number;
 
     @ApiProperty({
@@ -51,7 +54,7 @@ export class SubscriptionDto {
     id!: string;
 
     @ApiProperty({ example: 'uuid' })
-    organizationId!: string;
+    userId!: string;
 
     @ApiProperty({ example: 'cus_xxx' })
     stripeCustomerId!: string;

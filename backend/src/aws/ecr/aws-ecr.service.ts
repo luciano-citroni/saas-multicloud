@@ -36,46 +36,51 @@ export class AwsEcrService {
     }
 
     async syncRepositoriesFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getEcrClient(cloudAccountId, organizationId);
-
-        const { repositories } = await client.send(new DescribeRepositoriesCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar repositórios ECR. Verifique as permissões da role (ecr:DescribeRepositories).');
-        });
-
-        if (!repositories || repositories.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsRepository>[] = [];
 
-        for (const repo of repositories) {
-            if (!repo.repositoryArn) continue;
+        for (const region of regions) {
+            const client = await this.connector.getEcrClient(cloudAccountId, organizationId, region);
 
-            let tags: Record<string, string> = {};
+            const { repositories } = await client.send(new DescribeRepositoriesCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar repositórios ECR na região ${region}. Verifique as permissões da role (ecr:DescribeRepositories).`
+                );
+            });
 
-            try {
-                const { tags: rawTags } = await client.send(new ListTagsForResourceCommand({ resourceArn: repo.repositoryArn }));
-
-                tags =
-                    rawTags?.reduce<Record<string, string>>((acc, t) => {
-                        if (t.Key) acc[t.Key] = t.Value ?? '';
-
-                        return acc;
-                    }, {}) ?? {};
-            } catch {
-                this.logger.debug(`Não foi possível obter tags do repositório ${repo.repositoryName}.`);
+            if (!repositories || repositories.length === 0) {
+                continue;
             }
 
-            const repoData = mapAwsRepository(repo, tags);
+            for (const repo of repositories) {
+                if (!repo.repositoryArn) continue;
 
-            mapped.push(repoData);
+                let tags: Record<string, string> = {};
 
-            let dbRepo = await this.ecrRepository.findOne({ where: { repositoryArn: repoData.repositoryArn } });
+                try {
+                    const { tags: rawTags } = await client.send(new ListTagsForResourceCommand({ resourceArn: repo.repositoryArn }));
 
-            if (dbRepo) {
-                dbRepo.repositoryName = repoData.repositoryName;
+                    tags =
+                        rawTags?.reduce<Record<string, string>>((acc, t) => {
+                            if (t.Key) acc[t.Key] = t.Value ?? '';
+
+                            return acc;
+                        }, {}) ?? {};
+                } catch {
+                    this.logger.debug(`Não foi possível obter tags do repositório ${repo.repositoryName}.`);
+                }
+
+                const repoData = mapAwsRepository(repo, tags);
+
+                mapped.push(repoData);
+
+                let dbRepo = await this.ecrRepository.findOne({ where: { repositoryArn: repoData.repositoryArn } });
+
+                if (dbRepo) {
+                    dbRepo.repositoryName = repoData.repositoryName;
 
                 dbRepo.repositoryUri = repoData.repositoryUri;
 
@@ -91,20 +96,21 @@ export class AwsEcrService {
 
                 dbRepo.tags = tags;
 
-                dbRepo.lastSyncedAt = now;
-            } else {
-                dbRepo = this.ecrRepository.create({
-                    cloudAccountId,
+                    dbRepo.lastSyncedAt = now;
+                } else {
+                    dbRepo = this.ecrRepository.create({
+                        cloudAccountId,
 
-                    ...repoData,
+                        ...repoData,
 
-                    tags,
+                        tags,
 
-                    lastSyncedAt: now,
-                });
+                        lastSyncedAt: now,
+                    });
+                }
+
+                await this.ecrRepository.save(dbRepo);
             }
-
-            await this.ecrRepository.save(dbRepo);
         }
 
         return mapped;

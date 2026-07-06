@@ -167,6 +167,16 @@ export class AwsConnectorService {
         };
     }
 
+    async getConfiguredRegions(cloudAccountId: string, organizationId: string): Promise<string[]> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+
+        const normalizedRegions = [creds.region, ...(creds.regions ?? [])]
+            .filter((region) => typeof region === 'string' && region.trim() !== '')
+            .map((region) => region.trim());
+
+        return Array.from(new Set(normalizedRegions));
+    }
+
     /**
 
 
@@ -226,8 +236,10 @@ export class AwsConnectorService {
 
         // O STSClient usa automaticamente as credenciais do ambiente
 
+        const stsRegion = process.env.AWS_STS_REGION?.trim() || 'us-east-1';
+
         const sts = new STSClient({
-            region: creds.region,
+            region: stsRegion,
 
             // As credenciais do usuário IAM são automaticamente carregadas das variáveis de ambiente
         });
@@ -254,7 +266,9 @@ export class AwsConnectorService {
                         `Verifique: (1) O ARN da role está correto, ` +
                         `(2) A trust policy da role permite o usuário IAM, ` +
                         `(3) O usuário IAM tem permissão sts:AssumeRole, ` +
-                        `(4) O externalId está correto (se aplicável).`
+                        `(4) O externalId está correto (se aplicável). ` +
+                        `Detalhe AWS: ${errorMessage}. ` +
+                        `STS usado em ${stsRegion} (ajuste via AWS_STS_REGION se necessário).`
                 );
             });
 
@@ -279,12 +293,14 @@ export class AwsConnectorService {
 
      */
 
-    async getEc2Client(cloudAccountId: string, organizationId: string): Promise<EC2Client> {
+    async getEc2Client(cloudAccountId: string, organizationId: string, region?: string): Promise<EC2Client> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new EC2Client({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new EC2Client({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -295,12 +311,14 @@ export class AwsConnectorService {
 
      */
 
-    async getEcsClient(cloudAccountId: string, organizationId: string): Promise<ECSClient> {
+    async getEcsClient(cloudAccountId: string, organizationId: string, region?: string): Promise<ECSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new ECSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new ECSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -311,12 +329,14 @@ export class AwsConnectorService {
 
      */
 
-    async getEksClient(cloudAccountId: string, organizationId: string): Promise<EKSClient> {
+    async getEksClient(cloudAccountId: string, organizationId: string, region?: string): Promise<EKSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new EKSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new EKSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -366,12 +386,14 @@ export class AwsConnectorService {
 
      */
 
-    async getRdsClient(cloudAccountId: string, organizationId: string): Promise<RDSClient> {
+    async getRdsClient(cloudAccountId: string, organizationId: string, region?: string): Promise<RDSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new RDSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new RDSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -436,12 +458,14 @@ export class AwsConnectorService {
 
      */
 
-    async getCloudWatchClient(cloudAccountId: string, organizationId: string): Promise<CloudWatchClient> {
+    async getCloudWatchClient(cloudAccountId: string, organizationId: string, region?: string): Promise<CloudWatchClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new CloudWatchClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new CloudWatchClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -452,12 +476,14 @@ export class AwsConnectorService {
 
      */
 
-    async getCloudTrailClient(cloudAccountId: string, organizationId: string): Promise<CloudTrailClient> {
+    async getCloudTrailClient(cloudAccountId: string, organizationId: string, region?: string): Promise<CloudTrailClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new CloudTrailClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new CloudTrailClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -468,12 +494,14 @@ export class AwsConnectorService {
 
      */
 
-    async getLambdaClient(cloudAccountId: string, organizationId: string): Promise<LambdaClient> {
+    async getLambdaClient(cloudAccountId: string, organizationId: string, region?: string): Promise<LambdaClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new LambdaClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new LambdaClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -484,12 +512,14 @@ export class AwsConnectorService {
 
      */
 
-    async getApiGatewayClient(cloudAccountId: string, organizationId: string): Promise<APIGatewayClient> {
+    async getApiGatewayClient(cloudAccountId: string, organizationId: string, region?: string): Promise<APIGatewayClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new APIGatewayClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new APIGatewayClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -500,12 +530,14 @@ export class AwsConnectorService {
 
      */
 
-    async getKmsClient(cloudAccountId: string, organizationId: string): Promise<KMSClient> {
+    async getKmsClient(cloudAccountId: string, organizationId: string, region?: string): Promise<KMSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new KMSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new KMSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -516,12 +548,14 @@ export class AwsConnectorService {
 
      */
 
-    async getSecretsManagerClient(cloudAccountId: string, organizationId: string): Promise<SecretsManagerClient> {
+    async getSecretsManagerClient(cloudAccountId: string, organizationId: string, region?: string): Promise<SecretsManagerClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new SecretsManagerClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new SecretsManagerClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -532,12 +566,14 @@ export class AwsConnectorService {
 
      */
 
-    async getEcrClient(cloudAccountId: string, organizationId: string): Promise<ECRClient> {
+    async getEcrClient(cloudAccountId: string, organizationId: string, region?: string): Promise<ECRClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new ECRClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new ECRClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -548,12 +584,14 @@ export class AwsConnectorService {
 
      */
 
-    async getDynamoDbClient(cloudAccountId: string, organizationId: string): Promise<DynamoDBClient> {
+    async getDynamoDbClient(cloudAccountId: string, organizationId: string, region?: string): Promise<DynamoDBClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new DynamoDBClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new DynamoDBClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -564,12 +602,14 @@ export class AwsConnectorService {
 
      */
 
-    async getElastiCacheClient(cloudAccountId: string, organizationId: string): Promise<ElastiCacheClient> {
+    async getElastiCacheClient(cloudAccountId: string, organizationId: string, region?: string): Promise<ElastiCacheClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new ElastiCacheClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new ElastiCacheClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -580,12 +620,14 @@ export class AwsConnectorService {
 
      */
 
-    async getSqsClient(cloudAccountId: string, organizationId: string): Promise<SQSClient> {
+    async getSqsClient(cloudAccountId: string, organizationId: string, region?: string): Promise<SQSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new SQSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new SQSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -596,12 +638,14 @@ export class AwsConnectorService {
 
      */
 
-    async getSnsClient(cloudAccountId: string, organizationId: string): Promise<SNSClient> {
+    async getSnsClient(cloudAccountId: string, organizationId: string, region?: string): Promise<SNSClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new SNSClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new SNSClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**
@@ -636,11 +680,13 @@ export class AwsConnectorService {
 
      */
 
-    async getGuardDutyClient(cloudAccountId: string, organizationId: string): Promise<GuardDutyClient> {
+    async getGuardDutyClient(cloudAccountId: string, organizationId: string, region?: string): Promise<GuardDutyClient> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
-        const temporaryCreds = await this.assumeRole(creds);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
 
-        return new GuardDutyClient({ region: creds.region, credentials: temporaryCreds });
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+
+        return new GuardDutyClient({ region: finalRegion, credentials: temporaryCreds });
     }
 }

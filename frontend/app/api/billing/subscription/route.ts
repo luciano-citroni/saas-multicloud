@@ -11,57 +11,25 @@ import {
 } from '@/lib/auth/session';
 import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
-async function resolveAccessToken() {
+async function resolveToken() {
     const accessToken = await getAccessTokenFromCookies();
     const refreshToken = await getRefreshTokenFromCookies();
 
-    if (!accessToken && !refreshToken) {
-        return {
-            accessToken: null,
-            refreshToken: null,
-            rotatedTokens: null as AuthTokens | null,
-        };
-    }
-
     if (accessToken) {
-        return {
-            accessToken,
-            refreshToken,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
     if (!refreshToken) {
-        return {
-            accessToken: null,
-            refreshToken: null,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     }
 
     const rotatedTokens = await refreshAccessToken(refreshToken);
 
     if (!rotatedTokens) {
-        return {
-            accessToken: null,
-            refreshToken,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
-    return {
-        accessToken: rotatedTokens.accessToken,
-        refreshToken,
-        rotatedTokens,
-    };
-}
-
-function withAuthHeaders(accessToken: string, organizationId: string, headers?: HeadersInit): HeadersInit {
-    return {
-        ...(headers ?? {}),
-        Authorization: `Bearer ${accessToken}`,
-        'x-organization-id': organizationId,
-    };
+    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
 }
 
 function buildUnauthorizedResponse() {
@@ -76,30 +44,30 @@ export async function GET(request: Request) {
     const checkoutSessionId = searchParams.get('checkoutSessionId');
 
     if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
+        return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     }
 
-    const resolved = await resolveAccessToken();
+    const { accessToken, refreshToken, rotatedTokens: initialRotated } = await resolveToken();
 
-    if (!resolved.accessToken) {
+    if (!accessToken) {
         return buildUnauthorizedResponse();
     }
 
-    const backendQuery = new URLSearchParams();
-    if (checkoutSessionId) {
-        backendQuery.set('checkoutSessionId', checkoutSessionId);
-    }
+    const backendPath = checkoutSessionId
+        ? `/api/billing/subscription?checkoutSessionId=${encodeURIComponent(checkoutSessionId)}`
+        : '/api/billing/subscription';
 
-    const backendPath = backendQuery.size > 0 ? `/api/billing/subscription?${backendQuery.toString()}` : '/api/billing/subscription';
+    const baseHeaders = {
+        Authorization: `Bearer ${accessToken}`,
+        'x-organization-id': organizationId,
+    };
 
-    let response = await backendFetch(backendPath, {
-        headers: withAuthHeaders(resolved.accessToken, organizationId),
-    });
+    let response = await backendFetch(backendPath, { headers: baseHeaders });
 
-    let rotatedTokens = resolved.rotatedTokens;
+    let rotatedTokens = initialRotated;
 
-    if (response.status === 401 && resolved.refreshToken) {
-        const refreshResult = await refreshAccessToken(resolved.refreshToken);
+    if (response.status === 401 && refreshToken) {
+        const refreshResult = await refreshAccessToken(refreshToken);
 
         if (!refreshResult) {
             return buildUnauthorizedResponse();
@@ -108,16 +76,17 @@ export async function GET(request: Request) {
         rotatedTokens = refreshResult;
 
         response = await backendFetch(backendPath, {
-            headers: withAuthHeaders(refreshResult.accessToken, organizationId),
+            headers: {
+                Authorization: `Bearer ${refreshResult.accessToken}`,
+                'x-organization-id': organizationId,
+            },
         });
     }
 
     const payload = await parseJsonSafe<unknown>(response);
     const nextResponse = NextResponse.json(payload ?? null, { status: response.status });
 
-    if (rotatedTokens) {
-        setAuthCookies(nextResponse, rotatedTokens);
-    }
+    if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);
 
     return nextResponse;
 }
@@ -127,33 +96,36 @@ export async function PUT(request: Request) {
         return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organizationId');
+    const body = (await request.json()) as { organizationId?: string; priceId?: string };
+    const { organizationId, priceId } = body;
 
     if (!organizationId) {
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     }
 
-    const resolved = await resolveAccessToken();
+    const { accessToken, refreshToken, rotatedTokens: initialRotated } = await resolveToken();
 
-    if (!resolved.accessToken) {
+    if (!accessToken) {
         return buildUnauthorizedResponse();
     }
 
-    const body = await request.json();
+    const makeRequest = (token: string) =>
+        backendFetch('/api/billing/subscription', {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'x-organization-id': organizationId,
+            },
+            body: JSON.stringify({ priceId }),
+        });
 
-    let response = await backendFetch('/api/billing/subscription', {
-        method: 'PUT',
-        headers: withAuthHeaders(resolved.accessToken, organizationId, {
-            'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify(body),
-    });
+    let response = await makeRequest(accessToken);
 
-    let rotatedTokens = resolved.rotatedTokens;
+    let rotatedTokens = initialRotated;
 
-    if (response.status === 401 && resolved.refreshToken) {
-        const refreshResult = await refreshAccessToken(resolved.refreshToken);
+    if (response.status === 401 && refreshToken) {
+        const refreshResult = await refreshAccessToken(refreshToken);
 
         if (!refreshResult) {
             return buildUnauthorizedResponse();
@@ -161,21 +133,13 @@ export async function PUT(request: Request) {
 
         rotatedTokens = refreshResult;
 
-        response = await backendFetch('/api/billing/subscription', {
-            method: 'PUT',
-            headers: withAuthHeaders(refreshResult.accessToken, organizationId, {
-                'Content-Type': 'application/json',
-            }),
-            body: JSON.stringify(body),
-        });
+        response = await makeRequest(refreshResult.accessToken);
     }
 
     const payload = await parseJsonSafe<unknown>(response);
     const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao atualizar plano' }, { status: response.status });
 
-    if (rotatedTokens) {
-        setAuthCookies(nextResponse, rotatedTokens);
-    }
+    if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);
 
     return nextResponse;
 }

@@ -1,9 +1,9 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
@@ -25,7 +25,7 @@ export class GcpGkeController {
     @ApiOperation({ summary: 'Listar clusters GKE' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpGkeClusterResponseDto] })
-    async listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         void org;
         return this.service.listClustersFromDatabase(cloudAccountId);
     }
@@ -36,7 +36,7 @@ export class GcpGkeController {
     @ApiOperation({ summary: 'Sincronizar clusters GKE' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpGkeClusterResponseDto] })
-    async syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async syncClusters(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncClustersFromGcp(cloudAccountId, org.id);
     }
 }

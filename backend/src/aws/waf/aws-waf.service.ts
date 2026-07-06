@@ -38,9 +38,9 @@ export class AwsWafService {
     }
 
     async syncWebAclsFromAws(cloudAccountId: string, organizationId: string) {
-        // CLOUDFRONT scope requires us-east-1 — get a dedicated client for it
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
-        const regionalClient = await this.connector.getWafV2Client(cloudAccountId, organizationId);
+        // CLOUDFRONT scope requires us-east-1 — get a dedicated client for it
 
         const globalClient = await this.connector.getWafV2Client(cloudAccountId, organizationId, 'us-east-1');
 
@@ -49,21 +49,24 @@ export class AwsWafService {
         const mapped: Record<string, any>[] = [];
 
         for (const scope of WAF_SCOPES) {
-            const client = scope === 'CLOUDFRONT' ? globalClient : regionalClient;
+            const regionsForScope = scope === 'CLOUDFRONT' ? ['us-east-1'] : regions;
 
-            let webAcls: WebACLSummary[] = [];
+            for (const region of regionsForScope) {
+                const client = scope === 'CLOUDFRONT' ? globalClient : await this.connector.getWafV2Client(cloudAccountId, organizationId, region);
 
-            try {
-                const { WebACLs } = await client.send(new ListWebACLsCommand({ Scope: scope }));
+                let webAcls: WebACLSummary[] = [];
 
-                webAcls = WebACLs ?? [];
-            } catch {
-                this.logger.debug(`Não foi possível listar Web ACLs com scope ${scope}.`);
+                try {
+                    const { WebACLs } = await client.send(new ListWebACLsCommand({ Scope: scope }));
 
-                continue;
-            }
+                    webAcls = WebACLs ?? [];
+                } catch {
+                    this.logger.debug(`Não foi possível listar Web ACLs com scope ${scope} na região ${region}.`);
 
-            for (const summary of webAcls) {
+                    continue;
+                }
+
+                for (const summary of webAcls) {
                 if (!summary.ARN || !summary.Id) continue;
 
                 let capacity: number | null = null;
@@ -99,7 +102,7 @@ export class AwsWafService {
                     this.logger.debug(`Não foi possível obter tags da Web ACL ${summary.Name}.`);
                 }
 
-                const webAclData = {
+                    const webAclData = {
                     awsWebAclId: summary.Id,
 
                     webAclArn: summary.ARN,
@@ -119,7 +122,7 @@ export class AwsWafService {
 
                 mapped.push(webAclData);
 
-                let dbWebAcl = await this.webAclRepository.findOne({ where: { webAclArn: summary.ARN } });
+                    let dbWebAcl = await this.webAclRepository.findOne({ where: { webAclArn: summary.ARN } });
 
                 if (dbWebAcl) {
                     Object.assign(dbWebAcl, webAclData, { tags, lastSyncedAt: now });
@@ -127,7 +130,8 @@ export class AwsWafService {
                     dbWebAcl = this.webAclRepository.create({ cloudAccountId, ...webAclData, tags, lastSyncedAt: now });
                 }
 
-                await this.webAclRepository.save(dbWebAcl);
+                    await this.webAclRepository.save(dbWebAcl);
+                }
             }
         }
 

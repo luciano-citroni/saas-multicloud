@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -40,60 +40,67 @@ export class AwsDynamoDbService {
     }
 
     async syncTablesFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getDynamoDbClient(cloudAccountId, organizationId);
-
-        const { TableNames } = await client.send(new ListTablesCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar tabelas DynamoDB. Verifique as permissões da role (dynamodb:ListTables).');
-        });
-
-        if (!TableNames || TableNames.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsTable>[] = [];
 
-        for (const tableName of TableNames) {
-            const { Table } = await client.send(new DescribeTableCommand({ TableName: tableName })).catch(() => {
-                throw new BadRequestException(`Falha ao descrever a tabela DynamoDB "${tableName}". Verifique as permissões (dynamodb:DescribeTable).`);
+        for (const region of regions) {
+            const client = await this.connector.getDynamoDbClient(cloudAccountId, organizationId, region);
+
+            const { TableNames } = await client.send(new ListTablesCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar tabelas DynamoDB na região ${region}. Verifique as permissões da role (dynamodb:ListTables).`
+                );
             });
 
-            if (!Table?.TableArn) continue;
-
-            let pointInTimeRecoveryEnabled: boolean | null = null;
-
-            try {
-                const { ContinuousBackupsDescription } = await client.send(new DescribeContinuousBackupsCommand({ TableName: tableName }));
-
-                pointInTimeRecoveryEnabled = ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus === 'ENABLED';
-            } catch {
-                console.warn(`Não foi possível verificar PITR da tabela ${tableName}.`);
+            if (!TableNames || TableNames.length === 0) {
+                continue;
             }
 
-            let tags: Record<string, string> = {};
+            for (const tableName of TableNames) {
+                const { Table } = await client.send(new DescribeTableCommand({ TableName: tableName })).catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao descrever a tabela DynamoDB "${tableName}" na região ${region}. Verifique as permissões (dynamodb:DescribeTable).`
+                    );
+                });
 
-            try {
-                const { Tags } = await client.send(new ListTagsOfResourceCommand({ ResourceArn: Table.TableArn }));
+                if (!Table?.TableArn) continue;
 
-                tags =
-                    Tags?.reduce<Record<string, string>>((acc, t) => {
-                        if (t.Key) acc[t.Key] = t.Value ?? '';
+                let pointInTimeRecoveryEnabled: boolean | null = null;
 
-                        return acc;
-                    }, {}) ?? {};
-            } catch {
-                console.warn(`Não foi possível obter tags da tabela ${tableName}.`);
-            }
+                try {
+                    const { ContinuousBackupsDescription } = await client.send(new DescribeContinuousBackupsCommand({ TableName: tableName }));
 
-            const tableData = mapAwsTable(Table, pointInTimeRecoveryEnabled, tags);
+                    pointInTimeRecoveryEnabled = ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus === 'ENABLED';
+                } catch {
+                    Logger.warn(`Não foi possível verificar PITR da tabela ${tableName}.`);
+                }
 
-            mapped.push(tableData);
+                let tags: Record<string, string> = {};
 
-            let dbTable = await this.tableRepository.findOne({ where: { tableArn: Table.TableArn } });
+                try {
+                    const { Tags } = await client.send(new ListTagsOfResourceCommand({ ResourceArn: Table.TableArn }));
 
-            if (dbTable) {
-                dbTable.tableId = tableData.tableId;
+                    tags =
+                        Tags?.reduce<Record<string, string>>((acc, t) => {
+                            if (t.Key) acc[t.Key] = t.Value ?? '';
+
+                            return acc;
+                        }, {}) ?? {};
+                } catch {
+                    Logger.warn(`Não foi possível obter tags da tabela ${tableName}.`);
+                }
+
+                const tableData = mapAwsTable(Table, pointInTimeRecoveryEnabled, tags);
+
+                mapped.push(tableData);
+
+                let dbTable = await this.tableRepository.findOne({ where: { tableArn: Table.TableArn } });
+
+                if (dbTable) {
+                    dbTable.tableId = tableData.tableId;
 
                 dbTable.tableName = tableData.tableName;
 
@@ -119,22 +126,23 @@ export class AwsDynamoDbService {
 
                 dbTable.tags = tags;
 
-                dbTable.lastSyncedAt = now;
-            } else {
-                dbTable = this.tableRepository.create({
-                    cloudAccountId,
+                    dbTable.lastSyncedAt = now;
+                } else {
+                    dbTable = this.tableRepository.create({
+                        cloudAccountId,
 
-                    ...tableData,
+                        ...tableData,
 
-                    pointInTimeRecoveryEnabled,
+                        pointInTimeRecoveryEnabled,
 
-                    tags,
+                        tags,
 
-                    lastSyncedAt: now,
-                });
+                        lastSyncedAt: now,
+                    });
+                }
+
+                await this.tableRepository.save(dbTable);
             }
-
-            await this.tableRepository.save(dbTable);
         }
 
         return mapped;

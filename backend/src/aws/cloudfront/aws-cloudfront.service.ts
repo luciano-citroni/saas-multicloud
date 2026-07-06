@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -21,6 +21,8 @@ import { AwsS3Bucket } from '../../db/entites/aws-s3-bucket.entity';
 
 @Injectable()
 export class CloudFrontService {
+    private readonly logger = new Logger(CloudFrontService.name);
+
     constructor(
         private readonly connector: AwsConnectorService,
 
@@ -273,7 +275,8 @@ export class CloudFrontService {
 
                 mappedDistributions.push(mappedDist);
             } catch (error) {
-                console.error(`Erro ao buscar detalhes da distribuição ${summary.Id}:`, error);
+                const message = error instanceof Error ? error.message : String(error);
+                this.logger.error(`Erro ao buscar detalhes da distribuição ${summary.Id}: ${message}`);
 
                 continue;
             }

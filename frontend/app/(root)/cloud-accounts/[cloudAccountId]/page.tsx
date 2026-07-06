@@ -10,6 +10,7 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { GcpInventoryPage } from '@/components/root/cloud-accounts/inventory/gcp-inventory-page';
 import { AlertCircle } from 'lucide-react';
+import { useTranslations } from '@/lib/i18n';
 
 type CloudAccountDetails = {
     id: string;
@@ -27,6 +28,7 @@ export default function CloudAccountInventoryPage() {
     const [account, setAccount] = useState<CloudAccountDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const tca = useTranslations('cloudAccounts');
 
     useEffect(() => {
         const stored = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -56,7 +58,7 @@ export default function CloudAccountInventoryPage() {
                 const body = (await response.json().catch(() => null)) as unknown;
 
                 if (!response.ok) {
-                    const message = extractErrorMessage(body, 'pt');
+                    const message = extractErrorMessage(body);
                     setError(message);
                     toast.error(message);
                     return;
@@ -65,9 +67,8 @@ export default function CloudAccountInventoryPage() {
                 const data = body as CloudAccountDetails;
                 setAccount(data);
             } catch {
-                const message = 'Erro ao carregar conta cloud';
-                setError(message);
-                toast.error(message);
+                setError(tca.loadAccountError);
+                toast.error(tca.loadAccountError);
             } finally {
                 setLoading(false);
             }
@@ -97,7 +98,7 @@ export default function CloudAccountInventoryPage() {
                 <Card>
                     <CardContent className="flex items-center gap-3 py-8 text-destructive">
                         <AlertCircle className="size-5" />
-                        <span>{error ?? 'Conta cloud não encontrada.'}</span>
+                        <span>{error ?? tca.notFound}</span>
                     </CardContent>
                 </Card>
             </div>

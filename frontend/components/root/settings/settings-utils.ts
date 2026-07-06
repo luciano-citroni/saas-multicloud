@@ -1,13 +1,5 @@
 import { type CurrentUser, type RemoveSessionResult } from '@/app/actions/settings';
 
-export function normalizeOptionalCpf(value: string | null | undefined): string {
-    if (!value) {
-        return '';
-    }
-
-    return value;
-}
-
 export function isCurrentUser(payload: unknown): payload is CurrentUser {
     if (!payload || typeof payload !== 'object') {
         return false;

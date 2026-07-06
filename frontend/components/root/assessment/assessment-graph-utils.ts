@@ -8,8 +8,8 @@ import type {
     ResourceVisibilityFilterId,
 } from '@/components/root/assessment/types';
 
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 88;
+const NODE_WIDTH = 230;
+const NODE_HEIGHT = 80;
 const GROUP_PADDING_X = 24;
 const GROUP_PADDING_Y = 16;
 const GROUP_HEADER_HEIGHT = 34;
@@ -153,9 +153,32 @@ function inferNodeRegion(data: ArchitectureNodeData): string | null {
         return explicitRegion.trim();
     }
 
+    const regionName = details?.regionName;
+    if (typeof regionName === 'string' && regionName.trim().length > 0) {
+        return regionName.trim();
+    }
+
+    const awsRegion = details?.awsRegion;
+    if (typeof awsRegion === 'string' && awsRegion.trim().length > 0) {
+        return awsRegion.trim();
+    }
+
+    const awsRegionAlt = details?.aws_region;
+    if (typeof awsRegionAlt === 'string' && awsRegionAlt.trim().length > 0) {
+        return awsRegionAlt.trim();
+    }
+
     const location = details?.location;
     if (typeof location === 'string' && location.trim().length > 0) {
         return location.trim();
+    }
+
+    const regionList = details?.regions;
+    if (Array.isArray(regionList)) {
+        const firstRegion = regionList.find((item) => typeof item === 'string' && item.trim().length > 0);
+        if (typeof firstRegion === 'string') {
+            return firstRegion.trim();
+        }
     }
 
     const az = details?.availabilityZone;
@@ -163,7 +186,33 @@ function inferNodeRegion(data: ArchitectureNodeData): string | null {
         return regionFromAvailabilityZone(az) ?? az.trim();
     }
 
+    const azAlt = details?.availability_zone;
+    if (typeof azAlt === 'string' && azAlt.trim().length > 0) {
+        return regionFromAvailabilityZone(azAlt) ?? azAlt.trim();
+    }
+
     return null;
+}
+
+function extractRegionSegmentFromLabel(label: string): string {
+    const segment = label
+        .split('•')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith('Region: ') || part === 'Region: Sem regiao');
+
+    return segment ?? 'Region: Sem regiao';
+}
+
+function getRegionSortKey(label: string): { rank: number; value: string } {
+    const segment = extractRegionSegmentFromLabel(label);
+    if (segment === 'Region: Sem regiao') {
+        return { rank: 1, value: 'zzzz-sem-regiao' };
+    }
+
+    return {
+        rank: 0,
+        value: segment.replace('Region: ', '').toLowerCase(),
+    };
 }
 
 function getNodeGroupLabel(node: Node, groupingMode: GroupingMode): string {
@@ -192,7 +241,7 @@ function getNodeGroupLabel(node: Node, groupingMode: GroupingMode): string {
             return `Region: ${region}`;
         }
 
-        return 'Region: N/A';
+        return 'Region: Sem regiao';
     }
 
     return 'All Resources';
@@ -525,7 +574,9 @@ export function buildGroupedNodesByModes(resourceNodes: Node[], allEdges: Edge[]
         return buildVpcHierarchyNodes(resourceNodes, allEdges);
     }
 
-    const selectedModes = groupingModes;
+    const selectedModes = groupingModes.includes('region')
+        ? (['region', ...groupingModes.filter((mode) => mode !== 'region')] as GroupingDimension[])
+        : groupingModes;
 
     const groups = new Map<string, Node[]>();
     const labelsById = new Map<string, string>();
@@ -544,6 +595,20 @@ export function buildGroupedNodesByModes(resourceNodes: Node[], allEdges: Edge[]
     const orderedGroups = Array.from(groups.entries()).sort((a, b) => {
         const aLabel = labelsById.get(a[0]) ?? a[0].replace('group:', '');
         const bLabel = labelsById.get(b[0]) ?? b[0].replace('group:', '');
+
+        if (selectedModes.includes('region')) {
+            const aRegion = getRegionSortKey(aLabel);
+            const bRegion = getRegionSortKey(bLabel);
+
+            if (aRegion.rank !== bRegion.rank) {
+                return aRegion.rank - bRegion.rank;
+            }
+
+            const regionCompare = aRegion.value.localeCompare(bRegion.value, 'pt-BR');
+            if (regionCompare !== 0) {
+                return regionCompare;
+            }
+        }
 
         if (selectedModes.length === 1 && selectedModes[0] === 'resourceType') {
             return getGroupPriority(aLabel) - getGroupPriority(bLabel);
@@ -627,7 +692,18 @@ export function autoLayout(nodes: Node[], edges: Edge[]): Node[] {
 
     const graph = new dagre.graphlib.Graph();
     graph.setDefaultEdgeLabel(() => ({}));
-    graph.setGraph({ rankdir: 'LR', ranksep: 120, nodesep: 20, marginx: 56, marginy: 56, acyclicer: 'greedy', ranker: 'network-simplex' });
+    
+    // Otimização: parâmetros melhorados para grafos com 200+ nós
+    const isLargeGraph = nodes.length > 200;
+    const isUltraLargeGraph = nodes.length > 500;
+    
+        const layoutConfig = isUltraLargeGraph
+                ? { rankdir: 'LR' as const, ranksep: 50, nodesep: 12, marginx: 40, marginy: 40, acyclicer: 'greedy' as const, ranker: 'tight-tree' as const }
+                : isLargeGraph
+                    ? { rankdir: 'LR' as const, ranksep: 72, nodesep: 16, marginx: 50, marginy: 50, acyclicer: 'greedy' as const, ranker: 'network-simplex' as const }
+                    : { rankdir: 'LR' as const, ranksep: 96, nodesep: 20, marginx: 56, marginy: 56, acyclicer: 'greedy' as const, ranker: 'network-simplex' as const };
+    
+    graph.setGraph(layoutConfig);
 
     for (const node of nodes) {
         graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -691,41 +767,54 @@ type EdgeVisual = {
     label: string;
 };
 
+const RELATIONSHIP_COLOR_PALETTE: string[] = [
+    '#2563eb', '#3b82f6', '#60a5fa', '#1d4ed8', '#0ea5e9', '#0284c7', '#06b6d4', '#0891b2', '#14b8a6', '#0d9488',
+    '#10b981', '#059669', '#22c55e', '#16a34a', '#84cc16', '#65a30d', '#a3e635', '#eab308', '#ca8a04', '#f59e0b',
+    '#d97706', '#f97316', '#ea580c', '#fb7185', '#f43f5e', '#e11d48', '#ec4899', '#db2777', '#d946ef', '#c026d3',
+    '#a855f7', '#9333ea', '#8b5cf6', '#7c3aed', '#6366f1', '#4f46e5', '#64748b', '#475569', '#334155', '#0f766e',
+    '#0f766e', '#0369a1', '#1e40af', '#1e3a8a', '#047857', '#166534', '#365314', '#3f6212', '#854d0e', '#92400e',
+    '#9a3412', '#7f1d1d', '#991b1b', '#be123c', '#9f1239', '#9d174d', '#831843', '#86198f', '#701a75', '#6b21a8',
+    '#581c87', '#4c1d95', '#312e81', '#3730a3', '#155e75', '#164e63', '#134e4a', '#14532d', '#052e16', '#365314',
+    '#1a2e05', '#4d7c0f', '#a16207', '#7c2d12', '#9f1239', '#881337', '#4a044e', '#3b0764', '#2e1065', '#1e1b4b',
+    '#1e293b', '#334155', '#475569', '#0c4a6e', '#082f49', '#083344', '#134e4a', '#064e3b', '#14532d', '#052e16',
+    '#1e3a8a', '#0f172a', '#2c5282', '#2b6cb0', '#2f855a', '#2f855a', '#b7791f', '#c05621', '#97266d', '#6b46c1',
+];
+
 const EDGE_VISUALS: Record<string, EdgeVisual> = {
     // ── Networking ─────────────────────────────────────────────────────────
     network: {
         color: '#3b82f6', // blue
         strokeWidth: 2.5,
         strokeDasharray: '',
-        animated: true,
+        animated: false,
         label: 'network',
     },
     dns: {
         color: '#8b5cf6', // purple
         strokeWidth: 2.5,
         strokeDasharray: '',
-        animated: true,
+        animated: false,
         label: 'DNS',
     },
     'http-s': {
         color: '#06b6d4', // cyan
         strokeWidth: 2.5,
         strokeDasharray: '',
-        animated: true,
+        animated: false,
         label: 'HTTPS',
     },
     invoke: {
         color: '#f97316', // orange
         strokeWidth: 2.5,
         strokeDasharray: '',
-        animated: true,
+        animated: false,
         label: 'invoke',
     },
     'routes-traffic-to': {
         color: '#06b6d4', // cyan
         strokeWidth: 2.5,
         strokeDasharray: '',
-        animated: true,
+        animated: false,
         label: 'routes traffic',
     },
     // ── Containment / Hosting ──────────────────────────────────────────────
@@ -868,12 +957,80 @@ const EDGE_VISUALS: Record<string, EdgeVisual> = {
 };
 
 const DEFAULT_EDGE_VISUAL: EdgeVisual = {
-    color: 'var(--border)',
-    strokeWidth: 1.5,
+    color: RELATIONSHIP_COLOR_PALETTE[0],
+    strokeWidth: 1.8,
     strokeDasharray: '',
     animated: false,
     label: '',
 };
+
+const EDGE_RELATIONSHIP_ALIASES: Record<string, string> = {
+    https: 'http-s',
+    http: 'http-s',
+    invoke_listener: 'invoke',
+    invokes: 'invoke',
+    runs_service: 'runs-service',
+    run_service: 'runs-service',
+    route_table: 'has-route-table',
+    has_route_table: 'has-route-table',
+    has_security_group: 'has-security-group',
+    security_group: 'has-security-group',
+    attached_to_subnet: 'attached-to-subnet',
+    attached_to_security_group: 'has-security-group',
+    routes_to_subnet: 'routes-subnet',
+    runs_in_subnet: 'runs-in-subnet',
+    task_definition: 'uses-task-definition',
+    execution_role: 'execution-role',
+    service_role: 'service-role',
+    task_role: 'task-role',
+};
+
+function normalizeRelationshipIdentifier(value: string | undefined): string {
+    if (!value) {
+        return '';
+    }
+
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/_/g, '-');
+}
+
+function hashString(input: string): number {
+    let hash = 0;
+
+    for (let index = 0; index < input.length; index += 1) {
+        hash = (hash << 5) - hash + input.charCodeAt(index);
+        hash |= 0;
+    }
+
+    return Math.abs(hash);
+}
+
+function pickRelationshipColor(relationship: string): string {
+    if (!relationship) {
+        return DEFAULT_EDGE_VISUAL.color;
+    }
+
+    const normalized = normalizeRelationshipIdentifier(relationship);
+    if (!normalized) {
+        return DEFAULT_EDGE_VISUAL.color;
+    }
+
+    const index = hashString(normalized) % RELATIONSHIP_COLOR_PALETTE.length;
+    return RELATIONSHIP_COLOR_PALETTE[index] ?? DEFAULT_EDGE_VISUAL.color;
+}
+
+function resolveEdgeRelationship(candidate: Partial<Edge>): string {
+    const raw = candidate.data?.relationship as string | undefined;
+    const normalized = normalizeRelationshipIdentifier(raw);
+    if (!normalized) {
+        return '';
+    }
+
+    return EDGE_RELATIONSHIP_ALIASES[normalized] ?? normalized;
+}
 
 function getEdgeVisual(relationship: string): EdgeVisual {
     const direct = EDGE_VISUALS[relationship];
@@ -881,7 +1038,7 @@ function getEdgeVisual(relationship: string): EdgeVisual {
 
     if (relationship.startsWith('has-')) {
         return {
-            color: '#64748b',
+            color: pickRelationshipColor(relationship),
             strokeWidth: 1.5,
             strokeDasharray: '4 3',
             animated: false,
@@ -891,7 +1048,7 @@ function getEdgeVisual(relationship: string): EdgeVisual {
 
     if (relationship.startsWith('contains')) {
         return {
-            color: '#64748b',
+            color: pickRelationshipColor(relationship),
             strokeWidth: 1.5,
             strokeDasharray: '5 4',
             animated: false,
@@ -899,19 +1056,40 @@ function getEdgeVisual(relationship: string): EdgeVisual {
         };
     }
 
-    return DEFAULT_EDGE_VISUAL;
+    return {
+        color: pickRelationshipColor(relationship),
+        strokeWidth: 1.8,
+        strokeDasharray: '',
+        animated: false,
+        label: relationship.replace(/-/g, ' '),
+    };
 }
 
-export function normalizeEdges(edges: unknown): Edge[] {
+function shouldRemoveEdgeForLargeGraph(relationship: string): boolean {
+    const rel = relationship.toLowerCase();
+    // Remove "containment" relationships as they're mostly visual and add clutter
+    // Keep only critical flow: hosts, routes, invokes, runs-service
+    if (rel.includes('contains') || rel.includes('has-security-group') || rel.includes('has-route-table')) {
+        return true;
+    }
+    return false;
+}
+
+export function normalizeEdges(edges: unknown, shouldReduceEdges = false): Edge[] {
     if (!Array.isArray(edges)) {
         return [];
     }
 
-    return edges
+    const normalizedEdges = edges
         .filter((edge) => typeof edge === 'object' && edge !== null)
+        .filter((edge) => {
+            if (!shouldReduceEdges) return true;
+            const relationship = resolveEdgeRelationship(edge as Partial<Edge>);
+            return !shouldRemoveEdgeForLargeGraph(relationship ?? '');
+        })
         .map((edge) => {
             const candidate = edge as Partial<Edge>;
-            const relationship = (candidate.data?.relationship as string)?.toLowerCase() || '';
+            const relationship = resolveEdgeRelationship(candidate);
             const visual = getEdgeVisual(relationship);
 
             return {
@@ -938,6 +1116,18 @@ export function normalizeEdges(edges: unknown): Edge[] {
             } as Edge;
         })
         .filter((edge) => edge.source.length > 0 && edge.target.length > 0);
+
+    const deduplicated = new Map<string, Edge>();
+
+    for (const edge of normalizedEdges) {
+        const relationship = normalizeRelationshipIdentifier((edge.data as { relationship?: string } | undefined)?.relationship);
+        const key = `${edge.source}|${edge.target}|${relationship}`;
+        if (!deduplicated.has(key)) {
+            deduplicated.set(key, edge);
+        }
+    }
+
+    return Array.from(deduplicated.values());
 }
 
 function isHideableOrphanType(resourceType: string | undefined): boolean {

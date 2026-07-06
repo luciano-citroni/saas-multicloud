@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -22,6 +22,8 @@ import {
 
 @Injectable()
 export class AwsLoadBalancerService {
+    private readonly logger = new Logger(AwsLoadBalancerService.name);
+
     constructor(
         private readonly connector: AwsConnectorService,
 
@@ -220,7 +222,7 @@ export class AwsLoadBalancerService {
                 });
 
                 if (!vpc) {
-                    console.warn(`VPC ${lbData.awsVpcId} não encontrada. Load Balancer ${lbData.name} será salvo sem VPC.`);
+                    Logger.warn(`VPC ${lbData.awsVpcId} não encontrada. Load Balancer ${lbData.name} será salvo sem VPC.`);
                 }
             }
 
@@ -327,7 +329,7 @@ export class AwsLoadBalancerService {
             });
 
             if (!sg) {
-                console.warn(`Security Group ${awsSgId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                Logger.warn(`Security Group ${awsSgId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
 
                 continue;
             }
@@ -367,7 +369,7 @@ export class AwsLoadBalancerService {
             });
 
             if (!subnet) {
-                console.warn(`Subnet ${az.subnetId} não encontrada no banco. Pulando associação com Load Balancer ${loadBalancer.name}.`);
+                Logger.warn(`Subnet ${az.subnetId} não encontrada no banco. Pulando associação com Load Balancer ${loadBalancer.name}.`);
 
                 continue;
             }
@@ -450,7 +452,8 @@ export class AwsLoadBalancerService {
                 await this.listenerRepository.save(dbListener);
             }
         } catch (error) {
-            console.error(`Erro ao sincronizar listeners do Load Balancer ${loadBalancer.name}:`, error);
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Erro ao sincronizar listeners do Load Balancer ${loadBalancer.name}: ${message}`);
         }
     }
 }

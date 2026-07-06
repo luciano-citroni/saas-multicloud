@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsDynamoDbService } from './aws-dynamodb.service';
 
@@ -27,7 +27,7 @@ export class AwsDynamoDbController {
     @ApiOperation({ summary: 'Listar tabelas DynamoDB do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [DynamoDbTableResponseDto] })
-    listTables(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listTables(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listTablesFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsDynamoDbController {
 
         @Param('tableId', ParseUUIDPipe) tableId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getTableById(tableId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsDynamoDbController {
     @ApiOperation({ summary: 'Sincronizar tabelas DynamoDB da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [DynamoDbTableSyncResponseDto] })
-    syncTables(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncTables(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncTablesFromAws(cloudAccountId, org.id);
     }
 }

@@ -19,6 +19,9 @@ export class GcpAssessmentJobResponseDto {
     @ApiPropertyOptional({ description: 'URL para download do relatório Excel (disponível após conclusão)' })
     excelDownloadUrl?: string;
 
+    @ApiPropertyOptional({ description: 'Data/hora limite para download do Excel (24h após conclusão)' })
+    excelExpiresAt?: Date;
+
     @ApiProperty()
     createdAt!: Date;
 

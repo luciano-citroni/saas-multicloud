@@ -14,6 +14,7 @@ import { GoogleAuthCode } from '../db/entites/google-auth-code.entity';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { OrganizationModule } from '../organization/organization.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
     imports: [
@@ -32,6 +33,7 @@ import { OrganizationModule } from '../organization/organization.module';
         UsersModule,
         TenantModule,
         forwardRef(() => OrganizationModule),
+        forwardRef(() => BillingModule),
     ],
     providers: [AuthService, JwtGuard, GoogleAuthGuard, GoogleStrategy],
     controllers: [AuthController],

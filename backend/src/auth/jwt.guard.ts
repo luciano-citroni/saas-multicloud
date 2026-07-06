@@ -20,6 +20,8 @@ import { UserSession } from '../db/entites/user-session.entity';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
+    private static readonly INVALID_ACCESS_TOKEN_MESSAGE = 'Invalid or expired access token';
+
     constructor(
         private readonly jwtService: JwtService,
 
@@ -42,13 +44,13 @@ export class JwtGuard implements CanActivate {
 
         const token = this.extractToken(request);
 
-        if (!token) throw new UnauthorizedException('Missing access token');
+        if (!token) throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
 
         try {
             const payload = await this.jwtService.verifyAsync(token, this.buildVerifyOptions());
 
             if (!payload?.sub || !payload?.sessionId) {
-                throw new UnauthorizedException('Invalid or expired access token');
+                throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
             }
 
             // Validar se a sessão ainda existe
@@ -62,7 +64,7 @@ export class JwtGuard implements CanActivate {
             // Sessão não encontrada = foi removida/revogada
 
             if (!session) {
-                throw new UnauthorizedException('Session was revoked or does not exist. Please login again.');
+                throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
             }
 
             // Sessão expirada
@@ -70,13 +72,13 @@ export class JwtGuard implements CanActivate {
             if (session.expiresAt < new Date()) {
                 await this.sessionRepository.remove(session);
 
-                throw new UnauthorizedException('Session expired. Please login again.');
+                throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
             }
 
             // Usuário desativado
 
             if (!session.user?.isActive) {
-                throw new UnauthorizedException('User account is inactive');
+                throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
             }
 
             request['user'] = payload;
@@ -85,7 +87,7 @@ export class JwtGuard implements CanActivate {
                 throw error;
             }
 
-            throw new UnauthorizedException('Invalid or expired access token');
+            throw new UnauthorizedException(JwtGuard.INVALID_ACCESS_TOKEN_MESSAGE);
         }
 
         return true;

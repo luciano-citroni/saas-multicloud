@@ -34,22 +34,25 @@ export class AwsSqsService {
     }
 
     async syncQueuesFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getSqsClient(cloudAccountId, organizationId);
-
-        const { QueueUrls } = await client.send(new ListQueuesCommand({ MaxResults: 1000 })).catch(() => {
-            throw new BadRequestException('Falha ao listar filas SQS. Verifique as permissões da role (sqs:ListQueues).');
-        });
-
-        if (!QueueUrls || QueueUrls.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: Record<string, any>[] = [];
 
-        for (const queueUrl of QueueUrls) {
-            const { Attributes } = await client
+        for (const region of regions) {
+            const client = await this.connector.getSqsClient(cloudAccountId, organizationId, region);
+
+            const { QueueUrls } = await client.send(new ListQueuesCommand({ MaxResults: 1000 })).catch(() => {
+                throw new BadRequestException(`Falha ao listar filas SQS na região ${region}. Verifique as permissões da role (sqs:ListQueues).`);
+            });
+
+            if (!QueueUrls || QueueUrls.length === 0) {
+                continue;
+            }
+
+            for (const queueUrl of QueueUrls) {
+                const { Attributes } = await client
 
                 .send(
                     new GetQueueAttributesCommand({
@@ -82,7 +85,7 @@ export class AwsSqsService {
                 )
 
                 .catch(() => {
-                    console.warn(`Não foi possível obter atributos da fila ${queueUrl}.`);
+                    Logger.warn(`Não foi possível obter atributos da fila ${queueUrl}.`);
 
                     return { Attributes: {} };
                 });
@@ -94,7 +97,7 @@ export class AwsSqsService {
 
                 tags = Tags ?? {};
             } catch {
-                console.warn(`Não foi possível obter tags da fila ${queueUrl}.`);
+                Logger.warn(`Não foi possível obter tags da fila ${queueUrl}.`);
             }
 
             const queueName = queueUrl.split('/').pop() ?? '';
@@ -143,7 +146,8 @@ export class AwsSqsService {
                 dbQueue = this.queueRepository.create({ cloudAccountId, ...queueData, tags, lastSyncedAt: now });
             }
 
-            await this.queueRepository.save(dbQueue);
+                await this.queueRepository.save(dbQueue);
+            }
         }
 
         return mapped;

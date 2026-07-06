@@ -37,9 +37,9 @@ export class MailerService {
 
         token: string;
     }): Promise<void> {
-        const appUrl = this.config.get<string>('APP_URL') ?? 'http://localhost:3000';
+        const frontendUrl = (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
 
-        const acceptUrl = `${appUrl}/api/organization/invites/accept/${params.token}`;
+        const acceptUrl = `${frontendUrl}/invite/accept/${params.token}`;
 
         await this.transporter.sendMail({
             from: this.config.get<string>('SMTP_FROM') ?? 'noreply@saas.com',

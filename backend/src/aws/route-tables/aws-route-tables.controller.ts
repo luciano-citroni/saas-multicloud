@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { RouteTableResponseDto, RouteTableSyncResponseDto } from './swagger.dto';
 
@@ -58,7 +58,7 @@ export class AwsRouteTablesController {
 
         @Query('vpcId') vpcId: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listRouteTablesFromDatabase(cloudAccountId, vpcId);
     }
@@ -86,7 +86,7 @@ export class AwsRouteTablesController {
 
         @Param('routeTableId', ParseUUIDPipe) routeTableId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getRouteTableById(routeTableId, cloudAccountId);
     }
@@ -116,7 +116,7 @@ export class AwsRouteTablesController {
 
         @Query('vpcId') vpcId: string | undefined,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.syncRouteTablesFromAws(cloudAccountId, org.id, vpcId);
     }

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { organizationFormScheme } from './scheme';
+import { createOrganizationSchema, type OrganizationFormValues } from './scheme';
 import { zodResolver } from '@hookform/resolvers/zod';
-import z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
 import { Building2, IdCardLanyard } from 'lucide-react';
@@ -14,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { formatCNPJ } from '@/lib/validators/cnpj';
 import { InputMaskForm } from '@/components/ui/mask-input-form';
 import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import { useTranslations } from '@/lib/i18n';
 
 type CreateOrganizationResponse = {
     id?: string;
@@ -22,11 +22,14 @@ type CreateOrganizationResponse = {
 
 export function FormOrganization() {
     const [isLoading, setIsLoading] = useState(false);
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
+    const schema = useMemo(() => createOrganizationSchema({ nameMin: t.nameMin, cnpjInvalid: t.cnpjInvalid }), [t]);
 
     const router = useRouter();
 
-    const form = useForm<z.infer<typeof organizationFormScheme>>({
-        resolver: zodResolver(organizationFormScheme),
+    const form = useForm<OrganizationFormValues>({
+        resolver: zodResolver(schema),
         defaultValues: {
             name: '',
             cnpj: '',
@@ -41,14 +44,17 @@ export function FormOrganization() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    name: data.name,
+                    cnpj: data.cnpj?.trim() || undefined,
+                }),
             });
 
             const payload = (await response.json().catch(() => null)) as CreateOrganizationResponse | { message?: string } | null;
 
                 if (!response.ok) {
                 const message = typeof payload === 'object' && payload && 'message' in payload ? payload.message : null;
-                toast.error(typeof message === 'string' ? message : 'Não foi possível criar a organização.');
+                toast.error(typeof message === 'string' ? message : t.createError);
                 return;
             }
 
@@ -57,11 +63,11 @@ export function FormOrganization() {
                 notifySidebarContextUpdated();
             }
 
-            toast.success('Organização criada com sucesso.');
+            toast.success(t.createSuccess);
             router.replace('/');
             router.refresh();
         } catch {
-            toast.error('Não foi possível criar a organização.');
+            toast.error(t.createError);
         } finally {
             setIsLoading(false);
         }
@@ -76,9 +82,9 @@ export function FormOrganization() {
                         name="name"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Nome</FormLabel>
+                                <FormLabel>{tc.name}</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="Nome da organização" StartIcon={Building2} {...field} />
+                                    <IconInput placeholder={t.orgNamePlaceholder} StartIcon={Building2} {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -87,10 +93,10 @@ export function FormOrganization() {
 
                     <InputMaskForm
                         form={form}
-                        label="CNPJ"
+                        label={t.cnpjLabel}
                         maxLength={18}
                         name="cnpj"
-                        placeholder="CNPJ da organização"
+                        placeholder={t.cnpjPlaceholder}
                         icon={IdCardLanyard}
                         formatter={formatCNPJ}
                     />
@@ -120,7 +126,7 @@ export function FormOrganization() {
             </Form>
             <div className="w-full flex justify-end items-end">
                 <Button isLoading={isLoading} onClick={onSubmit}>
-                    Criar organização
+                    {t.createOrg}
                 </Button>
             </div>
         </div>

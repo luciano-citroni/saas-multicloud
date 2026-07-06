@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { LocaleProvider } from '@/components/providers/locale-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -29,10 +30,12 @@ export default function RootLayout({
         <html lang="pt-BR" suppressHydrationWarning>
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-                    <TooltipProvider>
-                        <main>{children}</main>
-                        <Toaster />
-                    </TooltipProvider>
+                    <LocaleProvider>
+                        <TooltipProvider>
+                            <main>{children}</main>
+                            <Toaster />
+                        </TooltipProvider>
+                    </LocaleProvider>
                 </ThemeProvider>
             </body>
         </html>

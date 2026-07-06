@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsSecretsManagerService } from './aws-secrets-manager.service';
 
@@ -27,7 +27,7 @@ export class AwsSecretsManagerController {
     @ApiOperation({ summary: 'Listar secrets do Secrets Manager do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SecretsManagerSecretResponseDto] })
-    listSecrets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listSecrets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listSecretsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsSecretsManagerController {
 
         @Param('secretId', ParseUUIDPipe) secretId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getSecretById(secretId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsSecretsManagerController {
     @ApiOperation({ summary: 'Sincronizar secrets do Secrets Manager da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [SecretsManagerSecretSyncResponseDto] })
-    syncSecrets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncSecrets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncSecretsFromAws(cloudAccountId, org.id);
     }
 }

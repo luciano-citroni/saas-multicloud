@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -25,6 +25,8 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 @Injectable()
 export class EcsService {
+    private readonly logger = new Logger(EcsService.name);
+
     constructor(
         private readonly connector: AwsConnectorService,
 
@@ -219,8 +221,8 @@ export class EcsService {
 
      */
 
-    async syncClustersFromAws(cloudAccountId: string, organizationId: string) {
-        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId);
+    async syncClustersFromAws(cloudAccountId: string, organizationId: string, region?: string) {
+        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId, region);
 
         // Lista todos os ARNs dos clusters
 
@@ -315,8 +317,8 @@ export class EcsService {
 
      */
 
-    async syncTaskDefinitionsFromAws(cloudAccountId: string, organizationId: string, family?: string) {
-        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId);
+    async syncTaskDefinitionsFromAws(cloudAccountId: string, organizationId: string, family?: string, region?: string) {
+        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId, region);
 
         // Lista TODAS as revisões ativas com paginação para cobrir task definitions
 
@@ -391,7 +393,7 @@ export class EcsService {
                 });
 
                 if (!executionRole) {
-                    console.warn(`Execution Role ${taskDefData.executionRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                    Logger.warn(`Execution Role ${taskDefData.executionRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
                 }
 
                 executionRoleId = executionRole?.id ?? null;
@@ -403,7 +405,7 @@ export class EcsService {
                 });
 
                 if (!taskRole) {
-                    console.warn(`Task Role ${taskDefData.taskRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                    Logger.warn(`Task Role ${taskDefData.taskRoleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
                 }
 
                 taskRoleId = taskRole?.id ?? null;
@@ -521,8 +523,8 @@ export class EcsService {
 
      */
 
-    async syncServicesFromAws(cloudAccountId: string, organizationId: string, clusterId?: string) {
-        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId);
+    async syncServicesFromAws(cloudAccountId: string, organizationId: string, clusterId?: string, region?: string) {
+        const ecs = await this.connector.getEcsClient(cloudAccountId, organizationId, region);
 
         let clusterArns: string[] = [];
 
@@ -540,7 +542,8 @@ export class EcsService {
             // Lista todos os clusters
 
             const { clusterArns: arns } = await ecs.send(new ListClustersCommand({})).catch((error: any) => {
-                console.error('Erro ao listar clusters ECS:', error.message || error);
+                const message = error instanceof Error ? error.message : String(error);
+                this.logger.error(`Erro ao listar clusters ECS: ${message}`);
 
                 throw new BadRequestException('Falha ao listar clusters ECS na AWS.');
             });
@@ -585,7 +588,7 @@ export class EcsService {
                 });
 
                 if (!dbCluster) {
-                    console.warn(`Cluster ${serviceData.clusterArn} não encontrado. Pulando serviço ${serviceData.serviceName}.`);
+                    Logger.warn(`Cluster ${serviceData.clusterArn} não encontrado. Pulando serviço ${serviceData.serviceName}.`);
 
                     continue;
                 }
@@ -597,7 +600,7 @@ export class EcsService {
                 });
 
                 if (!dbTaskDef) {
-                    console.warn(`Task definition ${serviceData.taskDefinitionArn} não encontrada. Pulando serviço ${serviceData.serviceName}.`);
+                    Logger.warn(`Task definition ${serviceData.taskDefinitionArn} não encontrada. Pulando serviço ${serviceData.serviceName}.`);
 
                     continue;
                 }
@@ -618,7 +621,7 @@ export class EcsService {
                     });
 
                     if (!serviceRole) {
-                        console.warn(`Service Role ${serviceData.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
+                        Logger.warn(`Service Role ${serviceData.roleArn} não encontrada no banco. Sincronize as IAM Roles primeiro.`);
                     }
 
                     serviceRoleId = serviceRole?.id ?? null;
@@ -780,7 +783,7 @@ export class EcsService {
             });
 
             if (!sg) {
-                console.warn(`Security Group ${awsSgId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
+                Logger.warn(`Security Group ${awsSgId} não encontrado no banco. Sincronize os Security Groups primeiro.`);
 
                 continue;
             }

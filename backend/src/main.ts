@@ -34,10 +34,24 @@ async function bootstrap() {
     const levels = (levelMap[rawLevel as 'info' | 'warn' | 'error'] ?? levelMap['info']) as LogLevel[];
 
     const app = await NestFactory.create(AppModule, { logger: levels, rawBody: true });
+    const isProduction = process.env.NODE_ENV === 'production';
 
     const expressApp = app.getHttpAdapter().getInstance();
 
+    // Aumentar timeout para 600 segundos (10 minutos) para permitir sync + geração de relatório
+    expressApp.set('trust proxy', 1);
+
     expressApp.disable('x-powered-by');
+
+    // Aumentar timeout padrão do Express para 600 segundos (10 minutos)
+    expressApp.set('query parser', 'simple');
+    expressApp.use((req, res, next) => {
+        // 600 segundos para endpoints de download/relatório, 60s para outros
+        const timeout = req.path.includes('/download') || req.path.includes('/report') ? 600000 : 60000;
+        req.setTimeout(timeout);
+        res.setTimeout(timeout);
+        next();
+    });
 
     app.useGlobalFilters(new HttpExceptionFilter());
 
@@ -45,16 +59,19 @@ async function bootstrap() {
 
     app.use(
         helmet({
-            contentSecurityPolicy: false,
-
+            // Em produção mantemos CSP habilitado; em dev pode ser desabilitado para facilitar debugging local.
+            contentSecurityPolicy: isProduction ? undefined : false,
             crossOriginEmbedderPolicy: false,
+            referrerPolicy: { policy: 'no-referrer' },
         })
     );
 
     app.enableCors({
         origin: (origin, callback) => {
+            // No Origin header: allow only in non-production (API tools, local dev, server-to-server).
+            // In production, all legitimate browser requests include Origin.
             if (!origin) {
-                callback(null, true);
+                callback(isProduction ? new Error('Not allowed by CORS') : null, !isProduction);
 
                 return;
             }
@@ -70,7 +87,7 @@ async function bootstrap() {
                     return;
                 }
 
-                const isLocalhostInDevelopment = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(requestOrigin.hostname);
+                const isLocalhostInDevelopment = !isProduction && ['localhost', '127.0.0.1'].includes(requestOrigin.hostname);
 
                 callback(isLocalhostInDevelopment ? null : new Error('Not allowed by CORS'), isLocalhostInDevelopment);
             } catch {
@@ -114,7 +131,11 @@ async function bootstrap() {
         SwaggerModule.setup('api/docs', app, document);
     }
 
-    await app.listen(process.env.PORT ?? 3000);
+    const server = await app.listen(process.env.PORT ?? 3000);
+
+    // Configurar timeout global do HTTP server para 10 minutos
+    server.setTimeout(600000);
+    server.headersTimeout = 610000; // Ligeiramente mais alto que setTimeout
 }
 
 bootstrap();

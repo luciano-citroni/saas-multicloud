@@ -74,22 +74,27 @@ export class AwsLambdaService {
     }
 
     async syncFunctionsFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getLambdaClient(cloudAccountId, organizationId);
-
-        const { Functions } = await client.send(new ListFunctionsCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar funções Lambda. Verifique as permissões da role (lambda:ListFunctions).');
-        });
-
-        if (!Functions || Functions.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsFunction>[] = [];
 
-        for (const fn of Functions) {
-            if (!fn.FunctionArn) continue;
+        for (const region of regions) {
+            const client = await this.connector.getLambdaClient(cloudAccountId, organizationId, region);
+
+            const { Functions } = await client.send(new ListFunctionsCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar funções Lambda na região ${region}. Verifique as permissões da role (lambda:ListFunctions).`
+                );
+            });
+
+            if (!Functions || Functions.length === 0) {
+                continue;
+            }
+
+            for (const fn of Functions) {
+                if (!fn.FunctionArn) continue;
 
             let tags: Record<string, string> = {};
 
@@ -195,7 +200,8 @@ export class AwsLambdaService {
                 });
             }
 
-            await this.lambdaRepository.save(dbFn);
+                await this.lambdaRepository.save(dbFn);
+            }
         }
 
         return mapped;

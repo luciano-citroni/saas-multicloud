@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
-import { Organization } from './organization.entity';
+import { Tenant } from './tenant.entity';
 
-export enum SubscriptionStatus {
+export enum TenantSubscriptionStatus {
     ACTIVE = 'active',
     TRIALING = 'trialing',
     PAST_DUE = 'past_due',
@@ -17,8 +17,8 @@ export class OrganizationSubscription {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
 
-    @Column({ type: 'uuid', name: 'organization_id', unique: true })
-    organizationId!: string;
+    @Column({ type: 'uuid', name: 'tenant_id', unique: true })
+    tenantId!: string;
 
     @Column({ type: 'varchar', length: 255, name: 'stripe_customer_id', unique: true })
     stripeCustomerId!: string;
@@ -32,7 +32,7 @@ export class OrganizationSubscription {
     @Column({ type: 'varchar', length: 255, name: 'stripe_product_id', nullable: true })
     stripeProductId!: string | null;
 
-    @Column({ type: 'varchar', length: 50, default: SubscriptionStatus.INCOMPLETE })
+    @Column({ type: 'varchar', length: 50, default: TenantSubscriptionStatus.INCOMPLETE })
     status!: string;
 
     @Column({ type: 'timestamp', name: 'current_period_start', nullable: true })
@@ -50,7 +50,7 @@ export class OrganizationSubscription {
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt!: Date;
 
-    @OneToOne(() => Organization)
-    @JoinColumn({ name: 'organization_id' })
-    organization!: Organization;
+    @OneToOne(() => Tenant)
+    @JoinColumn({ name: 'tenant_id' })
+    tenant!: Tenant;
 }

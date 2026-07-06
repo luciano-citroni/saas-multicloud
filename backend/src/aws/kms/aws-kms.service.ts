@@ -36,22 +36,25 @@ export class AwsKmsService {
     }
 
     async syncKeysFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getKmsClient(cloudAccountId, organizationId);
-
-        const { Keys } = await client.send(new ListKeysCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao listar chaves KMS. Verifique as permissões da role (kms:ListKeys).');
-        });
-
-        if (!Keys || Keys.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsKey>[] = [];
 
-        for (const key of Keys) {
-            if (!key.KeyId) continue;
+        for (const region of regions) {
+            const client = await this.connector.getKmsClient(cloudAccountId, organizationId, region);
+
+            const { Keys } = await client.send(new ListKeysCommand({})).catch(() => {
+                throw new BadRequestException(`Falha ao listar chaves KMS na região ${region}. Verifique as permissões da role (kms:ListKeys).`);
+            });
+
+            if (!Keys || Keys.length === 0) {
+                continue;
+            }
+
+            for (const key of Keys) {
+                if (!key.KeyId) continue;
 
             const { KeyMetadata } = await client.send(new DescribeKeyCommand({ KeyId: key.KeyId })).catch(() => {
                 throw new BadRequestException(`Falha ao descrever a chave KMS ${key.KeyId}. Verifique as permissões (kms:DescribeKey).`);
@@ -128,7 +131,8 @@ export class AwsKmsService {
                 });
             }
 
-            await this.kmsRepository.save(dbKey);
+                await this.kmsRepository.save(dbKey);
+            }
         }
 
         return mapped;

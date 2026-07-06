@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+﻿import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -6,7 +6,7 @@ import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagge
 
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
@@ -73,7 +73,7 @@ export class GovernanceController {
     @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
     async startScan(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceScanResponseDto> {
         return this.governanceService.startScan(cloudAccountId, org.id);
     }
@@ -92,7 +92,7 @@ export class GovernanceController {
     @ApiResponse({ status: 200, description: 'Lista de jobs paginada', type: GovernanceJobsPaginatedResponseDto })
     async listJobs(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('page') page?: string,
         @Query('limit') limit?: string
     ): Promise<GovernanceJobsPaginatedResponseDto> {
@@ -111,7 +111,7 @@ export class GovernanceController {
     async getJob(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId', ParseUUIDPipe) jobId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceJobStatusDto> {
         const job = await this.governanceService.getJob(jobId, cloudAccountId, org.id);
 
@@ -145,7 +145,7 @@ export class GovernanceController {
     async getJobFindings(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId', ParseUUIDPipe) jobId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceFindingDto[]> {
         return this.governanceService.getJobFindings(jobId, cloudAccountId, org.id);
     }
@@ -165,7 +165,7 @@ export class GovernanceController {
     @ApiResponse({ status: 404, description: 'Nenhum scan concluído encontrado' })
     async getLatestScore(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceScoreDto> {
         const result = await this.governanceService.getLatestScore(cloudAccountId, org.id);
 
@@ -186,7 +186,7 @@ export class GovernanceController {
     @ApiResponse({ status: 200, description: 'Histórico de scores', type: [GovernanceScoreHistoryDto] })
     async getScoreHistory(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('limit') limit?: string
     ): Promise<GovernanceScoreHistoryDto[]> {
         const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
@@ -206,7 +206,7 @@ export class GovernanceController {
     @ApiResponse({ status: 200, description: 'Lista de supressões', type: [GovernanceSuppressionDto] })
     async listSuppressions(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceSuppressionDto[]> {
         return this.governanceService.listSuppressions(org.id, cloudAccountId);
     }
@@ -227,7 +227,7 @@ export class GovernanceController {
     async createSuppression(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Body() body: CreateGovernanceSuppressionDto,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GovernanceSuppressionDto> {
         return this.governanceService.createSuppression(org.id, {
             cloudAccountId,
@@ -251,7 +251,7 @@ export class GovernanceController {
     @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
     async deleteSuppression(
         @Param('suppressionId', ParseUUIDPipe) suppressionId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<void> {
         return this.governanceService.deleteSuppression(suppressionId, org.id);
     }

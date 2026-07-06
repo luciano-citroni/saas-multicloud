@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -288,7 +288,7 @@ export class AwsIamRoleService {
                 )
 
                 .catch((err: any) => {
-                    console.warn(`Falha ao listar políticas anexadas da role "${roleName}":`, err.message);
+                    Logger.warn(`Falha ao listar políticas anexadas da role "${roleName}":`, err.message);
 
                     return { AttachedPolicies: [], IsTruncated: false };
                 });
@@ -324,7 +324,7 @@ export class AwsIamRoleService {
                 )
 
                 .catch((err: any) => {
-                    console.warn(`Falha ao listar políticas inline da role "${roleName}":`, err.message);
+                    Logger.warn(`Falha ao listar políticas inline da role "${roleName}":`, err.message);
 
                     return { PolicyNames: [], IsTruncated: false };
                 });

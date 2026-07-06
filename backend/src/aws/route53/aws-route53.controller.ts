@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsRoute53Service } from './aws-route53.service';
 
@@ -30,7 +30,7 @@ export class AwsRoute53Controller {
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [Route53HostedZoneResponseDto] })
-    listHostedZones(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listHostedZones(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listHostedZonesFromDatabase(cloudAccountId);
     }
 
@@ -45,7 +45,7 @@ export class AwsRoute53Controller {
 
         @Param('hostedZoneId', ParseUUIDPipe) hostedZoneId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getHostedZoneById(hostedZoneId, cloudAccountId);
     }
@@ -55,7 +55,7 @@ export class AwsRoute53Controller {
     @ApiOperation({ summary: 'Sincronizar hosted zones da AWS', description: 'Busca as hosted zones do Route53 e armazena/atualiza no banco de dados.' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [Route53HostedZoneSyncResponseDto] })
-    syncHostedZones(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncHostedZones(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncHostedZonesFromAws(cloudAccountId, org.id);
     }
 }

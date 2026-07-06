@@ -93,7 +93,7 @@ export function AssessmentToolbar({
                 {showExcelButton && (
                     <Button type="button" variant="outline" onClick={onExcelDownload} isLoading={generatingExcel} disabled={!canRun || running}>
                         <FileSpreadsheet className="size-4" />
-                        {generatingExcel ? 'Gerando relatório…' : 'Baixar relatório Excel'}
+                        {generatingExcel ? 'Enfileirando relatório…' : 'Gerar relatório Excel'}
                     </Button>
                 )}
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1">
@@ -158,7 +158,7 @@ export function AssessmentToolbar({
                         variant="outline"
                         onClick={onConnectCloudAccount}
                         disabled={!canCreateCloudAccount}
-                        title={!canCreateCloudAccount ? 'Apenas OWNER/ADMIN pode conectar contas cloud.' : 'Conectar conta cloud'}
+                        title={!canCreateCloudAccount ? 'Apenas MEMBER, ADMIN ou OWNER pode conectar contas cloud.' : 'Conectar conta cloud'}
                     >
                         Conectar Conta Cloud
                     </Button>

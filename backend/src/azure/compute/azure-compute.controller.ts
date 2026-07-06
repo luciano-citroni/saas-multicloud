@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, HttpStatus, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import {
     ApiBearerAuth,
     ApiHeader,
@@ -10,7 +10,7 @@ import {
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { AzureComputeService } from './azure-compute.service';
 
 @ApiTags('Azure - Compute')
@@ -29,7 +29,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listVirtualMachines(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.computeService.listVirtualMachines(cloudAccountId, org.id);
@@ -44,7 +44,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getVirtualMachine(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -59,7 +59,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listVmss(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.computeService.listVmss(cloudAccountId, org.id);
@@ -74,7 +74,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getVmss(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -89,7 +89,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listDisks(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.computeService.listDisks(cloudAccountId, org.id);
@@ -104,7 +104,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getDisk(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {
@@ -119,7 +119,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async listAksClusters(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
     ) {
         return this.computeService.listAksClusters(cloudAccountId, org.id);
@@ -134,7 +134,7 @@ export class AzureComputeController {
     @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token JWT inválido ou expirado' })
     @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Sem acesso a esta organização' })
     async getAksCluster(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('resourceId', ParseUUIDPipe) resourceId: string,
     ) {

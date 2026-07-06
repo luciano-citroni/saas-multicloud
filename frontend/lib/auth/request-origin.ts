@@ -10,6 +10,31 @@ function parseOrigin(value: string | null): string | null {
     }
 }
 
+function parseEnvOriginList(rawValue: string | undefined): string[] {
+    if (!rawValue) {
+        return [];
+    }
+
+    return rawValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value) => parseOrigin(value))
+        .filter((value): value is string => Boolean(value));
+}
+
+function getConfiguredOrigins(): string[] {
+    const configuredValues = [
+        ...parseEnvOriginList(process.env.NEXT_PUBLIC_ALLOWED_ORIGINS),
+        ...parseEnvOriginList(process.env.ALLOWED_AUTH_ORIGINS),
+        ...parseEnvOriginList(process.env.NEXT_PUBLIC_FRONTEND_URL),
+        ...parseEnvOriginList(process.env.NEXT_PUBLIC_APP_URL),
+        ...parseEnvOriginList(process.env.FRONTEND_URL),
+    ];
+
+    return Array.from(new Set(configuredValues));
+}
+
 function addOrigin(origins: Set<string>, rawUrl: string | undefined) {
     if (!rawUrl) {
         return;
@@ -50,11 +75,25 @@ function getAllowedOrigins(request: Request): Set<string> {
     }
 
     // Origens públicas configuradas para o frontend.
-    addOrigin(allowedOrigins, process.env.NEXT_PUBLIC_FRONTEND_URL);
-    addOrigin(allowedOrigins, process.env.NEXT_PUBLIC_APP_URL);
-    addOrigin(allowedOrigins, process.env.FRONTEND_URL);
+    for (const origin of getConfiguredOrigins()) {
+        allowedOrigins.add(origin);
+    }
 
     return allowedOrigins;
+}
+
+export function getPublicAppOrigin(request: Request): string {
+    const configuredOrigins = getConfiguredOrigins();
+    if (configuredOrigins.length > 0) {
+        return configuredOrigins[0];
+    }
+
+    const forwardedOrigin = getForwardedOrigin(request);
+    if (forwardedOrigin) {
+        return forwardedOrigin;
+    }
+
+    return parseOrigin(request.url) ?? 'http://localhost:3000';
 }
 
 function isOriginAllowed(origin: string | null, allowedOrigins: Set<string>): boolean {

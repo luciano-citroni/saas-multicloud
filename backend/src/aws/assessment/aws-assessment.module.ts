@@ -75,6 +75,7 @@ import { AwsSqsModule } from '../sqs/aws-sqs.module';
 import { AwsSnsModule } from '../sns/aws-sns.module';
 import { AwsWafModule } from '../waf/aws-waf.module';
 import { AwsGuardDutyModule } from '../guardduty/aws-guardduty.module';
+import { AwsConnectorModule } from '../aws-connector.module';
 import { TenantModule } from '../../tenant/tenant.module';
 import { BillingModule } from '../../billing/billing.module';
 
@@ -146,6 +147,7 @@ import { BillingModule } from '../../billing/billing.module';
         AwsSnsModule,
         AwsWafModule,
         AwsGuardDutyModule,
+        AwsConnectorModule,
         TenantModule,
         BillingModule,
     ],

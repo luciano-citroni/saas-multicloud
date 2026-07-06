@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/auth/constants';
 
 const authPrefix = '/auth';
+const publicPrefixes = ['/invite'];
 
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -12,6 +13,10 @@ export function proxy(request: NextRequest) {
         if (hasSession) {
             return NextResponse.redirect(new URL('/', request.url));
         }
+        return NextResponse.next();
+    }
+
+    if (publicPrefixes.some((prefix) => pathname.startsWith(prefix))) {
         return NextResponse.next();
     }
 

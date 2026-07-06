@@ -22,6 +22,8 @@ import { ErrorMessages } from '../common/messages/error-messages';
 
 import { OrganizationService } from '../organization/organization.service';
 
+import { BillingService } from '../billing/billing.service';
+
 export interface JwtPayload {
     sub: string;
 
@@ -62,7 +64,10 @@ export class AuthService {
         private readonly usersService: UsersService,
 
         @Inject(forwardRef(() => OrganizationService))
-        private readonly organizationService: OrganizationService
+        private readonly organizationService: OrganizationService,
+
+        @Inject(forwardRef(() => BillingService))
+        private readonly billingService: BillingService
     ) {}
 
     async register(dto: RegisterDto) {
@@ -72,34 +77,24 @@ export class AuthService {
 
         if (existingEmail) throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
 
-        if (dto.cpf) {
-            const existingCpf = await this.usersService.findByCpf(dto.cpf);
-
-            if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
-        }
-
         try {
             const user = await this.usersService.create({
-                ...dto,
-
+                name: dto.name,
                 email: normalizedEmail,
-
-                cpf: dto.cpf,
-
                 password: dto.password,
             });
 
-            return { id: user.id, email: user.email, name: user.name, cpf: user.cpf, isActive: user.isActive };
+            this.billingService.initializeSubscription(user).catch((err: unknown) => {
+                this.logger.error(`Failed to initialize subscription for user ${user.id}`, err);
+            });
+
+            return { id: user.id, email: user.email, name: user.name, isActive: user.isActive };
         } catch (error) {
             if (error instanceof QueryFailedError) {
                 const dbError = error as QueryFailedError & { detail?: string };
 
                 if (dbError.detail?.includes('email')) {
                     throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
-                }
-
-                if (dbError.detail?.includes('cpf')) {
-                    throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
                 }
             }
 
@@ -124,40 +119,25 @@ export class AuthService {
 
         if (existingEmail) throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
 
-        const existingCpf = await this.usersService.findByCpf(dto.cpf);
-
-        if (existingCpf) throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
-
         try {
-            // Registrar o usuário
-
             const user = await this.usersService.create({
                 name: dto.name,
-
                 email: normalizedEmail,
-
-                cpf: dto.cpf,
-
                 password: dto.password,
             });
 
-            // Aceitar o convite com o novo usuário
+            this.billingService.initializeSubscription(user).catch((err: unknown) => {
+                this.logger.error(`Failed to initialize subscription for user ${user.id}`, err);
+            });
 
             try {
                 await this.organizationService.acceptInviteWithUserId(dto.inviteToken, user.id);
             } catch (error) {
-                // Se falhar ao aceitar o convite, ainda assim retornar os dados de login
-
-                // (o usuário foi criado, mas o convite pode ter expirado, etc.)
-
                 this.logger.warn(`Failed to accept invite for user ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // Emitir tokens para o novo usuário
-
             return {
-                user: { id: user.id, email: user.email, name: user.name, cpf: user.cpf, isActive: user.isActive },
-
+                user: { id: user.id, email: user.email, name: user.name, isActive: user.isActive },
                 ...(await this.issueTokens(user.id)),
             };
         } catch (error) {
@@ -166,10 +146,6 @@ export class AuthService {
 
                 if (dbError.detail?.includes('email')) {
                     throw new ConflictException(ErrorMessages.AUTH.EMAIL_ALREADY_REGISTERED);
-                }
-
-                if (dbError.detail?.includes('cpf')) {
-                    throw new ConflictException(ErrorMessages.AUTH.CPF_ALREADY_REGISTERED);
                 }
             }
 
@@ -281,7 +257,7 @@ export class AuthService {
         return this.getAuthUserPayload(userId);
     }
 
-    async updateMe(userId: string, payload: { name?: string; email?: string; cpf?: string }) {
+    async updateMe(userId: string, payload: { name?: string; email?: string }) {
         await this.usersService.update(userId, payload);
         return this.getAuthUserPayload(userId);
     }
@@ -362,6 +338,10 @@ export class AuthService {
 
                     googleId: googleUser.googleId,
                 });
+
+                this.billingService.initializeSubscription(user).catch((err: unknown) => {
+                    this.logger.error(`Failed to initialize subscription for Google user ${user?.id}`, err);
+                });
             }
         }
 
@@ -441,7 +421,6 @@ export class AuthService {
             id: user.id,
             email: user.email,
             name: user.name,
-            cpf: user.cpf,
             isActive: user.isActive,
             hasPassword: Boolean(user.password),
         };

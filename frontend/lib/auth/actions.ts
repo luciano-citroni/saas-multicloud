@@ -19,7 +19,6 @@ const loginSchema = z.object({
 const registerSchema = z.object({
     name: z.string().min(3, 'O nome deve conter no mínimo 3 caracteres'),
     email: z.email('E-mail inválido'),
-    cpf: z.string().optional(),
     password: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres'),
     confirmPassword: z.string(),
 });
@@ -53,7 +52,7 @@ export async function loginAction(data: unknown): Promise<ActionResult> {
         const body = await response.json();
 
         if (!response.ok) {
-            const errorMessage = extractErrorMessage(body as ApiErrorResponse, 'pt');
+            const errorMessage = extractErrorMessage(body as ApiErrorResponse);
             return {
                 success: false,
                 error: errorMessage,
@@ -92,7 +91,6 @@ export async function registerAction(data: unknown): Promise<ActionResult> {
     try {
         // Validar dados
         const validatedData = registerSchema.parse(data);
-        const normalizedCpf = validatedData.cpf?.replace(/\D/g, '') || undefined;
 
         // Validar se as senhas coincidem
         if (validatedData.password !== validatedData.confirmPassword) {
@@ -109,7 +107,6 @@ export async function registerAction(data: unknown): Promise<ActionResult> {
             body: JSON.stringify({
                 name: validatedData.name,
                 email: validatedData.email,
-                ...(normalizedCpf ? { cpf: normalizedCpf } : {}),
                 password: validatedData.password,
             }),
         });
@@ -117,7 +114,7 @@ export async function registerAction(data: unknown): Promise<ActionResult> {
         const body = await response.json();
 
         if (!response.ok) {
-            const errorMessage = extractErrorMessage(body as ApiErrorResponse, 'pt');
+            const errorMessage = extractErrorMessage(body as ApiErrorResponse);
             return {
                 success: false,
                 error: errorMessage,

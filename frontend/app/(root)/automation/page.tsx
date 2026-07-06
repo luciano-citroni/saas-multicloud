@@ -13,15 +13,9 @@ import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import type { FlowDefinition, PricingModel, CostEstimateResponse, AutomationExecution } from '@/app/actions/automation';
 import { estimateAutomationCost, runAutomation } from '@/app/actions/automation';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 type Step = 'builder' | 'estimate' | 'pricing' | 'confirm' | 'done';
-
-const STEPS: { id: Step; label: string; icon: React.ElementType }[] = [
-    { id: 'builder', label: 'Builder', icon: Layers },
-    { id: 'estimate', label: 'Estimativa', icon: DollarSign },
-    { id: 'pricing', label: 'Pricing', icon: CreditCard },
-    { id: 'confirm', label: 'Confirmar', icon: CheckCircle2 },
-];
 
 const STEP_ORDER: Step[] = ['builder', 'estimate', 'pricing', 'confirm', 'done'];
 
@@ -42,12 +36,20 @@ export default function AutomationPage() {
     const [pricingModel, setPricingModel] = useState<PricingModel>('ON_DEMAND');
     const [isLoading, setIsLoading] = useState(false);
     const [executionResult, setExecutionResult] = useState<AutomationExecution | null>(null);
+    const taut = useTranslations('automation');
+
+    const STEPS: { id: Step; label: string; icon: React.ElementType }[] = [
+        { id: 'builder', label: 'Builder', icon: Layers },
+        { id: 'estimate', label: taut.stepEstimate, icon: DollarSign },
+        { id: 'pricing', label: 'Pricing', icon: CreditCard },
+        { id: 'confirm', label: taut.stepConfirm, icon: CheckCircle2 },
+    ];
 
     const stepIndex = STEP_ORDER.indexOf(currentStep);
 
     async function goToEstimate() {
         if (flow.nodes.length === 0) {
-            toast.error('Adicione ao menos um recurso ao fluxo antes de continuar.');
+            toast.error(taut.addResourceFirst);
             return;
         }
 
@@ -60,7 +62,7 @@ export default function AutomationPage() {
         });
 
         if (unconfigured.length > 0) {
-            toast.error(`Configure todos os recursos antes de continuar. ${unconfigured.length} recurso(s) incompleto(s).`);
+            toast.error(taut.configureResources.replace('{count}', String(unconfigured.length)));
             return;
         }
 
@@ -68,11 +70,11 @@ export default function AutomationPage() {
         const cloudAccountId = getActiveCloudAccount();
 
         if (!organizationId) {
-            toast.error('Selecione uma organização na sidebar antes de continuar.');
+            toast.error(taut.selectOrgFirst);
             return;
         }
         if (!cloudAccountId) {
-            toast.error('Selecione uma conta cloud na sidebar antes de continuar.');
+            toast.error(taut.selectAccountFirst);
             return;
         }
 
@@ -81,13 +83,13 @@ export default function AutomationPage() {
             const response = await estimateAutomationCost(flow, cloudAccountId, organizationId);
             const body = (await response.json()) as CostEstimateResponse;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             setEstimate(body);
             setCurrentStep('estimate');
         } catch {
-            toast.error('Falha ao calcular estimativa de custo.');
+            toast.error(taut.costEstimateError);
         } finally {
             setIsLoading(false);
         }
@@ -98,7 +100,7 @@ export default function AutomationPage() {
         const cloudAccountId = getActiveCloudAccount();
 
         if (!organizationId || !cloudAccountId) {
-            toast.error('Organização ou conta cloud não selecionada.');
+            toast.error(taut.noOrgOrAccount);
             return;
         }
 
@@ -107,14 +109,14 @@ export default function AutomationPage() {
             const response = await runAutomation(flow, pricingModel, cloudAccountId, organizationId);
             const body = (await response.json()) as AutomationExecution;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             setExecutionResult(body);
             setCurrentStep('done');
-            toast.success('Infraestrutura provisionada com sucesso!');
+            toast.success(taut.provisionSuccess);
         } catch {
-            toast.error('Falha ao provisionar a infraestrutura.');
+            toast.error(taut.provisionError);
         } finally {
             setIsLoading(false);
         }
@@ -128,10 +130,8 @@ export default function AutomationPage() {
     return (
         <div className="w-full space-y-6 p-6">
             <div>
-                <h1 className="text-2xl font-bold">Automação de Infraestrutura</h1>
-                <p className="text-sm text-muted-foreground">
-                    Construa fluxos visuais, estime custos com FinOps integrado e provisione recursos AWS com um clique.
-                </p>
+                <h1 className="text-2xl font-bold">{taut.pageTitle}</h1>
+                <p className="text-sm text-muted-foreground">{taut.pageDesc}</p>
             </div>
 
             {/* Step indicator */}
@@ -171,10 +171,8 @@ export default function AutomationPage() {
                 {currentStep === 'builder' && (
                     <>
                         <div className="border-b px-6 py-4">
-                            <h2 className="font-semibold">1. Construa seu fluxo</h2>
-                            <p className="text-sm text-muted-foreground">
-                                Adicione recursos AWS da paleta e conecte-os para definir a ordem de provisionamento.
-                            </p>
+                            <h2 className="font-semibold">{taut.buildFlowTitle}</h2>
+                            <p className="text-sm text-muted-foreground">{taut.buildFlowDesc}</p>
                         </div>
                         <div className="p-6">
                             <AutomationBuilder
@@ -186,7 +184,7 @@ export default function AutomationPage() {
                         <div className="flex justify-end border-t px-6 py-4">
                             <Button onClick={goToEstimate} disabled={isLoading || flow.nodes.length === 0}>
                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Estimar Custo
+                                {taut.estimateCostButton}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
@@ -196,8 +194,8 @@ export default function AutomationPage() {
                 {currentStep === 'estimate' && estimate && (
                     <>
                         <div className="border-b px-6 py-4">
-                            <h2 className="font-semibold">2. Estimativa de Custo</h2>
-                            <p className="text-sm text-muted-foreground">Comparação dos 3 modelos de precificação AWS para os recursos do seu fluxo.</p>
+                            <h2 className="font-semibold">{taut.estimateCostTitle}</h2>
+                            <p className="text-sm text-muted-foreground">{taut.estimateCostDesc}</p>
                         </div>
                         <div className="p-6">
                             <CostEstimationPanel estimate={estimate} />
@@ -205,10 +203,10 @@ export default function AutomationPage() {
                         <div className="flex justify-between border-t px-6 py-4">
                             <Button variant="outline" onClick={goBack}>
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Voltar
+                                {taut.backButton}
                             </Button>
                             <Button onClick={() => setCurrentStep('pricing')}>
-                                Escolher Modelo
+                                {taut.choosePricingButton}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
@@ -218,8 +216,8 @@ export default function AutomationPage() {
                 {currentStep === 'pricing' && estimate && (
                     <>
                         <div className="border-b px-6 py-4">
-                            <h2 className="font-semibold">3. Escolha o Modelo de Preço</h2>
-                            <p className="text-sm text-muted-foreground">Selecione o modelo que melhor se adapta ao seu caso de uso.</p>
+                            <h2 className="font-semibold">{taut.choosePricingTitle}</h2>
+                            <p className="text-sm text-muted-foreground">{taut.choosePricingDesc}</p>
                         </div>
                         <div className="p-6">
                             <PricingModelSelector selected={pricingModel} onChange={setPricingModel} totals={estimate.totals} />
@@ -227,10 +225,10 @@ export default function AutomationPage() {
                         <div className="flex justify-between border-t px-6 py-4">
                             <Button variant="outline" onClick={goBack}>
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Voltar
+                                {taut.backButton}
                             </Button>
                             <Button onClick={() => setCurrentStep('confirm')}>
-                                Revisar e Confirmar
+                                {taut.reviewButton}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
@@ -240,8 +238,8 @@ export default function AutomationPage() {
                 {currentStep === 'confirm' && estimate && (
                     <>
                         <div className="border-b px-6 py-4">
-                            <h2 className="font-semibold">4. Confirmar Provisionamento</h2>
-                            <p className="text-sm text-muted-foreground">Revise os recursos e confirme para iniciar o provisionamento na AWS.</p>
+                            <h2 className="font-semibold">{taut.confirmTitle}</h2>
+                            <p className="text-sm text-muted-foreground">{taut.confirmDesc}</p>
                         </div>
                         <div className="p-6">
                             <ExecutionConfirmation
@@ -254,18 +252,18 @@ export default function AutomationPage() {
                         <div className="flex justify-between border-t px-6 py-4">
                             <Button variant="outline" onClick={goBack}>
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Voltar
+                                {taut.backButton}
                             </Button>
                             <Button onClick={handleProvision} disabled={isLoading} className="bg-primary">
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Provisionando...
+                                        {taut.provisioningButton}
                                     </>
                                 ) : (
                                     <>
                                         <Play className="mr-2 h-4 w-4" />
-                                        Provisionar Infraestrutura
+                                        {taut.provisionButton}
                                     </>
                                 )}
                             </Button>
@@ -279,9 +277,9 @@ export default function AutomationPage() {
                             <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold">Infraestrutura Provisionada!</h2>
+                            <h2 className="text-xl font-bold">{taut.doneTitle}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Execução <span className="font-mono text-xs">{executionResult.id}</span> concluída.
+                                <span className="font-mono text-xs">{taut.doneDuration.replace('{id}', executionResult.id)}</span>
                             </p>
                         </div>
                         <div className="mt-2 w-full max-w-sm rounded-xl border p-4 text-left space-y-2">
@@ -314,7 +312,7 @@ export default function AutomationPage() {
                                 setExecutionResult(null);
                             }}
                         >
-                            Criar Novo Fluxo
+                            {taut.newFlowButton}
                         </Button>
                     </div>
                 )}

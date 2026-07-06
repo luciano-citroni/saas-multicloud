@@ -1,10 +1,10 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, In, QueryFailedError, Repository } from 'typeorm';
 
 import { InjectQueue } from '@nestjs/bullmq';
 
@@ -31,11 +31,14 @@ type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
 
 @Injectable()
 export class CloudService {
-    private readonly awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
+    private readonly logger = new Logger(CloudService.name);
+    private readonly awsRegionRegex = /^[a-z]{2}(?:-(?:gov|iso|isob|isof))?-[a-z0-9-]+-\d+$/i;
 
     constructor(
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
+
+        private readonly dataSource: DataSource,
 
         @InjectRepository(AzureAssessmentJob)
         private readonly azureAssessmentJobRepository: Repository<AzureAssessmentJob>,
@@ -324,7 +327,11 @@ export class CloudService {
                 });
             }
 
-            if (!credentials.serviceAccountEmail || typeof credentials.serviceAccountEmail !== 'string' || credentials.serviceAccountEmail.trim().length === 0) {
+            if (
+                !credentials.serviceAccountEmail ||
+                typeof credentials.serviceAccountEmail !== 'string' ||
+                credentials.serviceAccountEmail.trim().length === 0
+            ) {
                 throw new BadRequestException({
                     error: 'ValidationException',
                     message: 'Credencial GCP inválida: campo "serviceAccountEmail" ausente ou inválido.',
@@ -337,7 +344,8 @@ export class CloudService {
             if (!gcpSaEmailRegex.test(credentials.serviceAccountEmail.trim())) {
                 throw new BadRequestException({
                     error: 'ValidationException',
-                    message: 'Credencial GCP inválida: "serviceAccountEmail" deve ser uma Service Account GCP válida (ex: sa@projeto.iam.gserviceaccount.com).',
+                    message:
+                        'Credencial GCP inválida: "serviceAccountEmail" deve ser uma Service Account GCP válida (ex: sa@projeto.iam.gserviceaccount.com).',
                     details: { field: 'credentials.serviceAccountEmail' },
                 });
             }
@@ -352,15 +360,20 @@ export class CloudService {
 
      */
 
-    async createCloudAccount(organizationId: string, dto: CreateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
-        const plan = await this.billingService.getActivePlanForOrganization(organizationId);
+    async createCloudAccount(tenantId: string, dto: CreateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
+        try {
+            const plan = await this.billingService.getActivePlanForOrganization(tenantId);
 
-        if (plan.metadata.maxCloudAccounts > 0) {
-            const currentAccountsCount = await this.cloudAccountRepository.count({ where: { organizationId } });
+            if (plan.metadata.maxCloudAccounts > 0) {
+                const currentAccountsCount = await this.cloudAccountRepository.count({ where: { tenantId } });
 
-            if (currentAccountsCount >= plan.metadata.maxCloudAccounts) {
-                throw new ForbiddenException(ErrorMessages.PLANS.CLOUD_ACCOUNT_LIMIT_REACHED);
+                if (currentAccountsCount >= plan.metadata.maxCloudAccounts) {
+                    throw new ForbiddenException(ErrorMessages.PLANS.CLOUD_ACCOUNT_LIMIT_REACHED);
+                }
             }
+        } catch (err) {
+            if (err instanceof ForbiddenException) throw err;
+            this.logger.warn(`Plan limit check skipped for tenant ${tenantId} (billing not ready): ${err instanceof Error ? err.message : String(err)}`);
         }
 
         // Validar o provider
@@ -388,7 +401,9 @@ export class CloudService {
         // Criar a conta
 
         const cloudAccount = this.cloudAccountRepository.create({
-            organizationId,
+            tenantId,
+
+            organizationId: dto.organizationId ?? null,
 
             provider: dto.provider as CloudProvider,
 
@@ -408,11 +423,8 @@ export class CloudService {
         return result as Omit<CloudAccount, 'credentialsEncrypted'>;
     }
 
-    async getAccountForEdit(
-        organizationId: string,
-        id: string
-    ): Promise<Omit<CloudAccount, 'credentialsEncrypted'> & { credentials: Record<string, any> }> {
-        const account = await this.findByIdAndOrganization(id, organizationId, true);
+    async getAccountForEdit(tenantId: string, id: string): Promise<Omit<CloudAccount, 'credentialsEncrypted'> & { credentials: Record<string, any> }> {
+        const account = await this.findByIdAndTenant(id, tenantId, true);
 
         if (!account) {
             throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
@@ -427,8 +439,8 @@ export class CloudService {
         };
     }
 
-    async updateCloudAccount(organizationId: string, id: string, dto: UpdateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
-        const existingAccount = await this.findByIdAndOrganization(id, organizationId, true);
+    async updateCloudAccount(tenantId: string, id: string, dto: UpdateCloudAccountDto): Promise<Omit<CloudAccount, 'credentialsEncrypted'>> {
+        const existingAccount = await this.findByIdAndTenant(id, tenantId, true);
 
         if (!existingAccount) {
             throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
@@ -449,22 +461,64 @@ export class CloudService {
             existingAccount.isActive = dto.isActive;
         }
 
+        if (dto.organizationId !== undefined) {
+            existingAccount.organizationId = dto.organizationId;
+        }
+
         const updatedAccount = await this.cloudAccountRepository.save(existingAccount);
         const { credentialsEncrypted: _, ...result } = updatedAccount;
 
         return result as Omit<CloudAccount, 'credentialsEncrypted'>;
     }
 
-    async deleteCloudAccount(organizationId: string, id: string): Promise<{ id: string; deleted: true }> {
-        const existingAccount = await this.findByIdAndOrganization(id, organizationId, true);
+    async deleteCloudAccount(tenantId: string, id: string): Promise<{ id: string; deleted: true }> {
+        const existingAccount = await this.findByIdAndTenant(id, tenantId, true);
 
         if (!existingAccount) {
             throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
         }
 
-        await this.cloudAccountRepository.delete({ id, organizationId });
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            const tablesWithCloudAccountId = (await queryRunner.query(
+                `
+                    SELECT c.table_schema AS "tableSchema", c.table_name AS "tableName"
+                    FROM information_schema.columns c
+                    INNER JOIN information_schema.tables t
+                        ON t.table_schema = c.table_schema
+                        AND t.table_name = c.table_name
+                    WHERE c.column_name = 'cloud_account_id'
+                      AND c.table_name <> 'cloud_accounts'
+                      AND c.table_schema = 'public'
+                      AND t.table_type = 'BASE TABLE'
+                    ORDER BY c.table_name ASC
+                `
+            )) as Array<{ tableSchema: string; tableName: string }>;
+
+            for (const table of tablesWithCloudAccountId) {
+                const schemaName = this.quoteIdentifier(table.tableSchema);
+                const tableName = this.quoteIdentifier(table.tableName);
+                await queryRunner.query(`DELETE FROM ${schemaName}.${tableName} WHERE cloud_account_id = $1`, [id]);
+            }
+
+            await queryRunner.manager.delete(CloudAccount, { id, tenantId });
+
+            await queryRunner.commitTransaction();
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
 
         return { id, deleted: true };
+    }
+
+    private quoteIdentifier(identifier: string): string {
+        return `"${identifier.replace(/"/g, '""')}"`;
     }
 
     /**
@@ -475,13 +529,8 @@ export class CloudService {
 
      */
 
-    async findByOrganization(
-        organizationId: string,
-        filters?: Pick<ListCloudAccountsQueryDto, 'name' | 'isActive'>
-    ): Promise<CloudAccountWithSyncStatus[]> {
-        const queryBuilder = this.cloudAccountRepository
-            .createQueryBuilder('cloudAccount')
-            .where('cloudAccount.organization_id = :organizationId', { organizationId });
+    async findByOrganization(tenantId: string, filters?: Pick<ListCloudAccountsQueryDto, 'name' | 'isActive'>): Promise<CloudAccountWithSyncStatus[]> {
+        const queryBuilder = this.cloudAccountRepository.createQueryBuilder('cloudAccount').where('cloudAccount.tenant_id = :tenantId', { tenantId });
 
         if (filters?.name) {
             queryBuilder.andWhere('cloudAccount.alias ILIKE :name', { name: `%${filters.name}%` });
@@ -613,8 +662,8 @@ export class CloudService {
 
      */
 
-    async getDecryptedCredentials(id: string, organizationId: string): Promise<Record<string, any>> {
-        const account = await this.findByIdAndOrganization(id, organizationId, true);
+    async getDecryptedCredentials(id: string, tenantId: string): Promise<Record<string, any>> {
+        const account = await this.findByIdAndTenant(id, tenantId, true);
 
         if (!account) {
             throw new BadRequestException({
@@ -635,19 +684,23 @@ export class CloudService {
 
      */
 
-    async findByIdAndOrganization(id: string, organizationId: string, includeCredentials?: boolean): Promise<CloudAccount | null> {
+    async findByIdAndTenant(id: string, tenantId: string, includeCredentials?: boolean): Promise<CloudAccount | null> {
         let query = this.cloudAccountRepository
 
             .createQueryBuilder('ca')
 
             .where('ca.id = :id', { id })
 
-            .andWhere('ca.organizationId = :organizationId', { organizationId });
+            .andWhere('ca.tenantId = :tenantId', { tenantId });
 
         if (includeCredentials) {
             query = query.addSelect('ca.credentialsEncrypted');
         }
 
         return query.getOne();
+    }
+
+    async findByIdAndOrganization(id: string, organizationId: string, includeCredentials?: boolean): Promise<CloudAccount | null> {
+        return this.findByIdAndTenant(id, organizationId, includeCredentials);
     }
 }

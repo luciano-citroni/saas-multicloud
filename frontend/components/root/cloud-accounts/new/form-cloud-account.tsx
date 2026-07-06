@@ -1,25 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import z from 'zod';
-import { KeyRound, Globe, Tag, ShieldCheck, Copy, Check as CheckIcon, Plus, Trash2 } from 'lucide-react';
+import { KeyRound, Globe, Tag, ShieldCheck, Copy, Check as CheckIcon, Plus, Trash2, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import { cloudAccountFormScheme } from './scheme';
+import { createCloudAccountSchema, type CloudAccountFormValues } from './scheme';
+import { useTranslations } from '@/lib/i18n';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { buildTrustPolicy, PERMISSIONS_POLICY, AUTOMATION_PERMISSIONS_POLICY } from '@/lib/role-permissions';
 
 type Props = {
     organizationId: string;
+};
+
+type MidOrg = {
+    id: string;
+    name: string;
 };
 
 const PROVIDERS = [
@@ -28,7 +35,7 @@ const PROVIDERS = [
     { value: 'gcp', label: 'Google Cloud Platform', shortLabel: 'GCP' },
 ] as const;
 
-type FormValues = z.infer<typeof cloudAccountFormScheme>;
+type FormValues = CloudAccountFormValues;
 
 type CreateCloudAccountResponse = {
     id?: string;
@@ -42,6 +49,7 @@ function parseAdditionalRegions(values?: Array<{ value?: string }>): string[] {
 
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
+    const tc = useTranslations('common');
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(text);
@@ -56,7 +64,7 @@ function CopyButton({ text }: { text: string }) {
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
             {copied ? <CheckIcon className="size-3 text-green-500" /> : <Copy className="size-3" />}
-            {copied ? 'Copiado!' : 'Copiar'}
+            {copied ? tc.copied : tc.copy}
         </button>
     );
 }
@@ -115,15 +123,33 @@ const GCP_PERMISSIONS_LIST = [
 
 export function FormCloudAccount({ organizationId }: Props) {
     const [isLoading, setIsLoading] = useState(false);
-    // gerado uma vez por sessão de criação — mostrado na trust policy para o usuário configurar antes de submeter
     const [externalId] = useState(() => crypto.randomUUID());
+    const [orgs, setOrgs] = useState<MidOrg[]>([]);
     const router = useRouter();
+    const tca = useTranslations('cloudAccounts');
+
+    useEffect(() => {
+        void fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+            .then((r) => r.json())
+            .then((payload: unknown) => {
+                const items = Array.isArray(payload)
+                    ? (payload as MidOrg[])
+                    : Array.isArray((payload as { items?: unknown }).items)
+                      ? (payload as { items: MidOrg[] }).items
+                      : [];
+                setOrgs(items);
+            })
+            .catch(() => undefined);
+    }, [organizationId]);
+
+    const schema = useMemo(() => createCloudAccountSchema(tca), [tca]);
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(cloudAccountFormScheme),
+        resolver: zodResolver(schema),
         defaultValues: {
             alias: '',
             provider: 'aws',
+            orgId: '',
             roleArn: '',
             region: '',
             awsRegions: [],
@@ -172,11 +198,16 @@ export function FormCloudAccount({ organizationId }: Props) {
                 if (data.gcpServiceAccountEmail) credentials.serviceAccountEmail = data.gcpServiceAccountEmail.trim();
             }
 
-            const body = {
+            const body: Record<string, unknown> = {
                 provider: data.provider,
                 alias: data.alias.trim(),
                 credentials,
             };
+
+            if (data.orgId) {
+                const selectedOrg = orgs.find((o) => o.name === data.orgId);
+                if (selectedOrg) body.organizationId = selectedOrg.id;
+            }
 
             const response = await fetch(`/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`, {
                 method: 'POST',
@@ -187,11 +218,8 @@ export function FormCloudAccount({ organizationId }: Props) {
             const payload = (await response.json().catch(() => null)) as CreateCloudAccountResponse | { message?: string } | null;
 
             if (!response.ok) {
-                const message =
-                    typeof payload === 'object' && payload && 'message' in payload && typeof payload.message === 'string'
-                        ? payload.message
-                        : 'Não foi possível conectar a conta cloud.';
-                toast.error(message);
+                const errorPayload = payload as { message?: string; error?: string } | null;
+                toast.error(errorPayload?.message ?? tca.createError);
                 return;
             }
 
@@ -203,11 +231,11 @@ export function FormCloudAccount({ organizationId }: Props) {
 
             notifySidebarContextUpdated();
 
-            toast.success('Conta cloud conectada com sucesso.');
+            toast.success(tca.createSuccess);
             router.replace('/');
             router.refresh();
         } catch {
-            toast.error('Não foi possível conectar a conta cloud.');
+            toast.error(tca.createError);
         } finally {
             setIsLoading(false);
         }
@@ -223,10 +251,54 @@ export function FormCloudAccount({ organizationId }: Props) {
                         name="alias"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Nome da conta</FormLabel>
+                                <FormLabel>{tca.accountName}</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="Ex: Produção AWS, Dev GCP…" StartIcon={Tag} {...field} />
+                                    <IconInput placeholder={tca.accountNamePlaceholder} StartIcon={Tag} {...field} />
                                 </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    {/* Organization (required) */}
+                    <FormField
+                        control={form.control}
+                        name="orgId"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>{tca.organizationRequired}</FormLabel>
+                                {orgs.length === 0 ? (
+                                    <div className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-950/30">
+                                        <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                        <p className="flex-1 text-sm text-amber-800 dark:text-amber-300">
+                                            {tca.noOrganizationAlert}
+                                        </p>
+                                        <Link
+                                            href="/tenant/organizations/new"
+                                            className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50 transition-colors"
+                                        >
+                                            <Plus className="inline size-3 mr-1" />
+                                            {tca.createOrganization}
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <Combobox items={orgs} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
+                                        <ComboboxInput
+                                            placeholder={tca.organizationPlaceholder}
+                                            className="h-9 w-full rounded-md shadow-sm"
+                                        />
+                                        <ComboboxContent>
+                                            <ComboboxEmpty>{tca.noOrganization}</ComboboxEmpty>
+                                            <ComboboxList>
+                                                {(org: MidOrg) => (
+                                                    <ComboboxItem key={org.id} value={org.name}>
+                                                        {org.name}
+                                                    </ComboboxItem>
+                                                )}
+                                            </ComboboxList>
+                                        </ComboboxContent>
+                                    </Combobox>
+                                )}
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -267,7 +339,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                             <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                                     <ShieldCheck className="size-3.5" />
-                                    Credenciais AWS (Role ARN)
+                                    {tca.awsCredentials}
                                 </p>
 
                                 <FormField
@@ -289,7 +361,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                     name="region"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Região principal</FormLabel>
+                                            <FormLabel>{tca.primaryRegion}</FormLabel>
                                             <FormControl>
                                                 <IconInput placeholder="us-east-1" StartIcon={Globe} {...field} />
                                             </FormControl>
@@ -303,10 +375,10 @@ export function FormCloudAccount({ organizationId }: Props) {
                                     name="awsRegions"
                                     render={() => (
                                         <FormItem>
-                                            <FormLabel>Regiões adicionais (opcional)</FormLabel>
+                                            <FormLabel>{tca.additionalRegions}</FormLabel>
                                             <div className="flex flex-col gap-2">
                                                 {awsRegionFields.length === 0 ? (
-                                                    <p className="text-xs text-muted-foreground">Nenhuma região adicional adicionada.</p>
+                                                    <p className="text-xs text-muted-foreground">{tca.noAdditionalRegions}</p>
                                                 ) : null}
 
                                                 {awsRegionFields.map((awsRegionField, index) => (
@@ -316,7 +388,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                             name={`awsRegions.${index}.value`}
                                                             render={({ field }) => (
                                                                 <FormControl>
-                                                                    <IconInput placeholder="ex: us-west-2" StartIcon={Globe} {...field} />
+                                                                    <IconInput placeholder={tca.regionPlaceholder} StartIcon={Globe} {...field} />
                                                                 </FormControl>
                                                             )}
                                                         />
@@ -325,7 +397,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                             variant="outline"
                                                             size="icon"
                                                             onClick={() => removeAwsRegion(index)}
-                                                            title="Remover região"
+                                                            title={tca.removeRegion}
                                                         >
                                                             <Trash2 className="size-4" />
                                                         </Button>
@@ -341,7 +413,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                         className="gap-1"
                                                     >
                                                         <Plus className="size-4" />
-                                                        Adicionar região
+                                                        {tca.addRegion}
                                                     </Button>
                                                 </div>
                                             </div>
@@ -394,7 +466,10 @@ export function FormCloudAccount({ organizationId }: Props) {
                                         </ol>
 
                                         <PolicyBlock label="Trust Policy — cole ao criar a role" json={buildTrustPolicy(externalId)} />
-                                        <PolicyBlock label="Permissions Policy (Assessment / FinOps) — cole como inline policy" json={PERMISSIONS_POLICY} />
+                                        <PolicyBlock
+                                            label="Permissions Policy (Assessment / FinOps) — cole como inline policy"
+                                            json={PERMISSIONS_POLICY}
+                                        />
 
                                         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
                                             <div className="flex items-start gap-2">
@@ -455,7 +530,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                             <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                                     <ShieldCheck className="size-3.5" />
-                                    Credenciais Azure (Service Principal)
+                                    {tca.azureCredentials}
                                 </p>
 
                                 <FormField
@@ -493,12 +568,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                         <FormItem>
                                             <FormLabel>Client Secret</FormLabel>
                                             <FormControl>
-                                                <IconInput
-                                                    placeholder="Client secret do App Registration"
-                                                    StartIcon={KeyRound}
-                                                    type="password"
-                                                    {...field}
-                                                />
+                                                <IconInput placeholder={tca.clientSecretPlaceholder} StartIcon={KeyRound} type="password" {...field} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -620,7 +690,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                             <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                                     <ShieldCheck className="size-3.5" />
-                                    Credenciais GCP (Service Account Impersonation)
+                                    {tca.gcpCredentials}
                                 </p>
 
                                 <FormField
@@ -630,7 +700,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                         <FormItem>
                                             <FormLabel>Project ID</FormLabel>
                                             <FormControl>
-                                                <IconInput placeholder="meu-projeto-gcp-123" StartIcon={Globe} {...field} />
+                                                <IconInput placeholder={tca.gcpProjectIdPlaceholder} StartIcon={Globe} {...field} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -872,8 +942,8 @@ export function FormCloudAccount({ organizationId }: Props) {
                     )}
 
                     <div className="flex justify-end">
-                        <Button type="submit" isLoading={isLoading}>
-                            Conectar Conta Cloud
+                        <Button type="submit" isLoading={isLoading} disabled={orgs.length === 0}>
+                            {tca.connectAccount}
                         </Button>
                     </div>
                 </form>

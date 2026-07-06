@@ -62,7 +62,7 @@ export class AuthController {
     @Public()
     @Post('register')
     @HttpCode(HttpStatus.OK)
-    @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
     @ApiOperation({ summary: 'Registrar novo usuário' })
     @ApiBody({
         description: 'Dados para registrar novo usuário',
@@ -118,7 +118,7 @@ export class AuthController {
     @Public()
     @Post('register-with-invite')
     @HttpCode(HttpStatus.OK)
-    @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
     @ApiOperation({ summary: 'Registrar novo usuário com convite de organização' })
     @ApiBody({
         description: 'Dados para registrar novo usuário e aceitar convite de organização',
@@ -183,7 +183,7 @@ export class AuthController {
 
     @Public()
     @Post('login')
-    @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+    @Throttle({ default: { limit: 30, ttl: 60_000 } })
     @ApiOperation({ summary: 'Fazer login' })
     @ApiBody({
         description: 'Credenciais para fazer login',
@@ -219,7 +219,7 @@ export class AuthController {
 
     @Public()
     @Post('refresh')
-    @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+    @Throttle({ default: { limit: 120, ttl: 60_000 } })
     @ApiOperation({ summary: 'Renovar token de acesso' })
     @ApiBody({
         description: 'Token JWT de acesso para renovação',
@@ -265,6 +265,7 @@ export class AuthController {
 
     @Get('me')
     @AllowMissingOrganization()
+    @SkipThrottle()
     @UseGuards(TenantGuard)
     @ApiBearerAuth('access-token')
     @ApiOperation({ summary: 'Obter dados do usuário autenticado' })
@@ -362,7 +363,7 @@ export class AuthController {
     @Public()
     @Post('google/exchange')
     @HttpCode(HttpStatus.OK)
-    @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+    @Throttle({ default: { limit: 30, ttl: 60_000 } })
     @ApiOperation({ summary: 'Trocar código temporário do Google por tokens da sessão' })
     @ApiBody({
         description: 'Código temporário emitido após o callback do Google',
@@ -380,8 +381,24 @@ export class AuthController {
 
     private resolveGoogleRedirectUrl(state?: string) {
         const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
-        const defaultRedirectUrl = new URL('/auth/google/callback', frontendUrl);
-        const allowedOrigin = new URL(frontendUrl).origin;
+        const googleAllowedOrigins = this.configService.get<string>('GOOGLE_ALLOWED_REDIRECT_ORIGINS');
+        const rawAllowList = googleAllowedOrigins?.trim() ? googleAllowedOrigins : frontendUrl;
+        const configuredFrontendUrls = rawAllowList
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+
+        const defaultFrontendUrl = configuredFrontendUrls[0] ?? frontendUrl;
+        const defaultRedirectUrl = new URL('/auth/google/callback', defaultFrontendUrl);
+        const allowedOrigins = configuredFrontendUrls
+            .map((value) => {
+                try {
+                    return new URL(value).origin;
+                } catch {
+                    return null;
+                }
+            })
+            .filter((value): value is string => Boolean(value));
 
         if (!state) {
             return defaultRedirectUrl;
@@ -399,7 +416,7 @@ export class AuthController {
             const redirectUrl = new URL(decodedState.redirectUri);
 
             // Garante que o redirect só acontece para o domínio do frontend (evita Open Redirect)
-            if (redirectUrl.origin !== allowedOrigin) {
+            if (!allowedOrigins.includes(redirectUrl.origin)) {
                 return defaultRedirectUrl;
             }
 

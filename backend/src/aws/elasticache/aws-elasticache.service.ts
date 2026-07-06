@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -62,22 +62,27 @@ export class AwsElastiCacheService {
     }
 
     async syncClustersFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getElastiCacheClient(cloudAccountId, organizationId);
-
-        const { CacheClusters } = await client.send(new DescribeCacheClustersCommand({ ShowCacheNodeInfo: true })).catch(() => {
-            throw new BadRequestException('Falha ao listar clusters ElastiCache. Verifique as permissões da role (elasticache:DescribeCacheClusters).');
-        });
-
-        if (!CacheClusters || CacheClusters.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsCluster>[] = [];
 
-        for (const cluster of CacheClusters) {
-            if (!cluster.CacheClusterId) continue;
+        for (const region of regions) {
+            const client = await this.connector.getElastiCacheClient(cloudAccountId, organizationId, region);
+
+            const { CacheClusters } = await client.send(new DescribeCacheClustersCommand({ ShowCacheNodeInfo: true })).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar clusters ElastiCache na região ${region}. Verifique as permissões da role (elasticache:DescribeCacheClusters).`
+                );
+            });
+
+            if (!CacheClusters || CacheClusters.length === 0) {
+                continue;
+            }
+
+            for (const cluster of CacheClusters) {
+                if (!cluster.CacheClusterId) continue;
 
             let tags: Record<string, string> = {};
 
@@ -92,7 +97,7 @@ export class AwsElastiCacheService {
                             return acc;
                         }, {}) ?? {};
                 } catch {
-                    console.warn(`Não foi possível obter tags do cluster ${cluster.CacheClusterId}.`);
+                    Logger.warn(`Não foi possível obter tags do cluster ${cluster.CacheClusterId}.`);
                 }
             }
 
@@ -164,7 +169,8 @@ export class AwsElastiCacheService {
                 });
             }
 
-            await this.clusterRepository.save(dbCluster);
+                await this.clusterRepository.save(dbCluster);
+            }
         }
 
         return mapped;

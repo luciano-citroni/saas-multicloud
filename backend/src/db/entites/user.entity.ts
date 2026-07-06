@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { UserSession } from './user-session.entity';
-import { OrganizationMember } from './organization-member.entity';
+import { OrganizationMembership } from './organization-membership.entity';
 
 @Entity('users')
 export class User {
@@ -15,9 +15,6 @@ export class User {
 
     @Column({ type: 'varchar', length: 255, nullable: true })
     password!: string | null;
-
-    @Column({ type: 'varchar', length: 14, unique: true, nullable: true })
-    cpf!: string | null;
 
     @Column({ type: 'varchar', length: 255, unique: true, nullable: true, name: 'google_id' })
     googleId!: string | null;
@@ -34,6 +31,6 @@ export class User {
     @OneToMany(() => UserSession, (session) => session.user)
     sessions!: UserSession[];
 
-    @OneToMany(() => OrganizationMember, (member) => member.user)
-    organizationMemberships!: OrganizationMember[];
+    @OneToMany(() => OrganizationMembership, (member) => member.user)
+    organizationMemberships!: OrganizationMembership[];
 }

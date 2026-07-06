@@ -1,18 +1,31 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
+import {
+    Injectable,
+    Logger,
+    NotFoundException,
+    BadRequestException,
+    InternalServerErrorException,
+    ForbiddenException,
+} from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 
 import Stripe from 'stripe';
 
-import { OrganizationSubscription, SubscriptionStatus } from '../db/entites/organization-subscription.entity';
+import { OrganizationSubscription, TenantSubscriptionStatus } from '../db/entites/organization-subscription.entity';
 
-import { Organization } from '../db/entites/organization.entity';
+import { UserSubscription, SubscriptionStatus } from '../db/entites/user-subscription.entity';
 
 import { User } from '../db/entites/user.entity';
+
+import { Tenant } from '../db/entites/tenant.entity';
+
+import { TenantMember } from '../db/entites/tenant-member.entity';
+
+import { OrgRole } from '../rbac/roles.enum';
 
 import { ErrorMessages } from '../common/messages/error-messages';
 
@@ -20,6 +33,8 @@ import { ALL_MODULES_TOKEN, isKnownSystemModule, normalizeModuleName, normalizeP
 
 export interface PlanMetadata {
     maxCloudAccounts: number;
+
+    maxOrgAccounts: number;
 
     maxUsers: number;
 
@@ -60,10 +75,19 @@ export class BillingService {
 
     constructor(
         @InjectRepository(OrganizationSubscription)
-        private readonly subscriptionRepository: Repository<OrganizationSubscription>,
+        private readonly tenantSubRepository: Repository<OrganizationSubscription>,
 
-        @InjectRepository(Organization)
-        private readonly organizationRepository: Repository<Organization>,
+        @InjectRepository(UserSubscription)
+        private readonly userSubRepository: Repository<UserSubscription>,
+
+        @InjectRepository(User)
+        private readonly userRepository: Repository<User>,
+
+        @InjectRepository(TenantMember)
+        private readonly memberRepository: Repository<TenantMember>,
+
+        @InjectRepository(Tenant)
+        private readonly tenantRepository: Repository<Tenant>,
 
         private readonly configService: ConfigService
     ) {
@@ -78,7 +102,7 @@ export class BillingService {
 
     // ─── Plans ────────────────────────────────────────────────────────────────
 
-    async listPlans(_organizationId?: string): Promise<PlanInfo[]> {
+    async listPlans(): Promise<PlanInfo[]> {
         const prices = await this.stripe.prices.list({
             active: true,
 
@@ -89,14 +113,12 @@ export class BillingService {
             limit: 100,
         });
 
-        let plans = prices.data
-
+        const plans = prices.data
             .filter((price) => {
                 const product = price.product as Stripe.Product;
 
                 return product.active;
             })
-
             .map((price) => {
                 const product = price.product as Stripe.Product;
 
@@ -115,7 +137,7 @@ export class BillingService {
 
                     interval: price.recurring?.interval ?? 'month',
 
-                    metadata: this.parseProductMetadata(product.metadata),
+                    metadata: this.parsePlanMetadata(price.metadata, product.metadata),
 
                     active: product.active,
                 };
@@ -153,7 +175,7 @@ export class BillingService {
 
                 interval: price.recurring?.interval ?? 'month',
 
-                metadata: this.parseProductMetadata(product.metadata),
+                metadata: this.parsePlanMetadata(price.metadata, product.metadata),
 
                 active: product.active,
             };
@@ -162,27 +184,17 @@ export class BillingService {
         }
     }
 
-    // ─── Subscription ─────────────────────────────────────────────────────────
+    // ─── Tenant Subscription ──────────────────────────────────────────────────
 
     /**
-
-
-     * Creates a Stripe customer + default subscription for a new organization.
-
-
-     * Called automatically when an organization is created.
-
-
-     * Customer name = owner.name; company (metadata) = org.name; email = owner.email.
-
-
+     * Creates a Stripe customer + default subscription for a newly created tenant.
+     * Called fire-and-forget from OrganizationService.create().
      */
+    async initializeTenantSubscription(tenant: Tenant): Promise<OrganizationSubscription> {
+        const existing = await this.tenantSubRepository.findOne({ where: { tenantId: tenant.id } });
 
-    async initializeSubscription(org: Organization, owner: User): Promise<OrganizationSubscription> {
-        const existingSubscription = await this.subscriptionRepository.findOne({ where: { organizationId: org.id } });
-
-        if (existingSubscription) {
-            return existingSubscription;
+        if (existing) {
+            return existing;
         }
 
         const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID');
@@ -199,19 +211,9 @@ export class BillingService {
             const priceId = await this.resolveDefaultPriceFromProduct(defaultProductId);
 
             const customer = await this.stripe.customers.create({
-                name: owner.name,
+                name: tenant.name,
 
-                email: owner.email.toLowerCase(),
-
-                description: `Organization: ${org.name}`,
-
-                metadata: {
-                    organizationId: org.id,
-
-                    ownerId: owner.id,
-
-                    company: org.name,
-                },
+                metadata: { tenantId: tenant.id },
             });
 
             customerId = customer.id;
@@ -225,15 +227,13 @@ export class BillingService {
 
                 payment_settings: { save_default_payment_method: 'on_subscription' },
 
-                metadata: {
-                    organizationId: org.id,
-                },
+                metadata: { tenantId: tenant.id },
             });
 
             subscriptionId = subscription.id;
 
-            const record = this.subscriptionRepository.create({
-                organizationId: org.id,
+            const record = this.tenantSubRepository.create({
+                tenantId: tenant.id,
 
                 stripeCustomerId: customer.id,
 
@@ -252,15 +252,7 @@ export class BillingService {
                 cancelAtPeriodEnd: subscription.cancel_at_period_end,
             });
 
-            const savedRecord = await this.subscriptionRepository.save(record);
-
-            const defaultPlan = await this.getPlanByPriceId(priceId);
-
-            if (defaultPlan) {
-                await this.syncOrganizationPlanSnapshot(org.id, defaultPlan.metadata);
-            }
-
-            return savedRecord;
+            return await this.tenantSubRepository.save(record);
         } catch (error) {
             await this.rollbackStripeResources(customerId, subscriptionId);
 
@@ -268,16 +260,12 @@ export class BillingService {
         }
     }
 
-    async getSubscription(organizationId: string, checkoutSessionId?: string): Promise<OrganizationSubscription & { plan: PlanInfo | null }> {
+    async getTenantSubscription(tenantId: string, checkoutSessionId?: string): Promise<OrganizationSubscription & { plan: PlanInfo | null }> {
         if (checkoutSessionId) {
-            await this.reconcileCheckoutSession(organizationId, checkoutSessionId);
+            await this.reconcileTenantCheckoutSession(tenantId, checkoutSessionId);
         }
 
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
-
-        if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
-        }
+        const record = await this.getOrInitializeTenantSubscriptionRecord(tenantId);
 
         let plan: PlanInfo | null = null;
 
@@ -285,39 +273,113 @@ export class BillingService {
             plan = await this.getPlanByPriceId(record.stripePriceId);
 
             if (plan) {
-                await this.syncOrganizationPlanSnapshot(organizationId, plan.metadata);
+                await this.syncTenantPlanSnapshot(tenantId, plan);
             }
         }
 
         return { ...record, plan };
     }
 
-    async getActivePlanForOrganization(organizationId: string): Promise<PlanInfo> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
+    async changeTenantPlan(tenantId: string, newPriceId: string): Promise<ChangePlanCheckoutSession> {
+        const record = await this.getOrInitializeTenantSubscriptionRecord(tenantId);
 
-        if (!record) {
+        if (!record.stripeSubscriptionId || !record.stripeCustomerId) {
+            throw new BadRequestException('Tenant não possui assinatura ativa para alterar');
+        }
+
+        if (record.stripePriceId === newPriceId) {
+            throw new BadRequestException('Tenant já está neste plano');
+        }
+
+        const targetPlan = await this.getPlanByPriceId(newPriceId);
+
+        if (!targetPlan || !targetPlan.active) {
+            throw new BadRequestException('Plano selecionado não está disponível');
+        }
+
+        const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID') ?? null;
+
+        if (defaultProductId && record.stripeProductId && record.stripeProductId !== defaultProductId && targetPlan.productId === defaultProductId) {
+            throw new BadRequestException('Retornar ao plano padrão não é permitido');
+        }
+
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+
+        if (!frontendUrl) {
+            throw new InternalServerErrorException('FRONTEND_URL não configurada');
+        }
+
+        const successUrl = `${frontendUrl.replace(/\/$/, '')}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+
+        const cancelUrl = `${frontendUrl.replace(/\/$/, '')}/billing?checkout=cancel`;
+
+        const session = await this.stripe.checkout.sessions.create({
+            mode: 'subscription',
+
+            customer: record.stripeCustomerId,
+
+            line_items: [{ price: newPriceId, quantity: 1 }],
+
+            success_url: successUrl,
+
+            cancel_url: cancelUrl,
+
+            subscription_data: {
+                metadata: {
+                    tenantId,
+
+                    replacesSubscriptionId: record.stripeSubscriptionId,
+                },
+            },
+
+            metadata: {
+                tenantId,
+
+                requestedPriceId: newPriceId,
+
+                previousSubscriptionId: record.stripeSubscriptionId,
+            },
+        });
+
+        if (!session.url) {
+            throw new InternalServerErrorException('URL de checkout não gerada pelo Stripe');
+        }
+
+        return { checkoutSessionId: session.id, checkoutUrl: session.url };
+    }
+
+    /**
+     * Resolves the active plan for a tenant.
+     * Used by CloudService, AssessmentService, etc. to enforce per-resource limits.
+     */
+    async getActivePlanForOrganization(tenantId: string): Promise<PlanInfo> {
+        const sub = await this.tenantSubRepository.findOne({ where: { tenantId } });
+
+        if (!sub) {
             throw new ForbiddenException(ErrorMessages.PLANS.NO_ACTIVE_PLAN);
         }
 
-        if (![SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING].includes(record.status as SubscriptionStatus)) {
+        if (![TenantSubscriptionStatus.ACTIVE, TenantSubscriptionStatus.TRIALING].includes(sub.status as TenantSubscriptionStatus)) {
             throw new ForbiddenException(ErrorMessages.PLANS.NO_ACTIVE_PLAN);
         }
 
-        if (!record.stripePriceId) {
+        if (!sub.stripePriceId) {
             throw new ForbiddenException(ErrorMessages.PLANS.PLAN_METADATA_NOT_AVAILABLE);
         }
 
-        const plan = await this.getPlanByPriceId(record.stripePriceId);
+        const plan = await this.getPlanByPriceId(sub.stripePriceId);
 
         if (!plan || !plan.active) {
             throw new ForbiddenException(ErrorMessages.PLANS.PLAN_METADATA_NOT_AVAILABLE);
         }
 
+        await this.syncTenantPlanSnapshot(tenantId, plan);
+
         return plan;
     }
 
-    async assertModuleEnabled(organizationId: string, moduleName: string): Promise<void> {
-        const plan = await this.getActivePlanForOrganization(organizationId);
+    async assertModuleEnabled(tenantId: string, moduleName: string): Promise<void> {
+        const plan = await this.getActivePlanForOrganization(tenantId);
 
         const normalizedModule = normalizeModuleName(moduleName);
 
@@ -336,93 +398,13 @@ export class BillingService {
         throw new ForbiddenException(ErrorMessages.PLANS.MODULE_NOT_ENABLED);
     }
 
-    async changePlan(organizationId: string, newPriceId: string): Promise<ChangePlanCheckoutSession> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
+    // ─── Payment Methods (tenant-scoped) ──────────────────────────────────────
+
+    async listTenantPaymentMethods(tenantId: string): Promise<{ id: string; card: Stripe.PaymentMethod.Card; isDefault: boolean }[]> {
+        const record = await this.tenantSubRepository.findOne({ where: { tenantId } });
 
         if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
-        }
-
-        if (!record.stripeSubscriptionId || !record.stripeCustomerId) {
-            throw new BadRequestException('Organization does not have an active subscription to change');
-        }
-
-        if (record.stripePriceId === newPriceId) {
-            throw new BadRequestException('Organization is already on this plan');
-        }
-
-        const targetPlan = await this.getPlanByPriceId(newPriceId);
-
-        if (!targetPlan || !targetPlan.active) {
-            throw new BadRequestException('Selected plan is not available');
-        }
-
-        const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID') ?? null;
-
-        const currentProductId = await this.resolveCurrentProductId(record);
-
-        if (defaultProductId && currentProductId && currentProductId !== defaultProductId && targetPlan.productId === defaultProductId) {
-            throw new BadRequestException('Returning to the default plan is not allowed for this organization');
-        }
-
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-
-        if (!frontendUrl) {
-            throw new InternalServerErrorException('FRONTEND_URL is not configured');
-        }
-
-        const successUrl = `${frontendUrl.replace(/\/$/, '')}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-
-        const cancelUrl = `${frontendUrl.replace(/\/$/, '')}/billing?checkout=cancel`;
-
-        const session = await this.stripe.checkout.sessions.create({
-            mode: 'subscription',
-
-            customer: record.stripeCustomerId,
-
-            line_items: [{ price: newPriceId, quantity: 1 }],
-
-            success_url: successUrl,
-
-            cancel_url: cancelUrl,
-
-            client_reference_id: organizationId,
-
-            subscription_data: {
-                metadata: {
-                    organizationId,
-
-                    replacesSubscriptionId: record.stripeSubscriptionId,
-                },
-            },
-
-            metadata: {
-                organizationId,
-
-                requestedPriceId: newPriceId,
-
-                previousSubscriptionId: record.stripeSubscriptionId,
-            },
-        });
-
-        if (!session.url) {
-            throw new InternalServerErrorException('Stripe Checkout URL was not generated');
-        }
-
-        return {
-            checkoutSessionId: session.id,
-
-            checkoutUrl: session.url,
-        };
-    }
-
-    // ─── Payment Methods ──────────────────────────────────────────────────────
-
-    async listPaymentMethods(organizationId: string): Promise<{ id: string; card: Stripe.PaymentMethod.Card; isDefault: boolean }[]> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
-
-        if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
+            throw new NotFoundException('Nenhuma assinatura encontrada para este tenant');
         }
 
         const [paymentMethods, customer] = await Promise.all([
@@ -445,11 +427,11 @@ export class BillingService {
         }));
     }
 
-    async createSetupIntent(organizationId: string): Promise<{ setupIntentId: string; clientSecret: string }> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
+    async createTenantSetupIntent(tenantId: string): Promise<{ setupIntentId: string; clientSecret: string }> {
+        const record = await this.tenantSubRepository.findOne({ where: { tenantId } });
 
         if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
+            throw new NotFoundException('Nenhuma assinatura encontrada para este tenant');
         }
 
         const setupIntent = await this.stripe.setupIntents.create({
@@ -457,50 +439,24 @@ export class BillingService {
 
             payment_method_types: ['card'],
 
-            metadata: { organizationId },
+            metadata: { tenantId },
         });
 
-        return {
-            setupIntentId: setupIntent.id,
-
-            clientSecret: setupIntent.client_secret!,
-        };
+        return { setupIntentId: setupIntent.id, clientSecret: setupIntent.client_secret! };
     }
 
-    async detachPaymentMethod(organizationId: string, paymentMethodId: string): Promise<void> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
+    async setTenantDefaultPaymentMethod(tenantId: string, paymentMethodId: string): Promise<void> {
+        const record = await this.tenantSubRepository.findOne({ where: { tenantId } });
 
         if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
+            throw new NotFoundException('Nenhuma assinatura encontrada para este tenant');
         }
-
-        // Verify the payment method belongs to this customer before detaching
 
         const pm = await this.stripe.paymentMethods.retrieve(paymentMethodId);
 
         if (pm.customer !== record.stripeCustomerId) {
-            throw new BadRequestException('Payment method does not belong to this organization');
+            throw new BadRequestException('Método de pagamento não pertence a este tenant');
         }
-
-        await this.stripe.paymentMethods.detach(paymentMethodId);
-    }
-
-    async setDefaultPaymentMethod(organizationId: string, paymentMethodId: string): Promise<void> {
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
-
-        if (!record) {
-            throw new NotFoundException('No subscription found for this organization');
-        }
-
-        // Verify the payment method belongs to this customer
-
-        const pm = await this.stripe.paymentMethods.retrieve(paymentMethodId);
-
-        if (pm.customer !== record.stripeCustomerId) {
-            throw new BadRequestException('Payment method does not belong to this organization');
-        }
-
-        // Set as default on the customer and on the active subscription
 
         await this.stripe.customers.update(record.stripeCustomerId, {
             invoice_settings: { default_payment_method: paymentMethodId },
@@ -510,6 +466,96 @@ export class BillingService {
             await this.stripe.subscriptions.update(record.stripeSubscriptionId, {
                 default_payment_method: paymentMethodId,
             });
+        }
+    }
+
+    async detachTenantPaymentMethod(tenantId: string, paymentMethodId: string): Promise<void> {
+        const record = await this.tenantSubRepository.findOne({ where: { tenantId } });
+
+        if (!record) {
+            throw new NotFoundException('Nenhuma assinatura encontrada para este tenant');
+        }
+
+        const pm = await this.stripe.paymentMethods.retrieve(paymentMethodId);
+
+        if (pm.customer !== record.stripeCustomerId) {
+            throw new BadRequestException('Método de pagamento não pertence a este tenant');
+        }
+
+        await this.stripe.paymentMethods.detach(paymentMethodId);
+    }
+
+    // ─── User Subscription (kept for auth flow / individual users) ────────────
+
+    async initializeSubscription(user: Pick<User, 'id' | 'name' | 'email'>): Promise<UserSubscription> {
+        const existing = await this.userSubRepository.findOne({ where: { userId: user.id } });
+
+        if (existing) {
+            return existing;
+        }
+
+        const defaultProductId = this.configService.get<string>('DEFAULT_STRIPE_PRODUCT_ID');
+
+        if (!defaultProductId) {
+            throw new InternalServerErrorException('DEFAULT_STRIPE_PRODUCT_ID is not configured');
+        }
+
+        let customerId: string | null = null;
+
+        let subscriptionId: string | null = null;
+
+        try {
+            const priceId = await this.resolveDefaultPriceFromProduct(defaultProductId);
+
+            const customer = await this.stripe.customers.create({
+                name: user.name,
+
+                email: user.email.toLowerCase(),
+
+                metadata: { userId: user.id },
+            });
+
+            customerId = customer.id;
+
+            const subscription = await this.stripe.subscriptions.create({
+                customer: customer.id,
+
+                items: [{ price: priceId }],
+
+                payment_behavior: 'default_incomplete',
+
+                payment_settings: { save_default_payment_method: 'on_subscription' },
+
+                metadata: { userId: user.id },
+            });
+
+            subscriptionId = subscription.id;
+
+            const record = this.userSubRepository.create({
+                userId: user.id,
+
+                stripeCustomerId: customer.id,
+
+                stripeSubscriptionId: subscription.id,
+
+                stripePriceId: priceId,
+
+                stripeProductId: defaultProductId,
+
+                status: subscription.status,
+
+                currentPeriodEnd: new Date(subscription.billing_cycle_anchor * 1000),
+
+                currentPeriodStart: new Date(subscription.start_date * 1000),
+
+                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            });
+
+            return await this.userSubRepository.save(record);
+        } catch (error) {
+            await this.rollbackStripeResources(customerId, subscriptionId);
+
+            throw error;
         }
     }
 
@@ -570,27 +616,33 @@ export class BillingService {
     // ─── Private webhook handlers ─────────────────────────────────────────────
 
     private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
-        await this.applyCheckoutSessionToOrganization(session);
+        const tenantId = session.metadata?.tenantId;
+
+        if (tenantId) {
+            await this.applyCheckoutSessionToTenant(session);
+        } else {
+            await this.applyCheckoutSessionToUser(session);
+        }
     }
 
-    private async reconcileCheckoutSession(organizationId: string, checkoutSessionId: string): Promise<void> {
+    private async reconcileTenantCheckoutSession(tenantId: string, checkoutSessionId: string): Promise<void> {
         const session = await this.stripe.checkout.sessions.retrieve(checkoutSessionId, {
             expand: ['subscription'],
         });
 
-        await this.applyCheckoutSessionToOrganization(session, organizationId, true);
+        await this.applyCheckoutSessionToTenant(session, tenantId, true);
     }
 
-    private async applyCheckoutSessionToOrganization(
+    private async applyCheckoutSessionToTenant(
         session: Stripe.Checkout.Session,
 
-        expectedOrganizationId?: string,
+        expectedTenantId?: string,
 
         strictValidation = false
     ): Promise<void> {
         const metadata = session.metadata ?? {};
 
-        const organizationId = metadata.organizationId ?? session.client_reference_id ?? undefined;
+        const tenantId = metadata.tenantId ?? undefined;
 
         const previousSubscriptionId = metadata.previousSubscriptionId;
 
@@ -600,28 +652,28 @@ export class BillingService {
             throw new BadRequestException('Checkout session is not completed yet');
         }
 
-        if (expectedOrganizationId && organizationId && expectedOrganizationId !== organizationId) {
-            throw new ForbiddenException('Checkout session does not belong to this organization');
+        if (expectedTenantId && tenantId && expectedTenantId !== tenantId) {
+            throw new ForbiddenException('Checkout session does not belong to this tenant');
         }
 
-        if (!organizationId || !checkoutSubscriptionId) {
+        if (!tenantId || !checkoutSubscriptionId) {
             if (strictValidation) {
-                throw new BadRequestException('Checkout session is missing organizationId or subscription');
+                throw new BadRequestException('Checkout session is missing tenantId or subscription');
             }
 
-            this.logger.warn(`Checkout session ${session.id} missing organizationId or subscription`);
+            this.logger.warn(`Tenant checkout session ${session.id} missing tenantId or subscription`);
 
             return;
         }
 
-        const record = await this.subscriptionRepository.findOne({ where: { organizationId } });
+        const record = await this.tenantSubRepository.findOne({ where: { tenantId } });
 
         if (!record) {
             if (strictValidation) {
-                throw new NotFoundException('No subscription found for this organization');
+                throw new NotFoundException('No subscription found for this tenant');
             }
 
-            this.logger.warn(`No subscription record found for organization ${organizationId}`);
+            this.logger.warn(`No subscription record found for tenant ${tenantId}`);
 
             return;
         }
@@ -631,17 +683,13 @@ export class BillingService {
         const checkoutCustomerId = typeof checkoutSubscription.customer === 'string' ? checkoutSubscription.customer : checkoutSubscription.customer?.id;
 
         if (checkoutCustomerId && checkoutCustomerId !== record.stripeCustomerId) {
-            throw new ForbiddenException('Checkout session customer does not match organization subscription');
+            throw new ForbiddenException('Checkout session customer does not match tenant subscription');
         }
-
-        // Enforce subscription replacement order: cancel old subscriptions first,
-
-        // then persist the new one as the single source of truth in our DB.
 
         const subscriptionToReplace = previousSubscriptionId ?? record.stripeSubscriptionId;
 
         if (subscriptionToReplace && subscriptionToReplace !== checkoutSubscription.id) {
-            await this.cancelSubscriptionStrict(subscriptionToReplace, record.stripeCustomerId, 'previous checkout subscription');
+            await this.cancelSubscriptionStrict(subscriptionToReplace, record.stripeCustomerId, 'previous tenant checkout subscription');
         }
 
         await this.cancelOtherCustomerSubscriptionsStrict(record.stripeCustomerId, checkoutSubscription.id);
@@ -664,81 +712,193 @@ export class BillingService {
 
         record.cancelAtPeriodEnd = checkoutSubscription.cancel_at_period_end;
 
-        await this.subscriptionRepository.save(record);
+        await this.tenantSubRepository.save(record);
 
         if (priceId) {
-            const selectedPlan = await this.getPlanByPriceId(priceId);
-
-            if (selectedPlan) {
-                await this.syncOrganizationPlanSnapshot(organizationId, selectedPlan.metadata);
+            const plan = await this.getPlanByPriceId(priceId);
+            if (plan) {
+                await this.syncTenantPlanSnapshot(tenantId, plan);
             }
         }
 
-        this.logger.log(`Checkout completed for organization ${organizationId}; subscription switched to ${checkoutSubscription.id}`);
+        this.logger.log(`Checkout completed for tenant ${tenantId}; subscription switched to ${checkoutSubscription.id}`);
     }
 
-    private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
-        const record = await this.subscriptionRepository.findOne({
-            where: { stripeSubscriptionId: subscription.id },
-        });
+    private async applyCheckoutSessionToUser(
+        session: Stripe.Checkout.Session,
 
-        if (!record) {
-            this.logger.warn(`No subscription record found for Stripe subscription ${subscription.id}`);
+        expectedUserId?: string,
+
+        strictValidation = false
+    ): Promise<void> {
+        const metadata = session.metadata ?? {};
+
+        const userId = metadata.userId ?? session.client_reference_id ?? undefined;
+
+        const previousSubscriptionId = metadata.previousSubscriptionId;
+
+        const checkoutSubscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+
+        if (strictValidation && session.status !== 'complete') {
+            throw new BadRequestException('Checkout session is not completed yet');
+        }
+
+        if (expectedUserId && userId && expectedUserId !== userId) {
+            throw new ForbiddenException('Checkout session does not belong to this user');
+        }
+
+        if (!userId || !checkoutSubscriptionId) {
+            if (strictValidation) {
+                throw new BadRequestException('Checkout session is missing userId or subscription');
+            }
+
+            this.logger.warn(`User checkout session ${session.id} missing userId or subscription`);
 
             return;
         }
 
-        const priceId = subscription.items.data[0]?.price?.id ?? null;
+        const record = await this.userSubRepository.findOne({ where: { userId } });
 
-        const productId = this.extractProductId(subscription.items.data[0]?.price?.product);
+        if (!record) {
+            if (strictValidation) {
+                throw new NotFoundException('No subscription found for this user');
+            }
 
-        record.status = subscription.status;
+            this.logger.warn(`No subscription record found for user ${userId}`);
+
+            return;
+        }
+
+        const checkoutSubscription = await this.stripe.subscriptions.retrieve(checkoutSubscriptionId);
+
+        const checkoutCustomerId = typeof checkoutSubscription.customer === 'string' ? checkoutSubscription.customer : checkoutSubscription.customer?.id;
+
+        if (checkoutCustomerId && checkoutCustomerId !== record.stripeCustomerId) {
+            throw new ForbiddenException('Checkout session customer does not match user subscription');
+        }
+
+        const subscriptionToReplace = previousSubscriptionId ?? record.stripeSubscriptionId;
+
+        if (subscriptionToReplace && subscriptionToReplace !== checkoutSubscription.id) {
+            await this.cancelSubscriptionStrict(subscriptionToReplace, record.stripeCustomerId, 'previous user checkout subscription');
+        }
+
+        await this.cancelOtherCustomerSubscriptionsStrict(record.stripeCustomerId, checkoutSubscription.id);
+
+        const priceId = checkoutSubscription.items.data[0]?.price?.id ?? null;
+
+        const productId = this.extractProductId(checkoutSubscription.items.data[0]?.price?.product);
+
+        record.stripeSubscriptionId = checkoutSubscription.id;
 
         record.stripePriceId = priceId;
 
         record.stripeProductId = productId;
 
-        record.currentPeriodEnd = new Date(subscription.billing_cycle_anchor * 1000);
+        record.status = checkoutSubscription.status;
 
-        record.currentPeriodStart = new Date(subscription.start_date * 1000);
+        record.currentPeriodEnd = new Date(checkoutSubscription.billing_cycle_anchor * 1000);
 
-        record.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+        record.currentPeriodStart = new Date(checkoutSubscription.start_date * 1000);
 
-        await this.subscriptionRepository.save(record);
+        record.cancelAtPeriodEnd = checkoutSubscription.cancel_at_period_end;
 
-        if (priceId) {
-            const selectedPlan = await this.getPlanByPriceId(priceId);
+        await this.userSubRepository.save(record);
 
-            if (selectedPlan) {
-                await this.syncOrganizationPlanSnapshot(record.organizationId, selectedPlan.metadata);
+        this.logger.log(`Checkout completed for user ${userId}; subscription switched to ${checkoutSubscription.id}`);
+    }
+
+    private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
+        const tenantId = subscription.metadata?.tenantId;
+
+        const priceId = subscription.items.data[0]?.price?.id ?? null;
+
+        const productId = this.extractProductId(subscription.items.data[0]?.price?.product);
+
+        if (tenantId) {
+            const record = await this.tenantSubRepository.findOne({ where: { stripeSubscriptionId: subscription.id } });
+
+            if (!record) {
+                this.logger.warn(`No tenant subscription record found for Stripe subscription ${subscription.id}`);
+
+                return;
             }
-        }
 
-        this.logger.log(`Updated subscription ${record.id} to status: ${subscription.status}`);
+            record.status = subscription.status;
+
+            record.stripePriceId = priceId;
+
+            record.stripeProductId = productId;
+
+            record.currentPeriodEnd = new Date(subscription.billing_cycle_anchor * 1000);
+
+            record.currentPeriodStart = new Date(subscription.start_date * 1000);
+
+            record.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+
+            await this.tenantSubRepository.save(record);
+
+            if (priceId) {
+                const plan = await this.getPlanByPriceId(priceId);
+                if (plan) {
+                    await this.syncTenantPlanSnapshot(record.tenantId, plan);
+                }
+            }
+
+            this.logger.log(`Updated tenant subscription ${record.id} to status: ${subscription.status}`);
+        } else {
+            const record = await this.userSubRepository.findOne({ where: { stripeSubscriptionId: subscription.id } });
+
+            if (!record) {
+                this.logger.warn(`No user subscription record found for Stripe subscription ${subscription.id}`);
+
+                return;
+            }
+
+            record.status = subscription.status;
+
+            record.stripePriceId = priceId;
+
+            record.stripeProductId = productId;
+
+            record.currentPeriodEnd = new Date(subscription.billing_cycle_anchor * 1000);
+
+            record.currentPeriodStart = new Date(subscription.start_date * 1000);
+
+            record.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+
+            await this.userSubRepository.save(record);
+
+            this.logger.log(`Updated user subscription ${record.id} to status: ${subscription.status}`);
+        }
     }
 
     private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
-        const record = await this.subscriptionRepository.findOne({
-            where: { stripeSubscriptionId: subscription.id },
-        });
+        const tenantRecord = await this.tenantSubRepository.findOne({ where: { stripeSubscriptionId: subscription.id } });
 
-        if (!record) return;
+        if (tenantRecord) {
+            tenantRecord.status = TenantSubscriptionStatus.CANCELED;
 
-        record.status = SubscriptionStatus.CANCELED;
+            tenantRecord.cancelAtPeriodEnd = false;
 
-        record.cancelAtPeriodEnd = false;
+            await this.tenantSubRepository.save(tenantRecord);
 
-        await this.subscriptionRepository.save(record);
+            this.logger.log(`Tenant subscription ${tenantRecord.id} marked as canceled`);
 
-        await this.syncOrganizationPlanSnapshot(record.organizationId, {
-            maxCloudAccounts: 0,
+            return;
+        }
 
-            maxUsers: 0,
+        const userRecord = await this.userSubRepository.findOne({ where: { stripeSubscriptionId: subscription.id } });
 
-            modules: [],
-        });
+        if (!userRecord) return;
 
-        this.logger.log(`Subscription ${record.id} marked as canceled`);
+        userRecord.status = SubscriptionStatus.CANCELED;
+
+        userRecord.cancelAtPeriodEnd = false;
+
+        await this.userSubRepository.save(userRecord);
+
+        this.logger.log(`User subscription ${userRecord.id} marked as canceled`);
     }
 
     private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
@@ -746,17 +906,27 @@ export class BillingService {
 
         if (!subscriptionId) return;
 
-        const record = await this.subscriptionRepository.findOne({
-            where: { stripeSubscriptionId: subscriptionId },
-        });
+        const tenantRecord = await this.tenantSubRepository.findOne({ where: { stripeSubscriptionId: subscriptionId } });
 
-        if (!record) return;
+        if (tenantRecord) {
+            tenantRecord.status = TenantSubscriptionStatus.PAST_DUE;
 
-        record.status = SubscriptionStatus.PAST_DUE;
+            await this.tenantSubRepository.save(tenantRecord);
 
-        await this.subscriptionRepository.save(record);
+            this.logger.warn(`Payment failed for tenant subscription ${tenantRecord.id} — marked as past_due`);
 
-        this.logger.warn(`Payment failed for subscription ${record.id} — marked as past_due`);
+            return;
+        }
+
+        const userRecord = await this.userSubRepository.findOne({ where: { stripeSubscriptionId: subscriptionId } });
+
+        if (!userRecord) return;
+
+        userRecord.status = SubscriptionStatus.PAST_DUE;
+
+        await this.userSubRepository.save(userRecord);
+
+        this.logger.warn(`Payment failed for user subscription ${userRecord.id} — marked as past_due`);
     }
 
     private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
@@ -764,31 +934,40 @@ export class BillingService {
 
         if (!subscriptionId) return;
 
-        const record = await this.subscriptionRepository.findOne({
-            where: { stripeSubscriptionId: subscriptionId },
-        });
+        const tenantRecord = await this.tenantSubRepository.findOne({ where: { stripeSubscriptionId: subscriptionId } });
 
-        if (!record || record.status === SubscriptionStatus.ACTIVE) return;
+        if (tenantRecord) {
+            if (tenantRecord.status !== TenantSubscriptionStatus.ACTIVE) {
+                tenantRecord.status = TenantSubscriptionStatus.ACTIVE;
 
-        record.status = SubscriptionStatus.ACTIVE;
+                await this.tenantSubRepository.save(tenantRecord);
 
-        await this.subscriptionRepository.save(record);
+                this.logger.log(`Payment succeeded for tenant subscription ${tenantRecord.id} — marked as active`);
+            }
 
-        this.logger.log(`Payment succeeded for subscription ${record.id} — marked as active`);
+            return;
+        }
+
+        const userRecord = await this.userSubRepository.findOne({ where: { stripeSubscriptionId: subscriptionId } });
+
+        if (!userRecord || userRecord.status === SubscriptionStatus.ACTIVE) return;
+
+        userRecord.status = SubscriptionStatus.ACTIVE;
+
+        await this.userSubRepository.save(userRecord);
+
+        this.logger.log(`Payment succeeded for user subscription ${userRecord.id} — marked as active`);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Private helpers ──────────────────────────────────────────────────────
 
-    /**
+    private async resolveOrgOwnerId(tenantId: string): Promise<string | null> {
+        const ownerMembership = await this.memberRepository.findOne({
+            where: { tenantId, role: OrgRole.OWNER },
+        });
 
-
-     * Extracts the subscription ID from an Invoice object.
-
-
-     * In Stripe API 2026-02-25.clover, subscription info is nested under parent.subscription_details.
-
-
-     */
+        return ownerMembership?.userId ?? null;
+    }
 
     private extractSubscriptionId(invoice: Stripe.Invoice): string | null {
         const details = (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | { id: string } } } }).parent
@@ -798,17 +977,6 @@ export class BillingService {
 
         return typeof details === 'string' ? details : details.id;
     }
-
-    /**
-
-
-     * Resolves the default recurring price ID from a Stripe product.
-
-
-     * Uses product.default_price if set; falls back to the first active recurring price.
-
-
-     */
 
     private async resolveDefaultPriceFromProduct(productId: string): Promise<string> {
         const product = await this.stripe.products.retrieve(productId, { expand: ['default_price'] });
@@ -820,8 +988,6 @@ export class BillingService {
                 return defaultPrice.id;
             }
         }
-
-        // Fallback: first active recurring price for this product
 
         const prices = await this.stripe.prices.list({ product: productId, active: true, type: 'recurring', limit: 1 });
 
@@ -866,17 +1032,6 @@ export class BillingService {
         }
     }
 
-    /**
-
-
-     * Enforces one subscription per customer during plan switch.
-
-
-     * Any non-canceled subscription other than the new checkout subscription is canceled.
-
-
-     */
-
     private async cancelOtherCustomerSubscriptionsStrict(customerId: string, keepSubscriptionId: string): Promise<void> {
         const subscriptions = await this.stripe.subscriptions.list({
             customer: customerId,
@@ -907,26 +1062,68 @@ export class BillingService {
         return String(error);
     }
 
-    private async resolveCurrentProductId(record: OrganizationSubscription): Promise<string | null> {
-        if (record.stripeProductId) {
-            return record.stripeProductId;
-        }
-
-        if (!record.stripePriceId) {
-            return null;
-        }
-
-        const currentPlan = await this.getPlanByPriceId(record.stripePriceId);
-
-        return currentPlan?.productId ?? null;
-    }
-
-    /** Extracts a product ID string from a price.product field (string | Product | DeletedProduct). */
-
     private extractProductId(product: string | Stripe.Product | Stripe.DeletedProduct | null | undefined): string | null {
         if (!product) return null;
 
         return typeof product === 'string' ? product : product.id;
+    }
+
+    private async syncTenantPlanSnapshot(tenantId: string, plan: PlanInfo): Promise<void> {
+        const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
+
+        if (!tenant) {
+            return;
+        }
+
+        const normalizedModules = normalizePlanModules(plan.metadata.modules);
+        const maxCloudAccounts = Number.isFinite(plan.metadata.maxCloudAccounts) ? plan.metadata.maxCloudAccounts : 0;
+        const maxUsers = Number.isFinite(plan.metadata.maxUsers) ? plan.metadata.maxUsers : 0;
+
+        const currentModules = normalizePlanModules(tenant.plans ?? []);
+        const modulesChanged = JSON.stringify(currentModules) !== JSON.stringify(normalizedModules);
+        const limitsChanged = tenant.maxCloudAccounts !== maxCloudAccounts || tenant.maxUsers !== maxUsers;
+
+        if (!modulesChanged && !limitsChanged) {
+            return;
+        }
+
+        tenant.plans = normalizedModules;
+        tenant.maxCloudAccounts = maxCloudAccounts;
+        tenant.maxUsers = maxUsers;
+
+        await this.tenantRepository.save(tenant);
+    }
+
+    private async getOrInitializeTenantSubscriptionRecord(tenantId: string): Promise<OrganizationSubscription> {
+        const existing = await this.tenantSubRepository.findOne({ where: { tenantId } });
+
+        if (existing) {
+            return existing;
+        }
+
+        const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
+
+        if (!tenant) {
+            throw new NotFoundException(ErrorMessages.ORGANIZATIONS.NOT_FOUND);
+        }
+
+        try {
+            return await this.initializeTenantSubscription(tenant);
+        } catch (error) {
+            const dbCode = error instanceof QueryFailedError ? ((error as QueryFailedError & { code?: string }).code ?? undefined) : undefined;
+
+            // GET /billing/subscription can race with another initialization path.
+            // If another request created the row first, return the now-existing record.
+            if (dbCode === '23505') {
+                const concurrentRecord = await this.tenantSubRepository.findOne({ where: { tenantId } });
+
+                if (concurrentRecord) {
+                    return concurrentRecord;
+                }
+            }
+
+            throw error;
+        }
     }
 
     private parseProductMetadata(metadata: Stripe.Metadata): PlanMetadata {
@@ -939,23 +1136,18 @@ export class BillingService {
         return {
             maxCloudAccounts: parseInt(metadata['max_cloud_accounts'] ?? '0', 10),
 
+            maxOrgAccounts: parseInt(metadata['max_org_accounts'] ?? '0', 10),
+
             maxUsers: parseInt(metadata['max_users'] ?? '0', 10),
 
             modules,
         };
     }
 
-    private async syncOrganizationPlanSnapshot(organizationId: string, metadata: PlanMetadata): Promise<void> {
-        await this.organizationRepository.update(
-            { id: organizationId },
-
-            {
-                maxCloudAccounts: metadata.maxCloudAccounts,
-
-                maxUsers: metadata.maxUsers,
-
-                plans: normalizePlanModules(metadata.modules),
-            }
-        );
+    private parsePlanMetadata(priceMetadata: Stripe.Metadata, productMetadata: Stripe.Metadata): PlanMetadata {
+        return this.parseProductMetadata({
+            ...productMetadata,
+            ...priceMetadata,
+        });
     }
 }

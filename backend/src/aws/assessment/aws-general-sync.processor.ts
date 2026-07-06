@@ -51,7 +51,7 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
 
         const syncRecord = this.syncJobRepository.create({
             cloudAccountId,
-            organizationId: cloudAccount.organizationId,
+            organizationId: cloudAccount.tenantId,
             provider: CloudProvider.AWS,
             status: 'running',
             error: null,
@@ -64,9 +64,9 @@ export class AwsGeneralSyncProcessor extends WorkerHost {
             const hasPreviousSync = cloudAccount.lastGeneralSyncAt !== null;
 
             if (hasPreviousSync) {
-                await this.syncService.syncIncremental(cloudAccountId, cloudAccount.organizationId);
+                await this.syncService.syncIncremental(cloudAccountId, cloudAccount.tenantId);
             } else {
-                await this.syncService.syncAll(cloudAccountId, cloudAccount.organizationId);
+                await this.syncService.syncAll(cloudAccountId, cloudAccount.tenantId);
             }
 
             const completedAt = new Date();

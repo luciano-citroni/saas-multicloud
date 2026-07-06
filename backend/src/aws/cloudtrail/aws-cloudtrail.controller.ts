@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsCloudTrailService } from './aws-cloudtrail.service';
 
@@ -27,7 +27,7 @@ export class AwsCloudTrailController {
     @ApiOperation({ summary: 'Listar trails CloudTrail do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [CloudTrailTrailResponseDto] })
-    listTrails(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listTrails(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listTrailsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsCloudTrailController {
 
         @Param('trailId', ParseUUIDPipe) trailId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getTrailById(trailId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsCloudTrailController {
     @ApiOperation({ summary: 'Sincronizar trails CloudTrail da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [CloudTrailTrailSyncResponseDto] })
-    syncTrails(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncTrails(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncTrailsFromAws(cloudAccountId, org.id);
     }
 }

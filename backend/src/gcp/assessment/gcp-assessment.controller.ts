@@ -1,4 +1,17 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Res, StreamableFile, UseGuards } from '@nestjs/common';
+﻿import {
+    BadRequestException,
+    Controller,
+    Get,
+    GoneException,
+    HttpCode,
+    NotFoundException,
+    Param,
+    ParseUUIDPipe,
+    Post,
+    Res,
+    StreamableFile,
+    UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
 import type { Response } from 'express';
@@ -6,7 +19,7 @@ import * as fs from 'fs';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
@@ -14,6 +27,7 @@ import { OrgRole } from '../../rbac/roles.enum';
 import { GcpAssessmentService } from './gcp-assessment.service';
 import { GcpAssessmentExcelService } from './gcp-assessment-excel.service';
 import { GcpAssessmentJobResponseDto, GcpGeneralSyncJobResponseDto, GcpGeneralSyncJobStatusResponseDto } from './dto/swagger.dto';
+import { GcpAssessmentReportService } from './gcp-assessment-report.service';
 
 @ApiTags('GCP Assessment')
 @ApiBearerAuth('access-token')
@@ -21,14 +35,17 @@ import { GcpAssessmentJobResponseDto, GcpGeneralSyncJobResponseDto, GcpGeneralSy
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('gcp/assessment')
 export class GcpAssessmentController {
+    private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
+
     constructor(
         private readonly service: GcpAssessmentService,
-        private readonly excelService: GcpAssessmentExcelService
+        private readonly excelService: GcpAssessmentExcelService,
+        private readonly reportService: GcpAssessmentReportService
     ) {}
 
     @Post('accounts/:cloudAccountId/sync')
     @HttpCode(202)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Enfileirar sync geral da conta GCP',
         description: 'Enfileira um job de sync geral de todos os recursos GCP para a conta (VMs, redes, storage, SQL, GKE, IAM).',
@@ -39,7 +56,7 @@ export class GcpAssessmentController {
     @ApiResponse({ status: 403, description: 'Módulo assessment não habilitado ou papel insuficiente' })
     async enqueueGeneralSync(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GcpGeneralSyncJobResponseDto> {
         return this.service.enqueueGeneralSync(cloudAccountId, org.id);
     }
@@ -55,14 +72,14 @@ export class GcpAssessmentController {
     async getGeneralSyncJobStatus(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId') jobId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GcpGeneralSyncJobStatusResponseDto> {
         return this.service.getGeneralSyncJobStatus(jobId, cloudAccountId, org.id);
     }
 
     @Post('accounts/:cloudAccountId')
     @HttpCode(200)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.VIEWER)
     @ApiOperation({
         summary: 'Gerar arquitetura GCP da conta',
         description: 'Usa os recursos já sincronizados no banco como fonte de verdade e retorna um grafo de arquitetura pronto para React Flow.',
@@ -71,10 +88,7 @@ export class GcpAssessmentController {
     @ApiResponse({ status: 200, description: 'Arquitetura gerada com sucesso', type: GcpAssessmentJobResponseDto })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 403, description: 'Módulo assessment não habilitado ou papel insuficiente' })
-    async startAssessment(
-        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
-    ) {
+    async startAssessment(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.buildAssessmentArchitecture(cloudAccountId, org.id);
     }
 
@@ -89,10 +103,18 @@ export class GcpAssessmentController {
     @ApiResponse({ status: 202, description: 'Job de geração de relatório enfileirado', type: GcpAssessmentJobResponseDto })
     async generateReport(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GcpAssessmentJobResponseDto> {
         const job = await this.service.startAssessment(cloudAccountId, org.id, false);
-        return { id: job.id, cloudAccountId: job.cloudAccountId, organizationId: job.organizationId, status: job.status, error: job.error, createdAt: job.createdAt };
+        return {
+            id: job.id,
+            cloudAccountId: job.cloudAccountId,
+            organizationId: job.organizationId,
+            status: job.status,
+            error: job.error,
+            createdAt: job.createdAt,
+            excelExpiresAt: this.getExcelExpiresAt(job.completedAt),
+        };
     }
 
     @Get('accounts/:cloudAccountId/assessment-jobs/:jobId')
@@ -103,16 +125,21 @@ export class GcpAssessmentController {
     async getJobStatus(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId', ParseUUIDPipe) jobId: string,
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GcpAssessmentJobResponseDto> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
         return {
             id: job.id,
             cloudAccountId: job.cloudAccountId,
             organizationId: job.organizationId,
             status: job.status,
             error: job.error,
-            excelDownloadUrl: job.excelFileName ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+            excelDownloadUrl:
+                job.excelFileName && !this.isExcelExpired(excelExpiresAt)
+                    ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download`
+                    : undefined,
+            excelExpiresAt,
             createdAt: job.createdAt,
             completedAt: job.completedAt ?? undefined,
         };
@@ -123,7 +150,7 @@ export class GcpAssessmentController {
     @ApiOperation({ summary: 'Listar jobs de assessment GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpAssessmentJobResponseDto] })
-    async listJobs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    async listJobs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         const jobs = await this.service.listJobs(cloudAccountId, org.id);
         return jobs.map((job) => ({
             id: job.id,
@@ -131,7 +158,11 @@ export class GcpAssessmentController {
             organizationId: job.organizationId,
             status: job.status,
             error: job.error,
-            excelDownloadUrl: job.excelFileName ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+            excelDownloadUrl:
+                job.excelFileName && !this.isExcelExpired(this.getExcelExpiresAt(job.completedAt))
+                    ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download`
+                    : undefined,
+            excelExpiresAt: this.getExcelExpiresAt(job.completedAt),
             createdAt: job.createdAt,
             completedAt: job.completedAt ?? undefined,
         }));
@@ -145,40 +176,62 @@ export class GcpAssessmentController {
     async downloadExcel(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId', ParseUUIDPipe) jobId: string,
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Res({ passthrough: true }) res: Response
     ): Promise<StreamableFile> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
 
-        if (!job.excelFileName || job.status !== 'completed') {
-            res.status(400);
-            throw new Error('Relatório Excel GCP ainda não disponível.');
+        if (this.isExcelExpired(excelExpiresAt)) {
+            if (job.excelFileName) {
+                await this.excelService.deleteExcel(job.excelFileName);
+                await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            }
+
+            throw new GoneException('O relatório Excel expirou. Gere um novo relatório para baixar novamente.');
         }
 
-        const filePath = this.excelService.getExcelFilePath(job.excelFileName);
+        if (job.status !== 'completed') {
+            throw new BadRequestException('Relatório Excel GCP ainda não disponível.');
+        }
+
+        let excelFileName = job.excelFileName;
+        let filePath = excelFileName ? this.excelService.getExcelFilePath(excelFileName) : '';
+
+        if (!filePath || !fs.existsSync(filePath)) {
+            const data = await this.reportService.collectAllData(cloudAccountId);
+            excelFileName = await this.excelService.generateExcel(job.id, data);
+            await this.service.setJobExcelFile(job.id, cloudAccountId, org.id, excelFileName);
+            filePath = this.excelService.getExcelFilePath(excelFileName);
+        }
 
         if (!fs.existsSync(filePath)) {
-            res.status(404);
-            throw new Error('Arquivo Excel não encontrado.');
+            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            throw new NotFoundException('Arquivo Excel não encontrado.');
         }
 
         const stream = fs.createReadStream(filePath);
-        let cleanedUp = false;
-
-        const cleanup = async (): Promise<void> => {
-            if (cleanedUp) return;
-            cleanedUp = true;
-            await this.excelService.deleteExcel(job.excelFileName as string);
-            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
-        };
-
-        res.once('finish', () => { void cleanup(); });
-        res.once('close', () => { void cleanup(); });
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': `attachment; filename="${job.excelFileName}"`,
+            'Content-Disposition': `attachment; filename="${excelFileName}"`,
         });
 
         return new StreamableFile(stream);
+    }
+
+    private getExcelExpiresAt(completedAt: Date | null | undefined): Date | undefined {
+        if (!completedAt) {
+            return undefined;
+        }
+
+        return new Date(completedAt.getTime() + GcpAssessmentController.EXCEL_RETENTION_MS);
+    }
+
+    private isExcelExpired(excelExpiresAt?: Date): boolean {
+        if (!excelExpiresAt) {
+            return false;
+        }
+
+        return excelExpiresAt.getTime() <= Date.now();
     }
 }

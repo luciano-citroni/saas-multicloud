@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useTranslations } from '@/lib/i18n';
 
 export function LogoutButton() {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
+    const tn = useTranslations('nav');
 
     const handleLogout = async () => {
         setIsLoading(true);
@@ -20,7 +22,7 @@ export function LogoutButton() {
             router.replace('/auth/sign-in');
             router.refresh();
         } catch {
-            toast.error('Não foi possível sair da conta.');
+            toast.error(tn.logoutError);
         } finally {
             setIsLoading(false);
         }
@@ -28,7 +30,7 @@ export function LogoutButton() {
 
     return (
         <Button variant="outline" onClick={handleLogout} isLoading={isLoading}>
-            Sair
+            {tn.logout}
         </Button>
     );
 }

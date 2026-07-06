@@ -38,68 +38,74 @@ export class AwsCloudWatchService {
     }
 
     async syncAlarmsFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getCloudWatchClient(cloudAccountId, organizationId);
-
-        const { MetricAlarms } = await client.send(new DescribeAlarmsCommand({ AlarmTypes: ['MetricAlarm'] })).catch(() => {
-            throw new BadRequestException('Falha ao listar alarmes do CloudWatch. Verifique as permissões da role (cloudwatch:DescribeAlarms).');
-        });
-
-        if (!MetricAlarms || MetricAlarms.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsAlarm>[] = [];
 
-        for (const alarm of MetricAlarms) {
-            if (!alarm.AlarmArn) continue;
+        for (const region of regions) {
+            const client = await this.connector.getCloudWatchClient(cloudAccountId, organizationId, region);
 
-            const alarmData = mapAwsAlarm(alarm);
+            const { MetricAlarms } = await client.send(new DescribeAlarmsCommand({ AlarmTypes: ['MetricAlarm'] })).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar alarmes do CloudWatch na região ${region}. Verifique as permissões da role (cloudwatch:DescribeAlarms).`
+                );
+            });
 
-            mapped.push(alarmData);
-
-            let dbAlarm = await this.alarmRepository.findOne({ where: { alarmArn: alarmData.alarmArn } });
-
-            if (dbAlarm) {
-                dbAlarm.alarmName = alarmData.alarmName;
-
-                dbAlarm.alarmDescription = alarmData.alarmDescription;
-
-                dbAlarm.stateValue = alarmData.stateValue;
-
-                dbAlarm.stateReason = alarmData.stateReason;
-
-                dbAlarm.namespace = alarmData.namespace;
-
-                dbAlarm.metricName = alarmData.metricName;
-
-                dbAlarm.comparisonOperator = alarmData.comparisonOperator;
-
-                dbAlarm.threshold = alarmData.threshold;
-
-                dbAlarm.period = alarmData.period;
-
-                dbAlarm.evaluationPeriods = alarmData.evaluationPeriods;
-
-                dbAlarm.statistic = alarmData.statistic;
-
-                dbAlarm.alarmActions = alarmData.alarmActions;
-
-                dbAlarm.dimensions = alarmData.dimensions;
-
-                dbAlarm.lastSyncedAt = now;
-            } else {
-                dbAlarm = this.alarmRepository.create({
-                    cloudAccountId,
-
-                    ...alarmData,
-
-                    lastSyncedAt: now,
-                });
+            if (!MetricAlarms || MetricAlarms.length === 0) {
+                continue;
             }
 
-            await this.alarmRepository.save(dbAlarm);
+            for (const alarm of MetricAlarms) {
+                if (!alarm.AlarmArn) continue;
+
+                const alarmData = mapAwsAlarm(alarm);
+
+                mapped.push(alarmData);
+
+                let dbAlarm = await this.alarmRepository.findOne({ where: { alarmArn: alarmData.alarmArn } });
+
+                if (dbAlarm) {
+                    dbAlarm.alarmName = alarmData.alarmName;
+
+                    dbAlarm.alarmDescription = alarmData.alarmDescription;
+
+                    dbAlarm.stateValue = alarmData.stateValue;
+
+                    dbAlarm.stateReason = alarmData.stateReason;
+
+                    dbAlarm.namespace = alarmData.namespace;
+
+                    dbAlarm.metricName = alarmData.metricName;
+
+                    dbAlarm.comparisonOperator = alarmData.comparisonOperator;
+
+                    dbAlarm.threshold = alarmData.threshold;
+
+                    dbAlarm.period = alarmData.period;
+
+                    dbAlarm.evaluationPeriods = alarmData.evaluationPeriods;
+
+                    dbAlarm.statistic = alarmData.statistic;
+
+                    dbAlarm.alarmActions = alarmData.alarmActions;
+
+                    dbAlarm.dimensions = alarmData.dimensions;
+
+                    dbAlarm.lastSyncedAt = now;
+                } else {
+                    dbAlarm = this.alarmRepository.create({
+                        cloudAccountId,
+
+                        ...alarmData,
+
+                        lastSyncedAt: now,
+                    });
+                }
+
+                await this.alarmRepository.save(dbAlarm);
+            }
         }
 
         return mapped;

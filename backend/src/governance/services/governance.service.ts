@@ -320,9 +320,7 @@ export class GovernanceService {
      * Lista as supressões da organização (opcionalmente filtradas por conta).
      */
     async listSuppressions(organizationId: string, cloudAccountId?: string): Promise<GovernanceSuppression[]> {
-        const query = this.suppressionRepo
-            .createQueryBuilder('s')
-            .where('s.organizationId = :organizationId', { organizationId });
+        const query = this.suppressionRepo.createQueryBuilder('s').where('s.organizationId = :organizationId', { organizationId });
 
         if (cloudAccountId) {
             query.andWhere('(s.cloudAccountId IS NULL OR s.cloudAccountId = :cloudAccountId)', { cloudAccountId });
@@ -378,7 +376,7 @@ export class GovernanceService {
         });
 
         if (!cloudAccount) {
-            throw new BadRequestException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
         }
 
         return cloudAccount;

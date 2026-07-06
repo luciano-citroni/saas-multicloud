@@ -107,7 +107,7 @@ export function FinopsForecast() {
                     setForecast(data as ForecastResult | null);
                 } else {
                     const body = await forecastRes.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+                    toast.error(extractErrorMessage(body));
                 }
                 if (nextRes.ok) {
                     const data = await nextRes.json().catch(() => []);

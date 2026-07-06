@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { IamRoleResponseDto, IamRoleSyncResponseDto } from './swagger.dto';
 
@@ -81,7 +81,7 @@ export class AwsIamRoleController {
 
         @Query('pathPrefix') pathPrefix?: string,
 
-        @CurrentOrganization() org?: Organization
+        @CurrentOrganization() org?: Tenant
     ) {
         const scope = roleScope === 'all' ? 'all' : 'user';
 
@@ -111,7 +111,7 @@ export class AwsIamRoleController {
 
         @Param('roleId', ParseUUIDPipe) roleId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getRoleById(roleId, cloudAccountId);
     }
@@ -164,7 +164,7 @@ export class AwsIamRoleController {
     syncRoles(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Query('roleScope') roleScope?: string,
 

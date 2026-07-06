@@ -1,4 +1,17 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Res, StreamableFile, UseGuards } from '@nestjs/common';
+﻿import {
+    BadRequestException,
+    Controller,
+    Get,
+    GoneException,
+    HttpCode,
+    NotFoundException,
+    Param,
+    ParseUUIDPipe,
+    Post,
+    Res,
+    StreamableFile,
+    UseGuards,
+} from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +23,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
 
@@ -38,6 +51,8 @@ import { AzureAssessmentJobResponseDto } from './dto/swagger.dto';
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('azure/assessment')
 export class AzureAssessmentController {
+    private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
+
     constructor(
         private readonly service: AzureAssessmentService,
 
@@ -50,12 +65,11 @@ export class AzureAssessmentController {
 
     @Post('accounts/:cloudAccountId')
     @HttpCode(202)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.VIEWER)
     @ApiOperation({
         summary: 'Iniciar assessment Azure da conta',
 
-        description:
-            'Enfileira um job de assessment Azure. Sincroniza todos os recursos via ARG e gera um relatório Excel.',
+        description: 'Enfileira um job de assessment Azure. Sincroniza todos os recursos via ARG e gera um relatório Excel.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 202, description: 'Assessment enfileirado com sucesso', type: AzureAssessmentJobResponseDto })
@@ -65,9 +79,32 @@ export class AzureAssessmentController {
     async startAssessment(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<AzureAssessmentJobResponseDto> {
         const job = await this.service.startAssessment(cloudAccountId, org.id, true);
+
+        return this.mapToDto(job, cloudAccountId);
+    }
+
+    // =========================================================================
+    // POST /azure/assessment/accounts/:cloudAccountId/report — Enfileirar relatório
+    // =========================================================================
+
+    @Post('accounts/:cloudAccountId/report')
+    @HttpCode(202)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Gerar relatório Excel Azure',
+        description: 'Enfileira um job assíncrono para gerar o relatório Excel Azure sem executar sync completo.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 202, description: 'Job de geração de relatório enfileirado', type: AzureAssessmentJobResponseDto })
+    async generateReport(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
+        @CurrentOrganization() org: Tenant
+    ): Promise<AzureAssessmentJobResponseDto> {
+        const job = await this.service.startAssessment(cloudAccountId, org.id, false);
 
         return this.mapToDto(job, cloudAccountId);
     }
@@ -87,7 +124,7 @@ export class AzureAssessmentController {
 
         @Param('jobId', ParseUUIDPipe) jobId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<AzureAssessmentJobResponseDto> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
 
@@ -105,7 +142,7 @@ export class AzureAssessmentController {
     async listJobs(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<AzureAssessmentJobResponseDto[]> {
         const jobs = await this.service.listJobs(cloudAccountId, org.id);
 
@@ -128,47 +165,34 @@ export class AzureAssessmentController {
 
         @Param('jobId', ParseUUIDPipe) jobId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Res({ passthrough: true }) res: Response
     ): Promise<StreamableFile> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+
+        if (this.isExcelExpired(excelExpiresAt)) {
+            if (job.excelFileName) {
+                await this.excelService.deleteExcel(job.excelFileName);
+                await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            }
+
+            throw new GoneException('O relatório Excel expirou. Gere um novo relatório para baixar novamente.');
+        }
 
         if (!job.excelFileName || job.status !== 'completed') {
-            res.status(400);
-
-            throw new Error('Relatório Excel ainda não disponível.');
+            throw new BadRequestException('Relatório Excel ainda não disponível.');
         }
 
         const filePath = this.excelService.getExcelFilePath(job.excelFileName);
 
         if (!fs.existsSync(filePath)) {
-            res.status(404);
-
-            throw new Error('Arquivo Excel não encontrado.');
+            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            throw new NotFoundException('Arquivo Excel não encontrado.');
         }
 
         const stream = fs.createReadStream(filePath);
-
-        let cleanedUp = false;
-
-        const cleanup = async (): Promise<void> => {
-            if (cleanedUp) return;
-
-            cleanedUp = true;
-
-            await this.excelService.deleteExcel(job.excelFileName as string);
-
-            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
-        };
-
-        res.once('finish', () => {
-            void cleanup();
-        });
-
-        res.once('close', () => {
-            void cleanup();
-        });
 
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -202,10 +226,28 @@ export class AzureAssessmentController {
 
         dto.updatedAt = job.updatedAt;
 
-        if (job.excelFileName && job.status === 'completed') {
+        dto.excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+
+        if (job.excelFileName && job.status === 'completed' && !this.isExcelExpired(dto.excelExpiresAt)) {
             dto.excelDownloadUrl = `/azure/assessment/accounts/${cloudAccountId}/jobs/${job.id}/download`;
         }
 
         return dto;
+    }
+
+    private getExcelExpiresAt(completedAt: Date | null | undefined): Date | undefined {
+        if (!completedAt) {
+            return undefined;
+        }
+
+        return new Date(completedAt.getTime() + AzureAssessmentController.EXCEL_RETENTION_MS);
+    }
+
+    private isExcelExpired(excelExpiresAt?: Date): boolean {
+        if (!excelExpiresAt) {
+            return false;
+        }
+
+        return excelExpiresAt.getTime() <= Date.now();
     }
 }

@@ -2,7 +2,6 @@ export type CurrentUser = {
     id: string;
     name: string;
     email: string;
-    cpf: string | null;
     isActive: boolean;
     hasPassword: boolean;
 };
@@ -26,7 +25,7 @@ export async function fetchCurrentUser() {
     });
 }
 
-export async function updateCurrentUser(payload: { name?: string; email?: string; cpf?: string }) {
+export async function updateCurrentUser(payload: { name?: string; email?: string }) {
     return fetch('/api/auth/me', {
         method: 'PATCH',
         headers: {

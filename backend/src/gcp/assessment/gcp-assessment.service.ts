@@ -54,7 +54,7 @@ export class GcpAssessmentService {
 
         private readonly reportService: GcpAssessmentReportService,
 
-        private readonly architectureService: GcpAssessmentArchitectureService,
+        private readonly architectureService: GcpAssessmentArchitectureService
     ) {}
 
     async buildAssessmentArchitecture(cloudAccountId: string, organizationId: string): Promise<GcpAssessmentArchitectureResponse> {
@@ -116,6 +116,10 @@ export class GcpAssessmentService {
 
     async clearJobExcelFile(jobId: string, cloudAccountId: string, organizationId: string): Promise<void> {
         await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName: null });
+    }
+
+    async setJobExcelFile(jobId: string, cloudAccountId: string, organizationId: string, excelFileName: string): Promise<void> {
+        await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName });
     }
 
     async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GcpGeneralSyncJobResponse> {

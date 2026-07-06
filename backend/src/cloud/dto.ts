@@ -4,7 +4,7 @@ import { CloudProvider } from '../db/entites/cloud-account.entity';
 
 const cloudProviderSchema = z.enum([CloudProvider.AWS, CloudProvider.AZURE, CloudProvider.GCP]);
 
-const awsRegionRegex = /^[a-z]{2}(-gov)?-[a-z]+-\d$/i;
+const awsRegionRegex = /^[a-z]{2}(?:-(?:gov|iso|isob|isof))?-[a-z0-9-]+-\d+$/i;
 
 const awsRegionSchema = z.string({ invalid_type_error: 'região inválida' }).trim().regex(awsRegionRegex, 'região AWS inválida (ex: us-east-1)');
 
@@ -95,6 +95,8 @@ export const createCloudAccountSchema = z
         alias: z.string().min(1).max(100),
 
         credentials: z.record(z.any()),
+
+        organizationId: z.string().uuid().optional(),
     })
 
     .refine(
@@ -138,8 +140,9 @@ export const updateCloudAccountSchema = z
         alias: z.string().min(1).max(100).optional(),
         credentials: z.record(z.any()).optional(),
         isActive: z.boolean().optional(),
+        organizationId: z.string().uuid().nullable().optional(),
     })
-    .refine((data) => data.alias !== undefined || data.credentials !== undefined || data.isActive !== undefined, {
+    .refine((data) => data.alias !== undefined || data.credentials !== undefined || data.isActive !== undefined || data.organizationId !== undefined, {
         message: 'Informe ao menos um campo para atualização',
         path: ['alias'],
     });

@@ -1,4 +1,17 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Res, StreamableFile, UseGuards } from '@nestjs/common';
+﻿import {
+    BadRequestException,
+    Controller,
+    Get,
+    GoneException,
+    HttpCode,
+    NotFoundException,
+    Param,
+    ParseUUIDPipe,
+    Post,
+    Res,
+    StreamableFile,
+    UseGuards,
+} from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -12,7 +25,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
 
@@ -23,6 +36,7 @@ import { OrgRole } from '../../rbac/roles.enum';
 import { AwsAssessmentService } from './aws-assessment.service';
 
 import { AwsAssessmentExcelService } from './aws-assessment-excel.service';
+import { AwsAssessmentReportService } from './aws-assessment-report.service';
 
 import {
     AssessmentArchitectureResponseDto,
@@ -43,10 +57,14 @@ import {
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('aws/assessment')
 export class AwsAssessmentController {
+    private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
+
     constructor(
         private readonly service: AwsAssessmentService,
 
-        private readonly excelService: AwsAssessmentExcelService
+        private readonly excelService: AwsAssessmentExcelService,
+
+        private readonly reportService: AwsAssessmentReportService
     ) {}
 
     // =========================================================================
@@ -57,7 +75,7 @@ export class AwsAssessmentController {
 
     @Post('accounts/:cloudAccountId/sync')
     @HttpCode(202)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Enfileirar sync geral da conta AWS',
 
@@ -68,7 +86,7 @@ export class AwsAssessmentController {
     async enqueueGeneralSync(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GeneralSyncJobResponseDto> {
         return this.service.enqueueGeneralSync(cloudAccountId, org.id);
     }
@@ -87,7 +105,7 @@ export class AwsAssessmentController {
 
         @Param('jobId') jobId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GeneralSyncJobStatusResponseDto> {
         return this.service.getGeneralSyncJobStatus(jobId, cloudAccountId, org.id);
     }
@@ -104,7 +122,7 @@ export class AwsAssessmentController {
     async listQueuedJobs(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<GeneralSyncJobStatusResponseDto[]> {
         return this.service.listGeneralSyncJobs(cloudAccountId, org.id);
     }
@@ -117,6 +135,7 @@ export class AwsAssessmentController {
 
     @Post('accounts/:cloudAccountId')
     @HttpCode(200)
+    @Roles(OrgRole.VIEWER)
     @ApiOperation({
         summary: 'Gerar arquitetura AWS da conta',
 
@@ -130,9 +149,45 @@ export class AwsAssessmentController {
     async startAssessment(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<AssessmentArchitectureResponseDto> {
         return this.service.buildAssessmentArchitecture(cloudAccountId, org.id);
+    }
+
+    @Post('accounts/:cloudAccountId/report')
+    @HttpCode(202)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Gerar relatório Excel AWS',
+
+        description: 'Enfileira um job assíncrono para sincronizar recursos e gerar o relatório Excel da conta AWS.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 202, description: 'Job de geração de relatório enfileirado', type: AssessmentStatusResponseDto })
+    async generateReport(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+
+        @CurrentOrganization() org: Tenant
+    ): Promise<AssessmentStatusResponseDto> {
+        const job = await this.service.startAssessment(cloudAccountId, org.id, false);
+
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+
+        return {
+            id: job.id,
+
+            status: job.status,
+
+            error: job.error ?? undefined,
+
+            excelDownloadUrl: undefined,
+
+            excelExpiresAt,
+
+            createdAt: job.createdAt,
+
+            completedAt: job.completedAt ?? undefined,
+        };
     }
 
     // =========================================================================
@@ -156,9 +211,12 @@ export class AwsAssessmentController {
 
         @Param('jobId', ParseUUIDPipe) jobId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ): Promise<AssessmentStatusResponseDto> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
+
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+        const canDownloadExcel = this.canDownloadExcel(job.status, job.excelFileName, excelExpiresAt);
 
         return {
             id: job.id,
@@ -167,7 +225,9 @@ export class AwsAssessmentController {
 
             error: job.error ?? undefined,
 
-            excelDownloadUrl: job.excelFileName ? `/aws/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+            excelDownloadUrl: canDownloadExcel ? `/aws/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+
+            excelExpiresAt,
 
             createdAt: job.createdAt,
 
@@ -188,8 +248,26 @@ export class AwsAssessmentController {
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, description: 'Lista de jobs', type: [AssessmentStatusResponseDto] })
-    async listJobs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
-        return this.service.listJobs(cloudAccountId, org.id);
+    async listJobs(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant
+    ): Promise<AssessmentStatusResponseDto[]> {
+        const jobs = await this.service.listJobs(cloudAccountId, org.id);
+
+        return jobs.map((job) => {
+            const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+            const canDownloadExcel = this.canDownloadExcel(job.status, job.excelFileName, excelExpiresAt);
+
+            return {
+                id: job.id,
+                status: job.status,
+                error: job.error ?? undefined,
+                excelDownloadUrl: canDownloadExcel ? `/aws/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+                excelExpiresAt,
+                createdAt: job.createdAt,
+                completedAt: job.completedAt ?? undefined,
+            };
+        });
     }
 
     // =========================================================================
@@ -211,54 +289,69 @@ export class AwsAssessmentController {
 
         @Param('jobId', ParseUUIDPipe) jobId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Res({ passthrough: true }) res: Response
     ): Promise<StreamableFile> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
 
-        if (!job.excelFileName || job.status !== 'completed') {
-            res.status(400);
+        if (this.isExcelExpired(excelExpiresAt)) {
+            if (job.excelFileName) {
+                await this.excelService.deleteExcel(job.excelFileName);
+                await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            }
 
-            throw new Error('Relatório Excel ainda não disponível.');
+            throw new GoneException('O relatório Excel expirou. Gere um novo relatório para baixar novamente.');
         }
 
-        const filePath = this.excelService.getExcelFilePath(job.excelFileName);
+        if (job.status !== 'completed') {
+            throw new BadRequestException('Relatório Excel ainda não disponível.');
+        }
 
-        if (!fs.existsSync(filePath)) {
-            res.status(404);
+        let excelFileName = job.excelFileName;
+        let filePath = excelFileName ? this.excelService.resolveExistingExcelFilePath(excelFileName) : null;
 
-            throw new Error('Arquivo Excel não encontrado.');
+        if (!filePath) {
+            const data = await this.reportService.collectAllData(cloudAccountId);
+            excelFileName = await this.excelService.generateExcel(job.id, data);
+            await this.service.setJobExcelFile(job.id, cloudAccountId, org.id, excelFileName);
+            filePath = this.excelService.resolveExistingExcelFilePath(excelFileName);
+        }
+
+        if (!filePath) {
+            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
+            throw new NotFoundException('Arquivo Excel não encontrado.');
         }
 
         const stream = fs.createReadStream(filePath);
 
-        let cleanedUp = false;
-
-        const cleanup = async (): Promise<void> => {
-            if (cleanedUp) return;
-
-            cleanedUp = true;
-
-            await this.excelService.deleteExcel(job.excelFileName as string);
-
-            await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
-        };
-
-        res.once('finish', () => {
-            void cleanup();
-        });
-
-        res.once('close', () => {
-            void cleanup();
-        });
-
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 
-            'Content-Disposition': `attachment; filename="${job.excelFileName}"`,
+            'Content-Disposition': `attachment; filename="${excelFileName}"`,
         });
 
         return new StreamableFile(stream);
+    }
+
+    private getExcelExpiresAt(completedAt: Date | null | undefined): Date | undefined {
+        if (!completedAt) {
+            return undefined;
+        }
+
+        return new Date(completedAt.getTime() + AwsAssessmentController.EXCEL_RETENTION_MS);
+    }
+
+    private canDownloadExcel(status: string, excelFileName: string | null, excelExpiresAt?: Date): boolean {
+        return status === 'completed' && Boolean(excelFileName) && !this.isExcelExpired(excelExpiresAt);
+    }
+
+    private isExcelExpired(excelExpiresAt?: Date): boolean {
+        if (!excelExpiresAt) {
+            return false;
+        }
+
+        return excelExpiresAt.getTime() <= Date.now();
     }
 }

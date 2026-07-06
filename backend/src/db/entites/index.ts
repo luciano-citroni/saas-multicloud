@@ -1,4 +1,8 @@
+export { Tenant } from './tenant.entity';
+export { TenantMember } from './tenant-member.entity';
+export { TenantInvite, TenantInviteStatus } from './tenant-invite.entity';
 export { Organization } from './organization.entity';
+export { OrganizationMembership } from './organization-membership.entity';
 export { User } from './user.entity';
 export { UserSession } from './user-session.entity';
 export { GoogleAuthCode } from './google-auth-code.entity';
@@ -42,7 +46,8 @@ export { AwsWafWebAcl } from './aws-waf-web-acl.entity';
 export { AwsGuardDutyDetector } from './aws-guardduty-detector.entity';
 export { AwsAssessmentJob } from './aws-assessment-job.entity';
 export type { AssessmentStatus } from './aws-assessment-job.entity';
-export { OrganizationSubscription, SubscriptionStatus } from './organization-subscription.entity';
+export { OrganizationSubscription, TenantSubscriptionStatus } from './organization-subscription.entity';
+export { UserSubscription } from './user-subscription.entity';
 export { AzureSubscription } from './azure-subscription.entity';
 export { AzureResourceGroup } from './azure-resource-group.entity';
 export { AzureVirtualMachine } from './azure-virtual-machine.entity';

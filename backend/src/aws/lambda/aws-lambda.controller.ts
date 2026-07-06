@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsLambdaService } from './aws-lambda.service';
 
@@ -27,7 +27,7 @@ export class AwsLambdaController {
     @ApiOperation({ summary: 'Listar funções Lambda do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [LambdaFunctionResponseDto] })
-    listFunctions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listFunctions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listFunctionsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsLambdaController {
 
         @Param('functionId', ParseUUIDPipe) functionId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getFunctionById(functionId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsLambdaController {
     @ApiOperation({ summary: 'Sincronizar funções Lambda da AWS' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [LambdaFunctionSyncResponseDto] })
-    syncFunctions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncFunctions(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncFunctionsFromAws(cloudAccountId, org.id);
     }
 }

@@ -35,9 +35,10 @@ function canEditByRole(role?: string | null) {
 
 type OrganizationColumnOptions = {
     onEditOrganization: (organizationId: string) => void;
+    onViewCloudAccounts: (organizationId: string) => void;
 };
 
-export const OrganizationColumns = ({ onEditOrganization }: OrganizationColumnOptions): ColumnDef<UserOrganization>[] => {
+export const OrganizationColumns = ({ onEditOrganization, onViewCloudAccounts }: OrganizationColumnOptions): ColumnDef<UserOrganization>[] => {
     return [
         {
             id: 'name',
@@ -122,11 +123,14 @@ export const OrganizationColumns = ({ onEditOrganization }: OrganizationColumnOp
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="cursor-pointer" onSelect={() => onViewCloudAccounts(row.original.id)}>
+                                Contas Cloud
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="cursor-pointer"
                                 onSelect={() => onEditOrganization(row.original.id)}
                                 disabled={!canEdit}
-                                title={!canEdit ? 'Apenas admin ou owner podem editar a organização.' : 'Editar organização'}
+                                title={!canEdit ? 'Apenas member, admin ou owner podem editar a organização.' : 'Editar organização'}
                             >
                                 Editar
                             </DropdownMenuItem>

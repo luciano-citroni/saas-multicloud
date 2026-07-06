@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import z from 'zod';
 import { Building2, IdCardLanyard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -14,7 +13,7 @@ import {
     updateUserOrganization,
     type UserOrganization,
 } from '@/app/actions/organization';
-import { organizationFormScheme } from '@/components/root/organizations/new/scheme';
+import { createOrganizationSchema, type OrganizationFormValues } from '@/components/root/organizations/new/scheme';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -22,8 +21,9 @@ import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sideb
 import { formatCNPJ } from '@/lib/validators/cnpj';
 import { type OrganizationRole } from '@/lib/organization-rbac';
 import { OrganizationEditActions } from '@/components/root/organizations/edit/organization-edit-actions';
+import { useTranslations } from '@/lib/i18n';
 
-type FormValues = z.infer<typeof organizationFormScheme>;
+type FormValues = OrganizationFormValues;
 
 type ApiErrorPayload = {
     message?: string | string[];
@@ -54,13 +54,16 @@ type Props = {
 
 export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
     const router = useRouter();
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
+    const schema = useMemo(() => createOrganizationSchema({ nameMin: t.nameMin, cnpjInvalid: t.cnpjInvalid }), [t]);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingOrganization, setIsLoadingOrganization] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(organizationFormScheme),
+        resolver: zodResolver(schema),
         defaultValues: {
             name: '',
             cnpj: '',
@@ -76,7 +79,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                 const payload = (await response.json().catch(() => null)) as unknown;
 
                 if (!response.ok) {
-                    toast.error(extractErrorMessage(payload, 'pt'));
+                    toast.error(extractErrorMessage(payload));
                     router.replace('/organizations');
                     return;
                 }
@@ -84,7 +87,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                 const organization = normalizeOrganization(payload);
 
                 if (!organization) {
-                    toast.error('Não foi possível carregar os dados da organização.');
+                    toast.error(t.loadOrgError);
                     router.replace('/organizations');
                     return;
                 }
@@ -94,7 +97,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                     cnpj: organization.cnpj ?? '',
                 });
             } catch {
-                toast.error('Não foi possível carregar os dados da organização.');
+                toast.error(t.loadOrgError);
                 router.replace('/organizations');
             } finally {
                 setIsLoadingOrganization(false);
@@ -115,16 +118,16 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
             const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
 
             notifySidebarContextUpdated();
-            toast.success('Organização atualizada com sucesso.');
+            toast.success(t.updateSuccess);
             router.replace('/organizations');
             router.refresh();
         } catch {
-            toast.error('Não foi possível atualizar a organização.');
+            toast.error(t.updateError);
         } finally {
             setIsLoading(false);
         }
@@ -138,7 +141,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
             const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return false;
             }
 
@@ -147,12 +150,12 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
             }
 
             notifySidebarContextUpdated();
-            toast.success('Organização excluída com sucesso.');
+            toast.success(t.deleteSuccess);
             router.replace('/organizations');
             router.refresh();
             return true;
         } catch {
-            toast.error('Não foi possível excluir a organização.');
+            toast.error(t.deleteError);
             return false;
         } finally {
             setIsDeleting(false);
@@ -167,7 +170,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
             const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return false;
             }
 
@@ -176,12 +179,12 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
             }
 
             notifySidebarContextUpdated();
-            toast.success('Você saiu da organização com sucesso.');
+            toast.success(t.leaveSuccess);
             router.replace('/organizations');
             router.refresh();
             return true;
         } catch {
-            toast.error('Não foi possível sair da organização.');
+            toast.error(t.leaveError);
             return false;
         } finally {
             setIsLeaving(false);
@@ -189,7 +192,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
     };
 
     if (isLoadingOrganization) {
-        return <div className="py-6 text-sm text-muted-foreground">Carregando organização...</div>;
+        return <div className="py-6 text-sm text-muted-foreground">{t.loadingOrg}</div>;
     }
 
     return (
@@ -200,9 +203,9 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                     name="name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Nome</FormLabel>
+                            <FormLabel>{tc.name}</FormLabel>
                             <FormControl>
-                                <IconInput placeholder="Nome da organização" StartIcon={Building2} {...field} />
+                                <IconInput placeholder={t.orgNamePlaceholder} StartIcon={Building2} {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -214,10 +217,10 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                     name="cnpj"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>CNPJ</FormLabel>
+                            <FormLabel>{t.cnpjLabel}</FormLabel>
                             <FormControl>
                                 <IconInput
-                                    placeholder="CNPJ da organização"
+                                    placeholder={t.cnpjPlaceholder}
                                     StartIcon={IdCardLanyard}
                                     {...field}
                                     value={formatCNPJ(field.value ?? '')}

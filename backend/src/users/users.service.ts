@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../db/entites/user.entity';
-import { OrganizationMember } from '../db/entites/organization-member.entity';
+import { OrganizationMembership } from '../db/entites/organization-membership.entity';
+import { Organization } from '../db/entites/organization.entity';
 import type { CreateUserDto, UpdateUserDto } from './dto';
 import { ErrorMessages } from '../common/messages/error-messages';
 import { OrgRole } from '../rbac/roles.enum';
@@ -11,7 +12,7 @@ import { OrgRole } from '../rbac/roles.enum';
 interface UserScopeContext {
     requesterUserId: string;
     requesterRole: string;
-    organizationId: string;
+    tenantId: string;
 }
 
 @Injectable()
@@ -19,16 +20,12 @@ export class UsersService {
     constructor(
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
-        @InjectRepository(OrganizationMember)
-        private readonly organizationMemberRepository: Repository<OrganizationMember>
+        @InjectRepository(OrganizationMembership)
+        private readonly organizationMembershipRepository: Repository<OrganizationMembership>
     ) {}
 
     async findByEmail(email: string): Promise<User | null> {
         return this.userRepository.findOne({ where: { email: email.toLowerCase() } });
-    }
-
-    async findByCpf(cpf: string): Promise<User | null> {
-        return this.userRepository.findOne({ where: { cpf } });
     }
 
     private sanitizeUser(user: User): Omit<User, 'password' | 'sessions' | 'organizationMemberships'> {
@@ -40,15 +37,14 @@ export class UsersService {
         return role === OrgRole.ADMIN || role === OrgRole.OWNER;
     }
 
-    private async findInOrganization(userId: string, organizationId: string): Promise<User | null> {
-        return this.userRepository.findOne({
-            where: {
-                id: userId,
-                organizationMemberships: {
-                    organizationId,
-                },
-            },
-        });
+    private async findInOrganization(userId: string, tenantId: string): Promise<User | null> {
+        return this.userRepository
+            .createQueryBuilder('user')
+            .innerJoin(OrganizationMembership, 'membership', 'membership.user_id = user.id')
+            .innerJoin(Organization, 'organization', 'organization.id = membership.organization_id')
+            .where('user.id = :userId', { userId })
+            .andWhere('organization.tenant_id = :tenantId', { tenantId })
+            .getOne();
     }
 
     private async ensureScopedAccess(targetUserId: string, context: UserScopeContext): Promise<User> {
@@ -62,7 +58,7 @@ export class UsersService {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
 
-        const userInOrg = await this.findInOrganization(targetUserId, context.organizationId);
+        const userInOrg = await this.findInOrganization(targetUserId, context.tenantId);
         if (!userInOrg) {
             throw new NotFoundException(ErrorMessages.USERS.NOT_FOUND);
         }
@@ -93,17 +89,16 @@ export class UsersService {
         return this.sanitizeUser(savedUser);
     }
 
-    async findAll(organizationId: string): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>[]> {
-        const users = await this.userRepository.find({
-            where: {
-                organizationMemberships: {
-                    organizationId: organizationId,
-                },
-            },
-            order: {
-                createdAt: 'DESC',
-            },
-        });
+    async findAll(tenantId: string): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>[]> {
+        const users = await this.userRepository
+            .createQueryBuilder('user')
+            .innerJoin(OrganizationMembership, 'membership', 'membership.user_id = user.id')
+            .innerJoin(Organization, 'organization', 'organization.id = membership.organization_id')
+            .where('organization.tenant_id = :tenantId', { tenantId })
+            .orderBy('user.created_at', 'DESC')
+            .distinct(true)
+            .getMany();
+
         return users.map((user) => this.sanitizeUser(user));
     }
 
@@ -144,7 +139,7 @@ export class UsersService {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
 
-        const membershipCount = await this.organizationMemberRepository.count({
+        const membershipCount = await this.organizationMembershipRepository.count({
             where: { userId: id },
         });
 
@@ -189,7 +184,6 @@ export class UsersService {
             name: dto.name,
             googleId: dto.googleId,
             password: null,
-            cpf: null,
             isActive: true,
         });
         return this.userRepository.save(user);

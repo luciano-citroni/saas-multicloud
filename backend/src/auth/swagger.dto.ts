@@ -21,19 +21,6 @@ export class RegisterRequestDto {
     })
     email: string;
 
-    @ApiPropertyOptional({
-        example: '12345678901',
-
-        description: 'CPF do usuário (11 dígitos)',
-
-        pattern: '^\\d{11}$',
-
-        minLength: 11,
-
-        maxLength: 11,
-    })
-    cpf?: string;
-
     @ApiProperty({
         example: 'MyPassword123!',
 
@@ -96,13 +83,6 @@ export class UpdateMeRequestDto {
     })
     email?: string;
 
-    @ApiPropertyOptional({
-        example: '12345678901',
-        description: 'Novo CPF do usuário (11 dígitos)',
-        minLength: 11,
-        maxLength: 11,
-    })
-    cpf?: string;
 }
 
 export class UpdateMyPasswordRequestDto {
@@ -212,15 +192,6 @@ export class AuthUserResponseDto {
         description: 'Nome completo do usuário',
     })
     name: string;
-
-    @ApiProperty({
-        example: '12345678901',
-
-        description: 'CPF do usuário',
-
-        nullable: true,
-    })
-    cpf: string | null;
 
     @ApiProperty({
         example: true,

@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
+﻿import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
-import { Organization } from '../db/entites/organization.entity';
+import { Tenant } from '../db/entites/tenant.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { z } from 'zod';
 import { AwsResourcesService } from './aws-resources.service';
@@ -28,7 +28,7 @@ export class AutomationResourcesController {
     @ApiQuery({ name: 'region', required: true })
     @ApiResponse({ status: 200 })
     async listVpcs(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('cloudAccountId') cloudAccountId: string,
         @Query('region') region: string,
     ) {
@@ -42,7 +42,7 @@ export class AutomationResourcesController {
     @ApiQuery({ name: 'vpcId', required: false })
     @ApiResponse({ status: 200 })
     async listSubnets(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('cloudAccountId') cloudAccountId: string,
         @Query('region') region: string,
         @Query('vpcId') vpcId?: string,
@@ -57,7 +57,7 @@ export class AutomationResourcesController {
     @ApiQuery({ name: 'vpcId', required: false })
     @ApiResponse({ status: 200 })
     async listSecurityGroups(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('cloudAccountId') cloudAccountId: string,
         @Query('region') region: string,
         @Query('vpcId') vpcId?: string,
@@ -71,7 +71,7 @@ export class AutomationResourcesController {
     @ApiQuery({ name: 'region', required: true })
     @ApiResponse({ status: 200 })
     async listKeyPairs(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('cloudAccountId') cloudAccountId: string,
         @Query('region') region: string,
     ) {
@@ -83,7 +83,7 @@ export class AutomationResourcesController {
     @ApiOperation({ summary: 'Criar novo Key Pair e retornar PEM' })
     @ApiResponse({ status: 201 })
     async createKeyPair(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Body(new ZodValidationPipe(createKeyPairSchema)) body: z.infer<typeof createKeyPairSchema>,
     ) {
         return this.awsResources.createKeyPair(body.cloudAccountId, org.id, body.region, body.keyName);
@@ -96,7 +96,7 @@ export class AutomationResourcesController {
     @ApiQuery({ name: 'os', required: true })
     @ApiResponse({ status: 200 })
     async resolveAmi(
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
         @Query('cloudAccountId') cloudAccountId: string,
         @Query('region') region: string,
         @Query('os') os: string,

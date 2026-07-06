@@ -1,4 +1,5 @@
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
+import { ModuleAccessGuard } from '@/components/root/module-access-guard';
 import { SiteHeader } from '@/components/sidebar/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
@@ -16,6 +17,7 @@ export default function AuthenticatedLayout({
                 } as React.CSSProperties
             }
         >
+            <ModuleAccessGuard />
             <AppSidebar variant="inset" />
             <SidebarInset>
                 <SiteHeader />

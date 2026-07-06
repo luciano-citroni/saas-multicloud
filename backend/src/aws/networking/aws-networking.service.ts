@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -213,13 +213,21 @@ export class AwsNetworkingService {
      */
 
     async syncVpcsFromAws(cloudAccountId: string, organizationId: string) {
-        const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
-        const { Vpcs } = await ec2.send(new DescribeVpcsCommand({})).catch(() => {
-            throw new BadRequestException('Falha ao consultar VPCs na AWS. Verifique as permissões da role (ec2:DescribeVpcs).');
-        });
+        const vpcList = [] as ReturnType<typeof mapVpc>[];
 
-        const vpcList = (Vpcs ?? []).map(mapVpc);
+        for (const region of regions) {
+            const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId, region);
+
+            const { Vpcs } = await ec2.send(new DescribeVpcsCommand({})).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao consultar VPCs na AWS para a região ${region}. Verifique as permissões da role (ec2:DescribeVpcs).`
+                );
+            });
+
+            vpcList.push(...(Vpcs ?? []).map(mapVpc));
+        }
 
         const now = new Date();
 
@@ -280,7 +288,7 @@ export class AwsNetworkingService {
      */
 
     async syncSubnetsFromAws(cloudAccountId: string, organizationId: string, vpcId?: string) {
-        const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         // Se vpcId é do banco de dados, busca o AWS VPC ID
 
@@ -296,11 +304,21 @@ export class AwsNetworkingService {
             awsVpcId = dbVpc.awsVpcId;
         }
 
-        const { Subnets } = await ec2.send(new DescribeSubnetsCommand(awsVpcId ? { Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }] } : {})).catch(() => {
-            throw new BadRequestException('Falha ao consultar Subnets na AWS. Verifique as permissões da role (ec2:DescribeSubnets).');
-        });
+        const subnetList = [] as ReturnType<typeof mapSubnet>[];
 
-        const subnetList = (Subnets ?? []).map(mapSubnet);
+        for (const region of regions) {
+            const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId, region);
+
+            const { Subnets } = await ec2
+                .send(new DescribeSubnetsCommand(awsVpcId ? { Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }] } : {}))
+                .catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao consultar Subnets na AWS para a região ${region}. Verifique as permissões da role (ec2:DescribeSubnets).`
+                    );
+                });
+
+            subnetList.push(...(Subnets ?? []).map(mapSubnet));
+        }
 
         const now = new Date();
 
@@ -320,7 +338,7 @@ export class AwsNetworkingService {
             if (!vpc) {
                 // Se VPC não existe, pula esta subnet
 
-                console.warn(`VPC ${subnetData.vpcId} não encontrada. Pulando subnet ${subnetData.subnetId}.`);
+                Logger.warn(`VPC ${subnetData.vpcId} não encontrada. Pulando subnet ${subnetData.subnetId}.`);
 
                 continue;
             }

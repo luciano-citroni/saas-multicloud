@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { z } from 'zod';
 import { type UseFormReturn } from 'react-hook-form';
 import { Eye, EyeOff, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { updatePasswordSchema } from '@/components/root/settings/schema';
+import { type UpdatePasswordFormData } from '@/components/root/settings/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
-
-type UpdatePasswordFormData = z.infer<typeof updatePasswordSchema>;
+import { useTranslations } from '@/lib/i18n';
 
 type PasswordSettingsFormProps = {
     form: UseFormReturn<UpdatePasswordFormData>;
@@ -22,18 +20,17 @@ export function PasswordSettingsForm({ form, hasPassword, onSubmit }: PasswordSe
     const [viewCurrentPassword, setViewCurrentPassword] = useState(false);
     const [viewNewPassword, setViewNewPassword] = useState(false);
     const [viewConfirmPassword, setViewConfirmPassword] = useState(false);
+    const t = useTranslations('password');
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <ShieldCheck className="size-4" />
-                    Alterar Senha
+                    {t.title}
                 </CardTitle>
                 <CardDescription>
-                    {hasPassword
-                        ? 'Use uma senha forte para manter sua conta segura.'
-                        : 'Sua conta foi criada com Google e ainda não possui senha local. Defina uma nova senha abaixo.'}
+                    {hasPassword ? t.description : t.googleAccountDesc}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -45,7 +42,7 @@ export function PasswordSettingsForm({ form, hasPassword, onSubmit }: PasswordSe
                                 name="currentPassword"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Senha atual</FormLabel>
+                                        <FormLabel>{t.currentPassword}</FormLabel>
                                         <FormControl>
                                             <IconInput
                                                 StartIcon={LockKeyhole}
@@ -66,7 +63,7 @@ export function PasswordSettingsForm({ form, hasPassword, onSubmit }: PasswordSe
                             name="newPassword"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Nova senha</FormLabel>
+                                    <FormLabel>{t.newPassword}</FormLabel>
                                     <FormControl>
                                         <IconInput
                                             StartIcon={LockKeyhole}
@@ -86,7 +83,7 @@ export function PasswordSettingsForm({ form, hasPassword, onSubmit }: PasswordSe
                             name="confirmNewPassword"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Confirmar nova senha</FormLabel>
+                                    <FormLabel>{t.confirmNewPassword}</FormLabel>
                                     <FormControl>
                                         <IconInput
                                             StartIcon={LockKeyhole}
@@ -103,7 +100,7 @@ export function PasswordSettingsForm({ form, hasPassword, onSubmit }: PasswordSe
 
                         <div className="flex justify-end">
                             <Button type="submit" isLoading={form.formState.isSubmitting}>
-                                Atualizar senha
+                                {t.updatePassword}
                             </Button>
                         </div>
                     </form>

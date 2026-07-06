@@ -1,10 +1,9 @@
 import { z } from 'zod';
-import { cpfValidator, passwordValidator } from '../common/validators';
+import { passwordValidator } from '../common/validators';
 
 export const registerSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),
-    cpf: cpfValidator.optional(),
     password: passwordValidator,
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
@@ -28,7 +27,6 @@ export type GoogleExchangeDto = z.infer<typeof googleExchangeSchema>;
 export const registerWithInviteSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),
-    cpf: cpfValidator,
     password: passwordValidator,
     inviteToken: z.string().uuid(),
 });
@@ -38,7 +36,6 @@ export const updateMeSchema = z
     .object({
         name: z.string().min(2).max(255).optional(),
         email: z.string().email().optional(),
-        cpf: cpfValidator.optional(),
     })
     .refine((payload) => Object.keys(payload).length > 0, {
         message: 'At least one field must be provided',

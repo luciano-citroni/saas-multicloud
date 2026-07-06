@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,7 +8,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { AwsWafService } from './aws-waf.service';
 
@@ -27,7 +27,7 @@ export class AwsWafController {
     @ApiOperation({ summary: 'Listar Web ACLs WAF do banco de dados' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [WafWebAclResponseDto] })
-    listWebAcls(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listWebAcls(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listWebAclsFromDatabase(cloudAccountId);
     }
 
@@ -42,7 +42,7 @@ export class AwsWafController {
 
         @Param('webAclId', ParseUUIDPipe) webAclId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getWebAclById(webAclId, cloudAccountId);
     }
@@ -52,7 +52,7 @@ export class AwsWafController {
     @ApiOperation({ summary: 'Sincronizar Web ACLs WAF da AWS (REGIONAL e CLOUDFRONT)' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [WafWebAclSyncResponseDto] })
-    syncWebAcls(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    syncWebAcls(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.syncWebAclsFromAws(cloudAccountId, org.id);
     }
 }

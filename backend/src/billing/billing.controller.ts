@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiHeader } from '@nestjs/swagger';
 
-import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { BillingService } from './billing.service';
+
+import { SkipTenant, CurrentOrganization } from '../tenant/tenant.decorators';
 
 import { TenantGuard } from '../tenant/tenant.guard';
 
@@ -14,119 +16,102 @@ import { Roles } from '../rbac/roles.decorator';
 
 import { OrgRole } from '../rbac/roles.enum';
 
-import { CurrentOrganization } from '../tenant/tenant.decorators';
+import { Tenant } from '../db/entites/tenant.entity';
 
-import { Organization } from '../db/entites/organization.entity';
-
+import { PlanDto, SubscriptionDto, PaymentMethodDto, SetupIntentDto, ChangePlanRequestDto, ChangePlanCheckoutSessionDto } from './dto/swagger.dto';
 import {
-    PlanDto,
-    SubscriptionDto,
-    PaymentMethodDto,
-    SetupIntentDto,
-    ChangePlanRequestDto,
-    ChangePlanCheckoutSessionDto,
-    SetDefaultPaymentMethodRequestDto,
-} from './dto/swagger.dto';
+    changePlanSchema,
+    checkoutSessionQuerySchema,
+    paymentMethodIdParamSchema,
+    type ChangePlanDto,
+    type CheckoutSessionQueryDto,
+    type PaymentMethodIdParamDto,
+} from './dto/dto';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 @ApiTags('Billing')
 @ApiBearerAuth('access-token')
+@ApiHeader({ name: 'x-organization-id', description: 'Tenant UUID', required: true })
+@UseGuards(TenantGuard, RolesGuard)
 @Controller('billing')
 export class BillingController {
     constructor(private readonly billingService: BillingService) {}
 
     // =========================================================================
-
-    // Plans and Subscription management endpoints are public to all authenticated users of the organization, but changing plans and managing payment methods are restricted to OWNER/ADMIN roles only.
-
+    // Plans — no tenant context required
     // =========================================================================
 
     @Get('plans')
-    @ApiPaginationQuery()
-    @UseGuards(TenantGuard)
+    @SkipTenant()
     @ApiOperation({ summary: 'List all available plans from Stripe' })
-    @ApiHeader({ name: 'x-organization-id', required: true })
     @ApiResponse({ status: 200, description: 'List of available plans', type: PlanDto, isArray: true })
-    listPlans(@CurrentOrganization() org: Organization) {
-        return this.billingService.listPlans(org.id);
+    listPlans() {
+        return this.billingService.listPlans();
     }
 
     // =========================================================================
-    //
-    // Subscription management endpoints
-    //
+    // Subscription — tenant-scoped
     // =========================================================================
 
     @Get('subscription')
-    @UseGuards(TenantGuard)
-    @ApiOperation({ summary: "Get current organization's subscription" })
-    @ApiHeader({ name: 'x-organization-id', required: true })
+    @ApiOperation({ summary: "Get current tenant's subscription and plan" })
     @ApiResponse({ status: 200, description: 'Current subscription details', type: SubscriptionDto })
     @ApiResponse({ status: 404, description: 'No subscription found' })
-    getSubscription(@CurrentOrganization() org: Organization, @Query('checkoutSessionId') checkoutSessionId?: string) {
-        return this.billingService.getSubscription(org.id, checkoutSessionId);
+    getSubscription(@CurrentOrganization() tenant: Tenant, @Query(new ZodValidationPipe(checkoutSessionQuerySchema)) query?: CheckoutSessionQueryDto) {
+        return this.billingService.getTenantSubscription(tenant.id, query?.checkoutSessionId);
     }
 
     @Put('subscription')
-    @UseGuards(TenantGuard, RolesGuard)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
-    @ApiOperation({ summary: 'Create Stripe Checkout session to change the current plan (OWNER/ADMIN only)' })
-    @ApiHeader({ name: 'x-organization-id', required: true })
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
+    @ApiOperation({ summary: 'Create Stripe Checkout session to change the current tenant plan' })
     @ApiBody({ type: ChangePlanRequestDto })
     @ApiResponse({ status: 200, description: 'Checkout session created successfully', type: ChangePlanCheckoutSessionDto })
     @ApiResponse({ status: 400, description: 'Already on this plan or no active subscription' })
-    @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-    changePlan(@CurrentOrganization() org: Organization, @Body() body: ChangePlanRequestDto) {
-        return this.billingService.changePlan(org.id, body.priceId);
+    @ApiResponse({ status: 403, description: 'Insufficient role — OWNER or ADMIN required' })
+    changePlan(@CurrentOrganization() tenant: Tenant, @Body(new ZodValidationPipe(changePlanSchema)) body: ChangePlanDto) {
+        return this.billingService.changeTenantPlan(tenant.id, body.priceId);
     }
 
     // =========================================================================
-    //
-    // Payment Methods management endpoints
-    //
+    // Payment Methods — tenant-scoped
     // =========================================================================
 
     @Get('payment-methods')
-    @ApiPaginationQuery()
-    @UseGuards(TenantGuard)
-    @ApiOperation({ summary: "List organization's saved payment methods (cards)" })
-    @ApiHeader({ name: 'x-organization-id', required: true })
+    @ApiOperation({ summary: "List tenant's saved payment methods (cards)" })
     @ApiResponse({ status: 200, description: 'List of saved payment methods', type: PaymentMethodDto, isArray: true })
-    listPaymentMethods(@CurrentOrganization() org: Organization) {
-        return this.billingService.listPaymentMethods(org.id);
+    listPaymentMethods(@CurrentOrganization() tenant: Tenant) {
+        return this.billingService.listTenantPaymentMethods(tenant.id);
     }
 
     @Post('payment-methods/setup-intent')
-    @UseGuards(TenantGuard, RolesGuard)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Create a Stripe SetupIntent to add a new card (OWNER/ADMIN only)' })
-    @ApiHeader({ name: 'x-organization-id', required: true })
-    @ApiResponse({ status: 200, description: 'SetupIntent created  use clientSecret in Stripe.js', type: SetupIntentDto })
-    createSetupIntent(@CurrentOrganization() org: Organization) {
-        return this.billingService.createSetupIntent(org.id);
+    @ApiOperation({ summary: 'Create a Stripe SetupIntent to add a new card for the tenant' })
+    @ApiResponse({ status: 200, description: 'SetupIntent created — use clientSecret in Stripe.js', type: SetupIntentDto })
+    createSetupIntent(@CurrentOrganization() tenant: Tenant) {
+        return this.billingService.createTenantSetupIntent(tenant.id);
     }
 
     @Post('payment-methods/:paymentMethodId/set-default')
-    @UseGuards(TenantGuard, RolesGuard)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Set a card as the default payment method (OWNER/ADMIN only)' })
-    @ApiHeader({ name: 'x-organization-id', required: true })
+    @ApiOperation({ summary: "Set a card as the tenant's default payment method" })
     @ApiResponse({ status: 200, description: 'Default payment method updated' })
-    @ApiResponse({ status: 400, description: 'Payment method does not belong to this organization' })
-    setDefaultPaymentMethod(@CurrentOrganization() org: Organization, @Param('paymentMethodId') paymentMethodId: string) {
-        return this.billingService.setDefaultPaymentMethod(org.id, paymentMethodId);
+    @ApiResponse({ status: 400, description: 'Payment method does not belong to this tenant' })
+    setDefaultPaymentMethod(
+        @CurrentOrganization() tenant: Tenant,
+        @Param(new ZodValidationPipe(paymentMethodIdParamSchema)) params: PaymentMethodIdParamDto
+    ) {
+        return this.billingService.setTenantDefaultPaymentMethod(tenant.id, params.paymentMethodId);
     }
 
     @Delete('payment-methods/:paymentMethodId')
-    @UseGuards(TenantGuard, RolesGuard)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Remove a saved payment method (OWNER/ADMIN only)' })
-    @ApiHeader({ name: 'x-organization-id', required: true })
+    @ApiOperation({ summary: 'Remove a saved payment method from the tenant' })
     @ApiResponse({ status: 200, description: 'Payment method removed' })
-    @ApiResponse({ status: 400, description: 'Payment method does not belong to this organization' })
-    detachPaymentMethod(@CurrentOrganization() org: Organization, @Param('paymentMethodId') paymentMethodId: string) {
-        return this.billingService.detachPaymentMethod(org.id, paymentMethodId);
+    @ApiResponse({ status: 400, description: 'Payment method does not belong to this tenant' })
+    detachPaymentMethod(@CurrentOrganization() tenant: Tenant, @Param(new ZodValidationPipe(paymentMethodIdParamSchema)) params: PaymentMethodIdParamDto) {
+        return this.billingService.detachTenantPaymentMethod(tenant.id, params.paymentMethodId);
     }
 }

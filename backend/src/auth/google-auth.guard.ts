@@ -39,8 +39,8 @@ export class GoogleAuthGuard extends AuthGuard('google') {
                 return null;
             }
 
-            const configuredFrontendUrl = new URL(this.configService.getOrThrow<string>('FRONTEND_URL'));
-            const isConfiguredFrontend = requestedUrl.origin === configuredFrontendUrl.origin;
+            const configuredFrontendOrigins = this.getConfiguredFrontendOrigins();
+            const isConfiguredFrontend = configuredFrontendOrigins.includes(requestedUrl.origin);
             const isLocalhostInDevelopment =
                 this.configService.get<string>('NODE_ENV') !== 'production' && ['localhost', '127.0.0.1'].includes(requestedUrl.hostname);
 
@@ -52,5 +52,24 @@ export class GoogleAuthGuard extends AuthGuard('google') {
         } catch {
             return null;
         }
+    }
+
+    private getConfiguredFrontendOrigins(): string[] {
+        const googleAllowedOrigins = this.configService.get<string>('GOOGLE_ALLOWED_REDIRECT_ORIGINS');
+        const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
+        const rawAllowList = googleAllowedOrigins?.trim() ? googleAllowedOrigins : frontendUrl;
+
+        return rawAllowList
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0)
+            .map((value) => {
+                try {
+                    return new URL(value).origin;
+                } catch {
+                    return null;
+                }
+            })
+            .filter((value): value is string => Boolean(value));
     }
 }

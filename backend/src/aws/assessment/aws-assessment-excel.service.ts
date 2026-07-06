@@ -26,7 +26,58 @@ const ALT_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { a
 export class AwsAssessmentExcelService {
     private readonly logger = new Logger(AwsAssessmentExcelService.name);
 
-    private readonly outputDir = path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
+    private readonly outputDir: string;
+
+    constructor() {
+        // Usar variável de ambiente ou calcular caminho robusto
+        const envDir = process.env.EXCEL_UPLOADS_DIR;
+        if (envDir) {
+            this.outputDir = envDir;
+        } else {
+            // Calcular baseado no diretório do projeto
+            let projectRoot = process.cwd();
+            if (!projectRoot.endsWith('backend') && projectRoot.includes('backend')) {
+                projectRoot = path.join(projectRoot, 'backend');
+            } else if (!projectRoot.endsWith('saas-multicloud') && !projectRoot.endsWith('backend')) {
+                // Se não identifica, assume que está um nível acima de backend
+                const parent = path.dirname(projectRoot);
+                if (fs.existsSync(path.join(parent, 'backend'))) {
+                    projectRoot = path.join(parent);
+                }
+            }
+            this.outputDir = path.join(projectRoot, 'uploads', 'assessments');
+        }
+        this.logger.debug(`Excel upload directory: ${this.outputDir}`);
+    }
+
+    private getCandidateDirs(): string[] {
+        const projectRoot = this.getProjectRoot();
+        return Array.from(
+            new Set([
+                this.outputDir,
+                path.join(projectRoot, 'uploads', 'assessments'),
+                path.join(projectRoot, 'backend', 'uploads', 'assessments'),
+                path.join(os.tmpdir(), 'saas-multicloud', 'assessments'),
+            ])
+        );
+    }
+
+    private getProjectRoot(): string {
+        let current = process.cwd();
+        while (current !== path.dirname(current)) {
+            if (fs.existsSync(path.join(current, 'package.json'))) {
+                return current;
+            }
+            current = path.dirname(current);
+        }
+        return process.cwd();
+    }
+
+    private ensureOutputDir(): void {
+        if (!fs.existsSync(this.outputDir)) {
+            fs.mkdirSync(this.outputDir, { recursive: true });
+        }
+    }
 
     async generateExcel(jobId: string, data: AssessmentData): Promise<string> {
         const workbook = new ExcelJS.Workbook();
@@ -48,6 +99,13 @@ export class AwsAssessmentExcelService {
         this.addSecurityGroupSheet(workbook, data);
 
         this.addEcsSheet(workbook, data);
+
+        try {
+            this.addEcsServicesSheet(workbook, data);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            this.logger.warn(`Não foi possível gerar a aba ECS Services: ${reason}`);
+        }
 
         this.addEksSheet(workbook, data);
 
@@ -89,9 +147,7 @@ export class AwsAssessmentExcelService {
 
         this.addCloudTrailSheet(workbook, data);
 
-        if (!fs.existsSync(this.outputDir)) {
-            fs.mkdirSync(this.outputDir, { recursive: true });
-        }
+        this.ensureOutputDir();
 
         const fileName = `assessment-${jobId}.xlsx`;
 
@@ -108,18 +164,38 @@ export class AwsAssessmentExcelService {
         return path.join(this.outputDir, fileName);
     }
 
-    async deleteExcel(fileName: string): Promise<void> {
-        const filePath = this.getExcelFilePath(fileName);
+    resolveExistingExcelFilePath(fileName: string): string | null {
+        for (const dir of this.getCandidateDirs()) {
+            const candidatePath = path.join(dir, fileName);
 
-        try {
-            await fs.promises.unlink(filePath);
+            if (fs.existsSync(candidatePath)) {
+                if (candidatePath !== this.getExcelFilePath(fileName)) {
+                    this.logger.warn(`Excel AWS encontrado fora do diretório principal: ${candidatePath}`);
+                }
 
-            this.logger.log(`Excel removido: ${filePath}`);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-                this.logger.warn(`Falha ao remover Excel ${filePath}: ${(error as Error).message}`);
+                return candidatePath;
             }
         }
+
+        return null;
+    }
+
+    async deleteExcel(fileName: string): Promise<void> {
+        const paths = this.getCandidateDirs().map((dir) => path.join(dir, fileName));
+
+        await Promise.all(
+            paths.map(async (filePath) => {
+                try {
+                    await fs.promises.unlink(filePath);
+                    this.logger.log(`Excel removido: ${filePath}`);
+                } catch (error) {
+                    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                        this.logger.warn(`Falha ao remover Excel ${filePath}: ${(error as Error).message}`);
+                    }
+                }
+            }
+            )
+        );
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -190,6 +266,58 @@ export class AwsAssessmentExcelService {
         if (typeof val === 'object') return JSON.stringify(val).substring(0, 200);
 
         return String(val);
+    }
+
+    private regionFromAvailabilityZone(availabilityZone: string | null | undefined): string {
+        if (!availabilityZone) {
+            return '';
+        }
+
+        // Ex.: us-east-1a -> us-east-1
+        return availabilityZone.slice(0, -1);
+    }
+
+    private regionFromArn(arn: string | null | undefined): string {
+        if (!arn) {
+            return '';
+        }
+
+        const parts = arn.split(':');
+
+        if (parts.length < 4) {
+            return '';
+        }
+
+        return parts[3] ?? '';
+    }
+
+    private regionFromSqsUrl(queueUrl: string | null | undefined): string {
+        if (!queueUrl) {
+            return '';
+        }
+
+        try {
+            const host = new URL(queueUrl).hostname;
+            const match = host.match(/^sqs\.([a-z0-9-]+)\./i);
+
+            return match?.[1] ?? '';
+        } catch {
+            return '';
+        }
+    }
+
+    private buildVpcRegionMap(data: AssessmentData): Map<string, string> {
+        const vpcRegionMap = new Map<string, string>();
+
+        for (const subnet of data.subnets) {
+            const region = this.regionFromAvailabilityZone(subnet.availabilityZone);
+
+            if (region && !vpcRegionMap.has(subnet.awsVpcId)) {
+                vpcRegionMap.set(subnet.awsVpcId, region);
+            }
+        }
+
+        return vpcRegionMap;
     }
 
     // ─── Sheets ───────────────────────────────────────────────────────────────
@@ -273,12 +401,16 @@ export class AwsAssessmentExcelService {
     }
 
     private addVpcSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const vpcRegionMap = this.buildVpcRegionMap(data);
+
         const sheet = this.createSheet(wb, 'VPC', [
             { header: 'AWS VPC ID', key: 'awsVpcId' },
 
             { header: 'Name (Tag)', key: 'name' },
 
             { header: 'CIDR Block', key: 'cidrBlock' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'Is Default', key: 'isDefault' },
 
@@ -294,6 +426,8 @@ export class AwsAssessmentExcelService {
                 name: r.tags?.['Name'] ?? '',
 
                 cidrBlock: r.cidrBlock,
+
+                region: r.awsVpcId ? (vpcRegionMap.get(r.awsVpcId) ?? '') : '',
 
                 isDefault: r.isDefault,
 
@@ -318,6 +452,8 @@ export class AwsAssessmentExcelService {
 
             { header: 'Availability Zone', key: 'availabilityZone' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Subnet Type', key: 'subnetType' },
 
             { header: 'State', key: 'state' },
@@ -335,6 +471,8 @@ export class AwsAssessmentExcelService {
 
                 availabilityZone: r.availabilityZone,
 
+                region: this.regionFromAvailabilityZone(r.availabilityZone),
+
                 subnetType: r.subnetType,
 
                 state: r.state,
@@ -345,12 +483,16 @@ export class AwsAssessmentExcelService {
     }
 
     private addRouteTableSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const vpcRegionMap = this.buildVpcRegionMap(data);
+
         const sheet = this.createSheet(wb, 'Route Tables', [
             { header: 'Route Table ID', key: 'awsRouteTableId' },
 
             { header: 'Name (Tag)', key: 'name' },
 
             { header: 'VPC ID (AWS)', key: 'awsVpcId' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'Is Main', key: 'isMain' },
 
@@ -364,6 +506,8 @@ export class AwsAssessmentExcelService {
                 name: r.tags?.['Name'] ?? '',
 
                 awsVpcId: r.awsVpcId,
+
+                region: r.awsVpcId ? (vpcRegionMap.get(r.awsVpcId) ?? '') : '',
 
                 isMain: r.isMain,
 
@@ -383,6 +527,8 @@ export class AwsAssessmentExcelService {
             { header: 'Instance Type', key: 'instanceType' },
 
             { header: 'State', key: 'state' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'VPC ID (AWS)', key: 'awsVpcId' },
 
@@ -405,6 +551,8 @@ export class AwsAssessmentExcelService {
 
                 state: r.state,
 
+                region: this.regionFromAvailabilityZone(r.availabilityZone),
+
                 awsVpcId: r.awsVpcId,
 
                 awsSubnetId: r.awsSubnetId,
@@ -421,12 +569,16 @@ export class AwsAssessmentExcelService {
     }
 
     private addSecurityGroupSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const vpcRegionMap = this.buildVpcRegionMap(data);
+
         const sheet = this.createSheet(wb, 'Security Groups', [
             { header: 'Group ID', key: 'awsSecurityGroupId' },
 
             { header: 'Name', key: 'name' },
 
             { header: 'VPC ID (AWS)', key: 'awsVpcId' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'Description', key: 'description' },
 
@@ -443,6 +595,8 @@ export class AwsAssessmentExcelService {
 
                 awsVpcId: r.awsVpcId,
 
+                region: r.awsVpcId ? (vpcRegionMap.get(r.awsVpcId) ?? '') : '',
+
                 description: r.description,
 
                 inboundCount: Array.isArray(r.inboundRules) ? r.inboundRules.length : 0,
@@ -458,6 +612,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'ECS', [
             { header: 'Cluster Name', key: 'clusterName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Status', key: 'status' },
 
             { header: 'Running Tasks', key: 'runningTasksCount' },
@@ -468,6 +624,8 @@ export class AwsAssessmentExcelService {
         data.ecsClusters.forEach((r) =>
             sheet.addRow({
                 clusterName: r.clusterName,
+
+                region: this.regionFromArn(r.clusterArn),
 
                 status: r.status,
 
@@ -480,9 +638,145 @@ export class AwsAssessmentExcelService {
         this.finalize(sheet);
     }
 
+    private addEcsServicesSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        // Create lookup maps for easier joins
+        const taskDefMap = new Map(data.ecsTaskDefinitions.map((td) => [td.id, td]));
+        const subnetByIdMap = new Map(data.subnets.map((s) => [s.id, s]));
+        const subnetByAwsIdMap = new Map(data.subnets.map((s) => [s.awsSubnetId, s]));
+        const sgByAwsIdMap = new Map(data.securityGroups.map((sg) => [sg.awsSecurityGroupId, sg]));
+        const lbByNameMap = new Map(data.loadBalancers.map((lb) => [lb.name, lb]));
+        const lbByArnMap = new Map(data.loadBalancers.map((lb) => [lb.awsLoadBalancerArn, lb]));
+
+        const sheet = this.createSheet(wb, 'ECS Services', [
+            { header: 'Service Name', key: 'serviceName' },
+            { header: 'Cluster', key: 'clusterName' },
+            { header: 'Status', key: 'status' },
+            { header: 'Desired Count', key: 'desiredCount' },
+            { header: 'Running Count', key: 'runningCount' },
+            { header: 'Launch Type', key: 'launchType' },
+            { header: 'vCPU', key: 'cpu' },
+            { header: 'Memory (MB)', key: 'memory' },
+            { header: 'Task Definition', key: 'taskDefinition' },
+            { header: 'Task Def Revision', key: 'taskDefRevision' },
+            { header: 'VPC', key: 'vpc' },
+            { header: 'Subnets', key: 'subnets' },
+            { header: 'Security Groups', key: 'securityGroups' },
+            { header: 'Load Balancers', key: 'loadBalancers' },
+            { header: 'Target Groups', key: 'targetGroups' },
+        ]);
+
+        data.ecsServices.forEach((service) => {
+            const taskDef = taskDefMap.get(service.taskDefinitionId);
+            const clusterName = data.ecsClusters.find((c) => c.id === service.clusterId)?.clusterName ?? '';
+
+            // Extract network configuration
+            const netConfig =
+                service.networkConfiguration && typeof service.networkConfiguration === 'object'
+                    ? (service.networkConfiguration as Record<string, unknown>)
+                    : {};
+
+            const awsvpcConfiguration =
+                netConfig['awsvpcConfiguration'] && typeof netConfig['awsvpcConfiguration'] === 'object'
+                    ? (netConfig['awsvpcConfiguration'] as Record<string, unknown>)
+                    : {};
+
+            const subnetIds = Array.isArray(awsvpcConfiguration['subnets'])
+                ? awsvpcConfiguration['subnets'].filter((id): id is string => typeof id === 'string')
+                : [];
+
+            const sgIdsFromNetwork = Array.isArray(awsvpcConfiguration['securityGroups'])
+                ? awsvpcConfiguration['securityGroups'].filter((id): id is string => typeof id === 'string')
+                : [];
+
+            const sgIdsFromService = Array.isArray(service.securityGroupIds)
+                ? service.securityGroupIds.filter((id): id is string => typeof id === 'string')
+                : [];
+
+            const sgIds = sgIdsFromNetwork.length > 0 ? sgIdsFromNetwork : sgIdsFromService;
+
+            const subnets = subnetIds
+                .map((id: string) => {
+                    const subnet = subnetByAwsIdMap.get(id) ?? subnetByIdMap.get(id);
+                    return subnet ? `${subnet.tags?.['Name'] ?? subnet.awsSubnetId}` : id;
+                })
+                .join('; ');
+
+            const securityGroups = sgIds
+                .map((id: string) => {
+                    const sg = sgByAwsIdMap.get(id);
+                    return sg ? `${sg.name}` : id;
+                })
+                .join('; ');
+
+            // Extract load balancers and target groups
+            const lbsInfo = Array.isArray(service.loadBalancers)
+                ? (service.loadBalancers as Array<Record<string, unknown>>)
+                : [];
+
+            const loadBalancers = lbsInfo
+                .map((lb) => {
+                    const lbName = typeof lb.loadBalancerName === 'string' ? lb.loadBalancerName : undefined;
+                    const lbArn = typeof lb.loadBalancerArn === 'string' ? lb.loadBalancerArn : undefined;
+                    const targetGroupArn = typeof lb.targetGroupArn === 'string' ? lb.targetGroupArn : undefined;
+
+                    const dbLb = (lbArn ? lbByArnMap.get(lbArn) : undefined) ?? (lbName ? lbByNameMap.get(lbName) : undefined);
+
+                    return dbLb?.name ?? lbName ?? targetGroupArn ?? 'N/A';
+                })
+                .join('; ');
+
+            const targetGroups = lbsInfo
+                .map((lb) => {
+                    if (typeof lb.targetGroupArn === 'string') {
+                        return lb.targetGroupArn;
+                    }
+
+                    if (typeof lb.targetGroupName === 'string') {
+                        return lb.targetGroupName;
+                    }
+
+                    return 'N/A';
+                })
+                .join('; ');
+
+            // Extract VPC from first subnet
+            let vpcName = '';
+            if (subnetIds.length > 0) {
+                const firstSubnet = subnetByAwsIdMap.get(subnetIds[0]) ?? subnetByIdMap.get(subnetIds[0]);
+                if (firstSubnet) {
+                    const vpc = data.vpcs.find((v) => v.awsVpcId === firstSubnet.awsVpcId);
+                    vpcName = vpc ? `${vpc.tags?.['Name'] ?? vpc.awsVpcId}` : '';
+                }
+            }
+
+            sheet.addRow({
+                serviceName: service.serviceName,
+                clusterName,
+                status: service.status,
+                desiredCount: service.desiredCount,
+                runningCount: service.runningCount,
+                launchType: service.launchType ?? 'N/A',
+                cpu: taskDef?.cpu ?? 'N/A',
+                memory: taskDef?.memory ?? 'N/A',
+                taskDefinition: taskDef?.family ?? 'N/A',
+                taskDefRevision: taskDef?.revision ?? 'N/A',
+                vpc: vpcName,
+                subnets,
+                securityGroups,
+                loadBalancers,
+                targetGroups,
+            });
+        });
+
+        this.finalize(sheet);
+    }
+
     private addEksSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
         const sheet = this.createSheet(wb, 'EKS', [
             { header: 'Cluster Name', key: 'clusterName' },
+
+            { header: 'Region', key: 'region' },
+
 
             { header: 'Status', key: 'status' },
 
@@ -494,6 +788,8 @@ export class AwsAssessmentExcelService {
         data.eksClusters.forEach((r) =>
             sheet.addRow({
                 clusterName: r.clusterName,
+
+                region: this.regionFromArn(r.clusterArn),
 
                 status: r.status,
 
@@ -510,6 +806,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'Load Balancers', [
             { header: 'Name', key: 'name' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Type', key: 'type' },
 
             { header: 'Scheme', key: 'scheme' },
@@ -522,6 +820,8 @@ export class AwsAssessmentExcelService {
         data.loadBalancers.forEach((r) =>
             sheet.addRow({
                 name: r.name,
+
+                region: this.regionFromArn(r.awsLoadBalancerArn),
 
                 type: r.type,
 
@@ -540,6 +840,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'RDS', [
             { header: 'DB Identifier', key: 'awsDbInstanceIdentifier' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Engine', key: 'engine' },
 
             { header: 'Engine Version', key: 'engineVersion' },
@@ -554,6 +856,8 @@ export class AwsAssessmentExcelService {
         data.rdsInstances.forEach((r) =>
             sheet.addRow({
                 awsDbInstanceIdentifier: r.awsDbInstanceIdentifier,
+
+                region: this.regionFromAvailabilityZone(r.availabilityZone),
 
                 engine: r.engine,
 
@@ -608,6 +912,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'Lambda', [
             { header: 'Function Name', key: 'functionName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Runtime', key: 'runtime' },
 
             { header: 'State', key: 'state' },
@@ -622,6 +928,8 @@ export class AwsAssessmentExcelService {
         data.lambdaFunctions.forEach((r) =>
             sheet.addRow({
                 functionName: r.functionName,
+
+                region: this.regionFromArn(r.functionArn),
 
                 runtime: r.runtime,
 
@@ -639,12 +947,16 @@ export class AwsAssessmentExcelService {
     }
 
     private addApiGatewaySheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const vpcRegionMap = this.buildVpcRegionMap(data);
+
         const sheet = this.createSheet(wb, 'API Gateway', [
             { header: 'API Name', key: 'name' },
 
             { header: 'API ID', key: 'awsApiId' },
 
             { header: 'Endpoint Type', key: 'endpointType' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'Description', key: 'description' },
 
@@ -659,6 +971,8 @@ export class AwsAssessmentExcelService {
 
                 endpointType: r.endpointType,
 
+                region: r.awsVpcId ? (vpcRegionMap.get(r.awsVpcId) ?? '') : '',
+
                 description: r.description,
 
                 createdAtAws: this.fmt(r.createdAtAws),
@@ -672,6 +986,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'CloudFront', [
             { header: 'Distribution ID', key: 'distributionId' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Domain Name', key: 'domainName' },
 
             { header: 'Status', key: 'status' },
@@ -684,6 +1000,8 @@ export class AwsAssessmentExcelService {
         data.cloudFrontDistributions.forEach((r) =>
             sheet.addRow({
                 distributionId: r.distributionId,
+
+                region: 'global',
 
                 domainName: r.domainName,
 
@@ -702,6 +1020,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'Route53', [
             { header: 'Hosted Zone ID', key: 'awsHostedZoneId' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Name', key: 'name' },
 
             { header: 'Zone Type', key: 'zoneType' },
@@ -714,6 +1034,8 @@ export class AwsAssessmentExcelService {
         data.route53HostedZones.forEach((r) =>
             sheet.addRow({
                 awsHostedZoneId: r.awsHostedZoneId,
+
+                region: 'global',
 
                 name: r.name,
 
@@ -732,6 +1054,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'DynamoDB', [
             { header: 'Table Name', key: 'tableName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Status', key: 'tableStatus' },
 
             { header: 'Billing Mode', key: 'billingMode' },
@@ -742,6 +1066,8 @@ export class AwsAssessmentExcelService {
         data.dynamoDbTables.forEach((r) =>
             sheet.addRow({
                 tableName: r.tableName,
+
+                region: this.regionFromArn(r.tableArn),
 
                 tableStatus: r.tableStatus,
 
@@ -758,6 +1084,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'ElastiCache', [
             { header: 'Cluster ID', key: 'cacheClusterId' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Engine', key: 'engine' },
 
             { header: 'Engine Version', key: 'engineVersion' },
@@ -772,6 +1100,8 @@ export class AwsAssessmentExcelService {
         data.elastiCacheClusters.forEach((r) =>
             sheet.addRow({
                 cacheClusterId: r.cacheClusterId,
+
+                region: this.regionFromArn(r.clusterArn),
 
                 engine: r.engine,
 
@@ -792,6 +1122,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'SQS', [
             { header: 'Queue Name', key: 'queueName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Queue URL', key: 'queueUrl' },
 
             { header: 'Is FIFO', key: 'isFifo' },
@@ -802,6 +1134,8 @@ export class AwsAssessmentExcelService {
         data.sqsQueues.forEach((r) =>
             sheet.addRow({
                 queueName: r.queueName,
+
+                region: this.regionFromArn(r.queueArn) || this.regionFromSqsUrl(r.queueUrl),
 
                 queueUrl: r.queueUrl,
 
@@ -818,6 +1152,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'SNS', [
             { header: 'Topic Name', key: 'topicName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Topic ARN', key: 'topicArn' },
 
             { header: 'Subscriptions Confirmed', key: 'subscriptionsConfirmed' },
@@ -826,6 +1162,8 @@ export class AwsAssessmentExcelService {
         data.snsTopics.forEach((r) =>
             sheet.addRow({
                 topicName: r.topicName,
+
+                region: this.regionFromArn(r.topicArn),
 
                 topicArn: r.topicArn,
 
@@ -839,6 +1177,8 @@ export class AwsAssessmentExcelService {
     private addKmsSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
         const sheet = this.createSheet(wb, 'KMS', [
             { header: 'Key ID', key: 'awsKeyId' },
+
+            { header: 'Region', key: 'region' },
 
             { header: 'Key ARN', key: 'keyArn' },
 
@@ -854,6 +1194,8 @@ export class AwsAssessmentExcelService {
         data.kmsKeys.forEach((r) =>
             sheet.addRow({
                 awsKeyId: r.awsKeyId,
+
+                region: this.regionFromArn(r.keyArn),
 
                 keyArn: r.keyArn,
 
@@ -874,6 +1216,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'Secrets Manager', [
             { header: 'Name', key: 'name' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'ARN', key: 'secretArn' },
 
             { header: 'Last Rotated', key: 'lastRotatedDate' },
@@ -884,6 +1228,8 @@ export class AwsAssessmentExcelService {
         data.secretsManagerSecrets.forEach((r) =>
             sheet.addRow({
                 name: r.name,
+
+                region: this.regionFromArn(r.secretArn),
 
                 secretArn: r.secretArn,
 
@@ -900,6 +1246,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'ECR', [
             { header: 'Repository Name', key: 'repositoryName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Repository ARN', key: 'repositoryArn' },
 
             { header: 'Repository URI', key: 'repositoryUri' },
@@ -912,6 +1260,8 @@ export class AwsAssessmentExcelService {
         data.ecrRepositories.forEach((r) =>
             sheet.addRow({
                 repositoryName: r.repositoryName,
+
+                region: this.regionFromArn(r.repositoryArn),
 
                 repositoryArn: r.repositoryArn,
 
@@ -930,6 +1280,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'WAF', [
             { header: 'Name', key: 'name' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'ARN', key: 'webAclArn' },
 
             { header: 'Scope', key: 'scope' },
@@ -940,6 +1292,8 @@ export class AwsAssessmentExcelService {
         data.wafWebAcls.forEach((r) =>
             sheet.addRow({
                 name: r.name,
+
+                region: r.scope === 'CLOUDFRONT' ? 'global' : this.regionFromArn(r.webAclArn),
 
                 webAclArn: r.webAclArn,
 
@@ -956,6 +1310,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'GuardDuty', [
             { header: 'Detector ID', key: 'detectorId' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Status', key: 'status' },
 
             { header: 'Finding Publishing Frequency', key: 'findingPublishingFrequency' },
@@ -966,6 +1322,8 @@ export class AwsAssessmentExcelService {
         data.guardDutyDetectors.forEach((r) =>
             sheet.addRow({
                 detectorId: r.detectorId,
+
+                region: '',
 
                 status: r.status,
 
@@ -982,6 +1340,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'IAM Roles', [
             { header: 'Role Name', key: 'roleName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Role ARN', key: 'roleArn' },
 
             { header: 'Path', key: 'path' },
@@ -994,6 +1354,8 @@ export class AwsAssessmentExcelService {
         data.iamRoles.forEach((r) =>
             sheet.addRow({
                 roleName: r.roleName,
+
+                region: 'global',
 
                 roleArn: r.roleArn,
 
@@ -1012,6 +1374,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'CloudWatch Alarms', [
             { header: 'Alarm Name', key: 'alarmName' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'State', key: 'stateValue' },
 
             { header: 'Metric Name', key: 'metricName' },
@@ -1024,6 +1388,8 @@ export class AwsAssessmentExcelService {
         data.cloudWatchAlarms.forEach((r) =>
             sheet.addRow({
                 alarmName: r.alarmName,
+
+                region: this.regionFromArn(r.alarmArn),
 
                 stateValue: r.stateValue,
 
@@ -1042,6 +1408,8 @@ export class AwsAssessmentExcelService {
         const sheet = this.createSheet(wb, 'CloudTrail', [
             { header: 'Trail Name', key: 'name' },
 
+            { header: 'Region', key: 'region' },
+
             { header: 'Trail ARN', key: 'trailArn' },
 
             { header: 'S3 Bucket', key: 's3BucketName' },
@@ -1054,6 +1422,8 @@ export class AwsAssessmentExcelService {
         data.cloudTrailTrails.forEach((r) =>
             sheet.addRow({
                 name: r.name,
+
+                region: r.homeRegion ?? '',
 
                 trailArn: r.trailArn,
 

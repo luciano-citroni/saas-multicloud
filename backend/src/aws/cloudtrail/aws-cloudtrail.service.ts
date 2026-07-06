@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -59,90 +59,96 @@ export class AwsCloudTrailService {
     }
 
     async syncTrailsFromAws(cloudAccountId: string, organizationId: string) {
-        const client = await this.connector.getCloudTrailClient(cloudAccountId, organizationId);
-
-        const { trailList } = await client.send(new DescribeTrailsCommand({ includeShadowTrails: false })).catch(() => {
-            throw new BadRequestException('Falha ao listar trails do CloudTrail. Verifique as permissões da role (cloudtrail:DescribeTrails).');
-        });
-
-        if (!trailList || trailList.length === 0) {
-            return [];
-        }
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         const now = new Date();
 
         const mapped: ReturnType<typeof mapAwsTrail>[] = [];
 
-        for (const trail of trailList) {
-            if (!trail.TrailARN) continue;
+        for (const region of regions) {
+            const client = await this.connector.getCloudTrailClient(cloudAccountId, organizationId, region);
 
-            let isLogging = false;
+            const { trailList } = await client.send(new DescribeTrailsCommand({ includeShadowTrails: false })).catch(() => {
+                throw new BadRequestException(
+                    `Falha ao listar trails do CloudTrail na região ${region}. Verifique as permissões da role (cloudtrail:DescribeTrails).`
+                );
+            });
 
-            try {
-                const status = await client.send(new GetTrailStatusCommand({ Name: trail.TrailARN }));
-
-                isLogging = status.IsLogging ?? false;
-            } catch {
-                console.warn(`Não foi possível obter status da trail ${trail.Name}.`);
+            if (!trailList || trailList.length === 0) {
+                continue;
             }
 
-            let tags: Record<string, string> = {};
+            for (const trail of trailList) {
+                if (!trail.TrailARN) continue;
 
-            try {
-                const { ResourceTagList } = await client.send(new ListTagsCommand({ ResourceIdList: [trail.TrailARN] }));
+                let isLogging = false;
 
-                tags = parseTags(ResourceTagList?.[0]?.TagsList);
-            } catch {
-                console.warn(`Não foi possível obter tags da trail ${trail.Name}.`);
+                try {
+                    const status = await client.send(new GetTrailStatusCommand({ Name: trail.TrailARN }));
+
+                    isLogging = status.IsLogging ?? false;
+                } catch {
+                    Logger.warn(`Não foi possível obter status da trail ${trail.Name}.`);
+                }
+
+                let tags: Record<string, string> = {};
+
+                try {
+                    const { ResourceTagList } = await client.send(new ListTagsCommand({ ResourceIdList: [trail.TrailARN] }));
+
+                    tags = parseTags(ResourceTagList?.[0]?.TagsList);
+                } catch {
+                    Logger.warn(`Não foi possível obter tags da trail ${trail.Name}.`);
+                }
+
+                const trailData = mapAwsTrail(trail, isLogging, tags);
+
+                mapped.push(trailData);
+
+                const vpc = trailData.awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId: trailData.awsVpcId } }) : null;
+
+                let dbTrail = await this.trailRepository.findOne({ where: { trailArn: trailData.trailArn } });
+
+                if (dbTrail) {
+                    dbTrail.name = trailData.name;
+
+                    dbTrail.s3BucketName = trailData.s3BucketName;
+
+                    dbTrail.s3KeyPrefix = trailData.s3KeyPrefix;
+
+                    dbTrail.isMultiRegionTrail = trailData.isMultiRegionTrail;
+
+                    dbTrail.isLogging = isLogging;
+
+                    dbTrail.homeRegion = trailData.homeRegion;
+
+                    dbTrail.isOrganizationTrail = trailData.isOrganizationTrail;
+
+                    dbTrail.logFileValidationEnabled = trailData.logFileValidationEnabled;
+
+                    dbTrail.snsTopicArn = trailData.snsTopicArn;
+
+                    dbTrail.cloudWatchLogsLogGroupArn = trailData.cloudWatchLogsLogGroupArn;
+
+                    dbTrail.awsVpcId = trailData.awsVpcId;
+
+                    dbTrail.vpcId = vpc?.id ?? null;
+
+                    dbTrail.lastSyncedAt = now;
+                } else {
+                    dbTrail = this.trailRepository.create({
+                        cloudAccountId,
+
+                        ...trailData,
+
+                        vpcId: vpc?.id ?? null,
+
+                        lastSyncedAt: now,
+                    });
+                }
+
+                await this.trailRepository.save(dbTrail);
             }
-
-            const trailData = mapAwsTrail(trail, isLogging, tags);
-
-            mapped.push(trailData);
-
-            const vpc = trailData.awsVpcId ? await this.vpcRepository.findOne({ where: { cloudAccountId, awsVpcId: trailData.awsVpcId } }) : null;
-
-            let dbTrail = await this.trailRepository.findOne({ where: { trailArn: trailData.trailArn } });
-
-            if (dbTrail) {
-                dbTrail.name = trailData.name;
-
-                dbTrail.s3BucketName = trailData.s3BucketName;
-
-                dbTrail.s3KeyPrefix = trailData.s3KeyPrefix;
-
-                dbTrail.isMultiRegionTrail = trailData.isMultiRegionTrail;
-
-                dbTrail.isLogging = isLogging;
-
-                dbTrail.homeRegion = trailData.homeRegion;
-
-                dbTrail.isOrganizationTrail = trailData.isOrganizationTrail;
-
-                dbTrail.logFileValidationEnabled = trailData.logFileValidationEnabled;
-
-                dbTrail.snsTopicArn = trailData.snsTopicArn;
-
-                dbTrail.cloudWatchLogsLogGroupArn = trailData.cloudWatchLogsLogGroupArn;
-
-                dbTrail.awsVpcId = trailData.awsVpcId;
-
-                dbTrail.vpcId = vpc?.id ?? null;
-
-                dbTrail.lastSyncedAt = now;
-            } else {
-                dbTrail = this.trailRepository.create({
-                    cloudAccountId,
-
-                    ...trailData,
-
-                    vpcId: vpc?.id ?? null,
-
-                    lastSyncedAt: now,
-                });
-            }
-
-            await this.trailRepository.save(dbTrail);
         }
 
         return mapped;

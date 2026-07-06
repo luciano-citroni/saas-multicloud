@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -13,19 +13,26 @@ import { GoogleButton } from '@/components/auth/google-button';
 import { Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from '@/lib/i18n';
 
-const loginScheme = z.object({
-    email: z.email('E-mail inválido'),
-    password: z.string().min(1, 'Senha é obrigatória'),
-});
-
-type LoginFormData = z.infer<typeof loginScheme>;
+type LoginFormData = { email: string; password: string };
 
 export function LoginForm() {
     const [viewPassword, setViewPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
+    const t = useTranslations('auth');
+    const tc = useTranslations('common');
+
+    const loginScheme = useMemo(
+        () =>
+            z.object({
+                email: z.email(t.emailInvalid),
+                password: z.string().min(1, t.passwordRequired),
+            }),
+        [t]
+    );
 
     useEffect(() => {
         const error = searchParams.get('error');
@@ -35,9 +42,9 @@ export function LoginForm() {
         }
 
         if (error === 'google_auth_failed') {
-            toast.error('Não foi possível concluir o login com Google. Tente novamente.');
+            toast.error(t.googleLoginError);
         } else {
-            toast.error('Não foi possível concluir o login. Tente novamente.');
+            toast.error(t.loginError);
         }
 
         const currentUrl = new URL(window.location.href);
@@ -62,14 +69,14 @@ export function LoginForm() {
             const body = await response.json();
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
             router.replace('/');
             router.refresh();
         } catch {
-            toast.error('Erro de conexão. Tente novamente.');
+            toast.error(tc.connectionError);
         } finally {
             setLoading(false);
         }
@@ -84,9 +91,9 @@ export function LoginForm() {
                         name="email"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>E-mail</FormLabel>
+                                <FormLabel>{tc.email}</FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="seu@email.com" StartIcon={Mail} {...field} />
+                                    <IconInput placeholder={t.emailPlaceholder} StartIcon={Mail} {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -98,10 +105,10 @@ export function LoginForm() {
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Senha</FormLabel>
+                                <FormLabel>{t.passwordLabel}</FormLabel>
                                 <FormControl>
                                     <IconInput
-                                        placeholder="Sua senha"
+                                        placeholder={t.passwordPlaceholder}
                                         StartIcon={LockKeyhole}
                                         type={viewPassword ? 'text' : 'password'}
                                         ButtonIcon={{
@@ -117,22 +124,22 @@ export function LoginForm() {
                     />
 
                     <Button type="submit" disabled={loading}>
-                        {loading ? 'Entrando...' : 'Entrar'}
+                        {loading ? t.signingIn : t.signIn}
                     </Button>
                 </form>
             </Form>
 
             <div className="relative flex items-center gap-2">
                 <div className="flex-1 border-t border-border" />
-                <span className="text-xs text-muted-foreground">ou</span>
+                <span className="text-xs text-muted-foreground">{t.or}</span>
                 <div className="flex-1 border-t border-border" />
             </div>
 
-            <GoogleButton label="Entrar com Google" />
+            <GoogleButton label={t.signInWithGoogle} />
 
             <Link href="/auth/sign-up" className="">
                 <p className="text-center text-sm text-muted-foreground">
-                    Não tem conta? <span className="font-medium text-primary hover:underline">Cadastre-se</span>
+                    {t.noAccount} <span className="font-medium text-primary hover:underline">{t.signUp}</span>
                 </p>
             </Link>
         </div>

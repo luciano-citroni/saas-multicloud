@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -10,7 +10,7 @@ import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 
-import { Organization } from '../../db/entites/organization.entity';
+import { Tenant } from '../../db/entites/tenant.entity';
 
 import { LoadBalancerResponseDto, LoadBalancerSyncResponseDto } from './swagger.dto';
 
@@ -52,7 +52,7 @@ export class AwsLoadBalancerController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listLoadBalancers(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Organization) {
+    listLoadBalancers(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         return this.service.listLoadBalancersFromDatabase(cloudAccountId);
     }
 
@@ -80,7 +80,7 @@ export class AwsLoadBalancerController {
 
         @Param('vpcId', ParseUUIDPipe) vpcId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.listLoadBalancersByVpcFromDatabase(vpcId, cloudAccountId);
     }
@@ -108,7 +108,7 @@ export class AwsLoadBalancerController {
 
         @Param('loadBalancerId', ParseUUIDPipe) loadBalancerId: string,
 
-        @CurrentOrganization() org: Organization
+        @CurrentOrganization() org: Tenant
     ) {
         return this.service.getLoadBalancerById(loadBalancerId, cloudAccountId);
     }
@@ -151,7 +151,7 @@ export class AwsLoadBalancerController {
     syncLoadBalancers(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Organization,
+        @CurrentOrganization() org: Tenant,
 
         @Query('region') region?: string,
 

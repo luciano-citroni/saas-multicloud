@@ -2,15 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { toPng } from 'html-to-image';
-import { getViewportForBounds } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
-import { runAssessment, triggerGcpExcelReport, pollGcpJobStatus, buildGcpExcelDownloadUrl } from '@/app/actions/assessment';
+import {
+    exportAssessmentDiagram,
+    runAssessment,
+    triggerAssessmentExcelReport,
+    fetchAssessmentExcelJobs,
+    buildAssessmentExcelDownloadUrl,
+    type AssessmentExcelJob,
+} from '@/app/actions/assessment';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
-import { AssessmentGraphCard } from '@/components/root/assessment/assessment-graph-card';
+import { MemoizedAssessmentGraphCard } from '@/components/root/assessment/assessment-graph-card';
 import { AssessmentToolbar, getGroupingModeLabel } from '@/components/root/assessment/assessment-toolbar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     autoLayout,
     buildGroupedNodesByModes,
@@ -31,6 +38,7 @@ import {
     ACTIVE_ORG_STORAGE_KEY,
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
@@ -44,6 +52,7 @@ type ApiErrorPayload = {
 
 type CloudAccountApiItem = OrganizationCloudAccount;
 type CloudAccountsApiPayload = CloudAccountApiItem[] | { items?: CloudAccountApiItem[] };
+type AssessmentExcelJobsApiPayload = AssessmentExcelJob[] | { items?: AssessmentExcelJob[] };
 
 type NodeBounds = {
     x: number;
@@ -52,20 +61,21 @@ type NodeBounds = {
     height: number;
 };
 
-const DEFAULT_NODE_WIDTH = 260;
-const DEFAULT_NODE_HEIGHT = 86;
+const DEFAULT_NODE_WIDTH = 230;
+const DEFAULT_NODE_HEIGHT = 80;
 const EXPORT_PADDING = 80;
 const MIN_EXPORT_WIDTH = 1200;
 const MIN_EXPORT_HEIGHT = 720;
-const MAX_EXPORT_SIZE = 12000;
+const MAX_EXPORT_SIZE = 10000;
 const LOGO_EXPORT_WIDTH = 132;
 const LOGO_EXPORT_MARGIN = 28;
-const DEFAULT_GROUPING_MODES: GroupingDimension[] = ['vpc', 'region'];
-const DEFAULT_HIDDEN_FILTER_IDS: ResourceVisibilityFilterId[] = ['securityGroups'];
+const DEFAULT_GROUPING_MODES: GroupingDimension[] = ['region', 'vpc'];
+const DEFAULT_HIDDEN_FILTER_IDS: ResourceVisibilityFilterId[] = [];
 const GROUP_BY_QUERY_PARAM = 'groupBy';
 const HIDDEN_FILTERS_QUERY_PARAM = 'hiddenFilters';
 const VALID_GROUPING_MODES: GroupingDimension[] = ['resourceType', 'vpc', 'region'];
 const VALID_HIDDEN_FILTER_IDS: ResourceVisibilityFilterId[] = ['securityGroups', 'taskDefinitions', 'managedIdentities'];
+const REPORTS_POLL_INTERVAL_MS = 5000;
 
 function normalizeGroupingModesFromUrl(value: string | null): GroupingDimension[] {
     if (!value) {
@@ -77,7 +87,13 @@ function normalizeGroupingModesFromUrl(value: string | null): GroupingDimension[
         .map((item) => item.trim())
         .filter((item): item is GroupingDimension => VALID_GROUPING_MODES.includes(item as GroupingDimension));
 
-    return parsed.length > 0 ? [...new Set(parsed)] : [];
+    const unique = parsed.length > 0 ? [...new Set(parsed)] : [];
+
+    if (unique.includes('region')) {
+        return ['region', ...unique.filter((mode) => mode !== 'region')];
+    }
+
+    return unique;
 }
 
 function normalizeHiddenFiltersFromUrl(value: string | null): ResourceVisibilityFilterId[] {
@@ -120,6 +136,17 @@ function formatExportTimestamp(date: Date): string {
         dateStyle: 'short',
         timeStyle: 'short',
     }).format(date);
+}
+
+function resolveExportBackgroundColor(colorMode: 'light' | 'dark'): string {
+    const fallbackColor = colorMode === 'dark' ? '#0f172a' : '#ffffff';
+    const rawColor = getComputedStyle(document.body).backgroundColor?.trim().toLowerCase();
+
+    if (!rawColor || rawColor === 'transparent' || rawColor === 'rgba(0, 0, 0, 0)' || rawColor === 'rgba(0,0,0,0)') {
+        return fallbackColor;
+    }
+
+    return rawColor;
 }
 
 function getNodeSize(node: Node): { width: number; height: number } {
@@ -319,11 +346,58 @@ function normalizeCloudAccounts(payload: unknown): OrganizationCloudAccount[] {
     });
 }
 
+function normalizeAssessmentExcelJobs(payload: unknown): AssessmentExcelJob[] {
+    const normalizedPayload = payload as AssessmentExcelJobsApiPayload;
+    const items = Array.isArray(normalizedPayload) ? normalizedPayload : Array.isArray(normalizedPayload?.items) ? normalizedPayload.items : [];
+
+    return items.filter((item): item is AssessmentExcelJob => {
+        return typeof item === 'object' && item !== null && typeof item.id === 'string' && typeof item.status === 'string';
+    });
+}
+
+function formatDateTime(value?: string): string {
+    if (!value) {
+        return '-';
+    }
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return '-';
+    }
+
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
+}
+
+function hasExcelExpired(expiresAt?: string): boolean {
+    if (!expiresAt) {
+        return false;
+    }
+
+    const expiresTimestamp = new Date(expiresAt).getTime();
+
+    if (Number.isNaN(expiresTimestamp)) {
+        return false;
+    }
+
+    return expiresTimestamp <= Date.now();
+}
+
+function getJobStatusLabel(status: string, t: { statusPending: string; statusRunning: string; statusCompleted: string; statusFailed: string }): string {
+    if (status === 'pending') return t.statusPending;
+    if (status === 'running') return t.statusRunning;
+    if (status === 'completed') return t.statusCompleted;
+    if (status === 'failed') return t.statusFailed;
+    return status;
+}
+
 export function AssessmentPageClient() {
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
     const { resolvedTheme } = useTheme();
+    const ta = useTranslations('assessment');
+    const tc = useTranslations('common');
     const graphWrapperRef = useRef<HTMLDivElement | null>(null);
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
@@ -332,8 +406,10 @@ export function AssessmentPageClient() {
     const [canCreateCloudAccount, setCanCreateCloudAccount] = useState<boolean | null>(null);
     const [running, setRunning] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [isExportingDiagram, setIsExportingDiagram] = useState(false);
     const [generatingExcel, setGeneratingExcel] = useState(false);
-    const excelPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const reportsPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [assessmentExcelJobs, setAssessmentExcelJobs] = useState<AssessmentExcelJob[]>([]);
     const [resourceNodes, setResourceNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [groupingModes, setGroupingModes] = useState<GroupingDimension[]>(() => normalizeGroupingModesFromUrl(searchParams.get(GROUP_BY_QUERY_PARAM)));
@@ -356,6 +432,8 @@ export function AssessmentPageClient() {
             }
 
             if (areStringArraysEqual(hiddenFilterValues, [...DEFAULT_HIDDEN_FILTER_IDS].sort())) {
+                params.delete(HIDDEN_FILTERS_QUERY_PARAM);
+            } else if (hiddenFilterValues.length === 0) {
                 params.delete(HIDDEN_FILTERS_QUERY_PARAM);
             } else {
                 params.set(HIDDEN_FILTERS_QUERY_PARAM, hiddenFiltersValue);
@@ -385,24 +463,38 @@ export function AssessmentPageClient() {
         syncFilterStateToUrl(groupingModes, hiddenResourceFilterIds);
     }, [groupingModes, hiddenResourceFilterIds, syncFilterStateToUrl]);
 
+    const layoutedGraph = useMemo(() => {
+        const layoutedNodes = autoLayout(resourceNodes, edges);
+        const layoutedNodeIds = new Set(layoutedNodes.map((node) => node.id));
+        const layoutedEdges = edges.filter((edge) => layoutedNodeIds.has(edge.source) && layoutedNodeIds.has(edge.target));
+
+        return {
+            resourceNodes: layoutedNodes,
+            edges: layoutedEdges,
+        };
+    }, [edges, layoutNonce, resourceNodes]);
+
     const filteredGraph = useMemo(() => {
-        const nodesAfterVisibilityFilter = filterNodesByVisibility(resourceNodes, hiddenResourceFilterIds);
+        const nodesAfterVisibilityFilter = filterNodesByVisibility(layoutedGraph.resourceNodes, hiddenResourceFilterIds);
         const visibleNodeIds = new Set(nodesAfterVisibilityFilter.map((node) => node.id));
-        const edgesAfterVisibilityFilter = edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
+        const edgesAfterVisibilityFilter = layoutedGraph.edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
         const nodesAfterOrphanRemoval = removeOrphanNodesByType(nodesAfterVisibilityFilter, edgesAfterVisibilityFilter);
         const finalNodeIds = new Set(nodesAfterOrphanRemoval.map((node) => node.id));
         const finalEdges = edgesAfterVisibilityFilter.filter((edge) => finalNodeIds.has(edge.source) && finalNodeIds.has(edge.target));
 
         return {
-            resourceNodes: autoLayout(nodesAfterOrphanRemoval, finalEdges),
+            resourceNodes: nodesAfterOrphanRemoval,
             edges: finalEdges,
         };
-    }, [edges, hiddenResourceFilterIds, layoutNonce, resourceNodes]);
+    }, [hiddenResourceFilterIds, layoutedGraph.edges, layoutedGraph.resourceNodes]);
 
-    const nodes = useMemo(
-        () => buildGroupedNodesByModes(filteredGraph.resourceNodes, filteredGraph.edges, groupingModes),
-        [filteredGraph.edges, filteredGraph.resourceNodes, groupingModes]
-    );
+    const nodes = useMemo(() => {
+        if (groupingModes.length === 0) {
+            return filteredGraph.resourceNodes;
+        }
+
+        return buildGroupedNodesByModes(filteredGraph.resourceNodes, filteredGraph.edges, groupingModes);
+    }, [filteredGraph.edges, filteredGraph.resourceNodes, groupingModes]);
 
     const visualGroupCount = useMemo(() => {
         if (!filteredGraph.resourceNodes.length) {
@@ -457,7 +549,7 @@ export function AssessmentPageClient() {
             ]);
 
             if (sidebarResponse.status === 401 || cloudAccountsResponse.status === 401) {
-                toast.error('Sua sessão expirou. Faça login novamente.');
+                toast.error(tc.sessionExpired);
                 router.replace('/auth/sign-in');
                 router.refresh();
                 return;
@@ -537,7 +629,7 @@ export function AssessmentPageClient() {
             return;
         }
 
-        toast.error('O módulo de assessment não está habilitado para a organização ativa.');
+        toast.error(ta.moduleNotEnabled);
         router.replace('/');
     }, [hasAssessmentModule, router]);
 
@@ -545,19 +637,75 @@ export function AssessmentPageClient() {
     const providerLabel = formatAssessmentProvider(activeProvider);
     const canRun = Boolean(organizationId && cloudAccountId && activeProvider !== 'unknown' && hasAssessmentModule);
 
+    const loadAssessmentExcelJobs = useCallback(async () => {
+        if (!organizationId || !cloudAccountId || activeProvider === 'unknown') {
+            setAssessmentExcelJobs([]);
+            return;
+        }
+
+        try {
+            const response = await fetchAssessmentExcelJobs(organizationId, cloudAccountId, activeProvider);
+
+            if (response.status === 401) {
+                toast.error(tc.sessionExpired);
+                router.replace('/auth/sign-in');
+                router.refresh();
+                return;
+            }
+
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = (await response.json().catch(() => null)) as unknown;
+            const jobs = normalizeAssessmentExcelJobs(payload);
+            setAssessmentExcelJobs(jobs);
+        } catch {
+            // Silencia erros de polling para evitar spam de toast.
+        }
+    }, [activeProvider, cloudAccountId, organizationId, router]);
+
+    useEffect(() => {
+        void loadAssessmentExcelJobs();
+    }, [loadAssessmentExcelJobs]);
+
+    useEffect(() => {
+        if (reportsPollTimerRef.current) {
+            clearInterval(reportsPollTimerRef.current);
+            reportsPollTimerRef.current = null;
+        }
+
+        const hasActiveJob = assessmentExcelJobs.some((job) => job.status === 'pending' || job.status === 'running');
+
+        if (!hasActiveJob) {
+            return;
+        }
+
+        reportsPollTimerRef.current = setInterval(() => {
+            void loadAssessmentExcelJobs();
+        }, REPORTS_POLL_INTERVAL_MS);
+
+        return () => {
+            if (reportsPollTimerRef.current) {
+                clearInterval(reportsPollTimerRef.current);
+                reportsPollTimerRef.current = null;
+            }
+        };
+    }, [assessmentExcelJobs, loadAssessmentExcelJobs]);
+
     const runAssessmentRequest = useCallback(async () => {
         if (!organizationId || !cloudAccountId) {
-            toast.error('Selecione organização e conta cloud para executar o assessment.');
+            toast.error(ta.selectOrgAndAccount);
             return;
         }
 
         if (!hasAssessmentModule) {
-            toast.error('O módulo de assessment não está habilitado para a organização ativa.');
+            toast.error(ta.moduleNotEnabled);
             return;
         }
 
         if (activeProvider === 'unknown') {
-            toast.error('Não foi possível identificar o provider da conta cloud ativa.');
+            toast.error(ta.providerNotFound);
             return;
         }
 
@@ -568,53 +716,53 @@ export function AssessmentPageClient() {
             const payload = (await response.json().catch(() => null)) as AssessmentGraphPayload | ApiErrorPayload | null;
 
             if (response.status === 401) {
-                toast.error('Sua sessão expirou. Faça login novamente.');
+                toast.error(tc.sessionExpired);
                 router.replace('/auth/sign-in');
                 router.refresh();
                 return;
             }
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
 
             const graph = payload && typeof payload === 'object' && 'architectureGraph' in payload ? payload.architectureGraph : undefined;
             const rawNodes = normalizeNodes(graph?.nodes);
-            const nextEdges = normalizeEdges(graph?.edges);
+            const nextEdges = normalizeEdges(graph?.edges, rawNodes.length > 250);
             setResourceNodes(rawNodes);
             setEdges(nextEdges);
             setLayoutNonce((value) => value + 1);
 
             if (rawNodes.length === 0) {
-                toast.warning('Assessment concluído, mas sem nós para exibir no grafo.');
+                toast.warning(ta.noNodes);
             } else {
-                toast.success(`Assessment ${providerLabel} executado com sucesso.`);
+                toast.success(ta.runSuccess.replace('{provider}', providerLabel));
             }
         } catch {
-            toast.error('Falha ao executar assessment.');
+            toast.error(ta.runError);
         } finally {
             setRunning(false);
         }
     }, [activeProvider, cloudAccountId, hasAssessmentModule, organizationId, providerLabel, router]);
 
+    const colorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
+
     const subtitle = useMemo(() => {
         if (hasAssessmentModule === false) {
-            return 'O módulo de assessment não está habilitado para a organização ativa.';
+            return ta.moduleNotEnabled;
         }
 
         if (!cloudAccountId || !activeCloudAccount) {
-            return 'Selecione uma conta cloud na sidebar para habilitar o assessment.';
+            return ta.selectCloudSubtitle;
         }
 
         if (!canRun) {
-            return 'Selecione uma organização e uma conta cloud válidas na sidebar para habilitar o assessment.';
+            return ta.selectOrgAndCloudSubtitle;
         }
 
-        return `Execute o assessment para gerar e visualizar o grafo de arquitetura da conta ${activeCloudAccount.alias} em ${providerLabel}.`;
-    }, [activeCloudAccount, canRun, cloudAccountId, hasAssessmentModule, providerLabel]);
-
-    const colorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
+        return ta.runningSubtitle.replace('{account}', activeCloudAccount.alias).replace('{provider}', providerLabel);
+    }, [activeCloudAccount, canRun, cloudAccountId, hasAssessmentModule, providerLabel, ta]);
 
     const reorganizeGraph = useCallback(() => {
         setLayoutNonce((value) => value + 1);
@@ -626,113 +774,146 @@ export function AssessmentPageClient() {
         }
 
         setDownloading(true);
+        setIsExportingDiagram(true);
 
         try {
-            const viewportElement = graphWrapperRef.current.querySelector('.react-flow__viewport') as HTMLElement | null;
-            const bounds = getAbsoluteNodeBounds(nodes);
+            // Aguarda um ciclo de render para garantir que o SVG esteja totalmente materializado.
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            });
 
-            if (!viewportElement || !bounds) {
-                toast.error('Não foi possível preparar o diagrama para exportação.');
+            const svgElement = graphWrapperRef.current.querySelector('.assessment-graph-svg') as SVGSVGElement | null;
+
+            if (!svgElement) {
+                toast.error(ta.exportPrepError);
                 return;
             }
 
-            const backgroundColor = getComputedStyle(document.body).backgroundColor;
-            const exportWidth = Math.min(Math.max(Math.ceil(bounds.width + EXPORT_PADDING * 2), MIN_EXPORT_WIDTH), MAX_EXPORT_SIZE);
-            const exportHeight = Math.min(Math.max(Math.ceil(bounds.height + EXPORT_PADDING * 2), MIN_EXPORT_HEIGHT), MAX_EXPORT_SIZE);
-            const viewport = getViewportForBounds(bounds, exportWidth, exportHeight, 0.1, 1.5, 0.06);
+            const exportSvg = svgElement.cloneNode(true) as SVGSVGElement;
+            const fullViewBox = svgElement.getAttribute('data-full-view-box');
+            const fullWidth = svgElement.getAttribute('data-full-width');
+            const fullHeight = svgElement.getAttribute('data-full-height');
 
-            const rawDataUrl = await toPng(viewportElement, {
-                cacheBust: true,
-                pixelRatio: 2,
-                backgroundColor,
-                skipFonts: true,
-                width: exportWidth,
-                height: exportHeight,
-                canvasWidth: exportWidth,
-                canvasHeight: exportHeight,
-                style: {
-                    width: `${exportWidth}px`,
-                    height: `${exportHeight}px`,
-                    transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-                    transformOrigin: 'top left',
-                },
+            if (fullViewBox) {
+                exportSvg.setAttribute('viewBox', fullViewBox);
+            }
+
+            if (fullWidth) {
+                exportSvg.setAttribute('width', fullWidth);
+            }
+
+            if (fullHeight) {
+                exportSvg.setAttribute('height', fullHeight);
+            }
+
+            exportSvg.removeAttribute('data-full-view-box');
+            exportSvg.removeAttribute('data-full-width');
+            exportSvg.removeAttribute('data-full-height');
+            exportSvg.setAttribute('font-family', 'Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif');
+            exportSvg.setAttribute('shape-rendering', 'geometricPrecision');
+            exportSvg.setAttribute('text-rendering', 'optimizeLegibility');
+
+            const exportColorMap = new Map<string, string>([
+                ['#0b1220', 'none'],
+                ['rgba(71,85,105,0.16)', 'rgba(148,163,184,0.12)'],
+                ['rgba(148,163,184,0.34)', 'rgba(71,85,105,0.28)'],
+                ['#0f172a', '#ffffff'],
+                ['rgba(148,163,184,0.36)', 'rgba(100,116,139,0.34)'],
+                ['#e2e8f0', '#0f172a'],
+                ['#94a3b8', '#475569'],
+            ]);
+
+            const firstChild = exportSvg.firstElementChild;
+            if (firstChild && firstChild.tagName.toLowerCase() === 'rect') {
+                firstChild.remove();
+            }
+
+            exportSvg.querySelectorAll<SVGElement>('*').forEach((element) => {
+                const fill = element.getAttribute('fill');
+                if (fill) {
+                    const nextFill = exportColorMap.get(fill.trim().toLowerCase());
+                    if (nextFill) {
+                        element.setAttribute('fill', nextFill);
+                    }
+                }
+
+                const stroke = element.getAttribute('stroke');
+                if (stroke) {
+                    const nextStroke = exportColorMap.get(stroke.trim().toLowerCase());
+                    if (nextStroke) {
+                        element.setAttribute('stroke', nextStroke);
+                    }
+                }
             });
-            const dataUrl = await composeExportWithLogo(rawDataUrl, colorMode === 'light', backgroundColor, providerLabel, new Date());
 
+            const rawSvgMarkup = new XMLSerializer().serializeToString(exportSvg);
+            const svgMarkup = rawSvgMarkup.includes('xmlns="http://www.w3.org/2000/svg"')
+                ? rawSvgMarkup
+                : rawSvgMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+            const encodedSvgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+
+            const exportedAt = new Date().toISOString();
+            const exportResponse = await exportAssessmentDiagram({
+                svgDataUrl: encodedSvgDataUrl,
+                provider: activeProvider,
+                exportedAt,
+            });
+
+            if (!exportResponse.ok) {
+                toast.error(ta.exportError);
+                return;
+            }
+
+            const blob = await exportResponse.blob();
+            const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.download = `assessment-diagrama-${activeProvider}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
-            link.href = dataUrl;
+            link.download = `assessment-diagrama-${activeProvider}-${exportedAt.slice(0, 19).replace(/:/g, '-')}.svg`;
+            link.href = objectUrl;
             link.click();
-            toast.success('Diagrama baixado com sucesso.');
+            URL.revokeObjectURL(objectUrl);
+            toast.success(ta.downloadSuccess);
         } catch {
-            toast.error('Não foi possível baixar o diagrama.');
+            toast.error(ta.exportError);
         } finally {
+            setIsExportingDiagram(false);
             setDownloading(false);
         }
-    }, [activeProvider, colorMode, filteredGraph.resourceNodes.length, nodes, providerLabel]);
+    }, [activeProvider, filteredGraph.resourceNodes.length]);
 
-    const downloadGcpExcel = useCallback(async () => {
+    const downloadAssessmentExcel = useCallback(async () => {
         if (!organizationId || !cloudAccountId) return;
 
         setGeneratingExcel(true);
 
         try {
-            const triggerRes = await triggerGcpExcelReport(organizationId, cloudAccountId);
+            const triggerRes = await triggerAssessmentExcelReport(organizationId, cloudAccountId, activeProvider);
 
             if (!triggerRes.ok) {
                 const body = await triggerRes.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
-            const { id: jobId } = (await triggerRes.json()) as { id: string };
-
-            await new Promise<void>((resolve, reject) => {
-                let attempts = 0;
-
-                excelPollTimerRef.current = setInterval(async () => {
-                    attempts++;
-
-                    try {
-                        const statusRes = await pollGcpJobStatus(organizationId, cloudAccountId, jobId);
-
-                        if (!statusRes.ok) {
-                            clearInterval(excelPollTimerRef.current!);
-                            reject(new Error('Falha ao consultar status do relatório.'));
-                            return;
-                        }
-
-                        const job = (await statusRes.json()) as { status: string; error?: string };
-
-                        if (job.status === 'completed') {
-                            clearInterval(excelPollTimerRef.current!);
-                            resolve();
-                        } else if (job.status === 'failed') {
-                            clearInterval(excelPollTimerRef.current!);
-                            reject(new Error(job.error ?? 'Geração do relatório falhou.'));
-                        } else if (attempts >= 60) {
-                            clearInterval(excelPollTimerRef.current!);
-                            reject(new Error('Tempo esgotado aguardando o relatório.'));
-                        }
-                    } catch {
-                        clearInterval(excelPollTimerRef.current!);
-                        reject(new Error('Erro ao verificar status do relatório.'));
-                    }
-                }, 3000);
-            });
-
-            const downloadUrl = buildGcpExcelDownloadUrl(organizationId, cloudAccountId, jobId);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `gcp-assessment-${new Date().toISOString().slice(0, 10)}.xlsx`;
-            link.click();
-            toast.success('Relatório Excel baixado com sucesso.');
+            toast.success(ta.reportQueued);
+            await loadAssessmentExcelJobs();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Não foi possível gerar o relatório Excel.');
+            toast.error(err instanceof Error ? err.message : ta.reportError);
         } finally {
             setGeneratingExcel(false);
         }
-    }, [cloudAccountId, organizationId]);
+    }, [activeProvider, cloudAccountId, loadAssessmentExcelJobs, organizationId]);
+
+    const downloadExcelJob = useCallback(
+        (jobId: string) => {
+            if (!organizationId || !cloudAccountId) {
+                return;
+            }
+
+            const downloadUrl = buildAssessmentExcelDownloadUrl(organizationId, cloudAccountId, jobId, activeProvider);
+            window.location.assign(downloadUrl);
+        },
+        [activeProvider, cloudAccountId, organizationId]
+    );
 
     const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
     const groupingModeLabel = getGroupingModeLabel(groupingModes);
@@ -754,25 +935,69 @@ export function AssessmentPageClient() {
                 running={running}
                 downloading={downloading}
                 generatingExcel={generatingExcel}
-                showExcelButton={activeProvider === 'gcp'}
+                showExcelButton={activeProvider !== 'unknown'}
                 groupingModes={groupingModes}
                 hiddenResourceFilterIds={hiddenResourceFilterIds}
                 onRun={() => void runAssessmentRequest()}
                 onReorganize={reorganizeGraph}
                 onDownload={() => void downloadDiagram()}
-                onExcelDownload={() => void downloadGcpExcel()}
+                onExcelDownload={() => void downloadAssessmentExcel()}
                 onToggleGroupingMode={toggleGroupingMode}
                 onToggleResourceFilter={toggleResourceFilter}
                 onConnectCloudAccount={() => router.push('/cloud-accounts/new')}
             />
 
-            <AssessmentGraphCard
+            <MemoizedAssessmentGraphCard
                 nodes={nodes}
                 edges={filteredGraph.edges}
                 groupingModeLabel={groupingModeLabel}
                 colorMode={colorMode}
+                isExportingDiagram={isExportingDiagram}
                 graphWrapperRef={graphWrapperRef}
             />
+
+            {activeProvider !== 'unknown' ? (
+                <div className="rounded-xl border">
+                    <div className="flex items-center justify-between border-b px-4 py-3">
+                        <div>
+                            <p className="text-sm font-medium">{ta.excelQueueTitle}</p>
+                            <p className="text-xs text-muted-foreground">{ta.excelQueueDesc}</p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void loadAssessmentExcelJobs()}>
+                            {tc.refresh}
+                        </Button>
+                    </div>
+
+                    <div className="divide-y">
+                        {assessmentExcelJobs.length === 0 ? (
+                            <div className="px-4 py-6 text-sm text-muted-foreground">{ta.noRecentReports}</div>
+                        ) : (
+                            assessmentExcelJobs.map((job) => {
+                                const expired = hasExcelExpired(job.excelExpiresAt);
+                                const canDownload = job.status === 'completed' && Boolean(job.excelDownloadUrl) && !expired;
+
+                                return (
+                                    <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline">{getJobStatusLabel(job.status, ta)}</Badge>
+                                                {job.status === 'completed' && expired ? <Badge variant="secondary">{ta.expired}</Badge> : null}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">{formatDateTime(job.createdAt)}</p>
+                                            <p className="text-xs text-muted-foreground">{formatDateTime(job.completedAt)}</p>
+                                            <p className="text-xs text-muted-foreground">{formatDateTime(job.excelExpiresAt)}</p>
+                                            {job.status === 'failed' && job.error ? <p className="text-xs text-destructive">{job.error}</p> : null}
+                                        </div>
+                                        <Button type="button" size="sm" onClick={() => downloadExcelJob(job.id)} disabled={!canDownload}>
+                                            {ta.downloadXlsx}
+                                        </Button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

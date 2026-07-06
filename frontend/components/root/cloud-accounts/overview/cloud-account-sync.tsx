@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { canManageCloudAccounts, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { canManageCloudAccounts, canSyncCloudAccounts, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
+    deleteOrganizationCloudAccount,
     enqueueGeneralSync,
     fetchOrganizationCloudAccounts,
     isAwsProvider,
@@ -18,6 +19,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CloudAccountTable } from './cloud-account-table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTranslations } from '@/lib/i18n';
+import { ConfirmCloudAccountActionDialog } from '@/components/root/cloud-accounts/edit/confirm-cloud-account-action-dialog';
 
 type ApiErrorPayload = {
     message?: string | string[];
@@ -45,6 +48,11 @@ type CloudAccountsApiPayload =
     | {
           items?: CloudAccountApiItem[];
       };
+
+type MidOrg = {
+    id: string;
+    name: string;
+};
 
 function normalizeDateValue(value: unknown): string | null {
     if (typeof value === 'string') {
@@ -81,6 +89,12 @@ function normalizeCloudAccounts(payload: unknown): CloudAccount[] {
 
             return {
                 ...item,
+                organizationId:
+                    typeof apiItem.organizationId === 'string'
+                        ? apiItem.organizationId
+                        : typeof (apiItem as CloudAccountApiItem & { organization_id?: unknown }).organization_id === 'string'
+                          ? ((apiItem as CloudAccountApiItem & { organization_id?: string }).organization_id ?? null)
+                          : null,
                 isSyncInProgress: apiItem.isSyncInProgress === true || apiItem.is_sync_in_progress === true,
                 lastGeneralSyncAt: normalizeDateValue(apiItem.lastGeneralSyncAt ?? apiItem.last_general_sync_at ?? null),
             };
@@ -89,6 +103,8 @@ function normalizeCloudAccounts(payload: unknown): CloudAccount[] {
 
 export function CloudAccountSync() {
     const router = useRouter();
+    const tca = useTranslations('cloudAccounts');
+    const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [organizationRole, setOrganizationRole] = useState<OrganizationRole | null>(null);
     const [maxCloudAccounts, setMaxCloudAccounts] = useState(0);
@@ -96,7 +112,10 @@ export function CloudAccountSync() {
     const [loading, setLoading] = useState(true);
     const [resolvingRole, setResolvingRole] = useState(true);
     const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
+    const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+    const [pendingDeleteAccountId, setPendingDeleteAccountId] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [midOrgs, setMidOrgs] = useState<MidOrg[]>([]);
 
     const loadAccounts = useCallback(
         async (
@@ -136,7 +155,7 @@ export function CloudAccountSync() {
                 setAccounts(cloudAccountsList);
             } catch {
                 if (!silentErrors) {
-                    toast.error('Não foi possível carregar as contas Cloud da Organização.');
+                    toast.error(tca.loadListError);
                 }
 
                 if (!background) {
@@ -150,7 +169,7 @@ export function CloudAccountSync() {
                 setRefreshing(false);
             }
         },
-        []
+        [tca]
     );
 
     const hasSyncInProgress = accounts.some((account) => account.isSyncInProgress === true);
@@ -178,6 +197,32 @@ export function CloudAccountSync() {
         }
     }, []);
 
+    const loadMidOrgs = useCallback(async (orgId: string) => {
+        try {
+            const response = await fetch(`/api/orgs?organizationId=${encodeURIComponent(orgId)}`, { cache: 'no-store' });
+
+            if (!response.ok) {
+                setMidOrgs([]);
+                return;
+            }
+
+            const payload = (await response.json().catch(() => null)) as unknown;
+            const items = Array.isArray(payload)
+                ? payload
+                : Array.isArray((payload as { items?: unknown[] } | null)?.items)
+                  ? ((payload as { items?: unknown[] }).items ?? [])
+                  : [];
+
+            const normalized = items.filter(
+                (item): item is MidOrg => typeof item === 'object' && item !== null && typeof (item as MidOrg).id === 'string' && typeof (item as MidOrg).name === 'string'
+            );
+
+            setMidOrgs(normalized);
+        } catch {
+            setMidOrgs([]);
+        }
+    }, []);
+
     useEffect(() => {
         const activeOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         setOrganizationId(activeOrganizationId);
@@ -185,11 +230,13 @@ export function CloudAccountSync() {
         if (!activeOrganizationId) {
             setLoading(false);
             setResolvingRole(false);
+            setMidOrgs([]);
             return;
         }
 
         void loadOrganizationRole(activeOrganizationId);
-    }, [loadOrganizationRole]);
+        void loadMidOrgs(activeOrganizationId);
+    }, [loadMidOrgs, loadOrganizationRole]);
 
     useEffect(() => {
         const syncActiveOrganization = () => {
@@ -199,6 +246,7 @@ export function CloudAccountSync() {
 
             if (!nextOrganizationId) {
                 setAccounts([]);
+                setMidOrgs([]);
                 setOrganizationRole(null);
                 setLoading(false);
                 setResolvingRole(false);
@@ -206,6 +254,7 @@ export function CloudAccountSync() {
             }
 
             void loadOrganizationRole(nextOrganizationId);
+            void loadMidOrgs(nextOrganizationId);
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncActiveOrganization);
@@ -217,7 +266,11 @@ export function CloudAccountSync() {
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, syncActiveOrganization);
             window.removeEventListener('storage', syncActiveOrganization);
         };
-    }, [loadOrganizationRole]);
+    }, [loadMidOrgs, loadOrganizationRole]);
+
+    const organizationNamesById = useMemo(() => {
+        return Object.fromEntries(midOrgs.map((org) => [org.id, org.name]));
+    }, [midOrgs]);
 
     useEffect(() => {
         if (organizationId) {
@@ -240,19 +293,20 @@ export function CloudAccountSync() {
     }, [hasSyncInProgress, loadAccounts, organizationId]);
 
     const canManageAccounts = canManageCloudAccounts(organizationRole);
+    const canSyncAccounts = canSyncCloudAccounts(organizationRole);
     const hasCloudAccountLimit = maxCloudAccounts > 0;
     const hasReachedCloudAccountLimit = hasCloudAccountLimit && accounts.length >= maxCloudAccounts;
 
     const handleSyncAccount = useCallback(
         async (cloudAccountId: string) => {
-            if (!organizationId || !canManageAccounts || syncingAccountId) {
+            if (!organizationId || !canSyncAccounts || syncingAccountId) {
                 return;
             }
 
             const account = accounts.find((a) => a.id === cloudAccountId);
 
             if (account?.isSyncInProgress) {
-                toast.info('Esta conta já possui sync em andamento.');
+                toast.info(tca.alreadySyncingToast);
                 return;
             }
 
@@ -279,18 +333,18 @@ export function CloudAccountSync() {
                 }
 
                 if (isAwsProvider(account?.provider)) {
-                    toast.success('Sync da conta AWS foi iniciado. O processamento vai considerar todas as regiões cadastradas nessa conta Cloud.');
+                    toast.success(tca.awsSyncStarted);
                 } else {
-                    toast.success('Sync da conta Cloud foi iniciado com sucesso.');
+                    toast.success(tca.syncStarted);
                 }
                 await loadAccounts(organizationId, { nextRefreshing: true });
             } catch {
-                toast.error('Não foi possível iniciar o sync da conta.');
+                toast.error(tca.syncError);
             } finally {
                 setSyncingAccountId(null);
             }
         },
-        [accounts, canManageAccounts, loadAccounts, organizationId, syncingAccountId]
+        [accounts, canSyncAccounts, loadAccounts, organizationId, syncingAccountId, tca]
     );
 
     const handleEditAccount = useCallback(
@@ -304,17 +358,67 @@ export function CloudAccountSync() {
         [canManageAccounts, router]
     );
 
+    const handleDeleteAccount = useCallback(
+        (cloudAccountId: string) => {
+            if (!canManageAccounts || deletingAccountId) {
+                return;
+            }
+
+            setPendingDeleteAccountId(cloudAccountId);
+        },
+        [canManageAccounts, deletingAccountId]
+    );
+
+    const handleConfirmDeleteAccount = useCallback(async (): Promise<boolean> => {
+        if (!organizationId || !canManageAccounts || deletingAccountId || !pendingDeleteAccountId) {
+            return true;
+        }
+
+        setDeletingAccountId(pendingDeleteAccountId);
+
+        try {
+            const response = await deleteOrganizationCloudAccount(organizationId, pendingDeleteAccountId);
+            const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+
+            if (response.status === 404) {
+                notifySidebarContextUpdated();
+                toast.success(tca.deleteSuccess);
+                setPendingDeleteAccountId(null);
+                await loadAccounts(organizationId, { nextRefreshing: true });
+                router.refresh();
+                return true;
+            }
+
+            if (!response.ok) {
+                toast.error(extractErrorMessage(payload));
+                return false;
+            }
+
+            notifySidebarContextUpdated();
+            toast.success(tca.deleteSuccess);
+            setPendingDeleteAccountId(null);
+            await loadAccounts(organizationId, { nextRefreshing: true });
+            router.refresh();
+            return true;
+        } catch {
+            toast.error(tca.deleteError);
+            return false;
+        } finally {
+            setDeletingAccountId(null);
+        }
+    }, [canManageAccounts, deletingAccountId, loadAccounts, organizationId, pendingDeleteAccountId, router, tca]);
+
     const connectAccountButton = canManageAccounts ? (
         hasReachedCloudAccountLimit ? (
             <Button size="sm" disabled>
                 <Plus className="mr-1 h-4 w-4" />
-                Nova conta
+                {tca.newAccountButton}
             </Button>
         ) : (
             <Link href="/cloud-accounts/new">
                 <Button size="sm">
                     <Plus className="mr-1 h-4 w-4" />
-                    Nova conta
+                    {tca.newAccountButton}
                 </Button>
             </Link>
         )
@@ -324,8 +428,8 @@ export function CloudAccountSync() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Organização</CardTitle>
-                    <CardDescription>Selecione uma organização na sidebar para visualizar as contas Cloud e sincronizações.</CardDescription>
+                    <CardTitle>{tca.selectOrgTitle}</CardTitle>
+                    <CardDescription>{tca.selectOrgDesc}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -334,14 +438,27 @@ export function CloudAccountSync() {
     return (
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
+                <ConfirmCloudAccountActionDialog
+                    title="Excluir conta cloud"
+                    description="Esta ação remove a Conta Cloud permanentemente. Após a confirmação não pode ser desfeita."
+                    confirmLabel="Excluir conta"
+                    triggerLabel="Excluir conta"
+                    open={Boolean(pendingDeleteAccountId)}
+                    onOpenChange={(nextOpen) => {
+                        if (!nextOpen) {
+                            setPendingDeleteAccountId(null);
+                        }
+                    }}
+                    hideTrigger
+                    confirmVariant="destructive"
+                    isConfirming={deletingAccountId !== null}
+                    onConfirm={handleConfirmDeleteAccount}
+                />
+
                 <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-col gap-1">
-                        <p className="text-sm font-medium">Contas Cloud da Organização</p>
-                        {hasReachedCloudAccountLimit ? (
-                            <p className="text-xs text-muted-foreground">
-                                Limite de contas cloud do plano atingido. Faça upgrade em Billing para conectar uma nova conta.
-                            </p>
-                        ) : null}
+                        <p className="text-sm font-medium">{tca.orgAccountsTitle}</p>
+                        {hasReachedCloudAccountLimit ? <p className="text-xs text-muted-foreground">{tca.planLimitNote}</p> : null}
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -352,7 +469,7 @@ export function CloudAccountSync() {
                             onClick={() => void loadAccounts(organizationId, { nextRefreshing: true })}
                             isLoading={refreshing}
                         >
-                            Atualizar
+                            {tc.refresh}
                         </Button>
                     </div>
                 </div>
@@ -365,18 +482,19 @@ export function CloudAccountSync() {
                     </div>
                 ) : accounts.length === 0 ? (
                     <div className="px-4 py-6">
-                        <p className="text-sm text-muted-foreground">
-                            Nenhuma conta cloud conectada ainda. Conecte uma conta para habilitar o sync geral.
-                        </p>
+                        <p className="text-sm text-muted-foreground">{tca.noAccountsConnected}</p>
                     </div>
                 ) : (
                     <div className="p-4">
                         <CloudAccountTable
                             data={accounts}
+                            organizationNamesById={organizationNamesById}
                             canManageAccounts={canManageAccounts}
+                            canSyncAccounts={canSyncAccounts}
                             syncingAccountId={syncingAccountId}
                             onSyncAccount={(id) => void handleSyncAccount(id)}
                             onEditAccount={handleEditAccount}
+                            onDeleteAccount={(id) => void handleDeleteAccount(id)}
                         />
                     </div>
                 )}

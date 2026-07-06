@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { automationNodeTypes, type AutomationNodeData } from './automation-nodes';
 import { Ec2ConfigForm } from './ec2-config-form';
@@ -157,12 +158,17 @@ function LambdaConfigForm({ config, onChange }: { config: Record<string, unknown
 function RegionSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     const regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1', 'eu-west-2', 'eu-central-1', 'ap-southeast-1', 'ap-northeast-1', 'sa-east-1'];
     return (
-        <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-                {regions.map((r) => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}
-            </SelectContent>
-        </Select>
+        <Combobox items={regions} value={value} onValueChange={(v) => { if (v) onChange(v); }}>
+            <ComboboxInput placeholder="Buscar região..." className="h-8 text-xs" />
+            <ComboboxContent>
+                <ComboboxEmpty className="text-xs">Região não encontrada.</ComboboxEmpty>
+                <ComboboxList>
+                    {(r: string) => (
+                        <ComboboxItem key={r} value={r} className="text-xs">{r}</ComboboxItem>
+                    )}
+                </ComboboxList>
+            </ComboboxContent>
+        </Combobox>
     );
 }
 

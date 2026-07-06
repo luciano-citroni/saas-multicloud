@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 
 import { Job } from 'bullmq';
 
+import * as fs from 'fs';
+
 import { AwsAssessmentJob } from '../../db/entites/aws-assessment-job.entity';
 
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
@@ -128,6 +130,19 @@ export class AwsAssessmentProcessor extends WorkerHost {
             await job.updateProgress(60);
 
             const excelFileName = await this.excelService.generateExcel(jobId, data);
+            const excelFilePath = this.excelService.resolveExistingExcelFilePath(excelFileName);
+
+            if (!excelFilePath) {
+                throw new Error(`Arquivo Excel não encontrado após geração: ${excelFileName}`);
+            }
+
+            const excelStats = await fs.promises.stat(excelFilePath);
+
+            if (excelStats.size <= 0) {
+                throw new Error(`Arquivo Excel gerado está vazio: ${excelFilePath}`);
+            }
+
+            this.logger.log(`[${jobId}] Excel confirmado em disco: ${excelFilePath} (${excelStats.size} bytes)`);
 
             // ── 4. Finalize job ───────────────────────────────────────────────
 

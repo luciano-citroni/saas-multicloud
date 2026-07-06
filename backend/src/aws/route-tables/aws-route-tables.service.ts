@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -138,7 +138,7 @@ export class AwsRouteTablesService {
      */
 
     async syncRouteTablesFromAws(cloudAccountId: string, organizationId: string, vpcId?: string) {
-        const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId);
+        const regions = await this.connector.getConfiguredRegions(cloudAccountId, organizationId);
 
         // Se vpcId é do banco de dados, busca o AWS VPC ID
 
@@ -154,23 +154,29 @@ export class AwsRouteTablesService {
             awsVpcId = dbVpc.awsVpcId;
         }
 
-        const { RouteTables } = await ec2
+        const routeTableList: ReturnType<typeof mapRouteTable>[] = [];
 
-            .send(
-                new DescribeRouteTablesCommand(
-                    awsVpcId
-                        ? {
-                              Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }],
-                          }
-                        : {}
+        for (const region of regions) {
+            const ec2 = await this.connector.getEc2Client(cloudAccountId, organizationId, region);
+
+            const { RouteTables } = await ec2
+                .send(
+                    new DescribeRouteTablesCommand(
+                        awsVpcId
+                            ? {
+                                  Filters: [{ Name: 'vpc-id', Values: [awsVpcId] }],
+                              }
+                            : {}
+                    )
                 )
-            )
+                .catch(() => {
+                    throw new BadRequestException(
+                        `Falha ao consultar Route Tables na AWS para a região ${region}. Verifique as permissões da role (ec2:DescribeRouteTables).`
+                    );
+                });
 
-            .catch(() => {
-                throw new BadRequestException('Falha ao consultar Route Tables na AWS. Verifique as permissões da role (ec2:DescribeRouteTables).');
-            });
-
-        const routeTableList = (RouteTables ?? []).map(mapRouteTable);
+            routeTableList.push(...(RouteTables ?? []).map(mapRouteTable));
+        }
 
         const now = new Date();
 
@@ -188,7 +194,7 @@ export class AwsRouteTablesService {
             });
 
             if (!vpc) {
-                console.warn(`VPC ${rtData.vpcId} não encontrada. Pulando route table ${rtData.routeTableId}.`);
+                Logger.warn(`VPC ${rtData.vpcId} não encontrada. Pulando route table ${rtData.routeTableId}.`);
 
                 continue;
             }

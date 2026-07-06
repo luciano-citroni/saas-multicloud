@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -55,6 +56,8 @@ const AWS_REGIONS = [
     'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1',
     'ca-central-1', 'sa-east-1', 'af-south-1', 'me-south-1',
 ];
+
+const ALL_INSTANCE_TYPES = INSTANCE_TYPE_GROUPS.flatMap((g) => g.types);
 
 interface Vpc { id: string; cidr: string; isDefault: boolean; name: string }
 interface Subnet { id: string; cidr: string; az: string; vpcId: string; name: string }
@@ -271,32 +274,33 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
             {/* Instance Type */}
             <div className="space-y-1">
                 <Label className="text-xs">Tipo de Instância</Label>
-                <Select value={String(config.instanceType ?? 't3.micro')} onValueChange={(v) => onChange('instanceType', v)}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                        {INSTANCE_TYPE_GROUPS.map((group) => (
-                            <SelectGroup key={group.label}>
-                                <SelectLabel className="text-[10px]">{group.label}</SelectLabel>
-                                {group.types.map((t) => (
-                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                ))}
-                            </SelectGroup>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <Combobox items={ALL_INSTANCE_TYPES} value={String(config.instanceType ?? 't3.micro')} onValueChange={(v) => { if (v) onChange('instanceType', v); }}>
+                    <ComboboxInput placeholder="Buscar tipo..." className="h-8 text-xs" />
+                    <ComboboxContent>
+                        <ComboboxEmpty className="text-xs">Tipo não encontrado.</ComboboxEmpty>
+                        <ComboboxList>
+                            {(t: string) => (
+                                <ComboboxItem key={t} value={t} className="text-xs">{t}</ComboboxItem>
+                            )}
+                        </ComboboxList>
+                    </ComboboxContent>
+                </Combobox>
             </div>
 
             {/* Region */}
             <div className="space-y-1">
                 <Label className="text-xs">Região</Label>
-                <Select value={region} onValueChange={handleRegionChange}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        {AWS_REGIONS.map((r) => (
-                            <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <Combobox items={AWS_REGIONS} value={region} onValueChange={(v) => { if (v) handleRegionChange(v); }}>
+                    <ComboboxInput placeholder="Buscar região..." className="h-8 text-xs" />
+                    <ComboboxContent>
+                        <ComboboxEmpty className="text-xs">Região não encontrada.</ComboboxEmpty>
+                        <ComboboxList>
+                            {(r: string) => (
+                                <ComboboxItem key={r} value={r} className="text-xs">{r}</ComboboxItem>
+                            )}
+                        </ComboboxList>
+                    </ComboboxContent>
+                </Combobox>
             </div>
 
             {/* VPC */}
@@ -483,7 +487,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
 
             {/* New Key Pair Dialog */}
             <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
-                <DialogContent className="max-w-sm">
+                <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-sm">
                             <Key className="h-4 w-4" />

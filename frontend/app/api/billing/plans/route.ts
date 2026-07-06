@@ -15,67 +15,33 @@ async function resolveAccessToken() {
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return {
-            accessToken: null,
-            refreshToken: null,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     }
 
     if (accessToken) {
-        return {
-            accessToken,
-            refreshToken,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
     if (!refreshToken) {
-        return {
-            accessToken: null,
-            refreshToken: null,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     }
 
     const rotatedTokens = await refreshAccessToken(refreshToken);
 
     if (!rotatedTokens) {
-        return {
-            accessToken: null,
-            refreshToken,
-            rotatedTokens: null as AuthTokens | null,
-        };
+        return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
-    return {
-        accessToken: rotatedTokens.accessToken,
-        refreshToken,
-        rotatedTokens,
-    };
-}
-
-function withAuthHeaders(accessToken: string, organizationId: string): HeadersInit {
-    return {
-        Authorization: `Bearer ${accessToken}`,
-        'x-organization-id': organizationId,
-    };
+    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
 }
 
 function buildUnauthorizedResponse() {
-    const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
+    const response = NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
     clearAuthCookies(response);
     return response;
 }
 
-export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organizationId');
-
-    if (!organizationId) {
-        return NextResponse.json({ message: 'organizationId e obrigatorio' }, { status: 400 });
-    }
-
+export async function GET() {
     const resolved = await resolveAccessToken();
 
     if (!resolved.accessToken) {
@@ -83,7 +49,7 @@ export async function GET(request: Request) {
     }
 
     let response = await backendFetch('/api/billing/plans', {
-        headers: withAuthHeaders(resolved.accessToken, organizationId),
+        headers: { Authorization: `Bearer ${resolved.accessToken}` },
     });
 
     let rotatedTokens = resolved.rotatedTokens;
@@ -98,7 +64,7 @@ export async function GET(request: Request) {
         rotatedTokens = refreshResult;
 
         response = await backendFetch('/api/billing/plans', {
-            headers: withAuthHeaders(refreshResult.accessToken, organizationId),
+            headers: { Authorization: `Bearer ${refreshResult.accessToken}` },
         });
     }
 

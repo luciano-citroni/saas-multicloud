@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FormCloudAccount } from '@/components/root/cloud-accounts/new/form-cloud-account';
 import { canManageCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { fetchOrganizationCloudAccounts } from '@/app/actions/organization';
+import { useTranslations } from '@/lib/i18n';
 
 type SidebarContextPayload = {
     organizations?: Array<{
@@ -20,13 +21,14 @@ export default function NewCloudAccountPage() {
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
     const router = useRouter();
+    const tca = useTranslations('cloudAccounts');
 
     useEffect(() => {
         const loadPermissions = async () => {
             const orgId = window.localStorage.getItem('smc_active_organization_id');
 
             if (!orgId) {
-                toast.error('Selecione uma organização antes de conectar uma conta cloud.');
+                toast.error(tca.noOrgSelected);
                 router.replace('/');
                 return;
             }
@@ -35,7 +37,7 @@ export default function NewCloudAccountPage() {
                 const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
                 if (!response.ok) {
                     setIsAuthorized(false);
-                    toast.error('Não foi possível validar suas permissões.');
+                    toast.error(tca.validatePermissionsError);
                     router.replace('/');
                     return;
                 }
@@ -47,7 +49,7 @@ export default function NewCloudAccountPage() {
 
                 if (!canManageCloudAccounts(role)) {
                     setIsAuthorized(false);
-                    toast.error('Apenas OWNER ou ADMIN pode conectar contas cloud.');
+                    toast.error(tca.noManagePermission);
                     router.replace('/organizations');
                     return;
                 }
@@ -57,7 +59,7 @@ export default function NewCloudAccountPage() {
 
                 if (!accountsResponse.ok) {
                     setIsAuthorized(false);
-                    toast.error('Não foi possível validar o limite de contas cloud da organização.');
+                    toast.error(tca.validateLimitError);
                     router.replace('/cloud-accounts');
                     return;
                 }
@@ -70,7 +72,7 @@ export default function NewCloudAccountPage() {
 
                 if (maxCloudAccounts > 0 && accountItems.length >= maxCloudAccounts) {
                     setIsAuthorized(false);
-                    toast.error('O limite de contas cloud do plano atual foi atingido.');
+                    toast.error(tca.planLimitReached);
                     router.replace('/cloud-accounts');
                     return;
                 }
@@ -79,12 +81,13 @@ export default function NewCloudAccountPage() {
                 setIsAuthorized(true);
             } catch {
                 setIsAuthorized(false);
-                toast.error('Não foi possível validar suas permissões.');
+                toast.error(tca.validatePermissionsError);
                 router.replace('/');
             }
         };
 
         void loadPermissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router]);
 
     if (!organizationId || isAuthorized !== true) {
@@ -95,8 +98,8 @@ export default function NewCloudAccountPage() {
         <div className="mx-auto w-full max-w-2xl">
             <Card>
                 <CardHeader>
-                    <CardTitle>Conectar nova Conta Cloud</CardTitle>
-                    <CardDescription>Adicione uma conta cloud à sua organização para começar a gerenciar recursos.</CardDescription>
+                    <CardTitle>{tca.newAccountTitle}</CardTitle>
+                    <CardDescription>{tca.newAccountDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <FormCloudAccount organizationId={organizationId} />
