@@ -9,6 +9,7 @@ import { NavMain } from '@/components/sidebar/nav-main';
 import { NavUser } from '@/components/sidebar/nav-user';
 import { toast } from 'sonner';
 import {
+    ACTIVE_ORG_MODULES_STORAGE_KEY,
     ACTIVE_ORG_STORAGE_KEY,
     SIDEBAR_CONTEXT_UPDATED_EVENT,
     notifyActiveCloudAccountChanged,
@@ -360,6 +361,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             if (!validStoredOrganization) {
                 window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+                window.localStorage.removeItem(ACTIVE_ORG_MODULES_STORAGE_KEY);
                 setActiveOrganizationId(undefined);
                 setActiveOrganizationModules([]);
                 setCloudAccounts([]);
@@ -370,7 +372,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
             setActiveOrganizationId(validStoredOrganization);
             const activeOrganization = nextOrganizations.find((organization) => organization.id === validStoredOrganization);
-            setActiveOrganizationModules(normalizePlanModules(activeOrganization?.plans ?? []));
+            const activeModules = normalizePlanModules(activeOrganization?.plans ?? []);
+            setActiveOrganizationModules(activeModules);
+            window.localStorage.setItem(ACTIVE_ORG_MODULES_STORAGE_KEY, JSON.stringify(activeModules));
             const selectedMidOrgId = await loadMidOrgs(validStoredOrganization);
             await loadCloudAccounts(validStoredOrganization, selectedMidOrgId);
         } catch {
@@ -412,7 +416,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             notifyActiveOrganizationChanged();
             setActiveOrganizationId(tenant.id);
             const selectedOrganization = organizations.find((item) => item.id === tenant.id);
-            setActiveOrganizationModules(normalizePlanModules(selectedOrganization?.plans ?? []));
+            const tenantModules = normalizePlanModules(selectedOrganization?.plans ?? []);
+            setActiveOrganizationModules(tenantModules);
+            window.localStorage.setItem(ACTIVE_ORG_MODULES_STORAGE_KEY, JSON.stringify(tenantModules));
             setMidOrgs([]);
             setActiveMidOrgId(undefined);
             setCloudAccounts([]);

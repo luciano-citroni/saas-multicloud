@@ -15,6 +15,7 @@ export function translateGovernancePolicyName(name: string): string {
     const policyMap: Record<string, string> = {
         'EC2 Instance Must Have Required Tags': 'Instância EC2 deve ter tags obrigatórias',
         'S3 Bucket Must Have Server-Side Encryption Enabled': 'Bucket S3 deve ter criptografia no servidor habilitada',
+        'S3 Bucket Should Have Server Access Logging Enabled': 'Bucket S3 deve ter logging de acesso habilitado',
     };
 
     return policyMap[name] ?? name;
@@ -86,6 +87,14 @@ export function translateGovernanceDescription(description: string): string {
         return `O bucket S3 "${bucketName}" não possui Bloqueio de Acesso Público habilitado e pode estar acessível publicamente.`;
     }
 
+    const s3AccessLoggingRegex = /^S3 bucket "([^"]+)" does not have server access logging enabled\. Access requests are not being recorded\.$/i;
+    const s3AccessLoggingMatch = description.match(s3AccessLoggingRegex);
+
+    if (s3AccessLoggingMatch) {
+        const [, bucketName] = s3AccessLoggingMatch;
+        return `O bucket S3 "${bucketName}" não possui logging de acesso habilitado. As solicitações de acesso não estão sendo registradas.`;
+    }
+
     return applyCommonEnglishReplacements(description.replace(/is missing required tags/gi, 'está sem as tags obrigatórias'));
 }
 
@@ -112,6 +121,13 @@ export function translateGovernanceRecommendation(recommendation: string): strin
 
     if (s3PublicAccessRegex.test(recommendation)) {
         return 'Habilite as quatro configurações de Bloqueio de Acesso Público no bucket S3: Bloquear ACLs públicas (BlockPublicAcls), Ignorar ACLs públicas (IgnorePublicAcls), Bloquear política pública (BlockPublicPolicy) e Restringir buckets públicos (RestrictPublicBuckets).';
+    }
+
+    const s3AccessLoggingRecommendationRegex =
+        /^Enable S3 server access logging on the bucket and configure a target logging bucket\. This provides an audit trail of all requests for security analysis and compliance\.$/i;
+
+    if (s3AccessLoggingRecommendationRegex.test(recommendation)) {
+        return 'Habilite o logging de acesso do S3 no bucket e configure um bucket de destino para logs. Isso fornece um histórico de auditoria de todas as solicitações para análise de segurança e conformidade.';
     }
 
     return applyCommonEnglishReplacements(

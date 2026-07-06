@@ -37,6 +37,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+    /* Data-viz extended palette (assessment graph) */
+    --color-chart-6: var(--chart-6);
+    --color-chart-7: var(--chart-7);
+    --color-chart-8: var(--chart-8);
+    --color-chart-9: var(--chart-9);
+    --color-chart-10: var(--chart-10);
+    --color-chart-11: var(--chart-11);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -101,6 +108,13 @@
     --chart-5: oklch(0.47 0.157 37.304);
 
     --sidebar: oklch(0.985 0 0);
+      /* Extended data-viz palette for assessment graph edges */
+      --chart-6:  oklch(0.718 0.167 209.15); /* cyan    → HTTPS / traffic routing */
+      --chart-7:  oklch(0.606 0.224 293.54); /* violet  → DNS / service discovery */
+      --chart-8:  oklch(0.574 0.214 256.86); /* blue    → network connectivity    */
+      --chart-9:  oklch(0.703 0.192 52.30);  /* orange  → invocation / listener   */
+      --chart-10: oklch(0.625 0.24  298.96); /* purple  → service / workload      */
+      --chart-11: oklch(0.654 0.242 355.65); /* pink    → IAM Role binding        */
     --sidebar-foreground: oklch(0.141 0.005 285.823);
     --sidebar-primary: oklch(0.627 0.265 328.36);
     --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -153,6 +167,13 @@
     --chart-5: oklch(0.47 0.157 37.304);
 
     --sidebar: oklch(0.21 0.006 285.885);
+      /* Extended data-viz palette (dark) */
+      --chart-6:  oklch(0.77  0.155 209.15);
+      --chart-7:  oklch(0.68  0.21  293.54);
+      --chart-8:  oklch(0.65  0.2   256.86);
+      --chart-9:  oklch(0.76  0.18  52.30);
+      --chart-10: oklch(0.70  0.225 298.96);
+      --chart-11: oklch(0.73  0.225 355.65);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.702 0.265 328.36);
     --sidebar-primary-foreground: oklch(0.98 0.016 73.684);

@@ -17,8 +17,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: 'Bridge MultCloud',
-    description: 'Created by Bridge',
+    title: {
+        default: 'Bridge MultCloud | Governanca, custos e automacao multi-cloud',
+        template: '%s | Bridge MultCloud',
+    },
+    description: 'Centralize governanca, custos e automacoes de AWS, Azure e GCP em uma unica operacao.',
+    applicationName: 'Bridge MultCloud',
 };
 
 export default function RootLayout({
@@ -32,7 +36,7 @@ export default function RootLayout({
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
                     <LocaleProvider>
                         <TooltipProvider>
-                            <main>{children}</main>
+                            {children}
                             <Toaster />
                         </TooltipProvider>
                     </LocaleProvider>

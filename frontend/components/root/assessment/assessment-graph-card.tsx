@@ -6,18 +6,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ArchitectureNodeData } from '@/components/root/assessment/types';
 
+// Edge colour tokens — must match CSS custom properties in globals.css.
+// Using var(...) references keeps the SVG in sync with the token system.
 const EDGE_LEGEND = [
-    { color: '#06b6d4', label: 'HTTPS e roteamento de trafego', dashed: false, animated: false },
-    { color: '#8b5cf6', label: 'DNS e descoberta de servico', dashed: false, animated: false },
-    { color: '#3b82f6', label: 'Conectividade de rede', dashed: false, animated: false },
-    { color: '#f97316', label: 'Invocacao e listener', dashed: false, animated: false },
-    { color: '#a855f7', label: 'Servico e execucao de workload', dashed: false, animated: false },
-    { color: '#f59e0b', label: 'Hospedagem em subnet', dashed: false, animated: false },
-    { color: '#10b981', label: 'Rota principal e roteamento', dashed: false, animated: false },
-    { color: '#10b981', label: 'Associacao com subnet/tabela', dashed: true, animated: false },
-    { color: '#ef4444', label: 'Vinculo com Security Group', dashed: true, animated: false },
-    { color: '#ec4899', label: 'Vinculo com IAM Role', dashed: true, animated: false },
-    { color: '#64748b', label: 'Contencao e estrutura', dashed: true, animated: false },
+    { color: 'var(--chart-6)',          label: 'HTTPS e roteamento de trafego', dashed: false, animated: false },
+    { color: 'var(--chart-7)',          label: 'DNS e descoberta de servico',    dashed: false, animated: false },
+    { color: 'var(--chart-8)',          label: 'Conectividade de rede',          dashed: false, animated: false },
+    { color: 'var(--chart-9)',          label: 'Invocacao e listener',           dashed: false, animated: false },
+    { color: 'var(--chart-10)',         label: 'Servico e execucao de workload', dashed: false, animated: false },
+    { color: 'var(--warning)',          label: 'Hospedagem em subnet',           dashed: false, animated: false },
+    { color: 'var(--success)',          label: 'Rota principal e roteamento',    dashed: false, animated: false },
+    { color: 'var(--success)',          label: 'Associacao com subnet/tabela',   dashed: true,  animated: false },
+    { color: 'var(--destructive)',      label: 'Vinculo com Security Group',     dashed: true,  animated: false },
+    { color: 'var(--chart-11)',         label: 'Vinculo com IAM Role',           dashed: true,  animated: false },
+    { color: 'var(--muted-foreground)', label: 'Contencao e estrutura',          dashed: true,  animated: false },
 ] as const;
 
 const DEFAULT_NODE_WIDTH = 230;
@@ -207,18 +209,6 @@ function buildEdgePath(source: ResolvedNode, target: ResolvedNode): string {
     return path;
 }
 
-function formatDetailValue(value: unknown): string {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-    if (Array.isArray(value)) return value.map((item) => formatDetailValue(item)).join(', ');
-
-    try {
-        return JSON.stringify(value);
-    } catch {
-        return '-';
-    }
-}
-
 function truncateText(value: string | undefined, maxChars: number): string {
     if (!value) return '';
     if (value.length <= maxChars) return value;
@@ -314,7 +304,7 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
                 return {
                     id: edge.id,
                     path: buildEdgePath(source, target),
-                    stroke: style?.stroke ?? '#64748b',
+                    stroke: style?.stroke ?? 'var(--muted-foreground)',
                     strokeWidth: Number(style?.strokeWidth) || 1.5,
                     strokeDasharray: style?.strokeDasharray,
                 };
@@ -445,7 +435,13 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
     );
 
     useEffect(() => {
-        fitView(true, true);
+        const frame = window.requestAnimationFrame(() => {
+            fitView(true, true);
+        });
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+        };
     }, [edges.length, fitView, nodes.length]);
 
     const viewBox = useMemo(() => {

@@ -7,6 +7,7 @@ import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagge
 import { TenantGuard } from '../../tenant/tenant.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Tenant } from '../../db/entites/tenant.entity';
+import type { FindingSeverity } from '../../db/entites/governance-finding.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
@@ -19,6 +20,7 @@ import {
     GovernanceScanResponseDto,
     GovernanceJobStatusDto,
     GovernanceJobsPaginatedResponseDto,
+    GovernanceFindingsPaginatedResponseDto,
     GovernanceFindingDto,
     GovernanceScoreDto,
     GovernancePolicyDto,
@@ -140,14 +142,33 @@ export class GovernanceController {
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiParam({ name: 'jobId', type: 'string', format: 'uuid' })
-    @ApiResponse({ status: 200, description: 'Lista de achados', type: [GovernanceFindingDto] })
+    @ApiQuery({ name: 'name', required: false, example: 'S3 Bucket', description: 'Filtrar por nome da política, tipo ou identificador do recurso' })
+    @ApiQuery({ name: 'resourceType', required: false, example: 'S3Bucket', description: 'Filtrar por tipo de recurso' })
+    @ApiQuery({ name: 'severity', required: false, example: 'critical', description: 'Filtrar por criticidade: low | medium | high | critical' })
+    @ApiResponse({ status: 200, description: 'Lista de achados paginada', type: GovernanceFindingsPaginatedResponseDto })
     @ApiResponse({ status: 400, description: 'Job não encontrado' })
     async getJobFindings(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('jobId', ParseUUIDPipe) jobId: string,
-        @CurrentOrganization() org: Tenant
-    ): Promise<GovernanceFindingDto[]> {
-        return this.governanceService.getJobFindings(jobId, cloudAccountId, org.id);
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('name') name?: string,
+        @Query('resourceType') resourceType?: string,
+        @Query('severity') severity?: string
+    ): Promise<GovernanceFindingsPaginatedResponseDto> {
+        const parsedPage = page ? Number.parseInt(page, 10) : undefined;
+        const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+        const severityFilter: FindingSeverity | undefined =
+            severity === 'low' || severity === 'medium' || severity === 'high' || severity === 'critical' ? severity : undefined;
+
+        return this.governanceService.getJobFindings(jobId, cloudAccountId, org.id, {
+            page: parsedPage,
+            limit: parsedLimit,
+            name,
+            resourceType,
+            severity: severityFilter,
+        });
     }
 
     // =========================================================================

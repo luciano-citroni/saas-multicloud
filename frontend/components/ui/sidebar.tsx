@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '16rem';
-const SIDEBAR_WIDTH_MOBILE = '18rem';
+const SIDEBAR_WIDTH_MOBILE = 'clamp(16rem, 86vw, 20rem)';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
@@ -163,7 +163,7 @@ function Sidebar({
                     data-sidebar="sidebar"
                     data-slot="sidebar"
                     data-mobile="true"
-                    className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+                    className="bg-sidebar text-sidebar-foreground border-sidebar-border w-[min(var(--sidebar-width),calc(100vw-0.75rem))] max-w-[calc(100vw-0.75rem)] p-0 [&>button]:hidden"
                     style={
                         {
                             '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
@@ -175,7 +175,9 @@ function Sidebar({
                         <SheetTitle>Sidebar</SheetTitle>
                         <SheetDescription>Displays the mobile sidebar.</SheetDescription>
                     </SheetHeader>
-                    <div className="flex h-full w-full flex-col">{children}</div>
+                    <div className="flex h-full w-full min-h-0 flex-col overflow-hidden px-[max(0.5rem,env(safe-area-inset-left))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                        {children}
+                    </div>
                 </SheetContent>
             </Sheet>
         );
@@ -238,7 +240,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
             data-slot="sidebar-trigger"
             variant="ghost"
             size="icon"
-            className={cn('size-7', className)}
+            className={cn('size-9 md:size-7', className)}
             onClick={(event) => {
                 onClick?.(event);
                 toggleSidebar();
@@ -263,7 +265,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
             onClick={toggleSidebar}
             title="Toggle Sidebar"
             className={cn(
-                'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex',
+                'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 sm:flex',
                 'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
                 '[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize',
                 'hover:group-data-[collapsible=offcanvas]:bg-sidebar group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full',
@@ -370,7 +372,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<'li'>) {
 }
 
 const sidebarMenuButtonVariants = cva(
-    'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
+    'peer/menu-button flex w-full items-center gap-3 overflow-hidden rounded-md px-3 py-2.5 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground md:gap-2 md:p-2 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
     {
         variants: {
             variant: {
@@ -379,9 +381,9 @@ const sidebarMenuButtonVariants = cva(
                     'bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
             },
             size: {
-                default: 'h-8 text-sm',
-                sm: 'h-7 text-xs',
-                lg: 'h-12 text-sm group-data-[collapsible=icon]:p-0!',
+                default: 'min-h-11 text-sm md:h-8 md:min-h-8',
+                sm: 'min-h-10 text-xs md:h-7 md:min-h-7',
+                lg: 'min-h-12 text-sm group-data-[collapsible=icon]:p-0!',
             },
         },
         defaultVariants: {
@@ -494,10 +496,11 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<'div'> & {
     showIcon?: boolean;
 }) {
-    // Random width between 50 to 90%.
+    const skeletonId = React.useId();
     const width = React.useMemo(() => {
-        return `${Math.floor(Math.random() * 40) + 50}%`;
-    }, []);
+        const seed = skeletonId.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
+        return `${50 + (seed % 41)}%`;
+    }, [skeletonId]);
 
     return (
         <div

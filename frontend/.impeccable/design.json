@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-06T00:00:00.000Z",
+  "title": "Design System: Bridge MultCloud",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Magenta de Comando",
+        "canonical": "oklch(0.627 0.265 328.36)",
+        "tonalRamp": [
+          "oklch(0.15 0.265 328.36)",
+          "oklch(0.26 0.265 328.36)",
+          "oklch(0.35 0.265 328.36)",
+          "oklch(0.45 0.265 328.36)",
+          "oklch(0.55 0.265 328.36)",
+          "oklch(0.66 0.265 328.36)",
+          "oklch(0.78 0.265 328.36)",
+          "oklch(0.9 0.265 328.36)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Plano Base",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.26 0 0)",
+          "oklch(0.35 0 0)",
+          "oklch(0.45 0 0)",
+          "oklch(0.55 0 0)",
+          "oklch(0.7 0 0)",
+          "oklch(0.85 0 0)",
+          "oklch(0.98 0 0)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Tinta Operacional",
+        "canonical": "oklch(0.141 0.005 285.823)",
+        "tonalRamp": [
+          "oklch(0.1 0.005 285.823)",
+          "oklch(0.18 0.005 285.823)",
+          "oklch(0.28 0.005 285.823)",
+          "oklch(0.4 0.005 285.823)",
+          "oklch(0.52 0.005 285.823)",
+          "oklch(0.64 0.005 285.823)",
+          "oklch(0.78 0.005 285.823)",
+          "oklch(0.9 0.005 285.823)"
+        ]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Verde de Confirmação",
+        "canonical": "oklch(0.627 0.171 146.12)",
+        "tonalRamp": [
+          "oklch(0.15 0.171 146.12)",
+          "oklch(0.25 0.171 146.12)",
+          "oklch(0.35 0.171 146.12)",
+          "oklch(0.45 0.171 146.12)",
+          "oklch(0.56 0.171 146.12)",
+          "oklch(0.67 0.171 146.12)",
+          "oklch(0.79 0.171 146.12)",
+          "oklch(0.9 0.171 146.12)"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Ambar de Atenção",
+        "canonical": "oklch(0.763 0.177 89.65)",
+        "tonalRamp": [
+          "oklch(0.18 0.177 89.65)",
+          "oklch(0.28 0.177 89.65)",
+          "oklch(0.39 0.177 89.65)",
+          "oklch(0.5 0.177 89.65)",
+          "oklch(0.62 0.177 89.65)",
+          "oklch(0.73 0.177 89.65)",
+          "oklch(0.84 0.177 89.65)",
+          "oklch(0.93 0.177 89.65)"
+        ]
+      },
+      "destructive": {
+        "role": "secondary",
+        "displayName": "Vermelho de Bloqueio",
+        "canonical": "oklch(0.637 0.237 25.33)",
+        "tonalRamp": [
+          "oklch(0.15 0.237 25.33)",
+          "oklch(0.25 0.237 25.33)",
+          "oklch(0.35 0.237 25.33)",
+          "oklch(0.45 0.237 25.33)",
+          "oklch(0.56 0.237 25.33)",
+          "oklch(0.67 0.237 25.33)",
+          "oklch(0.79 0.237 25.33)",
+          "oklch(0.9 0.237 25.33)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Titulos de pagina e cabecalhos principais de modulo."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Subtitulos de secao e agrupamentos de decisao."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Titulos de blocos funcionais, cards e paineis."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texto operacional principal com leitura densa e clara."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Estados compactos, chips e microcopia estrutural."
+      }
+    },
+    "shadows": [
+      {
+        "name": "inset-lift",
+        "value": "0 1px 3px color-mix(in oklab, var(--foreground) 14%, transparent)",
+        "purpose": "Separacao leve de superficies moveis sobre o plano base."
+      },
+      {
+        "name": "focus-halo",
+        "value": "0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent)",
+        "purpose": "Realce de foco visivel em componentes interativos."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Feedback rapido de hover e active em controles pequenos."
+      },
+      {
+        "name": "duration-standard",
+        "value": "200ms",
+        "purpose": "Transicoes padrao de largura e estado em elementos estruturais."
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+        "purpose": "Suavizacao consistente para mudancas de estado sem coreografia."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acao dominante de modulo e envio de fluxos principais.",
+      "html": "<button class=\"ds-btn-primary\">Executar Acao</button>",
+      "css": ".ds-btn-primary { height: 2.25rem; padding: 0 1rem; border: 0; border-radius: calc(var(--radius, 0.65rem) - 2px); background: var(--primary); color: var(--primary-foreground); font: 500 0.875rem/1.2 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); cursor: pointer; transition: opacity 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94); } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); } .ds-btn-primary:active { opacity: 0.82; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Acao secundaria contextual em barras e cabecalhos.",
+      "html": "<button class=\"ds-btn-ghost\">Abrir Filtro</button>",
+      "css": ".ds-btn-ghost { height: 2.25rem; padding: 0 0.75rem; border: 1px solid transparent; border-radius: calc(var(--radius, 0.65rem) - 2px); background: transparent; color: var(--foreground); font: 500 0.875rem/1.2 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); cursor: pointer; transition: background-color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94); } .ds-btn-ghost:hover { background: color-mix(in oklab, var(--accent) 85%, transparent); color: var(--accent-foreground); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); } .ds-btn-ghost:active { background: color-mix(in oklab, var(--accent) 100%, transparent); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Campo base para filtros, formulários e pesquisa operacional.",
+      "html": "<label class=\"ds-input-wrap\"><span class=\"ds-input-label\">Conta Cloud</span><input class=\"ds-input\" placeholder=\"Digite um alias\" /></label>",
+      "css": ".ds-input-wrap { display: grid; gap: 0.375rem; max-width: 22rem; } .ds-input-label { font: 500 0.75rem/1.2 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); color: color-mix(in oklab, var(--foreground) 82%, transparent); } .ds-input { height: 2rem; width: 100%; border: 1px solid var(--input); border-radius: var(--radius, 0.65rem); background: transparent; color: var(--foreground); padding: 0.25rem 0.625rem; font: 400 0.875rem/1.4 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); transition: border-color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94); } .ds-input::placeholder { color: var(--muted-foreground); opacity: 1; } .ds-input:hover { background: color-mix(in oklab, var(--muted) 45%, transparent); } .ds-input:focus-visible { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); } .ds-input:disabled { cursor: not-allowed; opacity: 0.5; background: color-mix(in oklab, var(--input) 50%, transparent); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-default",
+      "description": "Indicador compacto de estado para listas e tabelas.",
+      "html": "<span class=\"ds-badge\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M10 15.2l-3.5-3.5-1.4 1.4L10 18 20.3 7.7l-1.4-1.4z\"/></svg>Saudavel</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 0.25rem; height: 1.25rem; padding: 0 0.5rem; border-radius: 999px; border: 1px solid transparent; background: var(--primary); color: var(--primary-foreground); font: 500 0.75rem/1 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); white-space: nowrap; transition: opacity 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94); } .ds-badge svg { width: 0.75rem; height: 0.75rem; fill: currentColor; } .ds-badge:hover { opacity: 0.88; } .ds-badge:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }"
+    },
+    {
+      "name": "Card Container",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "Container de conteudo com hierarquia interna curta e contraste limpo.",
+      "html": "<article class=\"ds-card\"><header class=\"ds-card-head\"><h3 class=\"ds-card-title\">Custo por Organizacao</h3><p class=\"ds-card-desc\">Ultimas 24h</p></header><div class=\"ds-card-content\">R$ 132.400,11</div></article>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: calc(var(--radius, 0.65rem) + 4px); background: var(--card); color: var(--card-foreground); box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent); } .ds-card-head { display: grid; gap: 0.25rem; } .ds-card-title { margin: 0; font: 500 1rem/1.3 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); } .ds-card-desc { margin: 0; font: 400 0.875rem/1.4 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); color: var(--muted-foreground); } .ds-card-content { font: 600 1.25rem/1.2 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); letter-spacing: -0.01em; }"
+    },
+    {
+      "name": "Sidebar Menu Item",
+      "kind": "nav",
+      "refersTo": "sidebar-menu-active",
+      "description": "Item de navegacao primaria na shell lateral.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 11.5L12 4l9 7.5v8.5a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z\"/></svg><span>Dashboard</span></a><a class=\"ds-nav-item\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z\"/></svg><span>Governanca</span></a></nav>",
+      "css": ".ds-nav { display: grid; gap: 0.25rem; max-width: 17rem; } .ds-nav-item { display: inline-flex; align-items: center; gap: 0.5rem; height: 2rem; padding: 0 0.5rem; border-radius: calc(var(--radius, 0.65rem) - 2px); color: var(--sidebar-foreground, var(--foreground)); font: 400 0.875rem/1.2 var(--font-geist-sans, Geist, ui-sans-serif, system-ui, sans-serif); text-decoration: none; transition: background-color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), color 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94); } .ds-nav-item svg { width: 1rem; height: 1rem; fill: currentColor; } .ds-nav-item:hover { background: var(--sidebar-accent, var(--accent)); color: var(--sidebar-accent-foreground, var(--accent-foreground)); } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--sidebar-ring, var(--ring)) 60%, transparent); } .ds-nav-item-active { background: var(--sidebar-accent, var(--accent)); color: var(--sidebar-accent-foreground, var(--accent-foreground)); font-weight: 500; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Ops Grid",
+    "overview": "Bridge MultCloud opera como uma malha de decisao: confiavel, objetiva, rapida, tecnica e clara. A interface nao busca espetaculo; ela prioriza leitura de estado, acesso previsivel a acoes e transicoes curtas que mantem o usuario no fluxo operacional.\n\nA composicao visual parte de uma base neutra de alto contraste, com o acento magenta reservado para pontos de comando e selecao. Densidade e tratada como recurso funcional: cada bloco existe para reduzir custo cognitivo em tarefas de governanca, finops e automacao.\n\nEste sistema rejeita explicitamente: interfaces genericas sem hierarquia visual clara (\"cara de template\"), superficies que dificultam localizar rapidamente estados criticos e acoes prioritarias, e decoracoes visuais que competem com dados, contexto operacional e tomada de decisao.",
+    "keyCharacteristics": [
+      "Hierarquia de decisao visivel em segundos.",
+      "Vocabulario de estado consistente entre modulos.",
+      "Neutros estaveis com acento unico para acao primaria.",
+      "Densidade controlada para operacao continua.",
+      "Feedback explicito para sucesso, erro, carregamento e bloqueio."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "O acento primario aparece em no maximo um foco de acao dominante por bloco visual. Se dois elementos competem em magenta, um deles esta errado.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operational Scale Rule",
+        "body": "Toda escala textual deve permanecer em progressao curta (aprox. 1.125-1.2). Saltos maiores quebram ritmo de varredura e prejudicam priorizacao.",
+        "section": "typography"
+      },
+      {
+        "name": "The State-Lift Rule",
+        "body": "Sem estado, sem elevacao. Se nao ha interacao, a superficie permanece plana.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do usar o magenta primario apenas para acao dominante, item selecionado e foco ativo.",
+      "Do manter contraste alto entre texto principal e fundo (foreground sobre background/card).",
+      "Do manter feedback explicito de estado (hover, focus, active, disabled, loading, error) em todos os componentes interativos.",
+      "Do preservar densidade operacional com espacamento curto e ritmo tipografico estavel.",
+      "Do manter foco visivel com halo de 3px e navegacao completa por teclado nos fluxos principais."
+    ],
+    "donts": [
+      "Don't criar interfaces genericas sem hierarquia visual clara (\"cara de template\").",
+      "Don't construir superficies que dificultam localizar rapidamente estados criticos e acoes prioritarias.",
+      "Don't introduzir decoracoes visuais que competem com dados, contexto operacional e tomada de decisao.",
+      "Don't usar gradiente de texto, side-stripe decorativo ou glassmorphism como recurso padrao de interface.",
+      "Don't usar acento saturado em estados inativos."
+    ]
+  }
+}

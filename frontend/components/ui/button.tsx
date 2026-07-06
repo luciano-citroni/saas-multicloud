@@ -4,7 +4,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 import { Loader2Icon } from 'lucide-react';
-import { Label } from '@/components/ui/label';
 
 const buttonVariants = cva(
     "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
@@ -44,24 +43,34 @@ function Button({
     asChild = false,
     children,
     isLoading = false,
+    loadingText = 'Carregando...',
     ...props
 }: React.ComponentProps<'button'> &
     VariantProps<typeof buttonVariants> & {
         asChild?: boolean;
         isLoading?: boolean;
+        loadingText?: React.ReactNode;
     }) {
     const Comp = asChild ? Slot : 'button';
 
     return (
-        <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props} disabled={isLoading || props.disabled}>
+        <Comp
+            data-slot="button"
+            data-loading={isLoading ? 'true' : undefined}
+            aria-busy={isLoading || undefined}
+            className={cn(buttonVariants({ variant, size, className }), 'relative')}
+            {...props}
+            disabled={isLoading || props.disabled}
+        >
+            <span className={cn('inline-flex items-center justify-center gap-2', isLoading && 'opacity-0')}>
+                {children}
+            </span>
             {isLoading ? (
-                <div className="flex flex-row gap-1 w-full h-full items-center justify-center">
-                    <Loader2Icon className={'animate-spin'} />
-                    <Label>Carregando...</Label>
-                </div>
-            ) : (
-                children
-            )}
+                <span className="absolute inset-0 inline-flex items-center justify-center gap-2">
+                    <Loader2Icon className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <span>{loadingText}</span>
+                </span>
+            ) : null}
         </Comp>
     );
 }

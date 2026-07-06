@@ -69,15 +69,15 @@ export function SiteHeader() {
 
                 <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
 
-                <h1 className="text-base font-medium flex items-center gap-2">
-                    {breadcrumbs.length === 0 && 'Dashboard'}
+                <nav aria-label="Breadcrumb" className="text-base font-medium flex items-center gap-2">
+                    {breadcrumbs.length === 0 && <span>Dashboard</span>}
 
                     {breadcrumbs.map((crumb, index) => (
                         <span key={crumb.url} className="flex items-center gap-2">
-                            {index > 0 && <span>/</span>}
+                            {index > 0 && <span aria-hidden="true">/</span>}
 
                             {index === breadcrumbs.length - 1 ? (
-                                <span>{crumb.title}</span>
+                                <span aria-current="page">{crumb.title}</span>
                             ) : (
                                 <Link href={crumb.url} className="hover:underline">
                                     {crumb.title}
@@ -85,7 +85,7 @@ export function SiteHeader() {
                             )}
                         </span>
                     ))}
-                </h1>
+                </nav>
             </div>
         </header>
     );

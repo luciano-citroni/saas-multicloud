@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { Brackets, FindOptionsWhere, ILike, Repository } from 'typeorm';
 
 import { InjectQueue } from '@nestjs/bullmq';
 
@@ -59,6 +59,11 @@ export interface GovernancePaginationMeta {
 
 export interface PaginatedGovernanceJobsResponse {
     items: GovernanceJob[];
+    pagination: GovernancePaginationMeta;
+}
+
+export interface PaginatedGovernanceFindingsResponse {
+    items: GovernanceFinding[];
     pagination: GovernancePaginationMeta;
 }
 
@@ -193,13 +198,87 @@ export class GovernanceService {
 
     // ── Findings ─────────────────────────────────────────────────────────────
 
-    async getJobFindings(jobId: string, cloudAccountId: string, organizationId: string): Promise<GovernanceFinding[]> {
+    async getJobFindings(
+        jobId: string,
+        cloudAccountId: string,
+        organizationId: string,
+        options: {
+            page?: number;
+            limit?: number;
+            name?: string;
+            resourceType?: string;
+            severity?: GovernanceFinding['severity'];
+        } = {}
+    ): Promise<PaginatedGovernanceFindingsResponse> {
         await this.getJob(jobId, cloudAccountId, organizationId);
 
-        return this.findingRepo.find({
-            where: { jobId, cloudAccountId },
-            order: { severity: 'DESC', createdAt: 'ASC' },
-        });
+        const safeLimit = Math.min(Math.max(1, options.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
+        const requestedPage = Math.max(1, options.page ?? DEFAULT_PAGE);
+
+        const query = this.findingRepo
+            .createQueryBuilder('finding')
+            .where('finding.jobId = :jobId', { jobId })
+            .andWhere('finding.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('finding.organizationId = :organizationId', { organizationId });
+
+        if (options.name?.trim()) {
+            const normalizedName = `%${options.name.trim()}%`;
+
+            query.andWhere(
+                new Brackets((queryBuilder) => {
+                    queryBuilder
+                        .where('finding.policyName ILIKE :name', { name: normalizedName })
+                        .orWhere('finding.resourceType ILIKE :name', { name: normalizedName })
+                        .orWhere('finding.resourceId ILIKE :name', { name: normalizedName });
+                })
+            );
+        }
+
+        if (options.resourceType) {
+            query.andWhere('finding.resourceType ILIKE :resourceType', {
+                resourceType: `%${options.resourceType.trim()}%`,
+            });
+        }
+
+        if (options.severity) {
+            query.andWhere('finding.severity = :severity', { severity: options.severity });
+        }
+
+        const totalItems = await query.getCount();
+        const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
+        const resolvedPage = totalPages === 0 ? DEFAULT_PAGE : Math.min(requestedPage, totalPages);
+
+        const items =
+            totalItems === 0
+                ? []
+                : await query
+                      .clone()
+                      .orderBy(
+                          `CASE finding.severity
+                              WHEN 'critical' THEN 4
+                              WHEN 'high' THEN 3
+                              WHEN 'medium' THEN 2
+                              WHEN 'low' THEN 1
+                              ELSE 0
+                          END`,
+                          'DESC'
+                      )
+                      .addOrderBy('finding.createdAt', 'ASC')
+                      .skip((resolvedPage - DEFAULT_PAGE) * safeLimit)
+                      .take(safeLimit)
+                      .getMany();
+
+        return {
+            items,
+            pagination: {
+                page: resolvedPage,
+                limit: safeLimit,
+                totalItems,
+                totalPages,
+                hasNextPage: resolvedPage < totalPages,
+                hasPreviousPage: resolvedPage > DEFAULT_PAGE,
+            },
+        };
     }
 
     // ── Score ─────────────────────────────────────────────────────────────────
@@ -372,7 +451,7 @@ export class GovernanceService {
 
     private async requireCloudAccount(cloudAccountId: string, organizationId: string): Promise<CloudAccount> {
         const cloudAccount = await this.cloudAccountRepo.findOne({
-            where: { id: cloudAccountId, organizationId },
+            where: { id: cloudAccountId, tenantId: organizationId },
         });
 
         if (!cloudAccount) {

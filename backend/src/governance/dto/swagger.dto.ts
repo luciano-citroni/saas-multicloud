@@ -112,6 +112,14 @@ export class GovernanceFindingDto {
     createdAt!: Date;
 }
 
+export class GovernanceFindingsPaginatedResponseDto {
+    @ApiProperty({ type: [GovernanceFindingDto] })
+    items!: GovernanceFindingDto[];
+
+    @ApiProperty({ type: PaginationMetaDto })
+    pagination!: PaginationMetaDto;
+}
+
 // ── Score ─────────────────────────────────────────────────────────────────────
 
 export class CategoryScoreDto {

@@ -50,7 +50,7 @@ export function LoginForm() {
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.delete('error');
         window.history.replaceState({}, '', currentUrl.toString());
-    }, [searchParams]);
+    }, [searchParams, t.googleLoginError, t.loginError]);
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginScheme),
@@ -123,8 +123,8 @@ export function LoginForm() {
                         )}
                     />
 
-                    <Button type="submit" disabled={loading}>
-                        {loading ? t.signingIn : t.signIn}
+                    <Button type="submit" isLoading={loading} loadingText={t.signingIn}>
+                        {t.signIn}
                     </Button>
                 </form>
             </Form>

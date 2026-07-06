@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useTranslations } from '@/lib/i18n';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import {
+    ACTIVE_ORG_MODULES_STORAGE_KEY,
     ACTIVE_ORG_STORAGE_KEY,
     ACTIVE_ORG_CHANGED_EVENT,
     ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
@@ -62,6 +63,30 @@ export function ModuleAccessGuard() {
             return;
         }
 
+        // Fast path: use the modules already resolved and cached by AppSidebar.
+        // This avoids a duplicate /api/sidebar/context request on every pathname change.
+        const cachedModulesJson = window.localStorage.getItem(ACTIVE_ORG_MODULES_STORAGE_KEY);
+        if (cachedModulesJson !== null) {
+            try {
+                const enabledModules = JSON.parse(cachedModulesJson) as string[];
+                const hasAccess = hasModuleAccess(enabledModules, requiredModule);
+                if (hasAccess) {
+                    blockedPathRef.current = null;
+                    return;
+                }
+                if (blockedPathRef.current !== pathname) {
+                    toast.error(tn.moduleNotEnabled);
+                    blockedPathRef.current = pathname;
+                }
+                router.replace('/');
+                return;
+            } catch {
+                // Corrupted cache entry — fall through to network fetch below.
+            }
+        }
+
+        // Slow path: cache not yet populated (first-load race before AppSidebar finishes).
+        // Falls back to a direct fetch so the guard never incorrectly blocks on first navigation.
         try {
             const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
 

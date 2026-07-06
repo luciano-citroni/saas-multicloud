@@ -58,6 +58,11 @@ export async function GET(request: Request, { params }: Params) {
     const { cloudAccountId, jobId } = await params;
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    const name = searchParams.get('name');
+    const resourceType = searchParams.get('resourceType');
+    const severity = searchParams.get('severity');
 
     if (!organizationId) {
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
@@ -68,7 +73,18 @@ export async function GET(request: Request, { params }: Params) {
         return buildUnauthorizedResponse();
     }
 
-    let response = await backendFetch(`/api/governance/accounts/${cloudAccountId}/jobs/${jobId}/findings`, {
+    const backendQuery = new URLSearchParams();
+    if (page) backendQuery.set('page', page);
+    if (limit) backendQuery.set('limit', limit);
+    if (name) backendQuery.set('name', name);
+    if (resourceType) backendQuery.set('resourceType', resourceType);
+    if (severity) backendQuery.set('severity', severity);
+
+    const backendPath = backendQuery.size
+        ? `/api/governance/accounts/${cloudAccountId}/jobs/${jobId}/findings?${backendQuery.toString()}`
+        : `/api/governance/accounts/${cloudAccountId}/jobs/${jobId}/findings`;
+
+    let response = await backendFetch(backendPath, {
         headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
@@ -79,7 +95,7 @@ export async function GET(request: Request, { params }: Params) {
         if (!refreshResult) return buildUnauthorizedResponse();
 
         rotatedTokens = refreshResult;
-        response = await backendFetch(`/api/governance/accounts/${cloudAccountId}/jobs/${jobId}/findings`, {
+        response = await backendFetch(backendPath, {
             headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }

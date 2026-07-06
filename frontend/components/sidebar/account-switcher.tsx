@@ -32,6 +32,11 @@ type CloudAccountItem = {
     provider: string;
 };
 
+type ProviderTheme = {
+    label: string;
+    baseColor: string;
+};
+
 type AccountSwitcherProps = {
     loading?: boolean;
     tenants: TenantItem[];
@@ -48,24 +53,37 @@ type AccountSwitcherProps = {
     onCloudAccountChange?: (account: CloudAccountItem) => void;
 };
 
-const providerColors: Record<string, string> = {
-    aws: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-    azure: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-    gcp: 'bg-red-500/15 text-red-600 dark:text-red-400',
+const providerThemes: Record<string, ProviderTheme> = {
+    aws: { label: 'AWS', baseColor: 'var(--warning)' },
+    azure: { label: 'Azure', baseColor: 'var(--sidebar-primary)' },
+    gcp: { label: 'GCP', baseColor: 'var(--destructive)' },
 };
 
-const providerLabel: Record<string, string> = {
-    aws: 'AWS',
-    azure: 'Azure',
-    gcp: 'GCP',
-};
+function getProviderTheme(provider?: string): ProviderTheme {
+    return providerThemes[provider?.toLowerCase() ?? ''] ?? { label: provider?.toUpperCase() ?? 'Cloud', baseColor: 'var(--sidebar-primary)' };
+}
+
+function getProviderIconStyle(baseColor: string): React.CSSProperties {
+    return {
+        backgroundColor: `color-mix(in oklab, ${baseColor} 14%, var(--sidebar) 86%)`,
+        color: `color-mix(in oklab, ${baseColor} 62%, var(--foreground) 38%)`,
+        borderColor: `color-mix(in oklab, ${baseColor} 20%, var(--border) 80%)`,
+    };
+}
+
+function getProviderMetaStyle(baseColor: string): React.CSSProperties {
+    return {
+        color: `color-mix(in oklab, ${baseColor} 52%, var(--muted-foreground) 48%)`,
+    };
+}
 
 function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
     return (
         <div className="px-2 pb-1.5 pt-1">
             <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 pointer-events-none text-muted-foreground" />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 pointer-events-none text-muted-foreground" aria-hidden="true" />
                 <input
+                    aria-label={placeholder}
                     placeholder={placeholder}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
@@ -101,25 +119,25 @@ export function AccountSwitcher({
     const selectedMidOrg = midOrgs.find((o) => o.id === activeMidOrgId);
     const selectedCloudAccount = cloudAccounts.find((a) => a.id === activeCloudAccountId) ?? cloudAccounts[0];
 
-    const filteredTenants = React.useMemo(() => {
+    const filteredTenants = (() => {
         const q = tenantSearch.trim().toLowerCase();
         return q ? tenants.filter((t) => t.name.toLowerCase().includes(q)) : tenants;
-    }, [tenants, tenantSearch]);
+    })();
 
-    const filteredOrgs = React.useMemo(() => {
+    const filteredOrgs = (() => {
         const q = orgSearch.trim().toLowerCase();
         return q ? midOrgs.filter((o) => o.name.toLowerCase().includes(q)) : midOrgs;
-    }, [midOrgs, orgSearch]);
+    })();
 
-    const filteredAccounts = React.useMemo(() => {
+    const filteredAccounts = (() => {
         const q = cloudSearch.trim().toLowerCase();
         return q ? cloudAccounts.filter((a) => a.alias.toLowerCase().includes(q) || a.provider.toLowerCase().includes(q)) : cloudAccounts;
-    }, [cloudAccounts, cloudSearch]);
+    })();
 
     const side = isMobile ? 'bottom' : 'right';
 
     const cloudProvider = selectedCloudAccount?.provider.toLowerCase() ?? '';
-    const cloudIconClass = providerColors[cloudProvider] ?? 'bg-sidebar-primary/15 text-sidebar-primary';
+    const selectedCloudTheme = getProviderTheme(cloudProvider);
 
     if (loading) {
         return (
@@ -147,10 +165,10 @@ export function AccountSwitcher({
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="group data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                            className="group data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
-                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                                <Building2 className="size-4" />
+                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-primary/15 bg-sidebar-primary/12 text-sidebar-primary shadow-[inset_0_1px_0_color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)]">
+                                <Building2 className="size-4" aria-hidden="true" />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">
@@ -160,7 +178,7 @@ export function AccountSwitcher({
                                     {selectedTenant?.slug ?? 'tenant'}
                                 </span>
                             </div>
-                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -179,11 +197,11 @@ export function AccountSwitcher({
                                 onClick={() => onTenantChange?.(tenant)}
                                 className="gap-2 p-2"
                             >
-                                <div className="flex size-6 items-center justify-center rounded-md border">
-                                    <Building2 className="size-3.5 shrink-0" />
+                                <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
+                                    <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
                                 </div>
                                 <span className="flex-1 truncate">{tenant.name}</span>
-                                {tenant.id === selectedTenant?.id && <Check className="ml-auto size-4 text-primary shrink-0" />}
+                                {tenant.id === selectedTenant?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
                             </DropdownMenuItem>
                         ))}
                         {filteredTenants.length === 0 && (
@@ -192,10 +210,10 @@ export function AccountSwitcher({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild className="gap-2 p-2">
                             <Link href={createTenantHref}>
-                                <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                                    <Plus className="size-4" />
+                                <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
+                                    <Plus className="size-4" aria-hidden="true" />
                                 </div>
-                                <div className="font-medium text-muted-foreground">Novo tenant</div>
+                                <div className="font-medium text-sidebar-primary">Novo tenant</div>
                             </Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -208,22 +226,28 @@ export function AccountSwitcher({
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="group data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                            className="group data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
-                            <div className={`flex aspect-square size-8 items-center justify-center rounded-lg ${cloudIconClass}`}>
-                                <Cloud className="size-4" />
+                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg border" style={getProviderIconStyle(selectedCloudTheme.baseColor)}>
+                                <Cloud className="size-4" aria-hidden="true" />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">
                                     {selectedMidOrg?.name ?? 'Nenhuma organização'}
                                 </span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                    {selectedCloudAccount
-                                        ? `${selectedCloudAccount.alias} · ${providerLabel[cloudProvider] ?? cloudProvider.toUpperCase()}`
-                                        : 'Sem conta cloud'}
-                                </span>
+                                {selectedCloudAccount ? (
+                                    <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                                        <span className="truncate">{selectedCloudAccount.alias}</span>
+                                        <span aria-hidden="true">·</span>
+                                        <span className="truncate font-medium" style={getProviderMetaStyle(selectedCloudTheme.baseColor)}>
+                                            {selectedCloudTheme.label}
+                                        </span>
+                                    </span>
+                                ) : (
+                                    <span className="truncate text-xs text-muted-foreground">Sem conta cloud</span>
+                                )}
                             </div>
-                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -247,15 +271,23 @@ export function AccountSwitcher({
                                     className="gap-2 p-2"
                                 >
                                     <div className="flex size-6 items-center justify-center rounded-md border">
-                                        <Layers className="size-3.5 shrink-0" />
+                                        <Layers className="size-3.5 shrink-0" aria-hidden="true" />
                                     </div>
                                     <span className="flex-1 truncate">{org.name}</span>
-                                    {org.id === selectedMidOrg?.id && <Check className="ml-auto size-4 text-primary shrink-0" />}
+                                    {org.id === selectedMidOrg?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
                                 </DropdownMenuItem>
                             ))
                         ) : (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum resultado.</p>
                         )}
+                        <DropdownMenuItem asChild className="mt-1 gap-2 p-2">
+                            <Link href={createMidOrgHref}>
+                                <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
+                                    <Plus className="size-4" aria-hidden="true" />
+                                </div>
+                                <div className="font-medium text-sidebar-primary">Nova organização</div>
+                            </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
 
                         {/* Contas Cloud */}
@@ -272,21 +304,35 @@ export function AccountSwitcher({
                                     onClick={() => onCloudAccountChange?.(account)}
                                     className="gap-2 p-2"
                                 >
-                                    <div className={`flex size-6 items-center justify-center rounded-md ${providerColors[account.provider.toLowerCase()] ?? 'bg-muted text-muted-foreground'}`}>
-                                        <Cloud className="size-3.5 shrink-0" />
+                                    <div
+                                        className="flex size-6 items-center justify-center rounded-md border"
+                                        style={getProviderIconStyle(getProviderTheme(account.provider).baseColor)}
+                                    >
+                                        <Cloud className="size-3.5 shrink-0" aria-hidden="true" />
                                     </div>
                                     <div className="flex flex-1 flex-col min-w-0">
                                         <span className="truncate text-sm">{account.alias}</span>
-                                        <span className="truncate text-xs text-muted-foreground">
-                                            {providerLabel[account.provider.toLowerCase()] ?? account.provider.toUpperCase()}
+                                        <span
+                                            className="truncate text-xs"
+                                            style={getProviderMetaStyle(getProviderTheme(account.provider).baseColor)}
+                                        >
+                                            {getProviderTheme(account.provider).label}
                                         </span>
                                     </div>
-                                    {account.id === selectedCloudAccount?.id && <Check className="ml-auto size-4 text-primary shrink-0" />}
+                                    {account.id === selectedCloudAccount?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
                                 </DropdownMenuItem>
                             ))
                         ) : (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum resultado.</p>
                         )}
+                        <DropdownMenuItem asChild className="mt-1 gap-2 p-2">
+                            <Link href={createCloudAccountHref}>
+                                <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
+                                    <Plus className="size-4" aria-hidden="true" />
+                                </div>
+                                <div className="font-medium text-sidebar-primary">Nova conta cloud</div>
+                            </Link>
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarMenuItem>
