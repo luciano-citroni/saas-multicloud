@@ -16,6 +16,8 @@ export class GcpSqlPublicIpPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpSqlInstance';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'gcp';
+    readonly category = 'network' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'PCI_DSS_3_2_1', 'SOC2'] as const;
 
     evaluate(instance: GcpSqlInstance, _context: PolicyContext): PolicyEvaluationResult[] {
         const ipAddresses: Record<string, any>[] = instance.ipAddresses ?? [];

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
+import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { canManageCloudAccounts, canSyncCloudAccounts, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
@@ -94,6 +94,12 @@ function normalizeCloudAccounts(payload: unknown): CloudAccount[] {
                         ? apiItem.organizationId
                         : typeof (apiItem as CloudAccountApiItem & { organization_id?: unknown }).organization_id === 'string'
                           ? ((apiItem as CloudAccountApiItem & { organization_id?: string }).organization_id ?? null)
+                          : null,
+                tenantId:
+                    typeof apiItem.tenantId === 'string'
+                        ? apiItem.tenantId
+                        : typeof (apiItem as CloudAccountApiItem & { tenant_id?: unknown }).tenant_id === 'string'
+                          ? ((apiItem as CloudAccountApiItem & { tenant_id?: string }).tenant_id ?? null)
                           : null,
                 isSyncInProgress: apiItem.isSyncInProgress === true || apiItem.is_sync_in_progress === true,
                 lastGeneralSyncAt: normalizeDateValue(apiItem.lastGeneralSyncAt ?? apiItem.last_general_sync_at ?? null),
@@ -214,7 +220,8 @@ export function CloudAccountSync() {
                   : [];
 
             const normalized = items.filter(
-                (item): item is MidOrg => typeof item === 'object' && item !== null && typeof (item as MidOrg).id === 'string' && typeof (item as MidOrg).name === 'string'
+                (item): item is MidOrg =>
+                    typeof item === 'object' && item !== null && typeof (item as MidOrg).id === 'string' && typeof (item as MidOrg).name === 'string'
             );
 
             setMidOrgs(normalized);
@@ -243,6 +250,8 @@ export function CloudAccountSync() {
             const nextOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
 
             setOrganizationId(nextOrganizationId);
+            setAccounts([]);
+            setSyncingAccountId(null);
 
             if (!nextOrganizationId) {
                 setAccounts([]);
@@ -305,6 +314,18 @@ export function CloudAccountSync() {
 
             const account = accounts.find((a) => a.id === cloudAccountId);
 
+            if (!account) {
+                toast.error(tca.notFound);
+                await loadAccounts(organizationId, { nextRefreshing: true });
+                return;
+            }
+
+            if (account.tenantId && account.tenantId !== organizationId) {
+                toast.error(tca.notFound);
+                await loadAccounts(organizationId, { nextRefreshing: true });
+                return;
+            }
+
             if (account?.isSyncInProgress) {
                 toast.info(tca.alreadySyncingToast);
                 return;
@@ -323,7 +344,8 @@ export function CloudAccountSync() {
             );
 
             try {
-                const response = await enqueueGeneralSync(organizationId, cloudAccountId, account?.provider);
+                const tenantId = account.tenantId ?? organizationId;
+                const response = await enqueueGeneralSync(tenantId, cloudAccountId, account?.provider);
                 const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
 
                 if (!response.ok) {

@@ -53,6 +53,20 @@ function Button({
     }) {
     const Comp = asChild ? Slot : 'button';
 
+    if (asChild) {
+        return (
+            <Comp
+                data-slot="button"
+                data-loading={isLoading ? 'true' : undefined}
+                aria-busy={isLoading || undefined}
+                className={cn(buttonVariants({ variant, size, className }), 'relative')}
+                {...props}
+            >
+                {children}
+            </Comp>
+        );
+    }
+
     return (
         <Comp
             data-slot="button"
@@ -62,9 +76,7 @@ function Button({
             {...props}
             disabled={isLoading || props.disabled}
         >
-            <span className={cn('inline-flex items-center justify-center gap-2', isLoading && 'opacity-0')}>
-                {children}
-            </span>
+            <span className={cn('inline-flex items-center justify-center gap-2', isLoading && 'opacity-0')}>{children}</span>
             {isLoading ? (
                 <span className="absolute inset-0 inline-flex items-center justify-center gap-2">
                     <Loader2Icon className="animate-spin motion-reduce:animate-none" aria-hidden="true" />

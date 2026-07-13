@@ -49,6 +49,8 @@ export class GcpFirewallOpenDatabasePortsPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpFirewallRule';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'gcp';
+    readonly category = 'network' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'PCI_DSS_3_2_1', 'SOC2'] as const;
 
     evaluate(rule: GcpFirewallRule, _context: PolicyContext): PolicyEvaluationResult[] {
         if (rule.disabled || rule.direction !== 'INGRESS') {

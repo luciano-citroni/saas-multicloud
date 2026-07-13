@@ -48,7 +48,8 @@ export class GovernanceController {
     @Get('policies')
     @ApiOperation({
         summary: 'Listar políticas de governança disponíveis',
-        description: 'Retorna todas as políticas registradas. Suporta filtro por provider (aws, gcp) e framework de compliance (CIS_AWS_1_4, PCI_DSS_3_2_1, SOC2, NIST_800_53, ISO_27001).',
+        description:
+            'Retorna todas as políticas registradas. Suporta filtro por provider (aws, gcp) e framework de compliance (CIS_AWS_1_4, CIS_GCP_2_0, PCI_DSS_3_2_1, SOC2, NIST_800_53, ISO_27001).',
     })
     @ApiQuery({ name: 'provider', required: false, example: 'aws', description: 'Filtrar por provider' })
     @ApiQuery({ name: 'framework', required: false, example: 'CIS_AWS_1_4', description: 'Filtrar por framework de compliance' })

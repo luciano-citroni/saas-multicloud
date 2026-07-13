@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
 import { GcpAssessmentJob } from '../../db/entites/gcp-assessment-job.entity';
+import { OrganizationMembership } from '../../db/entites/organization-membership.entity';
 import { GcpVmInstance } from '../../db/entites/gcp-vm-instance.entity';
 import { GcpVpcNetwork } from '../../db/entites/gcp-vpc-network.entity';
 import { GcpSubnetwork } from '../../db/entites/gcp-subnetwork.entity';
@@ -48,6 +49,7 @@ import { GcpAssessmentArchitectureService } from './gcp-assessment-architecture.
             CloudAccount,
             CloudSyncJob,
             GcpAssessmentJob,
+            OrganizationMembership,
             GcpVmInstance,
             GcpVpcNetwork,
             GcpSubnetwork,

@@ -18,8 +18,9 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
-import { CurrentOrganization } from '../../tenant/tenant.decorators';
+import { CurrentMembership, CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Tenant } from '../../db/entites/tenant.entity';
+import { TenantMember } from '../../db/entites/tenant-member.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
@@ -45,7 +46,7 @@ export class GcpAssessmentController {
 
     @Post('accounts/:cloudAccountId/sync')
     @HttpCode(202)
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Enfileirar sync geral da conta GCP',
         description: 'Enfileira um job de sync geral de todos os recursos GCP para a conta (VMs, redes, storage, SQL, GKE, IAM).',
@@ -56,9 +57,10 @@ export class GcpAssessmentController {
     @ApiResponse({ status: 403, description: 'Módulo assessment não habilitado ou papel insuficiente' })
     async enqueueGeneralSync(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Tenant
+        @CurrentOrganization() org: Tenant,
+        @CurrentMembership() membership: TenantMember
     ): Promise<GcpGeneralSyncJobResponseDto> {
-        return this.service.enqueueGeneralSync(cloudAccountId, org.id);
+        return this.service.enqueueGeneralSync(cloudAccountId, org.id, membership.userId);
     }
 
     @Get('accounts/:cloudAccountId/jobs/:jobId')

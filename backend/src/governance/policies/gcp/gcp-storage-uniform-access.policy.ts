@@ -13,6 +13,8 @@ export class GcpStorageUniformAccessPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpStorageBucket';
     readonly severity: FindingSeverity = 'high';
     readonly provider = 'gcp';
+    readonly category = 'identity' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'ISO_27001', 'SOC2'] as const;
 
     evaluate(bucket: GcpStorageBucket, _context: PolicyContext): PolicyEvaluationResult[] {
         if (!bucket.uniformBucketLevelAccess) {

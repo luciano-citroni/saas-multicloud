@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -6,6 +6,7 @@ import { Job, Queue } from 'bullmq';
 
 import { GcpAssessmentJob } from '../../db/entites/gcp-assessment-job.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { OrganizationMembership } from '../../db/entites/organization-membership.entity';
 import { BillingService } from '../../billing/billing.service';
 import { SystemModule } from '../../common/modules/system-modules';
 
@@ -43,6 +44,9 @@ export class GcpAssessmentService {
 
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
+
+        @InjectRepository(OrganizationMembership)
+        private readonly organizationMembershipRepository: Repository<OrganizationMembership>,
 
         private readonly billingService: BillingService,
 
@@ -122,19 +126,16 @@ export class GcpAssessmentService {
         await this.jobRepository.update({ id: jobId, cloudAccountId, organizationId }, { excelFileName });
     }
 
-    async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GcpGeneralSyncJobResponse> {
+    async enqueueGeneralSync(cloudAccountId: string, organizationId: string, userId: string): Promise<GcpGeneralSyncJobResponse> {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
-        const cloudAccount = await this.cloudAccountRepository.findOne({ where: { id: cloudAccountId, organizationId } });
-
-        if (!cloudAccount) {
-            throw new BadRequestException(`CloudAccount "${cloudAccountId}" não encontrada ou sem acesso.`);
-        }
+        const cloudAccount = await this.requireCloudAccount(cloudAccountId, organizationId);
+        await this.assertUserHasCloudAccountAccess(cloudAccount, userId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
 
         if (existingJob) {
-            await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+            await this.cloudAccountRepository.update({ id: cloudAccountId, tenantId: organizationId }, { isGeneralSyncInProgress: true });
 
             return {
                 id: String(existingJob.id),
@@ -143,7 +144,7 @@ export class GcpAssessmentService {
             };
         }
 
-        await this.cloudAccountRepository.update({ id: cloudAccountId, organizationId }, { isGeneralSyncInProgress: true });
+        await this.cloudAccountRepository.update({ id: cloudAccountId, tenantId: organizationId }, { isGeneralSyncInProgress: true });
 
         const syncJob = await this.generalSyncQueue.add(
             GCP_GENERAL_SYNC_JOB_NAME,
@@ -161,11 +162,7 @@ export class GcpAssessmentService {
     }
 
     async getGeneralSyncJobStatus(syncJobId: string, cloudAccountId: string, organizationId: string): Promise<GcpGeneralSyncJobStatusResponse> {
-        const cloudAccount = await this.cloudAccountRepository.findOne({ where: { id: cloudAccountId, organizationId } });
-
-        if (!cloudAccount) {
-            throw new BadRequestException(`CloudAccount "${cloudAccountId}" não encontrada ou sem acesso.`);
-        }
+        await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const job = await this.generalSyncQueue.getJob(syncJobId);
 
@@ -203,5 +200,34 @@ export class GcpAssessmentService {
 
     private mapQueueState(state: string): string {
         return state === 'active' ? 'running' : state;
+    }
+
+    private async requireCloudAccount(cloudAccountId: string, organizationId: string): Promise<CloudAccount> {
+        const cloudAccount = await this.cloudAccountRepository.findOne({
+            where: { id: cloudAccountId, tenantId: organizationId },
+        });
+
+        if (!cloudAccount) {
+            throw new BadRequestException(`CloudAccount "${cloudAccountId}" não encontrada ou sem acesso.`);
+        }
+
+        return cloudAccount;
+    }
+
+    private async assertUserHasCloudAccountAccess(cloudAccount: CloudAccount, userId: string): Promise<void> {
+        if (!cloudAccount.organizationId) {
+            return;
+        }
+
+        const membership = await this.organizationMembershipRepository.findOne({
+            where: {
+                organizationId: cloudAccount.organizationId,
+                userId,
+            },
+        });
+
+        if (!membership) {
+            throw new ForbiddenException('Você não possui acesso à organização vinculada a esta cloud account.');
+        }
     }
 }

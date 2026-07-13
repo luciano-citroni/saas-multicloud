@@ -16,6 +16,8 @@ export class GcpVmRequiredLabelsPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpVmInstance';
     readonly severity: FindingSeverity = 'medium';
     readonly provider = 'gcp';
+    readonly category = 'compute' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'ISO_27001', 'SOC2'] as const;
 
     evaluate(instance: GcpVmInstance, _context: PolicyContext): PolicyEvaluationResult[] {
         const labels = instance.labels ?? {};

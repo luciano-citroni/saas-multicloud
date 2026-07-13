@@ -101,7 +101,17 @@ export function CloudAccountTable({
                 onDeleteAccount,
             }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [canManageAccounts, canSyncAccounts, syncingAccountId, locale, organizationNamesById, columnTranslations, onDeleteAccount]
+        [
+            canManageAccounts,
+            canSyncAccounts,
+            syncingAccountId,
+            locale,
+            organizationNamesById,
+            columnTranslations,
+            onSyncAccount,
+            onEditAccount,
+            onDeleteAccount,
+        ]
     );
 
     const filteredData = useMemo(() => {

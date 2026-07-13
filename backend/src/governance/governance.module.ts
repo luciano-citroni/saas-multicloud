@@ -63,6 +63,9 @@ import { GcpVmRequiredLabelsPolicy } from './policies/gcp/gcp-vm-required-labels
 import { GcpSqlBackupDisabledPolicy } from './policies/gcp/gcp-sql-backup-disabled.policy';
 import { GcpSqlPublicIpPolicy } from './policies/gcp/gcp-sql-public-ip.policy';
 import { GcpGkeLoggingDisabledPolicy } from './policies/gcp/gcp-gke-logging-disabled.policy';
+import { GcpVmDeletionProtectionDisabledPolicy } from './policies/gcp/gcp-vm-deletion-protection-disabled.policy';
+import { GcpGkeMonitoringDisabledPolicy } from './policies/gcp/gcp-gke-monitoring-disabled.policy';
+import { GcpSqlNoHighAvailabilityPolicy } from './policies/gcp/gcp-sql-no-high-availability.policy';
 
 // ── Entities — Shared ─────────────────────────────────────────────────────────
 import { GovernanceJob } from '../db/entites/governance-job.entity';
@@ -180,9 +183,12 @@ import { GOVERNANCE_QUEUE } from './constants';
         GcpFirewallOpenDatabasePortsPolicy,
         GcpVmPublicIpPolicy,
         GcpVmRequiredLabelsPolicy,
+        GcpVmDeletionProtectionDisabledPolicy,
         GcpSqlBackupDisabledPolicy,
         GcpSqlPublicIpPolicy,
         GcpGkeLoggingDisabledPolicy,
+        GcpGkeMonitoringDisabledPolicy,
+        GcpSqlNoHighAvailabilityPolicy,
     ],
 })
 export class GovernanceModule {}

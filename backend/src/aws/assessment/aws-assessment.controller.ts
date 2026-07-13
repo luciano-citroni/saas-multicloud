@@ -24,8 +24,10 @@ import * as fs from 'fs';
 import { TenantGuard } from '../../tenant/tenant.guard';
 
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
+import { CurrentMembership } from '../../tenant/tenant.decorators';
 
 import { Tenant } from '../../db/entites/tenant.entity';
+import { TenantMember } from '../../db/entites/tenant-member.entity';
 
 import { RolesGuard } from '../../rbac/roles.guard';
 
@@ -86,9 +88,10 @@ export class AwsAssessmentController {
     async enqueueGeneralSync(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
 
-        @CurrentOrganization() org: Tenant
+        @CurrentOrganization() org: Tenant,
+        @CurrentMembership() membership: TenantMember
     ): Promise<GeneralSyncJobResponseDto> {
-        return this.service.enqueueGeneralSync(cloudAccountId, org.id);
+        return this.service.enqueueGeneralSync(cloudAccountId, org.id, membership.userId);
     }
 
     @Get('accounts/:cloudAccountId/jobs/:jobId')

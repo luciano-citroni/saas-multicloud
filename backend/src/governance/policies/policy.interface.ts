@@ -12,6 +12,13 @@ export type PolicyCategory = 'network' | 'storage' | 'identity' | 'compute' | 'l
 export type ComplianceFramework = 'CIS_AWS_1_4' | 'PCI_DSS_3_2_1' | 'SOC2' | 'NIST_800_53' | 'ISO_27001';
 
 /**
+ * Framework de compliance voltado para Google Cloud Platform.
+ */
+export type GcpComplianceFramework = 'CIS_GCP_2_0';
+
+export type SupportedComplianceFramework = ComplianceFramework | GcpComplianceFramework;
+
+/**
  * Resultado da avaliação de uma política contra um único recurso.
  */
 export interface PolicyEvaluationResult {
@@ -67,7 +74,7 @@ export interface GovernancePolicy {
      * Frameworks de compliance cobertos por esta política.
      * Permite filtrar políticas por framework (CIS, PCI-DSS, SOC2, etc).
      */
-    readonly frameworks?: readonly ComplianceFramework[];
+    readonly frameworks?: readonly SupportedComplianceFramework[];
     /**
      * Avalia um único recurso e retorna um array de resultados.
      * Retorna um item com status='compliant' quando o recurso está em conformidade.

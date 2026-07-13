@@ -68,6 +68,7 @@ export type OrganizationCloudAccount = {
     alias: string;
     provider: string;
     organizationId?: string | null;
+    tenantId?: string | null;
     isActive?: boolean;
     isSyncInProgress?: boolean;
     lastGeneralSyncAt?: string | null;

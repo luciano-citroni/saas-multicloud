@@ -209,7 +209,7 @@ export class GovernancePolicyDto {
     @ApiPropertyOptional({ example: 'storage', description: 'Categoria funcional: network | storage | identity | compute | logging | encryption | monitoring' })
     category?: string | null;
 
-    @ApiProperty({ example: ['CIS_AWS_1_4', 'PCI_DSS_3_2_1'], description: 'Frameworks de compliance cobertos' })
+    @ApiProperty({ example: ['CIS_GCP_2_0', 'SOC2'], description: 'Frameworks de compliance cobertos' })
     frameworks!: string[];
 }
 

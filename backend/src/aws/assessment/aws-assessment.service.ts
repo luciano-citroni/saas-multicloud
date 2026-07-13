@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -11,6 +11,7 @@ import { Job, Queue } from 'bullmq';
 import { AwsAssessmentJob, AssessmentStatus } from '../../db/entites/aws-assessment-job.entity';
 
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { OrganizationMembership } from '../../db/entites/organization-membership.entity';
 
 import { ASSESSMENT_QUEUE, ASSESSMENT_JOB_NAME, GENERAL_SYNC_QUEUE, GENERAL_SYNC_JOB_NAME } from './constants';
 
@@ -61,6 +62,9 @@ export class AwsAssessmentService {
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepository: Repository<CloudAccount>,
 
+        @InjectRepository(OrganizationMembership)
+        private readonly organizationMembershipRepository: Repository<OrganizationMembership>,
+
         private readonly reportService: AwsAssessmentReportService,
 
         private readonly architectureService: AwsAssessmentArchitectureService,
@@ -100,10 +104,11 @@ export class AwsAssessmentService {
         };
     }
 
-    async enqueueGeneralSync(cloudAccountId: string, organizationId: string): Promise<GeneralSyncJobResponse> {
+    async enqueueGeneralSync(cloudAccountId: string, organizationId: string, userId: string): Promise<GeneralSyncJobResponse> {
         await this.assertCloudInventoryAccess(organizationId);
 
-        await this.requireCloudAccount(cloudAccountId, organizationId);
+        const cloudAccount = await this.requireCloudAccount(cloudAccountId, organizationId);
+        await this.assertUserHasCloudAccountAccess(cloudAccount, userId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
 
@@ -303,6 +308,23 @@ export class AwsAssessmentService {
         } catch {
             // Compatibilidade temporária para planos antigos que ainda usam apenas "assessment".
             await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        }
+    }
+
+    private async assertUserHasCloudAccountAccess(cloudAccount: CloudAccount, userId: string): Promise<void> {
+        if (!cloudAccount.organizationId) {
+            return;
+        }
+
+        const membership = await this.organizationMembershipRepository.findOne({
+            where: {
+                organizationId: cloudAccount.organizationId,
+                userId,
+            },
+        });
+
+        if (!membership) {
+            throw new ForbiddenException('Você não possui acesso à organização vinculada a esta cloud account.');
         }
     }
 }

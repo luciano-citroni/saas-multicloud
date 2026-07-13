@@ -13,6 +13,8 @@ export class GcpVmPublicIpPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpVmInstance';
     readonly severity: FindingSeverity = 'high';
     readonly provider = 'gcp';
+    readonly category = 'network' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'NIST_800_53', 'SOC2'] as const;
 
     evaluate(instance: GcpVmInstance, _context: PolicyContext): PolicyEvaluationResult[] {
         if (instance.externalIp) {

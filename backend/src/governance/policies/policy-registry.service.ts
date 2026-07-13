@@ -50,6 +50,9 @@ import { GcpVmRequiredLabelsPolicy } from './gcp/gcp-vm-required-labels.policy';
 import { GcpSqlBackupDisabledPolicy } from './gcp/gcp-sql-backup-disabled.policy';
 import { GcpSqlPublicIpPolicy } from './gcp/gcp-sql-public-ip.policy';
 import { GcpGkeLoggingDisabledPolicy } from './gcp/gcp-gke-logging-disabled.policy';
+import { GcpVmDeletionProtectionDisabledPolicy } from './gcp/gcp-vm-deletion-protection-disabled.policy';
+import { GcpGkeMonitoringDisabledPolicy } from './gcp/gcp-gke-monitoring-disabled.policy';
+import { GcpSqlNoHighAvailabilityPolicy } from './gcp/gcp-sql-no-high-availability.policy';
 
 /**
  * Registro central de todas as políticas de governança disponíveis.
@@ -109,9 +112,12 @@ export class PolicyRegistryService {
         private readonly gcpFirewallOpenDatabasePorts: GcpFirewallOpenDatabasePortsPolicy,
         private readonly gcpVmPublicIp: GcpVmPublicIpPolicy,
         private readonly gcpVmRequiredLabels: GcpVmRequiredLabelsPolicy,
+        private readonly gcpVmDeletionProtectionDisabled: GcpVmDeletionProtectionDisabledPolicy,
         private readonly gcpSqlBackupDisabled: GcpSqlBackupDisabledPolicy,
         private readonly gcpSqlPublicIp: GcpSqlPublicIpPolicy,
-        private readonly gcpGkeLoggingDisabled: GcpGkeLoggingDisabledPolicy
+        private readonly gcpSqlNoHighAvailability: GcpSqlNoHighAvailabilityPolicy,
+        private readonly gcpGkeLoggingDisabled: GcpGkeLoggingDisabledPolicy,
+        private readonly gcpGkeMonitoringDisabled: GcpGkeMonitoringDisabledPolicy
     ) {
         this.policies = [
             // ── AWS — Original ────────────────────────────────────────────────
@@ -159,9 +165,12 @@ export class PolicyRegistryService {
             this.gcpFirewallOpenDatabasePorts,
             this.gcpVmPublicIp,
             this.gcpVmRequiredLabels,
+            this.gcpVmDeletionProtectionDisabled,
             this.gcpSqlBackupDisabled,
             this.gcpSqlPublicIp,
+            this.gcpSqlNoHighAvailability,
             this.gcpGkeLoggingDisabled,
+            this.gcpGkeMonitoringDisabled,
         ];
     }
 

@@ -13,6 +13,8 @@ export class GcpSqlBackupDisabledPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpSqlInstance';
     readonly severity: FindingSeverity = 'high';
     readonly provider = 'gcp';
+    readonly category = 'storage' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'ISO_27001', 'SOC2'] as const;
 
     evaluate(instance: GcpSqlInstance, _context: PolicyContext): PolicyEvaluationResult[] {
         if (!instance.backupEnabled) {

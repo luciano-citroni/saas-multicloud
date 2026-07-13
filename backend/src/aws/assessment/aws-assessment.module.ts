@@ -17,6 +17,7 @@ import { ASSESSMENT_QUEUE, GENERAL_SYNC_QUEUE } from './constants';
 import { AwsAssessmentJob } from '../../db/entites/aws-assessment-job.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { CloudSyncJob } from '../../db/entites/cloud-sync-job.entity';
+import { OrganizationMembership } from '../../db/entites/organization-membership.entity';
 import {
     AwsVpc,
     AwsSubnet,
@@ -90,6 +91,7 @@ import { BillingModule } from '../../billing/billing.module';
             AwsAssessmentJob,
             CloudAccount,
             CloudSyncJob,
+            OrganizationMembership,
             AwsVpc,
             AwsSubnet,
             AwsRouteTable,

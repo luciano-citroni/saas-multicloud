@@ -13,6 +13,8 @@ export class GcpStoragePublicAccessPolicy implements GovernancePolicy {
     readonly resourceType = 'GcpStorageBucket';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'gcp';
+    readonly category = 'storage' as const;
+    readonly frameworks = ['CIS_GCP_2_0', 'ISO_27001', 'SOC2'] as const;
 
     evaluate(bucket: GcpStorageBucket, _context: PolicyContext): PolicyEvaluationResult[] {
         const isEnforced = bucket.publicAccessPrevention === 'enforced';
