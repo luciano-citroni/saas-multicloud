@@ -1,25 +1,27 @@
 'use client';
 
 import { Handle, Position } from '@xyflow/react';
-import { Server, HardDrive, Database, Zap } from 'lucide-react';
+import { Server, HardDrive, Database, Zap, Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type NodeData = {
     label: string;
-    resourceType: 'ec2' | 's3' | 'rds' | 'lambda';
+    resourceType: string;
     configured: boolean;
     config: Record<string, unknown>;
 };
 
-const RESOURCE_META = {
+const RESOURCE_META: Record<string, { icon: typeof Server; color: string; label: string }> = {
     ec2: { icon: Server, color: 'bg-orange-500', label: 'EC2' },
     s3: { icon: HardDrive, color: 'bg-green-500', label: 'S3' },
     rds: { icon: Database, color: 'bg-blue-500', label: 'RDS' },
     lambda: { icon: Zap, color: 'bg-purple-500', label: 'Lambda' },
-} as const;
+    AWS_S3_BUCKET_CREATE: { icon: HardDrive, color: 'bg-green-500', label: 'S3' },
+    AWS_CLOUDFRONT_DISTRIBUTION_CREATE: { icon: Cloud, color: 'bg-orange-500', label: 'CloudFront' },
+};
 
 function AutomationResourceNode({ data, selected }: { data: NodeData; selected?: boolean }) {
-    const meta = RESOURCE_META[data.resourceType];
+    const meta = RESOURCE_META[data.resourceType] ?? { icon: Cloud, color: 'bg-slate-500', label: data.resourceType };
     const Icon = meta.icon;
 
     return (

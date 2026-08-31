@@ -25,6 +25,8 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { buildTrustPolicy, PERMISSIONS_POLICY } from '@/lib/role-permissions';
 import { CloudAccountEditActions } from '@/components/root/cloud-accounts/edit/cloud-account-edit-actions';
+import { CloudAccountSyncStatus } from '@/components/root/cloud-accounts/cloud-account-sync-status';
+import { useLocale } from '@/components/providers/locale-provider';
 
 type Props = {
     organizationId: string;
@@ -52,18 +54,53 @@ function parseAdditionalRegions(values?: Array<{ value?: string }>): string[] {
     return values.map((item) => (item.value ?? '').trim().toLowerCase()).filter((region) => region.length > 0);
 }
 
+type CloudAccountDetailsApiItem = OrganizationCloudAccountDetails & {
+    is_sync_in_progress?: boolean;
+    last_general_sync_at?: string | null;
+    last_general_sync_error?: string | null;
+    last_general_sync_warning?: string | null;
+};
+
+function normalizeDateValue(value: unknown): string | null {
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    if (value === null) {
+        return null;
+    }
+
+    return null;
+}
+
 function normalizeCloudAccountDetails(payload: unknown): OrganizationCloudAccountDetails | null {
     if (typeof payload !== 'object' || payload === null) {
         return null;
     }
 
-    const account = payload as OrganizationCloudAccountDetails;
+    const account = payload as CloudAccountDetailsApiItem;
 
     if (typeof account.id !== 'string' || typeof account.alias !== 'string' || typeof account.provider !== 'string') {
         return null;
     }
 
-    return account;
+    return {
+        ...account,
+        isSyncInProgress: account.isSyncInProgress === true || account.is_sync_in_progress === true,
+        lastGeneralSyncAt: normalizeDateValue(account.lastGeneralSyncAt ?? account.last_general_sync_at ?? null),
+        lastGeneralSyncError:
+            typeof account.lastGeneralSyncError === 'string'
+                ? account.lastGeneralSyncError
+                : typeof account.last_general_sync_error === 'string'
+                  ? account.last_general_sync_error
+                  : null,
+        lastGeneralSyncWarning:
+            typeof account.lastGeneralSyncWarning === 'string'
+                ? account.lastGeneralSyncWarning
+                : typeof account.last_general_sync_warning === 'string'
+                  ? account.last_general_sync_warning
+                  : null,
+    };
 }
 
 function normalizeRegionFields(regions: unknown, primaryRegion?: string): Array<{ value: string }> {
@@ -132,6 +169,7 @@ function PolicyBlock({ label, json }: { label: string; json: object }) {
 export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) {
     const router = useRouter();
     const tca = useTranslations('cloudAccounts');
+    const { locale } = useLocale();
     const schema = useMemo(() => createCloudAccountSchema(tca), [tca]);
     const [isLoading, setIsLoading] = useState(false);
     const [isStatusLoading, setIsStatusLoading] = useState(false);
@@ -244,6 +282,39 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
         void loadCloudAccount();
     }, [cloudAccountId, form, orgs, organizationId, router, tca.loadError]);
+
+    useEffect(() => {
+        if (!cloudAccount?.isSyncInProgress) {
+            return;
+        }
+
+        const refreshAccount = async () => {
+            try {
+                const response = await fetchOrganizationCloudAccountById(organizationId, cloudAccountId);
+                const payload = (await response.json().catch(() => null)) as unknown;
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const account = normalizeCloudAccountDetails(payload);
+
+                if (account) {
+                    setCloudAccount(account);
+                }
+            } catch {
+                // ignore transient polling errors
+            }
+        };
+
+        const intervalId = window.setInterval(() => {
+            void refreshAccount();
+        }, 10000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [cloudAccount?.isSyncInProgress, cloudAccountId, organizationId]);
 
     const selectedProvider = form.watch('provider');
 
@@ -392,6 +463,22 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
     return (
         <div className="flex w-full flex-col gap-5 sm:gap-6">
+            {cloudAccount ? (
+                <CloudAccountSyncStatus
+                    account={cloudAccount}
+                    locale={locale}
+                    variant="banner"
+                    labels={{
+                        notSynced: tca.notSynced,
+                        invalidDate: tca.invalidDate,
+                        processing: tca.processing,
+                        syncFailedLabel: tca.syncFailedLabel,
+                        syncWarningLabel: tca.syncWarningLabel,
+                        lastSyncLabel: tca.lastSyncLabel,
+                    }}
+                />
+            ) : null}
+
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5 sm:gap-6">
                     <FormField

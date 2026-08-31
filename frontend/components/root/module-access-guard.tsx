@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useTranslations } from '@/lib/i18n';
-import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
+import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import {
     ACTIVE_ORG_MODULES_STORAGE_KEY,
     ACTIVE_ORG_STORAGE_KEY,
@@ -29,12 +29,20 @@ const MODULE_ROUTE_CONFIG: ModuleRouteConfig[] = [
     { prefix: '/assessment', module: PlanModule.ASSESSMENT },
     { prefix: '/governance', module: PlanModule.GOVERNANCE },
     { prefix: '/finops', module: PlanModule.FINOPS },
-    { prefix: '/automation', module: PlanModule.CLOUD_INVENTORY },
+    { prefix: '/automation', module: PlanModule.AUTOMATION },
+    { prefix: '/automations', module: PlanModule.AUTOMATION },
 ];
 
 function resolveRequiredModule(pathname: string): PlanModule | null {
     const matched = MODULE_ROUTE_CONFIG.find((entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`));
     return matched?.module ?? null;
+}
+
+function checkModuleAccess(enabledModules: string[], requiredModule: PlanModule): boolean {
+    if (requiredModule === PlanModule.AUTOMATION) {
+        return hasAutomationModuleAccess(enabledModules);
+    }
+    return hasModuleAccess(enabledModules, requiredModule);
 }
 
 export function ModuleAccessGuard() {
@@ -69,7 +77,7 @@ export function ModuleAccessGuard() {
         if (cachedModulesJson !== null) {
             try {
                 const enabledModules = JSON.parse(cachedModulesJson) as string[];
-                const hasAccess = hasModuleAccess(enabledModules, requiredModule);
+                const hasAccess = checkModuleAccess(enabledModules, requiredModule);
                 if (hasAccess) {
                     blockedPathRef.current = null;
                     return;
@@ -97,7 +105,7 @@ export function ModuleAccessGuard() {
             const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
             const activeOrganization = payload?.organizations?.find((organization) => organization?.id === activeOrganizationId);
             const enabledModules = normalizePlanModules(activeOrganization?.plans ?? []);
-            const hasAccess = hasModuleAccess(enabledModules, requiredModule);
+            const hasAccess = checkModuleAccess(enabledModules, requiredModule);
 
             if (hasAccess) {
                 blockedPathRef.current = null;

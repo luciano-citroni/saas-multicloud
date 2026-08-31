@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,9 @@ import {
     enqueueGeneralSync,
     fetchOrganizationCloudAccounts,
     isAwsProvider,
+    isGcpProvider,
+    pollGeneralSyncJobStatus,
+    type GeneralSyncJobStatus,
     type OrganizationCloudAccount as CloudAccount,
 } from '@/app/actions/organization';
 import { Plus } from 'lucide-react';
@@ -41,6 +44,8 @@ type SidebarContextPayload = {
 type CloudAccountApiItem = CloudAccount & {
     is_sync_in_progress?: boolean;
     last_general_sync_at?: string | null;
+    last_general_sync_error?: string | null;
+    last_general_sync_warning?: string | null;
 };
 
 type CloudAccountsApiPayload =
@@ -103,6 +108,18 @@ function normalizeCloudAccounts(payload: unknown): CloudAccount[] {
                           : null,
                 isSyncInProgress: apiItem.isSyncInProgress === true || apiItem.is_sync_in_progress === true,
                 lastGeneralSyncAt: normalizeDateValue(apiItem.lastGeneralSyncAt ?? apiItem.last_general_sync_at ?? null),
+                lastGeneralSyncError:
+                    typeof apiItem.lastGeneralSyncError === 'string'
+                        ? apiItem.lastGeneralSyncError
+                        : typeof apiItem.last_general_sync_error === 'string'
+                          ? apiItem.last_general_sync_error
+                          : null,
+                lastGeneralSyncWarning:
+                    typeof apiItem.lastGeneralSyncWarning === 'string'
+                        ? apiItem.lastGeneralSyncWarning
+                        : typeof apiItem.last_general_sync_warning === 'string'
+                          ? apiItem.last_general_sync_warning
+                          : null,
             };
         });
 }
@@ -122,6 +139,14 @@ export function CloudAccountSync() {
     const [pendingDeleteAccountId, setPendingDeleteAccountId] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [midOrgs, setMidOrgs] = useState<MidOrg[]>([]);
+    const syncPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopSyncPolling = useCallback(() => {
+        if (syncPollingRef.current) {
+            window.clearInterval(syncPollingRef.current);
+            syncPollingRef.current = null;
+        }
+    }, []);
 
     const loadAccounts = useCallback(
         async (
@@ -154,11 +179,12 @@ export function CloudAccountSync() {
                         setAccounts([]);
                     }
 
-                    return;
+                    return [];
                 }
 
                 const cloudAccountsList = normalizeCloudAccounts(payload);
                 setAccounts(cloudAccountsList);
+                return cloudAccountsList;
             } catch {
                 if (!silentErrors) {
                     toast.error(tca.loadListError);
@@ -167,6 +193,8 @@ export function CloudAccountSync() {
                 if (!background) {
                     setAccounts([]);
                 }
+
+                return [];
             } finally {
                 if (!background) {
                     setLoading(false);
@@ -176,6 +204,66 @@ export function CloudAccountSync() {
             }
         },
         [tca]
+    );
+
+    useEffect(() => {
+        return () => {
+            stopSyncPolling();
+        };
+    }, [stopSyncPolling]);
+
+    const pollSyncJobStatus = useCallback(
+        async (tenantId: string, cloudAccountId: string, jobId: string, provider: string) => {
+            try {
+                const response = await pollGeneralSyncJobStatus(tenantId, cloudAccountId, jobId, provider);
+                if (!response.ok) {
+                    return;
+                }
+
+                const job = (await response.json().catch(() => null)) as GeneralSyncJobStatus | null;
+                if (!job) {
+                    return;
+                }
+
+                const normalizedStatus = job.status.trim().toLowerCase();
+
+                if (normalizedStatus === 'completed') {
+                    stopSyncPolling();
+                    setSyncingAccountId(null);
+                    const refreshedAccounts = await loadAccounts(tenantId, { nextRefreshing: true });
+                    const refreshedAccount = refreshedAccounts.find((account) => account.id === cloudAccountId);
+                    const syncWarning = refreshedAccount?.lastGeneralSyncWarning?.trim();
+
+                    if (syncWarning) {
+                        toast.warning(syncWarning);
+                    } else {
+                        toast.success(tca.syncComplete);
+                    }
+                    return;
+                }
+
+                if (normalizedStatus === 'failed') {
+                    stopSyncPolling();
+                    setSyncingAccountId(null);
+                    toast.error(job.failedReason?.trim() || tca.syncFailed);
+                    await loadAccounts(tenantId, { nextRefreshing: true });
+                }
+            } catch {
+                // ignore transient polling errors
+            }
+        },
+        [loadAccounts, stopSyncPolling, tca.syncComplete, tca.syncFailed]
+    );
+
+    const startSyncJobPolling = useCallback(
+        (tenantId: string, cloudAccountId: string, jobId: string, provider: string) => {
+            stopSyncPolling();
+            void pollSyncJobStatus(tenantId, cloudAccountId, jobId, provider);
+            syncPollingRef.current = window.setInterval(() => {
+                void pollSyncJobStatus(tenantId, cloudAccountId, jobId, provider);
+            }, 3000);
+        },
+        [pollSyncJobStatus, stopSyncPolling]
     );
 
     const hasSyncInProgress = accounts.some((account) => account.isSyncInProgress === true);
@@ -346,27 +434,59 @@ export function CloudAccountSync() {
             try {
                 const tenantId = account.tenantId ?? organizationId;
                 const response = await enqueueGeneralSync(tenantId, cloudAccountId, account?.provider);
-                const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+                const payload = (await response.json().catch(() => null)) as (ApiErrorPayload & { id?: string }) | null;
 
                 if (!response.ok) {
                     const message = extractErrorMessage(payload ?? null);
                     toast.error(message);
+                    setAccounts((currentAccounts) =>
+                        currentAccounts.map((currentAccount) =>
+                            currentAccount.id === cloudAccountId
+                                ? {
+                                      ...currentAccount,
+                                      isSyncInProgress: false,
+                                  }
+                                : currentAccount
+                        )
+                    );
                     return;
                 }
 
+                const jobId = typeof payload?.id === 'string' ? payload.id : null;
+
                 if (isAwsProvider(account?.provider)) {
                     toast.success(tca.awsSyncStarted);
+                } else if (isGcpProvider(account?.provider)) {
+                    toast.success(tca.gcpSyncStarted);
                 } else {
                     toast.success(tca.syncStarted);
                 }
+
                 await loadAccounts(organizationId, { nextRefreshing: true });
+
+                if (jobId) {
+                    startSyncJobPolling(tenantId, cloudAccountId, jobId, account.provider);
+                }
             } catch {
                 toast.error(tca.syncError);
+                stopSyncPolling();
+                setAccounts((currentAccounts) =>
+                    currentAccounts.map((currentAccount) =>
+                        currentAccount.id === cloudAccountId
+                            ? {
+                                  ...currentAccount,
+                                  isSyncInProgress: false,
+                              }
+                            : currentAccount
+                    )
+                );
             } finally {
-                setSyncingAccountId(null);
+                if (!syncPollingRef.current) {
+                    setSyncingAccountId(null);
+                }
             }
         },
-        [accounts, canSyncAccounts, loadAccounts, organizationId, syncingAccountId, tca]
+        [accounts, canSyncAccounts, loadAccounts, organizationId, startSyncJobPolling, stopSyncPolling, syncingAccountId, tca]
     );
 
     const handleEditAccount = useCallback(

@@ -3,6 +3,7 @@ export enum PlanModule {
     CLOUD_INVENTORY = 'cloud_inventory',
     FINOPS = 'finops',
     GOVERNANCE = 'governance',
+    AUTOMATION = 'automation',
 }
 
 export const MODULE_ALIAS_MAP: Partial<Record<string, PlanModule>> = {
@@ -14,6 +15,7 @@ export const MODULE_LABEL_MAP: Record<PlanModule, string> = {
     [PlanModule.CLOUD_INVENTORY]: 'cloud inventory',
     [PlanModule.FINOPS]: 'finops',
     [PlanModule.GOVERNANCE]: 'governance',
+    [PlanModule.AUTOMATION]: 'automation',
 };
 
 export function hasModuleAccess(modules: string[] | unknown, module: PlanModule): boolean {
@@ -24,6 +26,10 @@ export function hasModuleAccess(modules: string[] | unknown, module: PlanModule)
     }
 
     return normalized.includes(module);
+}
+
+export function hasAutomationModuleAccess(modules: string[] | unknown): boolean {
+    return hasModuleAccess(modules, PlanModule.AUTOMATION) || hasModuleAccess(modules, PlanModule.CLOUD_INVENTORY);
 }
 
 export function normalizePlanModules(modules: string[] | unknown): string[] {

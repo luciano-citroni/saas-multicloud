@@ -43,7 +43,7 @@ export class CloudController {
     @ApiBody({ type: CreateCloudAccountRequestDto })
     @ApiOperation({ summary: 'Criar uma nova conta de cloud' })
     @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
-    @ApiResponse({ status: 400, description: 'Dados inválidos', type: ValidationErrorResponseDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos ou falha ao validar a conexão com o provedor', type: ValidationErrorResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Acesso negado – apenas MEMBER, ADMIN ou OWNER' })
     async createCloudAccount(@CurrentOrganization() org: Tenant, @Body(new ZodValidationPipe(createCloudAccountSchema)) dto: CreateCloudAccountDto) {
@@ -75,7 +75,7 @@ export class CloudController {
     @Roles(OrgRole.MEMBER)
     @ApiOperation({ summary: 'Atualiza uma conta de cloud por ID' })
     @ApiResponse({ status: 200, description: 'Conta de cloud atualizada com sucesso', type: CloudAccountResponseDto })
-    @ApiResponse({ status: 400, description: 'Dados inválidos', type: ValidationErrorResponseDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos ou falha ao validar a conexão com o provedor', type: ValidationErrorResponseDto })
     @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
     async updateCloudAccount(
         @CurrentOrganization() org: Tenant,

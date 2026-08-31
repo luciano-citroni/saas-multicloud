@@ -27,7 +27,7 @@ import { OrgRole } from '../../rbac/roles.enum';
 
 import { GcpAssessmentService } from './gcp-assessment.service';
 import { GcpAssessmentExcelService } from './gcp-assessment-excel.service';
-import { GcpAssessmentJobResponseDto, GcpGeneralSyncJobResponseDto, GcpGeneralSyncJobStatusResponseDto } from './dto/swagger.dto';
+import { GcpAssessmentJobResponseDto, GcpAssessmentArchitectureResponseDto, GcpGeneralSyncJobResponseDto, GcpGeneralSyncJobStatusResponseDto } from './dto/swagger.dto';
 import { GcpAssessmentReportService } from './gcp-assessment-report.service';
 
 @ApiTags('GCP Assessment')
@@ -79,6 +79,21 @@ export class GcpAssessmentController {
         return this.service.getGeneralSyncJobStatus(jobId, cloudAccountId, org.id);
     }
 
+    @Get('accounts/:cloudAccountId/jobs')
+    @ApiPaginationQuery()
+    @ApiOperation({
+        summary: 'Listar jobs da fila de sync geral GCP',
+        description: 'Retorna os jobs recentes da fila de sync geral para a conta GCP, incluindo pendentes, em execução, concluídos e com falha.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 200, description: 'Lista de jobs da fila', type: [GcpGeneralSyncJobStatusResponseDto] })
+    async listQueuedJobs(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant
+    ): Promise<GcpGeneralSyncJobStatusResponseDto[]> {
+        return this.service.listGeneralSyncJobs(cloudAccountId, org.id);
+    }
+
     @Post('accounts/:cloudAccountId')
     @HttpCode(200)
     @Roles(OrgRole.VIEWER)
@@ -87,7 +102,7 @@ export class GcpAssessmentController {
         description: 'Usa os recursos já sincronizados no banco como fonte de verdade e retorna um grafo de arquitetura pronto para React Flow.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
-    @ApiResponse({ status: 200, description: 'Arquitetura gerada com sucesso', type: GcpAssessmentJobResponseDto })
+    @ApiResponse({ status: 200, description: 'Arquitetura gerada com sucesso', type: GcpAssessmentArchitectureResponseDto })
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 403, description: 'Módulo assessment não habilitado ou papel insuficiente' })
     async startAssessment(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
@@ -108,14 +123,16 @@ export class GcpAssessmentController {
         @CurrentOrganization() org: Tenant
     ): Promise<GcpAssessmentJobResponseDto> {
         const job = await this.service.startAssessment(cloudAccountId, org.id, false);
+        const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+
         return {
             id: job.id,
-            cloudAccountId: job.cloudAccountId,
-            organizationId: job.organizationId,
             status: job.status,
-            error: job.error,
+            error: job.error ?? undefined,
+            excelDownloadUrl: undefined,
+            excelExpiresAt,
             createdAt: job.createdAt,
-            excelExpiresAt: this.getExcelExpiresAt(job.completedAt),
+            completedAt: job.completedAt ?? undefined,
         };
     }
 
@@ -131,16 +148,13 @@ export class GcpAssessmentController {
     ): Promise<GcpAssessmentJobResponseDto> {
         const job = await this.service.getJobStatus(jobId, cloudAccountId, org.id);
         const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+        const canDownloadExcel = this.canDownloadExcel(job.status, job.excelFileName, excelExpiresAt);
+
         return {
             id: job.id,
-            cloudAccountId: job.cloudAccountId,
-            organizationId: job.organizationId,
             status: job.status,
-            error: job.error,
-            excelDownloadUrl:
-                job.excelFileName && !this.isExcelExpired(excelExpiresAt)
-                    ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download`
-                    : undefined,
+            error: job.error ?? undefined,
+            excelDownloadUrl: canDownloadExcel ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
             excelExpiresAt,
             createdAt: job.createdAt,
             completedAt: job.completedAt ?? undefined,
@@ -154,20 +168,20 @@ export class GcpAssessmentController {
     @ApiResponse({ status: 200, type: [GcpAssessmentJobResponseDto] })
     async listJobs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
         const jobs = await this.service.listJobs(cloudAccountId, org.id);
-        return jobs.map((job) => ({
-            id: job.id,
-            cloudAccountId: job.cloudAccountId,
-            organizationId: job.organizationId,
-            status: job.status,
-            error: job.error,
-            excelDownloadUrl:
-                job.excelFileName && !this.isExcelExpired(this.getExcelExpiresAt(job.completedAt))
-                    ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download`
-                    : undefined,
-            excelExpiresAt: this.getExcelExpiresAt(job.completedAt),
-            createdAt: job.createdAt,
-            completedAt: job.completedAt ?? undefined,
-        }));
+        return jobs.map((job) => {
+            const excelExpiresAt = this.getExcelExpiresAt(job.completedAt);
+            const canDownloadExcel = this.canDownloadExcel(job.status, job.excelFileName, excelExpiresAt);
+
+            return {
+                id: job.id,
+                status: job.status,
+                error: job.error ?? undefined,
+                excelDownloadUrl: canDownloadExcel ? `/gcp/assessment/accounts/${cloudAccountId}/assessment-jobs/${job.id}/download` : undefined,
+                excelExpiresAt,
+                createdAt: job.createdAt,
+                completedAt: job.completedAt ?? undefined,
+            };
+        });
     }
 
     @Get('accounts/:cloudAccountId/assessment-jobs/:jobId/download')
@@ -198,16 +212,16 @@ export class GcpAssessmentController {
         }
 
         let excelFileName = job.excelFileName;
-        let filePath = excelFileName ? this.excelService.getExcelFilePath(excelFileName) : '';
+        let filePath = excelFileName ? this.excelService.resolveExistingExcelFilePath(excelFileName) : null;
 
-        if (!filePath || !fs.existsSync(filePath)) {
+        if (!filePath) {
             const data = await this.reportService.collectAllData(cloudAccountId);
             excelFileName = await this.excelService.generateExcel(job.id, data);
             await this.service.setJobExcelFile(job.id, cloudAccountId, org.id, excelFileName);
-            filePath = this.excelService.getExcelFilePath(excelFileName);
+            filePath = this.excelService.resolveExistingExcelFilePath(excelFileName);
         }
 
-        if (!fs.existsSync(filePath)) {
+        if (!filePath) {
             await this.service.clearJobExcelFile(jobId, cloudAccountId, org.id);
             throw new NotFoundException('Arquivo Excel não encontrado.');
         }
@@ -227,6 +241,10 @@ export class GcpAssessmentController {
         }
 
         return new Date(completedAt.getTime() + GcpAssessmentController.EXCEL_RETENTION_MS);
+    }
+
+    private canDownloadExcel(status: string, excelFileName: string | null, excelExpiresAt?: Date): boolean {
+        return status === 'completed' && Boolean(excelFileName) && !this.isExcelExpired(excelExpiresAt);
     }
 
     private isExcelExpired(excelExpiresAt?: Date): boolean {

@@ -31,7 +31,7 @@ export class GcpGeneralSyncProcessor extends WorkerHost {
     }
 
     async process(job: Job<GcpGeneralSyncJobPayload>): Promise<void> {
-        const { cloudAccountId, organizationId } = job.data;
+        const { cloudAccountId } = job.data;
 
         this.logger.log(`[sync:${job.id}] Iniciando sync geral GCP para conta ${cloudAccountId}`);
 
@@ -45,7 +45,7 @@ export class GcpGeneralSyncProcessor extends WorkerHost {
 
         const syncRecord = this.syncJobRepository.create({
             cloudAccountId,
-            organizationId,
+            organizationId: cloudAccount.tenantId,
             provider: CloudProvider.GCP,
             status: 'running',
             error: null,
@@ -55,12 +55,16 @@ export class GcpGeneralSyncProcessor extends WorkerHost {
         const savedSyncRecord = await this.syncJobRepository.save(syncRecord);
 
         try {
-            await this.syncService.syncAll(cloudAccountId, organizationId);
+            const { warnings } = await this.syncService.syncAll(cloudAccountId, cloudAccount.tenantId);
 
             const completedAt = new Date();
 
             await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: completedAt });
-            await this.syncJobRepository.update(savedSyncRecord.id, { status: 'completed', completedAt });
+            await this.syncJobRepository.update(savedSyncRecord.id, {
+                status: 'completed',
+                completedAt,
+                error: warnings.length > 0 ? warnings.join(' | ') : null,
+            });
 
             this.logger.log(`[sync:${job.id}] Sync geral GCP concluído para conta ${cloudAccountId}`);
         } catch (err) {

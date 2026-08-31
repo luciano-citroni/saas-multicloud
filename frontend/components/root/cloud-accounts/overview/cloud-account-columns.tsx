@@ -1,34 +1,14 @@
+'use client';
+
+import { ColumnDef } from '@tanstack/react-table';
+import { EllipsisVertical, LayoutList } from 'lucide-react';
+import Link from 'next/link';
+import type { AppLocale } from '@/lib/locale';
 import { type OrganizationCloudAccount as CloudAccount } from '@/app/actions/organization';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ColumnDef } from '@tanstack/react-table';
-import { Clock3, EllipsisVertical, LayoutList, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
-import type { AppLocale } from '@/lib/locale';
-
-const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
-
-function formatProvider(provider: string) {
-    const normalized = provider.toLowerCase();
-    if (normalized === 'aws') return 'AWS';
-    if (normalized === 'azure') return 'Azure';
-    if (normalized === 'gcp') return 'GCP';
-    return provider;
-}
-
-function formatDateTime(dateString: string | undefined | null, locale: AppLocale, notSynced: string, invalidDate: string) {
-    if (!dateString) return notSynced;
-
-    const parsed = new Date(dateString);
-    if (Number.isNaN(parsed.getTime())) return invalidDate;
-
-    return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'pt-BR', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-        timeZone: SAO_PAULO_TIME_ZONE,
-    }).format(parsed);
-}
+import { CloudAccountSyncStatus } from '@/components/root/cloud-accounts/cloud-account-sync-status';
 
 type ColumnTranslations = {
     notSynced: string;
@@ -39,6 +19,9 @@ type ColumnTranslations = {
     columnProvider: string;
     columnStatus: string;
     columnLastSync: string;
+    syncFailedLabel: string;
+    syncWarningLabel: string;
+    lastSyncLabel: string;
     active: string;
     inactive: string;
     syncPermission: string;
@@ -64,6 +47,14 @@ type CloudColumnOptions = {
     onDeleteAccount: (id: string) => void;
 };
 
+function formatProvider(provider: string) {
+    const normalized = provider.toLowerCase();
+    if (normalized === 'aws') return 'AWS';
+    if (normalized === 'azure') return 'Azure';
+    if (normalized === 'gcp') return 'GCP';
+    return provider;
+}
+
 export const CloudAccountColumns = ({
     canManageAccounts,
     canSyncAccounts,
@@ -75,6 +66,15 @@ export const CloudAccountColumns = ({
     onEditAccount,
     onDeleteAccount,
 }: CloudColumnOptions) => {
+    const syncStatusLabels = {
+        notSynced: t.notSynced,
+        invalidDate: t.invalidDate,
+        processing: t.processing,
+        syncFailedLabel: t.syncFailedLabel,
+        syncWarningLabel: t.syncWarningLabel,
+        lastSyncLabel: t.lastSyncLabel,
+    };
+
     const columns: ColumnDef<CloudAccount>[] = [
         {
             id: 'alias',
@@ -82,19 +82,32 @@ export const CloudAccountColumns = ({
             accessorKey: 'alias',
             cell: ({ getValue, row }) => {
                 const alias = getValue() as string;
-
-                if (!canManageAccounts) {
-                    return <span className="font-medium">{alias}</span>;
-                }
+                const hasSyncError = Boolean(row.original.lastGeneralSyncError?.trim());
+                const hasSyncWarning = Boolean(row.original.lastGeneralSyncWarning?.trim());
 
                 return (
-                    <button
-                        type="button"
-                        onClick={() => onEditAccount(row.original.id)}
-                        className="cursor-pointer text-left font-medium text-foreground hover:underline"
-                    >
-                        {alias}
-                    </button>
+                    <div className="flex flex-col gap-1">
+                        {!canManageAccounts ? (
+                            <span className="font-medium">{alias}</span>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => onEditAccount(row.original.id)}
+                                className="cursor-pointer text-left font-medium text-foreground hover:underline"
+                            >
+                                {alias}
+                            </button>
+                        )}
+                        {hasSyncError ? (
+                            <Badge variant="destructive" className="w-fit text-[10px] font-normal">
+                                {t.syncFailedLabel}
+                            </Badge>
+                        ) : hasSyncWarning ? (
+                            <Badge variant="outline" className="w-fit border-amber-500/40 text-[10px] font-normal text-amber-700 dark:text-amber-300">
+                                {t.syncWarningLabel}
+                            </Badge>
+                        ) : null}
+                    </div>
                 );
             },
         },
@@ -131,25 +144,7 @@ export const CloudAccountColumns = ({
             id: 'lastGeneralSyncAt',
             header: t.columnLastSync,
             accessorKey: 'lastGeneralSyncAt',
-            cell: ({ row }) => {
-                const isSyncInProgress = row.original.isSyncInProgress === true;
-
-                if (isSyncInProgress) {
-                    return (
-                        <Badge variant="default" className="inline-flex items-center gap-1">
-                            <RefreshCw className="size-3 animate-spin" />
-                            {t.processing}
-                        </Badge>
-                    );
-                }
-
-                return (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        <Clock3 className="size-3.5" />
-                        {formatDateTime(row.original.lastGeneralSyncAt, locale, t.notSynced, t.invalidDate)}
-                    </span>
-                );
-            },
+            cell: ({ row }) => <CloudAccountSyncStatus account={row.original} locale={locale} labels={syncStatusLabels} />,
         },
         {
             id: 'actions',

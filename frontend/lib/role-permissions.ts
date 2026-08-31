@@ -1,3 +1,13 @@
+const DEFAULT_PLATFORM_USER_ARN = 'arn:aws:iam::371117669756:user/saas-multicloud';
+
+/**
+ * ARN do usuário IAM da plataforma que assume roles nos clientes.
+ * Configure via NEXT_PUBLIC_AWS_USER_ARN no frontend (deve ser o mesmo de AWS_USER_ARN no backend).
+ */
+export function getPlatformUserArn(): string {
+    return process.env.NEXT_PUBLIC_AWS_USER_ARN?.trim() || DEFAULT_PLATFORM_USER_ARN;
+}
+
 export function buildTrustPolicy(externalId: string) {
     return {
         Version: '2012-10-17',
@@ -5,7 +15,7 @@ export function buildTrustPolicy(externalId: string) {
             {
                 Effect: 'Allow',
                 Principal: {
-                    AWS: ['arn:aws:iam::<PLATFORM_ACCOUNT_ID>:root', process.env.AWS_USER_ARN || 'arn:aws:iam::371117669756:user/saas-multicloud'],
+                    AWS: getPlatformUserArn(),
                 },
                 Action: 'sts:AssumeRole',
                 Condition: {
@@ -182,73 +192,31 @@ export const PERMISSIONS_POLICY = {
 };
 
 /**
- * Permissões adicionais necessárias para o módulo de Automação.
- * Conceda essas permissões somente se quiser usar o provisionamento
- * automático de recursos EC2, S3, RDS e Lambda pela plataforma.
+ * Permissões adicionais para o módulo de Automação (S3 + CloudFront).
+ * Deve estar alinhada com `backend/src/automation/action-definitions.ts`.
  */
 export const AUTOMATION_PERMISSIONS_POLICY = {
     Version: '2012-10-17',
     Statement: [
         {
-            Sid: 'EC2AutomationAccess',
-            Effect: 'Allow',
-            Action: [
-                'ec2:RunInstances',
-                'ec2:CreateTags',
-                'ec2:DescribeImages',
-                'ec2:DescribeKeyPairs',
-                'ec2:DescribeAvailabilityZones',
-                'ec2:DescribeInstanceTypes',
-            ],
-            Resource: '*',
-        },
-        {
             Sid: 'S3AutomationAccess',
             Effect: 'Allow',
             Action: [
                 's3:CreateBucket',
+                's3:GetBucketLocation',
+                's3:ListBucket',
                 's3:PutBucketVersioning',
                 's3:PutEncryptionConfiguration',
+                's3:PutPublicAccessBlock',
                 's3:PutBucketTagging',
-                's3:DeleteBucket',
             ],
             Resource: '*',
         },
         {
-            Sid: 'RDSAutomationAccess',
+            Sid: 'CloudFrontAutomationAccess',
             Effect: 'Allow',
-            Action: [
-                'rds:CreateDBInstance',
-                'rds:AddTagsToResource',
-                'rds:DescribeDBSubnetGroups',
-                'rds:DescribeDBParameterGroups',
-            ],
+            Action: ['cloudfront:CreateDistribution', 'cloudfront:GetDistribution', 'cloudfront:TagResource'],
             Resource: '*',
-        },
-        {
-            Sid: 'LambdaAutomationAccess',
-            Effect: 'Allow',
-            Action: [
-                'lambda:CreateFunction',
-                'lambda:TagResource',
-                'lambda:GetFunction',
-            ],
-            Resource: '*',
-        },
-        {
-            Sid: 'IAMPassRoleForAutomation',
-            Effect: 'Allow',
-            Action: ['iam:PassRole'],
-            Resource: '*',
-            Condition: {
-                StringEquals: {
-                    'iam:PassedToService': [
-                        'lambda.amazonaws.com',
-                        'rds.amazonaws.com',
-                        'ec2.amazonaws.com',
-                    ],
-                },
-            },
         },
     ],
 };

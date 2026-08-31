@@ -100,6 +100,19 @@ export const ErrorMessages = {
         ALIAS_ALREADY_IN_USE: 'A cloud account with this alias already exists in the organization.',
 
         INVALID_PROVIDER: 'Invalid cloud provider. Supported: aws, azure, gcp.',
+
+        AWS_CONNECTION_FAILED: 'Could not assume the AWS IAM role. Check the Role ARN, trust policy, and External ID.',
+
+        AWS_PLATFORM_CREDENTIALS_INVALID:
+            'Platform AWS credentials are invalid or expired. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY on the server.',
+
+        AZURE_CONNECTION_FAILED: 'Could not authenticate with Azure. Check the Tenant ID, Client ID, Client Secret, and Subscription ID.',
+
+        GCP_CONNECTION_FAILED: 'Could not authenticate with GCP. Check the Project ID, Service Account email, and impersonation setup.',
+
+        CONNECTION_TIMEOUT: 'The cloud connection test timed out. Please try again.',
+
+        CONNECTION_UNAVAILABLE: 'Cloud connection could not be verified right now. Please try again later.',
     },
 
     // Plans / subscriptions
@@ -171,11 +184,27 @@ export const ErrorMessages = {
     AUTOMATION: {
         NOT_FOUND: 'Automation execution not found.',
 
+        WORKFLOW_NOT_FOUND: 'Automation workflow not found.',
+
         UNSUPPORTED_RESOURCE_TYPE: 'Unsupported resource type for provisioning.',
 
         FLOW_INVALID: 'The flow definition is invalid.',
 
         PROVISIONING_FAILED: 'Failed to provision one or more resources.',
+
+        NOT_DRAFT: 'Automation can only be edited while in DRAFT status.',
+
+        NOT_PUBLISHED: 'Automation must be published before execution.',
+
+        NOT_ACTIVE: 'Automation is not active.',
+
+        CYCLE_DETECTED: 'Workflow contains a dependency cycle.',
+
+        INVALID_NODE_REFERENCE: 'Invalid node output reference.',
+
+        INVALID_EDGE: 'Workflow edge references invalid nodes.',
+
+        CLOUD_ACCOUNT_NOT_FOUND: 'Cloud account not found or not accessible.',
     },
 
     // General

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
+import * as fs from 'fs';
 
 import { GcpAssessmentJob } from '../../db/entites/gcp-assessment-job.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
@@ -66,11 +67,15 @@ export class GcpAssessmentProcessor extends WorkerHost {
                 const savedSyncRecord = await this.syncJobRepository.save(syncRecord);
 
                 try {
-                    await this.syncService.syncAll(cloudAccountId, organizationId);
+                    const { warnings } = await this.syncService.syncAll(cloudAccountId, organizationId);
 
                     const syncedAt = new Date();
                     await this.cloudAccountRepository.update({ id: cloudAccountId }, { lastGeneralSyncAt: syncedAt });
-                    await this.syncJobRepository.update(savedSyncRecord.id, { status: 'completed', completedAt: syncedAt });
+                    await this.syncJobRepository.update(savedSyncRecord.id, {
+                        status: 'completed',
+                        completedAt: syncedAt,
+                        error: warnings.length > 0 ? warnings.join(' | ') : null,
+                    });
                 } catch (syncErr) {
                     const syncError = syncErr instanceof Error ? syncErr.message : String(syncErr);
                     await this.syncJobRepository.update(savedSyncRecord.id, { status: 'failed', error: syncError, completedAt: new Date() });
@@ -93,6 +98,19 @@ export class GcpAssessmentProcessor extends WorkerHost {
             await job.updateProgress(60);
 
             const excelFileName = await this.excelService.generateExcel(jobId, data);
+            const excelFilePath = this.excelService.resolveExistingExcelFilePath(excelFileName);
+
+            if (!excelFilePath) {
+                throw new Error(`Arquivo Excel GCP não encontrado após geração: ${excelFileName}`);
+            }
+
+            const excelStats = await fs.promises.stat(excelFilePath);
+
+            if (excelStats.size <= 0) {
+                throw new Error(`Arquivo Excel GCP gerado está vazio: ${excelFilePath}`);
+            }
+
+            this.logger.log(`[${jobId}] Excel GCP confirmado em disco: ${excelFilePath} (${excelStats.size} bytes)`);
 
             // ── 4. Finalize ───────────────────────────────────────────────────
             this.logger.log(`[${jobId}] Fase 4/4: Finalizando...`);

@@ -121,7 +121,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const payload = await parseJsonSafe<unknown>(response);
-    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao enfileirar assessment GCP' }, { status: response.status });
+    const nextResponse = NextResponse.json(payload ?? { message: 'Erro ao executar assessment' }, { status: response.status });
 
     if (rotatedTokens) {
         setAuthCookies(nextResponse, rotatedTokens);

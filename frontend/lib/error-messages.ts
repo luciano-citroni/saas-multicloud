@@ -146,16 +146,40 @@ export const ErrorMessages = {
     // Cloud accounts
     CLOUD_ACCOUNTS: {
         NOT_FOUND: {
-            en: 'Cloud account not found',
-            pt: 'Conta cloud não encontrada',
+            en: 'Cloud account not found.',
+            pt: 'Conta cloud não encontrada.',
         },
         ALIAS_ALREADY_IN_USE: {
-            en: 'A cloud account with this alias already exists in the organization',
-            pt: 'Uma conta cloud com este alias já existe na organização',
+            en: 'A cloud account with this alias already exists in the organization.',
+            pt: 'Uma conta cloud com este alias já existe na organização.',
         },
         INVALID_PROVIDER: {
-            en: 'Invalid cloud provider. Supported: aws, azure, gcp',
-            pt: 'Provedor cloud inválido. Suportado: aws, azure, gcp',
+            en: 'Invalid cloud provider. Supported: aws, azure, gcp.',
+            pt: 'Provedor cloud inválido. Suportado: aws, azure, gcp.',
+        },
+        AWS_CONNECTION_FAILED: {
+            en: 'Could not assume the AWS IAM role. Check the Role ARN, trust policy, and External ID.',
+            pt: 'Não foi possível assumir a IAM Role da AWS. Verifique o Role ARN, a trust policy e o External ID.',
+        },
+        AWS_PLATFORM_CREDENTIALS_INVALID: {
+            en: 'Platform AWS credentials are invalid or expired. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY on the server.',
+            pt: 'As credenciais AWS da plataforma são inválidas ou expiraram. Verifique AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY no servidor.',
+        },
+        AZURE_CONNECTION_FAILED: {
+            en: 'Could not authenticate with Azure. Check the Tenant ID, Client ID, Client Secret, and Subscription ID.',
+            pt: 'Não foi possível autenticar no Azure. Verifique o Tenant ID, Client ID, Client Secret e Subscription ID.',
+        },
+        GCP_CONNECTION_FAILED: {
+            en: 'Could not authenticate with GCP. Check the Project ID, Service Account email, and impersonation setup.',
+            pt: 'Não foi possível autenticar no GCP. Verifique o Project ID, o e-mail da Service Account e a configuração de impersonation.',
+        },
+        CONNECTION_TIMEOUT: {
+            en: 'The cloud connection test timed out. Please try again.',
+            pt: 'O teste de conexão cloud expirou. Tente novamente.',
+        },
+        CONNECTION_UNAVAILABLE: {
+            en: 'Cloud connection could not be verified right now. Please try again later.',
+            pt: 'Não foi possível verificar a conexão cloud agora. Tente novamente mais tarde.',
         },
     },
 

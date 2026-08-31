@@ -15,7 +15,7 @@ import {
     notifyActiveCloudAccountChanged,
     notifyActiveOrganizationChanged,
 } from '@/lib/sidebar-context';
-import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
+import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
 
@@ -497,14 +497,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             { title: tn.assessment, url: '/assessment', icon: GitBranch, module: PlanModule.ASSESSMENT },
             { title: tn.governance, url: '/governance', icon: ShieldCheck, module: PlanModule.GOVERNANCE },
             { title: tn.finops, url: '/finops', icon: DollarSign, module: PlanModule.FINOPS },
-            { title: tn.automation, url: '/automation', icon: Workflow, module: PlanModule.CLOUD_INVENTORY },
+            { title: tn.automation, url: '/automations', icon: Workflow, module: PlanModule.AUTOMATION },
         ].map((item) => {
             if (!activeOrganizationId) {
                 return { ...item, disabled: true, disabledReason: tn.moduleNotEnabled };
             }
 
             if (!item.module) return item;
-            const enabled = hasModuleAccess(activeOrganizationModules, item.module);
+            const enabled =
+                item.module === PlanModule.AUTOMATION
+                    ? hasAutomationModuleAccess(activeOrganizationModules)
+                    : hasModuleAccess(activeOrganizationModules, item.module);
             return { ...item, disabled: !enabled, disabledReason: enabled ? undefined : tn.moduleNotEnabled };
         });
 

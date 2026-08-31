@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 
+import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpComputeService } from '../compute/gcp-compute.service';
 import { GcpNetworkingService } from '../networking/gcp-networking.service';
 import { GcpStorageService } from '../storage/gcp-storage.service';
@@ -14,6 +15,7 @@ export class GcpAssessmentSyncService {
     private readonly logger = new Logger(GcpAssessmentSyncService.name);
 
     constructor(
+        private readonly connector: GcpConnectorService,
         private readonly computeService: GcpComputeService,
         private readonly networkingService: GcpNetworkingService,
         private readonly storageService: GcpStorageService,
@@ -24,31 +26,78 @@ export class GcpAssessmentSyncService {
         private readonly cloudRunService: GcpCloudRunService
     ) {}
 
-    async syncAll(cloudAccountId: string, organizationId: string): Promise<void> {
+    async syncAll(cloudAccountId: string, organizationId: string): Promise<{ warnings: string[] }> {
         this.logger.log(`[${cloudAccountId}] Iniciando sincronização completa GCP`);
 
-        await this.runStep('VPC Networks', () => this.networkingService.syncNetworksFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Subnetworks', () => this.networkingService.syncSubnetworksFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Firewall Rules', () => this.networkingService.syncFirewallRulesFromGcp(cloudAccountId, organizationId));
-        await this.runStep('VM Instances', () => this.computeService.syncInstancesFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Storage Buckets', () => this.storageService.syncBucketsFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Cloud SQL Instances', () => this.sqlService.syncInstancesFromGcp(cloudAccountId, organizationId));
-        await this.runStep('GKE Clusters', () => this.gkeService.syncClustersFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Service Accounts', () => this.iamService.syncServiceAccountsFromGcp(cloudAccountId, organizationId));
-        await this.runStep('CDN Backend Services', () => this.cdnService.syncFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Cloud Run Services', () => this.cloudRunService.syncFromGcp(cloudAccountId, organizationId));
-        await this.runStep('Cloud Run Jobs', () => this.cloudRunService.syncJobsFromGcp(cloudAccountId, organizationId));
+        await this.connector.resolveCredentials(cloudAccountId, organizationId);
 
-        this.logger.log(`[${cloudAccountId}] Sincronização GCP concluída`);
+        const steps: Array<{ name: string; run: () => Promise<unknown> }> = [
+            { name: 'VPC Networks', run: () => this.networkingService.syncNetworksFromGcp(cloudAccountId, organizationId) },
+            { name: 'Subnetworks', run: () => this.networkingService.syncSubnetworksFromGcp(cloudAccountId, organizationId) },
+            { name: 'Firewall Rules', run: () => this.networkingService.syncFirewallRulesFromGcp(cloudAccountId, organizationId) },
+            { name: 'VM Instances', run: () => this.computeService.syncInstancesFromGcp(cloudAccountId, organizationId) },
+            { name: 'Storage Buckets', run: () => this.storageService.syncBucketsFromGcp(cloudAccountId, organizationId) },
+            { name: 'Cloud SQL Instances', run: () => this.sqlService.syncInstancesFromGcp(cloudAccountId, organizationId) },
+            { name: 'GKE Clusters', run: () => this.gkeService.syncClustersFromGcp(cloudAccountId, organizationId) },
+            { name: 'Service Accounts', run: () => this.iamService.syncServiceAccountsFromGcp(cloudAccountId, organizationId) },
+            { name: 'CDN Backend Services', run: () => this.cdnService.syncFromGcp(cloudAccountId, organizationId) },
+            { name: 'Cloud Run Services', run: () => this.cloudRunService.syncFromGcp(cloudAccountId, organizationId) },
+            { name: 'Cloud Run Jobs', run: () => this.cloudRunService.syncJobsFromGcp(cloudAccountId, organizationId) },
+        ];
+
+        let successCount = 0;
+        const failures: string[] = [];
+        const failureMessages: string[] = [];
+
+        for (const step of steps) {
+            const result = await this.runStep(step.name, step.run);
+            if (result.succeeded) {
+                successCount += 1;
+            } else {
+                failures.push(step.name);
+                if (result.error) {
+                    failureMessages.push(result.error);
+                }
+            }
+        }
+
+        if (successCount === 0) {
+            throw new InternalServerErrorException(this.buildUserFacingSyncError(failureMessages, failures));
+        }
+
+        if (failures.length > 0) {
+            this.logger.warn(`[${cloudAccountId}] Sincronização GCP concluída com falhas parciais: ${failures.join(', ')}`);
+        } else {
+            this.logger.log(`[${cloudAccountId}] Sincronização GCP concluída`);
+        }
+
+        return { warnings: failureMessages };
     }
 
-    private async runStep(name: string, fn: () => Promise<any>): Promise<void> {
+    private buildUserFacingSyncError(failureMessages: string[], failures: string[]): string {
+        const combined = failureMessages.join(' | ').toLowerCase();
+
+        if (combined.includes('invalid_grant') || combined.includes('invalid jwt signature')) {
+            return 'Falha de autenticação GCP: credenciais da plataforma inválidas (GCP_SA_CREDENTIALS_JSON) ou impersonation mal configurada. Verifique a chave da service account da plataforma e conceda roles/iam.serviceAccountTokenCreator na service account do cliente.';
+        }
+
+        if (failureMessages.length === 1) {
+            return failureMessages[0];
+        }
+
+        const primary = failureMessages[0] ?? `Falha ao sincronizar recursos GCP (${failures.join(', ')})`;
+        return `${primary} (+${failureMessages.length - 1} outras falhas no sync)`;
+    }
+
+    private async runStep(name: string, fn: () => Promise<unknown>): Promise<{ succeeded: boolean; error?: string }> {
         try {
             await fn();
             this.logger.debug(`[gcp-sync] ${name}: OK`);
+            return { succeeded: true };
         } catch (err) {
             const cause = this.extractGcpErrorMessage(err);
             this.logger.warn(`[gcp-sync] ${name}: FALHOU — ${cause}`);
+            return { succeeded: false, error: `${name}: ${cause}` };
         }
     }
 

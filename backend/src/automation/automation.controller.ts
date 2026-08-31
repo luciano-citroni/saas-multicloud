@@ -10,6 +10,8 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { estimateCostBodySchema, runAutomationBodySchema } from './dto';
 import type { EstimateCostBodyDto, RunAutomationBodyDto } from './dto';
 import { AutomationService } from './automation.service';
+import { AutomationsCrudService } from './automations-crud.service';
+import { ACTION_DEFINITIONS } from './action-definitions';
 import {
     AutomationExecutionResponseDto,
     CostEstimateResponseDto,
@@ -29,6 +31,13 @@ import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 @Controller('automation')
 export class AutomationController {
     constructor(private readonly automationService: AutomationService) {}
+
+    @Get('actions')
+    @ApiOperation({ summary: 'Catálogo de ações de automação disponíveis' })
+    @ApiResponse({ status: 200, description: 'Lista de definições de ações' })
+    listActions() {
+        return ACTION_DEFINITIONS;
+    }
 
     @Post('estimate')
     @HttpCode(HttpStatus.OK)

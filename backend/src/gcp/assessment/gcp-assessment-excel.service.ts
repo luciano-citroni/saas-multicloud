@@ -43,6 +43,27 @@ export class GcpAssessmentExcelService {
         return path.join(this.getOutputDir(), fileName);
     }
 
+    resolveExistingExcelFilePath(fileName: string): string | null {
+        const filePath = this.getExcelFilePath(fileName);
+
+        if (fs.existsSync(filePath)) {
+            return filePath;
+        }
+
+        const envDir = process.env.EXCEL_UPLOADS_DIR;
+        if (envDir) {
+            const candidatePath = path.join(envDir, fileName);
+            if (fs.existsSync(candidatePath)) {
+                if (candidatePath !== filePath) {
+                    this.logger.warn(`Excel GCP encontrado fora do diretório principal: ${candidatePath}`);
+                }
+                return candidatePath;
+            }
+        }
+
+        return null;
+    }
+
     async deleteExcel(fileName: string): Promise<void> {
         const filePath = this.getExcelFilePath(fileName);
         try {

@@ -72,6 +72,8 @@ export type OrganizationCloudAccount = {
     isActive?: boolean;
     isSyncInProgress?: boolean;
     lastGeneralSyncAt?: string | null;
+    lastGeneralSyncError?: string | null;
+    lastGeneralSyncWarning?: string | null;
     createdAt?: string;
     updatedAt?: string;
 };
@@ -88,7 +90,7 @@ function isAzureProvider(provider: string | undefined | null): boolean {
     return (provider ?? '').trim().toLowerCase() === 'azure';
 }
 
-function isGcpProvider(provider: string | undefined | null): boolean {
+export function isGcpProvider(provider: string | undefined | null): boolean {
     return (provider ?? '').trim().toLowerCase() === 'gcp';
 }
 
@@ -117,6 +119,49 @@ export async function fetchOrganizationCloudAccounts(organizationId: string, opt
     return fetch(url, {
         cache: 'no-store',
     });
+}
+
+export type GeneralSyncJobStatus = {
+    id: string;
+    status: string;
+    failedReason?: string;
+    createdAt?: string;
+    completedAt?: string;
+};
+
+function buildGeneralSyncJobPath(provider: string, cloudAccountId: string, jobId: string): string | null {
+    const normalizedProvider = (provider ?? 'aws').trim().toLowerCase();
+
+    if (normalizedProvider === 'azure') {
+        return `/api/azure/assessment/accounts/${encodeURIComponent(cloudAccountId)}/jobs/${encodeURIComponent(jobId)}`;
+    }
+
+    if (normalizedProvider === 'gcp') {
+        return `/api/gcp/assessment/accounts/${encodeURIComponent(cloudAccountId)}/jobs/${encodeURIComponent(jobId)}`;
+    }
+
+    if (normalizedProvider === 'aws') {
+        return `/api/aws/assessment/accounts/${encodeURIComponent(cloudAccountId)}/jobs/${encodeURIComponent(jobId)}`;
+    }
+
+    return null;
+}
+
+export async function pollGeneralSyncJobStatus(
+    organizationId: string,
+    cloudAccountId: string,
+    jobId: string,
+    provider: string
+): Promise<Response> {
+    const basePath = buildGeneralSyncJobPath(provider, cloudAccountId, jobId);
+
+    if (!basePath) {
+        throw new Error('Provider de sync não suportado');
+    }
+
+    const url = `${basePath}?organizationId=${encodeURIComponent(organizationId)}`;
+
+    return fetch(url, { cache: 'no-store' });
 }
 
 export async function enqueueGeneralSync(organizationId: string, cloudAccountId: string, provider = 'aws') {

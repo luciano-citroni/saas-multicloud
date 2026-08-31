@@ -1,20 +1,32 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class GcpAssessmentArchitectureResponseDto {
+    @ApiProperty({ format: 'uuid', description: 'ID da conta cloud GCP' })
+    cloudAccountId!: string;
+
+    @ApiPropertyOptional({ description: 'Data do último sync geral da conta', nullable: true })
+    lastGeneralSyncAt?: Date | null;
+
+    @ApiProperty({
+        description: 'Grafo da arquitetura para React Flow',
+        type: 'object',
+        additionalProperties: true,
+    })
+    architectureGraph!: {
+        nodes: unknown[];
+        edges: unknown[];
+    };
+}
+
 export class GcpAssessmentJobResponseDto {
     @ApiProperty({ format: 'uuid', description: 'UUID do job de assessment' })
     id!: string;
 
-    @ApiProperty({ format: 'uuid' })
-    cloudAccountId!: string;
-
-    @ApiProperty({ format: 'uuid' })
-    organizationId!: string;
-
     @ApiProperty({ enum: ['pending', 'running', 'completed', 'failed'] })
     status!: string;
 
-    @ApiPropertyOptional({ nullable: true })
-    error!: string | null;
+    @ApiPropertyOptional({ description: 'Mensagem de erro em caso de falha' })
+    error?: string;
 
     @ApiPropertyOptional({ description: 'URL para download do relatório Excel (disponível após conclusão)' })
     excelDownloadUrl?: string;

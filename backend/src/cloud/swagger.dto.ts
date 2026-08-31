@@ -64,6 +64,22 @@ export class CloudAccountResponseDto {
     lastGeneralSyncAt: Date | null;
 
     @ApiProperty({
+        example: 'Sincronização GCP falhou para todos os recursos.',
+        description: 'Mensagem do último sync geral com falha, quando o job mais recente não foi concluído com sucesso',
+        required: false,
+        nullable: true,
+    })
+    lastGeneralSyncError: string | null;
+
+    @ApiProperty({
+        example: 'Cloud Run Jobs em us-central1: Permission run.jobs.list denied',
+        description: 'Avisos do último sync geral concluído com falhas parciais',
+        required: false,
+        nullable: true,
+    })
+    lastGeneralSyncWarning: string | null;
+
+    @ApiProperty({
         example: true,
         description: 'Indica se existe sync/assessment em andamento para esta conta',
     })

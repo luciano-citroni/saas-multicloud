@@ -5,6 +5,17 @@ import { Repository } from 'typeorm';
 import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpCloudRunService as GcpCloudRunServiceEntity } from '../../db/entites/gcp-cloud-run-service.entity';
 import { GcpCloudRunJob } from '../../db/entites/gcp-cloud-run-job.entity';
+import { GcpSubnetwork } from '../../db/entites/gcp-subnetwork.entity';
+
+const DEFAULT_GCP_RUN_REGIONS = [
+    'southamerica-east1',
+    'us-central1',
+    'us-east1',
+    'us-west1',
+    'europe-west1',
+    'europe-west4',
+    'asia-southeast1',
+];
 
 @Injectable()
 export class GcpCloudRunService {
@@ -17,7 +28,10 @@ export class GcpCloudRunService {
         private readonly serviceRepo: Repository<GcpCloudRunServiceEntity>,
 
         @InjectRepository(GcpCloudRunJob)
-        private readonly jobRepo: Repository<GcpCloudRunJob>
+        private readonly jobRepo: Repository<GcpCloudRunJob>,
+
+        @InjectRepository(GcpSubnetwork)
+        private readonly subnetworkRepo: Repository<GcpSubnetwork>
     ) {}
 
     async listFromDatabase(cloudAccountId: string): Promise<GcpCloudRunServiceEntity[]> {
@@ -26,28 +40,10 @@ export class GcpCloudRunService {
 
     async syncFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpCloudRunServiceEntity[]> {
         const { client, projectId } = await this.connector.getRunClient(cloudAccountId, organizationId);
-
-        // Cloud Run v2 does NOT support the '-' wildcard for location.
-        // First list the locations where Cloud Run is enabled, then query each one.
-        const locationsResponse = await (client.projects.locations as any)
-            .list({ name: `projects/${projectId}` })
-            .catch((err: unknown) => {
-                throw new BadRequestException(
-                    `Falha ao listar regiões Cloud Run (run.projects.locations.list): ${(err as Error)?.message ?? err}`
-                );
-            });
-
-        const locations: string[] = ((locationsResponse.data.locations ?? []) as any[])
-            .map((l) => l.locationId as string)
-            .filter(Boolean);
-
-        if (locations.length === 0) {
-            this.logger.warn(`[${cloudAccountId}] Nenhuma região Cloud Run encontrada para o projeto ${projectId}`);
-            return [];
-        }
-
+        const locations = await this.resolveRunLocations(cloudAccountId);
         const now = new Date();
         const upserted: GcpCloudRunServiceEntity[] = [];
+        const warnings: string[] = [];
 
         for (const location of locations) {
             let pageToken: string | undefined;
@@ -60,9 +56,9 @@ export class GcpCloudRunService {
                         ...(pageToken ? { pageToken } : {}),
                     })
                     .catch((err: unknown) => {
-                        this.logger.warn(
-                            `[${cloudAccountId}] Falha ao listar Cloud Run services em ${location}: ${(err as Error)?.message ?? err}`
-                        );
+                        const message = (err as Error)?.message ?? String(err);
+                        warnings.push(`Cloud Run Services em ${location}: ${message}`);
+                        this.logger.warn(`[${cloudAccountId}] Falha ao listar Cloud Run services em ${location}: ${message}`);
                         return null;
                     });
 
@@ -75,12 +71,9 @@ export class GcpCloudRunService {
                     if (!gcpServiceName) continue;
 
                     const shortName = gcpServiceName.split('/').pop() ?? gcpServiceName;
-
-                    // terminalCondition.type is always "Ready"; the real status is in .state
                     const condition: string | null = svc.terminalCondition?.state ?? null;
                     const uri: string | null = svc.uri ?? null;
 
-                    // allowsUnauthenticated: check IAM policy for allUsers binding
                     let allowsUnauthenticated = false;
                     try {
                         const iamRes = await (client.projects.locations.services as any)
@@ -91,24 +84,19 @@ export class GcpCloudRunService {
                             (b: any) => b.role === 'roles/run.invoker' && (b.members as string[] | undefined)?.includes('allUsers')
                         );
                     } catch {
-                        // default false — no additional error needed, sync continues
+                        // default false — sync continues
                     }
 
-                    // Latest revision info
                     const latestContainer = svc.template?.containers?.[0] ?? null;
                     const containerImage: string | null = latestContainer?.image ?? null;
                     const cpuLimit: string | null = latestContainer?.resources?.limits?.cpu ?? null;
                     const memoryLimit: string | null = latestContainer?.resources?.limits?.memory ?? null;
-
                     const maxInstanceCount: number | null = svc.template?.scaling?.maxInstanceCount ?? null;
                     const minInstanceCount: number | null = svc.template?.scaling?.minInstanceCount ?? null;
-
                     const vpcConnector: string | null =
                         svc.template?.vpcAccess?.connector ??
                         svc.template?.vpcAccess?.networkInterfaces?.[0]?.network ??
                         null;
-
-                    // latestReadyRevision is a full resource path — keep it for architecture but also extract short name
                     const latestReadyRevision: string | null = svc.latestReadyRevision
                         ? ((svc.latestReadyRevision as string).split('/').pop() ?? svc.latestReadyRevision)
                         : null;
@@ -158,10 +146,12 @@ export class GcpCloudRunService {
             } while (pageToken);
         }
 
+        if (warnings.length > 0) {
+            throw new BadRequestException(warnings.join(' | '));
+        }
+
         return upserted;
     }
-
-    // ── Jobs ──────────────────────────────────────────────────────────────────
 
     async listJobsFromDatabase(cloudAccountId: string): Promise<GcpCloudRunJob[]> {
         return this.jobRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
@@ -169,42 +159,25 @@ export class GcpCloudRunService {
 
     async syncJobsFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpCloudRunJob[]> {
         const { client, projectId } = await this.connector.getRunClient(cloudAccountId, organizationId);
-
-        // Reuse the same location listing pattern — Jobs v2 also doesn't support '-' wildcard.
-        const locationsResponse = await (client.projects.locations as any)
-            .list({ name: `projects/${projectId}` })
-            .catch((err: unknown) => {
-                throw new BadRequestException(
-                    `Falha ao listar regiões Cloud Run Jobs (run.projects.locations.list): ${(err as Error)?.message ?? err}`
-                );
-            });
-
-        const locations: string[] = ((locationsResponse.data.locations ?? []) as any[])
-            .map((l) => l.locationId as string)
-            .filter(Boolean);
-
-        if (locations.length === 0) {
-            this.logger.warn(`[${cloudAccountId}] Nenhuma região Cloud Run encontrada para jobs no projeto ${projectId}`);
-            return [];
-        }
-
+        const locations = await this.resolveRunLocations(cloudAccountId);
         const now = new Date();
         const upserted: GcpCloudRunJob[] = [];
+        const warnings: string[] = [];
 
         for (const location of locations) {
             let pageToken: string | undefined;
 
             do {
-                const response = await (client.projects.locations as any)
-                    .jobs.list({
+                const response = await (client.projects.locations.jobs as any)
+                    .list({
                         parent: `projects/${projectId}/locations/${location}`,
                         pageSize: 100,
                         ...(pageToken ? { pageToken } : {}),
                     })
                     .catch((err: unknown) => {
-                        this.logger.warn(
-                            `[${cloudAccountId}] Falha ao listar Cloud Run jobs em ${location}: ${(err as Error)?.message ?? err}`
-                        );
+                        const message = (err as Error)?.message ?? String(err);
+                        warnings.push(`Cloud Run Jobs em ${location}: ${message}`);
+                        this.logger.warn(`[${cloudAccountId}] Falha ao listar Cloud Run jobs em ${location}: ${message}`);
                         return null;
                     });
 
@@ -218,17 +191,13 @@ export class GcpCloudRunService {
 
                     const shortName = gcpJobName.split('/').pop() ?? gcpJobName;
                     const condition: string | null = job.terminalCondition?.state ?? null;
-
                     const templateContainer = job.template?.template?.containers?.[0] ?? null;
                     const containerImage: string | null = templateContainer?.image ?? null;
                     const cpuLimit: string | null = templateContainer?.resources?.limits?.cpu ?? null;
                     const memoryLimit: string | null = templateContainer?.resources?.limits?.memory ?? null;
-
                     const taskCount: number | null = job.template?.taskCount ?? null;
                     const maxRetries: number | null = job.template?.maxRetries ?? null;
-                    const executionCount: number | null =
-                        typeof job.executionCount === 'number' ? job.executionCount : null;
-
+                    const executionCount: number | null = typeof job.executionCount === 'number' ? job.executionCount : null;
                     const latestCreatedExecution: string | null = job.latestCreatedExecution?.name
                         ? ((job.latestCreatedExecution.name as string).split('/').pop() ?? null)
                         : null;
@@ -274,6 +243,25 @@ export class GcpCloudRunService {
             } while (pageToken);
         }
 
+        if (warnings.length > 0) {
+            throw new BadRequestException(warnings.join(' | '));
+        }
+
         return upserted;
+    }
+
+    private async resolveRunLocations(cloudAccountId: string): Promise<string[]> {
+        const subnetworks = await this.subnetworkRepo.find({
+            where: { cloudAccountId },
+            select: ['region'],
+        });
+
+        const regions = [...new Set(subnetworks.map((subnet) => subnet.region).filter((region) => region.trim().length > 0))];
+
+        if (regions.length > 0) {
+            return regions;
+        }
+
+        return DEFAULT_GCP_RUN_REGIONS;
     }
 }

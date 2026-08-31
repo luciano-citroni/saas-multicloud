@@ -5,7 +5,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 
 import { GcpAssessmentJob } from '../../db/entites/gcp-assessment-job.entity';
-import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { CloudAccount, CloudProvider } from '../../db/entites/cloud-account.entity';
 import { OrganizationMembership } from '../../db/entites/organization-membership.entity';
 import { BillingService } from '../../billing/billing.service';
 import { SystemModule } from '../../common/modules/system-modules';
@@ -64,7 +64,9 @@ export class GcpAssessmentService {
     async buildAssessmentArchitecture(cloudAccountId: string, organizationId: string): Promise<GcpAssessmentArchitectureResponse> {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
-        const cloudAccount = await this.cloudAccountRepository.findOne({ where: { id: cloudAccountId, organizationId } });
+        const cloudAccount = await this.cloudAccountRepository.findOne({
+            where: { id: cloudAccountId, tenantId: organizationId },
+        });
 
         if (!cloudAccount) {
             throw new BadRequestException(`CloudAccount "${cloudAccountId}" não encontrada ou sem acesso.`);
@@ -76,10 +78,12 @@ export class GcpAssessmentService {
         return { cloudAccountId, lastGeneralSyncAt: cloudAccount.lastGeneralSyncAt, architectureGraph };
     }
 
-    async startAssessment(cloudAccountId: string, organizationId: string, runSync = true): Promise<GcpAssessmentJob> {
+    async startAssessment(cloudAccountId: string, organizationId: string, runSync: boolean): Promise<GcpAssessmentJob> {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
-        const cloudAccount = await this.cloudAccountRepository.findOne({ where: { id: cloudAccountId, organizationId } });
+        const cloudAccount = await this.cloudAccountRepository.findOne({
+            where: { id: cloudAccountId, tenantId: organizationId },
+        });
 
         if (!cloudAccount) {
             throw new BadRequestException(`CloudAccount "${cloudAccountId}" não encontrada ou sem acesso.`);
@@ -127,9 +131,14 @@ export class GcpAssessmentService {
     }
 
     async enqueueGeneralSync(cloudAccountId: string, organizationId: string, userId: string): Promise<GcpGeneralSyncJobResponse> {
-        await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        await this.assertCloudInventoryAccess(organizationId);
 
         const cloudAccount = await this.requireCloudAccount(cloudAccountId, organizationId);
+
+        if (cloudAccount.provider !== CloudProvider.GCP) {
+            throw new BadRequestException(`CloudAccount "${cloudAccountId}" não é uma conta GCP.`);
+        }
+
         await this.assertUserHasCloudAccountAccess(cloudAccount, userId);
 
         const existingJob = await this.findPendingGeneralSyncJob(cloudAccountId);
@@ -140,7 +149,7 @@ export class GcpAssessmentService {
             return {
                 id: String(existingJob.id),
                 status: this.mapQueueState(await existingJob.getState()),
-                message: `Já existe um sync geral em andamento para esta conta GCP.`,
+                message: `Já existe um sync geral em andamento para esta conta GCP. Acompanhe em GET /gcp/assessment/accounts/${cloudAccountId}/jobs/${existingJob.id}`,
             };
         }
 
@@ -157,7 +166,7 @@ export class GcpAssessmentService {
         return {
             id: String(syncJob.id),
             status: this.mapQueueState(await syncJob.getState()),
-            message: `Sync geral GCP enfileirado com sucesso.`,
+            message: `Sync geral GCP enfileirado. Acompanhe em GET /gcp/assessment/accounts/${cloudAccountId}/jobs/${syncJob.id}`,
         };
     }
 
@@ -170,6 +179,10 @@ export class GcpAssessmentService {
             throw new BadRequestException(`Job de sync GCP "${syncJobId}" não encontrado na fila.`);
         }
 
+        if (job.name !== GCP_GENERAL_SYNC_JOB_NAME) {
+            throw new BadRequestException(`Job de sync GCP "${syncJobId}" inválido.`);
+        }
+
         const jobCloudAccountId = (job.data as { cloudAccountId?: string }).cloudAccountId;
 
         if (jobCloudAccountId !== cloudAccountId) {
@@ -177,6 +190,20 @@ export class GcpAssessmentService {
         }
 
         return this.mapGeneralSyncJob(job);
+    }
+
+    async listGeneralSyncJobs(cloudAccountId: string, organizationId: string): Promise<GcpGeneralSyncJobStatusResponse[]> {
+        await this.requireCloudAccount(cloudAccountId, organizationId);
+
+        const jobs = await this.generalSyncQueue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'paused', 'completed', 'failed'], 0, 99, false);
+
+        const syncJobs = jobs.filter((job) => {
+            const jobCloudAccountId = (job.data as { cloudAccountId?: string }).cloudAccountId;
+
+            return job.name === GCP_GENERAL_SYNC_JOB_NAME && jobCloudAccountId === cloudAccountId;
+        });
+
+        return Promise.all(syncJobs.map((job) => this.mapGeneralSyncJob(job)));
     }
 
     private async findPendingGeneralSyncJob(cloudAccountId: string): Promise<Job | undefined> {
@@ -212,6 +239,16 @@ export class GcpAssessmentService {
         }
 
         return cloudAccount;
+    }
+
+    private async assertCloudInventoryAccess(organizationId: string): Promise<void> {
+        try {
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.CLOUD_INVENTORY);
+            return;
+        } catch {
+            // Compatibilidade temporária para planos antigos que ainda usam apenas "assessment".
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        }
     }
 
     private async assertUserHasCloudAccountAccess(cloudAccount: CloudAccount, userId: string): Promise<void> {

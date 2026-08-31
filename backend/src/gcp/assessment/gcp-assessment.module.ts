@@ -30,6 +30,7 @@ import { GcpIamModule } from '../iam/gcp-iam.module';
 import { GcpGkeModule } from '../gke/gcp-gke.module';
 import { GcpCdnModule } from '../cdn/gcp-cdn.module';
 import { GcpCloudRunModule } from '../cloudrun/gcp-cloudrun.module';
+import { GcpConnectorModule } from '../gcp-connector.module';
 
 import { GCP_ASSESSMENT_QUEUE, GCP_GENERAL_SYNC_QUEUE } from './constants';
 import { GcpAssessmentController } from './gcp-assessment.controller';
@@ -73,6 +74,7 @@ import { GcpAssessmentArchitectureService } from './gcp-assessment-architecture.
         GcpGkeModule,
         GcpCdnModule,
         GcpCloudRunModule,
+        GcpConnectorModule,
     ],
     providers: [
         GcpAssessmentService,

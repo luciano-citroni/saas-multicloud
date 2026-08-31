@@ -18,15 +18,25 @@ import * as crypto from 'crypto';
 
 import { BillingService } from '../billing/billing.service';
 
+import { CloudConnectionService } from './cloud-connection.service';
+
 import { ErrorMessages } from '../common/messages/error-messages';
 
 import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
+import { CloudSyncJob } from '../db/entites/cloud-sync-job.entity';
 
 import { GENERAL_SYNC_JOB_NAME, GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
 import { GCP_GENERAL_SYNC_JOB_NAME, GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
 
 type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
     isSyncInProgress: boolean;
+    lastGeneralSyncError: string | null;
+    lastGeneralSyncWarning: string | null;
+};
+
+type CloudAccountSyncFeedback = {
+    error: string | null;
+    warning: string | null;
 };
 
 @Injectable()
@@ -43,6 +53,9 @@ export class CloudService {
         @InjectRepository(AzureAssessmentJob)
         private readonly azureAssessmentJobRepository: Repository<AzureAssessmentJob>,
 
+        @InjectRepository(CloudSyncJob)
+        private readonly syncJobRepository: Repository<CloudSyncJob>,
+
         @InjectQueue(GENERAL_SYNC_QUEUE)
         private readonly generalSyncQueue: Queue,
 
@@ -51,7 +64,9 @@ export class CloudService {
 
         private readonly configService: ConfigService,
 
-        private readonly billingService: BillingService
+        private readonly billingService: BillingService,
+
+        private readonly cloudConnectionService: CloudConnectionService
     ) {}
 
     private normalizeAwsCredentials(credentials: Record<string, any>): Record<string, any> {
@@ -394,6 +409,8 @@ export class CloudService {
 
         this.validateCredentialsForProvider(dto.provider as CloudProvider, normalizedCredentials);
 
+        await this.cloudConnectionService.verify(dto.provider as CloudProvider, normalizedCredentials);
+
         // Criptografar as credenciais
 
         const encryptedCredentials = this.encryptCredentials(normalizedCredentials);
@@ -432,10 +449,12 @@ export class CloudService {
 
         const credentials = this.decryptCredentials(account.credentialsEncrypted);
         const { credentialsEncrypted: _, ...result } = account;
+        const syncMetadata = await this.getSyncMetadataForAccounts([id]);
 
         return {
             ...(result as Omit<CloudAccount, 'credentialsEncrypted'>),
             credentials,
+            ...syncMetadata[id],
         };
     }
 
@@ -454,6 +473,7 @@ export class CloudService {
             const normalizedCredentials = existingAccount.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : dto.credentials;
 
             this.validateCredentialsForProvider(existingAccount.provider, normalizedCredentials);
+            await this.cloudConnectionService.verify(existingAccount.provider, normalizedCredentials);
             existingAccount.credentialsEncrypted = this.encryptCredentials(normalizedCredentials);
         }
 
@@ -548,16 +568,89 @@ export class CloudService {
             return [];
         }
 
-        const [awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds] = await Promise.all([
+        const [awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds, latestSyncFeedback] = await Promise.all([
             this.findAwsAccountsWithSyncInProgress(accountIds),
             this.findAzureAccountsWithSyncInProgress(accountIds),
             this.findGcpAccountsWithSyncInProgress(accountIds),
+            this.findLatestSyncFeedback(accountIds),
         ]);
+
+        const syncMetadata = this.buildSyncMetadata(accountIds, awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds, latestSyncFeedback);
 
         return accounts.map(({ credentialsEncrypted: _, ...acc }) => ({
             ...acc,
-            isSyncInProgress: awsSyncingAccountIds.has(acc.id) || azureSyncingAccountIds.has(acc.id) || gcpSyncingAccountIds.has(acc.id),
+            ...syncMetadata[acc.id],
         }));
+    }
+
+    private async getSyncMetadataForAccounts(accountIds: string[]): Promise<Record<string, Omit<CloudAccountWithSyncStatus, keyof Omit<CloudAccount, 'credentialsEncrypted'>>>> {
+        if (accountIds.length === 0) {
+            return {};
+        }
+
+        const [awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds, latestSyncFeedback] = await Promise.all([
+            this.findAwsAccountsWithSyncInProgress(accountIds),
+            this.findAzureAccountsWithSyncInProgress(accountIds),
+            this.findGcpAccountsWithSyncInProgress(accountIds),
+            this.findLatestSyncFeedback(accountIds),
+        ]);
+
+        return this.buildSyncMetadata(accountIds, awsSyncingAccountIds, azureSyncingAccountIds, gcpSyncingAccountIds, latestSyncFeedback);
+    }
+
+    private buildSyncMetadata(
+        accountIds: string[],
+        awsSyncingAccountIds: Set<string>,
+        azureSyncingAccountIds: Set<string>,
+        gcpSyncingAccountIds: Set<string>,
+        latestSyncFeedback: Record<string, CloudAccountSyncFeedback>
+    ): Record<string, Pick<CloudAccountWithSyncStatus, 'isSyncInProgress' | 'lastGeneralSyncError' | 'lastGeneralSyncWarning'>> {
+        return Object.fromEntries(
+            accountIds.map((accountId) => {
+                const feedback = latestSyncFeedback[accountId] ?? { error: null, warning: null };
+
+                return [
+                    accountId,
+                    {
+                        isSyncInProgress:
+                            awsSyncingAccountIds.has(accountId) || azureSyncingAccountIds.has(accountId) || gcpSyncingAccountIds.has(accountId),
+                        lastGeneralSyncError: feedback.error,
+                        lastGeneralSyncWarning: feedback.warning,
+                    },
+                ];
+            })
+        );
+    }
+
+    private async findLatestSyncFeedback(accountIds: string[]): Promise<Record<string, CloudAccountSyncFeedback>> {
+        const jobs = await this.syncJobRepository.find({
+            where: { cloudAccountId: In(accountIds) },
+            order: { createdAt: 'DESC' },
+            select: ['cloudAccountId', 'status', 'error'],
+        });
+
+        const latestByAccount = new Map<string, Pick<CloudSyncJob, 'status' | 'error'>>();
+
+        for (const job of jobs) {
+            if (!latestByAccount.has(job.cloudAccountId)) {
+                latestByAccount.set(job.cloudAccountId, { status: job.status, error: job.error });
+            }
+        }
+
+        const result: Record<string, CloudAccountSyncFeedback> = {};
+
+        for (const [accountId, latest] of latestByAccount) {
+            if (latest.status === 'failed' && latest.error) {
+                result[accountId] = { error: latest.error, warning: null };
+                continue;
+            }
+
+            if (latest.status === 'completed' && latest.error) {
+                result[accountId] = { error: null, warning: latest.error };
+            }
+        }
+
+        return result;
     }
 
     private async findAwsAccountsWithSyncInProgress(accountIds: string[]): Promise<Set<string>> {
@@ -574,19 +667,7 @@ export class CloudService {
             }
         }
 
-        const persistedSyncingAccounts = await this.cloudAccountRepository.find({
-            select: ['id'],
-            where: {
-                id: In(accountIds),
-                isGeneralSyncInProgress: true,
-            },
-        });
-
-        const staleSyncingIds = persistedSyncingAccounts.map((account) => account.id).filter((accountId) => !syncingIds.has(accountId));
-
-        if (staleSyncingIds.length > 0) {
-            await this.cloudAccountRepository.update({ id: In(staleSyncingIds) }, { isGeneralSyncInProgress: false });
-        }
+        await this.clearStalePersistedSyncFlags(accountIds, syncingIds, CloudProvider.AWS);
 
         return syncingIds;
     }
@@ -628,10 +709,17 @@ export class CloudService {
             }
         }
 
+        await this.clearStalePersistedSyncFlags(accountIds, syncingIds, CloudProvider.GCP);
+
+        return syncingIds;
+    }
+
+    private async clearStalePersistedSyncFlags(accountIds: string[], syncingIds: Set<string>, provider: CloudProvider): Promise<void> {
         const persistedSyncingAccounts = await this.cloudAccountRepository.find({
             select: ['id'],
             where: {
                 id: In(accountIds),
+                provider,
                 isGeneralSyncInProgress: true,
             },
         });
@@ -641,8 +729,6 @@ export class CloudService {
         if (staleSyncingIds.length > 0) {
             await this.cloudAccountRepository.update({ id: In(staleSyncingIds) }, { isGeneralSyncInProgress: false });
         }
-
-        return syncingIds;
     }
 
     /**
