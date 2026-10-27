@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { OrgOverviewAccount } from '@/components/root/finops/overview/types';
@@ -10,7 +9,9 @@ import { Button } from '@/components/ui/button';
 type FinopsAccountsStripProps = {
     accounts: OrgOverviewAccount[];
     currency: string;
+    selectedAccountId?: string | null;
     isLoading?: boolean;
+    onSelectAccount?: (accountId: string) => void;
 };
 
 function statusLabel(account: OrgOverviewAccount): string {
@@ -20,7 +21,13 @@ function statusLabel(account: OrgOverviewAccount): string {
     return 'Sem consentimento';
 }
 
-export function FinopsAccountsStrip({ accounts, currency, isLoading = false }: FinopsAccountsStripProps) {
+export function FinopsAccountsStrip({
+    accounts,
+    currency,
+    selectedAccountId = null,
+    isLoading = false,
+    onSelectAccount,
+}: FinopsAccountsStripProps) {
     if (isLoading) {
         return (
             <div className="space-y-3">
@@ -49,11 +56,12 @@ export function FinopsAccountsStrip({ accounts, currency, isLoading = false }: F
         <div className="space-y-3">
             <div>
                 <h3 className="text-sm font-semibold">Contas ({accounts.length})</h3>
-                <p className="text-xs text-muted-foreground">Todas as cloud accounts do tenant selecionado</p>
+                <p className="text-xs text-muted-foreground">Filtre o dashboard por qualquer cloud account do tenant</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {accounts.map((account) => {
                     const supported = account.finopsSupported !== false;
+                    const isSelected = selectedAccountId === account.id;
                     const health =
                         !supported || account.isActive === false
                             ? 'neutral'
@@ -64,7 +72,13 @@ export function FinopsAccountsStrip({ accounts, currency, isLoading = false }: F
                                 : 'ok';
 
                     return (
-                        <div key={account.id} className="flex flex-col gap-3 rounded-xl border p-4">
+                        <div
+                            key={account.id}
+                            className={cn(
+                                'flex flex-col gap-3 rounded-xl border p-4',
+                                isSelected && 'border-primary/40 bg-primary/5'
+                            )}
+                        >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
@@ -106,11 +120,23 @@ export function FinopsAccountsStrip({ accounts, currency, isLoading = false }: F
                             </div>
 
                             {supported ? (
-                                <Button asChild size="sm" variant="outline" className="w-full justify-between">
-                                    <Link href={`/finops/accounts/${encodeURIComponent(account.id)}`}>
-                                        Abrir conta
-                                        <ArrowRight className="size-4" />
-                                    </Link>
+                                <Button
+                                    size="sm"
+                                    variant={isSelected ? 'default' : 'outline'}
+                                    className="w-full justify-between"
+                                    onClick={() => onSelectAccount?.(account.id)}
+                                >
+                                    {isSelected ? (
+                                        <>
+                                            Selecionada
+                                            <Check className="size-4" />
+                                        </>
+                                    ) : (
+                                        <>
+                                            Filtrar conta
+                                            <ArrowRight className="size-4" />
+                                        </>
+                                    )}
                                 </Button>
                             ) : (
                                 <Button size="sm" variant="outline" className="w-full justify-between" disabled>

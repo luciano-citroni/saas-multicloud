@@ -63,7 +63,7 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && !isLoading) onCancel(); }}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>Sincronizar dados de custo</DialogTitle>
                     <DialogDescription>

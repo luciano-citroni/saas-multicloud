@@ -3,6 +3,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Limit heap so the OOM killer fails fast instead of thrashing;
+# SWC keeps peak RSS well under this on typical VPS builders.
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV npm_config_update_notifier=false
+
 COPY package*.json ./
 RUN npm ci
 
@@ -15,6 +20,7 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV npm_config_update_notifier=false
 
 # Create non-root user before copying (avoids slow chown -R)
 RUN addgroup -g 1001 -S nodejs && \

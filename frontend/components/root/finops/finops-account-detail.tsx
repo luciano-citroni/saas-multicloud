@@ -14,7 +14,18 @@ import { FinopsConsentDialog } from '@/components/root/finops/overview/finops-co
 import { FinopsSyncDialog } from '@/components/root/finops/overview/finops-sync-dialog';
 import { FinopsSpendPanel } from '@/components/root/finops/overview/finops-spend-panel';
 import { FinopsOptimizePanel } from '@/components/root/finops/overview/finops-optimize-panel';
-import type { DashboardPeriod, FinopsJob, OrgFinopsOptimize, OrgFinopsOverview, SidebarContextPayload } from '@/components/root/finops/overview/types';
+import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
+import { FinopsKpiStrip, type FinopsBudgetStatusItem } from '@/components/root/finops/finops-kpi-strip';
+import { DASHBOARD_PERIODS, periodLabel, type FinopsTab, isDashboardPeriod } from '@/components/root/finops/finops-filter-utils';
+import { formatDate } from '@/components/root/finops/overview/helpers';
+import type {
+    DashboardPeriod,
+    FinopsJob,
+    OrgFinopsOptimize,
+    OrgFinopsOverview,
+    SidebarContextPayload,
+    SyncRun,
+} from '@/components/root/finops/overview/types';
 import {
     ACTIVE_ORG_STORAGE_KEY,
     ACTIVE_ORG_CHANGED_EVENT,
@@ -25,10 +36,12 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
     acceptFinopsConsent,
+    fetchFinopsBudgetStatuses,
     fetchFinopsConsent,
     fetchFinopsJobStatus,
     fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
+    fetchFinopsSyncRuns,
     startFinopsSync,
 } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
@@ -37,28 +50,6 @@ import { cn } from '@/lib/utils';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const CLOUD_PROVIDER_STORAGE_KEY = 'smc_active_cloud_provider';
-
-type FinopsTab = 'spend' | 'optimize';
-
-function isDashboardPeriod(value: string | null): value is DashboardPeriod {
-    return (
-        value === 'last7days' ||
-        value === 'last30days' ||
-        value === 'last90days' ||
-        value === 'currentmonth' ||
-        value === 'lastmonth' ||
-        value === 'ytd'
-    );
-}
-
-function periodLabel(period: DashboardPeriod): string {
-    if (period === 'last7days') return 'Últimos 7 dias';
-    if (period === 'last30days') return 'Últimos 30 dias';
-    if (period === 'last90days') return 'Últimos 90 dias';
-    if (period === 'currentmonth') return 'Mês atual';
-    if (period === 'lastmonth') return 'Mês passado';
-    return 'Ano até hoje';
-}
 
 type FinopsAccountDetailProps = {
     cloudAccountId: string;
@@ -80,6 +71,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
 
     const [overview, setOverview] = useState<OrgFinopsOverview | null>(null);
     const [optimize, setOptimize] = useState<OrgFinopsOptimize | null>(null);
+    const [budgetStatuses, setBudgetStatuses] = useState<FinopsBudgetStatusItem[]>([]);
+    const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [syncing, setSyncing] = useState(false);
@@ -247,6 +240,48 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         void loadOptimize(organizationId);
     }, [hasConsent, loadOptimize, organizationId, tab]);
 
+    useEffect(() => {
+        if (!organizationId || !cloudAccountId || hasConsent !== true) {
+            setBudgetStatuses([]);
+            setLastSyncAt(null);
+            return;
+        }
+
+        const loadExtras = async () => {
+            try {
+                const [budgetRes, syncRes] = await Promise.all([
+                    fetchFinopsBudgetStatuses(organizationId, cloudAccountId),
+                    fetchFinopsSyncRuns(organizationId, cloudAccountId),
+                ]);
+
+                if (budgetRes.ok) {
+                    const payload = (await budgetRes.json().catch(() => null)) as FinopsBudgetStatusItem[] | null;
+                    setBudgetStatuses(Array.isArray(payload) ? payload : []);
+                } else {
+                    setBudgetStatuses([]);
+                }
+
+                if (syncRes.ok) {
+                    const payload = await syncRes.json().catch(() => null);
+                    const runs = Array.isArray(payload)
+                        ? (payload as SyncRun[])
+                        : Array.isArray((payload as { items?: SyncRun[] })?.items)
+                          ? (payload as { items: SyncRun[] }).items
+                          : [];
+                    const completed = runs.find((run) => run.status === 'completed' || run.completedAt);
+                    setLastSyncAt(completed?.completedAt ?? completed?.createdAt ?? null);
+                } else {
+                    setLastSyncAt(null);
+                }
+            } catch {
+                setBudgetStatuses([]);
+                setLastSyncAt(null);
+            }
+        };
+
+        void loadExtras();
+    }, [cloudAccountId, hasConsent, organizationId]);
+
     const stopPolling = useCallback(() => {
         if (pollingRef.current) {
             clearInterval(pollingRef.current);
@@ -377,17 +412,32 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         );
     }
 
+    const backHref = (() => {
+        const params = new URLSearchParams();
+        if (period !== 'lastmonth') params.set('period', period);
+        if (tab !== 'spend') params.set('tab', tab);
+        params.set('account', cloudAccountId);
+        const q = params.toString();
+        return q ? `/finops?${q}` : '/finops';
+    })();
+
     return (
         <>
             <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                        <Link href="/finops" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                            <ArrowLeft className="size-3" />
-                            Todas as contas
-                        </Link>
-                        <h1 className="text-xl font-semibold tracking-tight">{account.alias}</h1>
-                        <p className="text-sm uppercase text-muted-foreground">{account.provider}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-3">
+                        <div className="space-y-1">
+                            <Link
+                                href={backHref}
+                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                                <ArrowLeft className="size-3" />
+                                Visão geral
+                            </Link>
+                            <h1 className="text-xl font-semibold tracking-tight">{account.alias}</h1>
+                            <p className="text-sm uppercase text-muted-foreground">{account.provider}</p>
+                        </div>
+                        <FinopsSubnav />
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -409,13 +459,11 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {(['last7days', 'last30days', 'last90days', 'currentmonth', 'lastmonth', 'ytd'] as DashboardPeriod[]).map(
-                                    (item) => (
-                                        <SelectItem key={item} value={item}>
-                                            {periodLabel(item)}
-                                        </SelectItem>
-                                    )
-                                )}
+                                {DASHBOARD_PERIODS.map((item) => (
+                                    <SelectItem key={item} value={item}>
+                                        {periodLabel(item)}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
 
@@ -454,6 +502,20 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                     </div>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {overview?.period && (
+                        <span>
+                            Período analisado:{' '}
+                            <strong className="text-foreground">
+                                {overview.period.startDate} → {overview.period.endDate}
+                            </strong>
+                        </span>
+                    )}
+                    <span>
+                        Última sincronização: <strong className="text-foreground">{formatDate(lastSyncAt)}</strong>
+                    </span>
+                </div>
+
                 {collectingCosts && (
                     <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
                         <Loader2 className="size-4 animate-spin" />
@@ -471,37 +533,59 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                 )}
 
                 {hasConsent === true && (
-                    <Tabs
-                        value={tab}
-                        onValueChange={(value) => {
-                            const next = value as FinopsTab;
-                            setTab(next);
-                            const params = new URLSearchParams(searchParams.toString());
-                            if (next === 'spend') params.delete('tab');
-                            else params.set('tab', next);
-                            const q = params.toString();
-                            router.replace(q ? `/finops/accounts/${cloudAccountId}?${q}` : `/finops/accounts/${cloudAccountId}`, {
-                                scroll: false,
-                            });
-                        }}
-                    >
-                        <TabsList>
-                            <TabsTrigger value="spend">Gastos</TabsTrigger>
-                            <TabsTrigger value="optimize">Otimizar</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="spend" className="mt-4">
-                            <FinopsSpendPanel overview={overview} isLoading={loadingInitial && !overview} />
-                        </TabsContent>
-                        <TabsContent value="optimize" className="mt-4">
-                            <FinopsOptimizePanel
-                                organizationId={organizationId}
-                                data={optimize}
-                                accountAliases={{ [account.id]: account.alias }}
-                                isLoading={!optimize && tab === 'optimize'}
-                                onChanged={() => void loadOptimize(organizationId)}
-                            />
-                        </TabsContent>
-                    </Tabs>
+                    <>
+                        <FinopsKpiStrip
+                            cost={overview?.totals.cost ?? 0}
+                            currency={overview?.totals.currency ?? 'USD'}
+                            momGrowth={Number(overview?.totals.momGrowth ?? 0)}
+                            forecastedCost={overview?.totals.forecastedCost ?? null}
+                            potentialSavings={overview?.totals.potentialSavings ?? 0}
+                            openAnomalies={optimize?.totals.openAnomalies ?? overview?.anomalies.length ?? 0}
+                            openRecommendations={
+                                optimize?.totals.openRecommendations ?? overview?.recommendations.length ?? 0
+                            }
+                            budgetStatuses={budgetStatuses}
+                            singleAccountMode
+                            isLoading={loadingInitial && !overview}
+                        />
+
+                        <Tabs
+                            value={tab}
+                            onValueChange={(value) => {
+                                const next = value as FinopsTab;
+                                setTab(next);
+                                const params = new URLSearchParams(searchParams.toString());
+                                if (next === 'spend') params.delete('tab');
+                                else params.set('tab', next);
+                                const q = params.toString();
+                                router.replace(q ? `/finops/accounts/${cloudAccountId}?${q}` : `/finops/accounts/${cloudAccountId}`, {
+                                    scroll: false,
+                                });
+                            }}
+                        >
+                            <TabsList>
+                                <TabsTrigger value="spend">Gastos</TabsTrigger>
+                                <TabsTrigger value="optimize">Otimizar</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="spend" className="mt-4">
+                                <FinopsSpendPanel
+                                    overview={overview}
+                                    accounts={overview?.accounts ?? []}
+                                    costByService={overview?.costByService ?? []}
+                                    isLoading={loadingInitial && !overview}
+                                />
+                            </TabsContent>
+                            <TabsContent value="optimize" className="mt-4">
+                                <FinopsOptimizePanel
+                                    organizationId={organizationId}
+                                    items={optimize?.items ?? []}
+                                    accountAliases={{ [account.id]: account.alias }}
+                                    isLoading={!optimize && tab === 'optimize'}
+                                    onChanged={() => void loadOptimize(organizationId)}
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    </>
                 )}
             </div>
 

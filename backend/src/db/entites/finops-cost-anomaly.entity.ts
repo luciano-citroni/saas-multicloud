@@ -35,7 +35,7 @@ export class FinopsCostAnomaly {
     @Column({ type: 'decimal', precision: 18, scale: 6, name: 'actual_cost' })
     actualCost!: number;
 
-    @Column({ type: 'decimal', precision: 8, scale: 4, name: 'deviation_percentage' })
+    @Column({ type: 'decimal', precision: 12, scale: 4, name: 'deviation_percentage' })
     deviationPercentage!: number;
 
     @Column({ type: 'decimal', precision: 18, scale: 6, name: 'financial_impact' })

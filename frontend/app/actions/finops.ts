@@ -146,6 +146,13 @@ export async function fetchFinopsSyncRuns(organizationId: string, cloudAccountId
     });
 }
 
+export async function fetchFinopsBudgetStatuses(organizationId: string, cloudAccountId: string) {
+    return fetch(
+        `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/budgets/status?organizationId=${encodeURIComponent(organizationId)}`,
+        { cache: 'no-store' }
+    );
+}
+
 export async function fetchFinopsOrgOverview(
     organizationId: string,
     options?: {

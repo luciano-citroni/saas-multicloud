@@ -5,6 +5,7 @@ npm-debug.log
 # Build
 dist
 build
+*.tsbuildinfo
 
 # Tests
 coverage
@@ -31,6 +32,13 @@ test
 README.md
 CHANGELOG.md
 
+# Local runtime / uploads
+uploads
+tmp
+temp
+
 # Misc
 .DS_Store
 Thumbs.db
+.dockerignore
+Dockerfile

@@ -7,6 +7,10 @@ import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
 import type { AnomalySeverity } from '../../db/entites/finops-cost-anomaly.entity';
 
 const ANOMALY_THRESHOLD = 1.3; // 30% acima da média → anomalia
+/** Ignora ruído de custos microscópicos (ex.: CloudFront fracionário). */
+const MIN_FINANCIAL_IMPACT = 0.01;
+/** Limite de DECIMAL(12,4) — evita numeric field overflow no Postgres. */
+const MAX_DEVIATION_PERCENTAGE = 99_999_999.9999;
 
 @Injectable()
 export class FinopsAnomalyDetectionService {
@@ -97,10 +101,15 @@ export class FinopsAnomalyDetectionService {
             const key = `${today.service}:${today.region}`;
             const avgCost = avgMap.get(key) ?? 0;
             const actualCost = Number(today.totalCost);
+            const financialImpact = actualCost - avgCost;
 
-            if (avgCost > 0 && actualCost > avgCost * ANOMALY_THRESHOLD) {
-                const deviationPercentage = ((actualCost - avgCost) / avgCost) * 100;
-                const financialImpact = actualCost - avgCost;
+            if (
+                avgCost > 0 &&
+                actualCost > avgCost * ANOMALY_THRESHOLD &&
+                financialImpact >= MIN_FINANCIAL_IMPACT
+            ) {
+                const rawDeviation = ((actualCost - avgCost) / avgCost) * 100;
+                const deviationPercentage = Math.min(rawDeviation, MAX_DEVIATION_PERCENTAGE);
                 const severity = this.computeSeverity(deviationPercentage);
 
                 // Upsert anomaly (idempotente por data + serviço + região)

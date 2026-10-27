@@ -1,7 +1,12 @@
 {
-    "extends": "./tsconfig.json",
-    "exclude": ["node_modules", "test", "dist", "uploads", "**/*spec.ts"],
-    "watchOptions": {
-        "excludeDirectories": ["**/node_modules", "**/dist", "**/uploads", "**/.git"]
-    }
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "sourceMap": false,
+    "incremental": false
+  },
+  "exclude": ["node_modules", "test", "dist", "uploads", "**/*spec.ts"],
+  "watchOptions": {
+    "excludeDirectories": ["**/node_modules", "**/dist", "**/uploads", "**/.git"]
+  }
 }
