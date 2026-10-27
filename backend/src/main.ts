@@ -68,30 +68,39 @@ async function bootstrap() {
 
     app.enableCors({
         origin: (origin, callback) => {
-            // No Origin header: allow only in non-production (API tools, local dev, server-to-server).
-            // In production, all legitimate browser requests include Origin.
+            // Top-level navigations (Google OAuth start/callback), health checks and
+            // server-to-server calls often omit Origin. Rejecting them with an Error
+            // becomes a 500 and breaks OAuth redirects in production.
             if (!origin) {
-                callback(isProduction ? new Error('Not allowed by CORS') : null, !isProduction);
-
+                callback(null, true);
                 return;
             }
 
             try {
-                const requestOrigin = new URL(origin);
+                const requestOrigin = new URL(origin).origin;
+                const allowedOrigins = [process.env.FRONTEND_URL, process.env.GOOGLE_ALLOWED_REDIRECT_ORIGINS]
+                    .filter((value): value is string => Boolean(value?.trim()))
+                    .flatMap((value) => value.split(','))
+                    .map((value) => value.trim())
+                    .filter((value) => value.length > 0)
+                    .map((value) => {
+                        try {
+                            return new URL(value).origin;
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter((value): value is string => Boolean(value));
 
-                const frontendUrl = process.env.FRONTEND_URL;
-
-                if (frontendUrl && requestOrigin.origin === new URL(frontendUrl).origin) {
+                if (allowedOrigins.includes(requestOrigin)) {
                     callback(null, true);
-
                     return;
                 }
 
-                const isLocalhostInDevelopment = !isProduction && ['localhost', '127.0.0.1'].includes(requestOrigin.hostname);
-
-                callback(isLocalhostInDevelopment ? null : new Error('Not allowed by CORS'), isLocalhostInDevelopment);
+                const isLocalhostInDevelopment = !isProduction && ['localhost', '127.0.0.1'].includes(new URL(origin).hostname);
+                callback(null, isLocalhostInDevelopment);
             } catch {
-                callback(new Error('Not allowed by CORS'), false);
+                callback(null, false);
             }
         },
 
