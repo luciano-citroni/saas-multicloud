@@ -8,9 +8,7 @@ import {
     AlertTriangle,
     ArrowRight,
     CheckCircle2,
-    LayoutDashboard,
     PiggyBank,
-    RefreshCw,
     ShieldCheck,
     Target,
     TrendingDown,
@@ -278,57 +276,24 @@ export function DecisionDashboard() {
     const visibleDecisions = decisions.slice(0, VISIBLE_DECISIONS);
 
     return (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                    <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-balance">
-                        <LayoutDashboard className="size-5" />
-                        {t.title}
-                    </h1>
-                    <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">
-                        {model ? fill(t.orgDescription, { org: model.org.name }) : t.description}
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {model ? (
-                        <p className="text-xs text-muted-foreground">
-                            {fill(t.updatedAt, {
-                                time: new Intl.DateTimeFormat(dateLocale, { hour: '2-digit', minute: '2-digit' }).format(model.updatedAt),
-                            })}
-                        </p>
-                    ) : null}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void load()}
-                        isLoading={refreshing}
-                        loadingText={t.refresh}
-                        disabled={phase === 'loading'}
-                    >
-                        <RefreshCw className="size-3.5" />
-                        {t.refresh}
-                    </Button>
-                </div>
-            </div>
-
+        <div className="flex w-full flex-col gap-4">
             {phase === 'loading' && !model ? <DashboardSkeleton /> : null}
             {phase === 'empty' ? <EmptyTenant t={t} /> : null}
             {phase === 'error' && !model ? <ErrorState message={t.loadError} /> : null}
             {model ? (
-                <>
+                <div className="flex flex-col gap-4">
                     <KpiStrip t={t} model={model} dateLocale={dateLocale} />
                     <DecisionQueue
                         t={t}
                         decisions={visibleDecisions}
                         hiddenCount={Math.max(0, decisions.length - visibleDecisions.length)}
                     />
-                    <div className="grid gap-6 lg:grid-cols-5">
+                    <div className="grid gap-4 lg:grid-cols-5">
                         <FinopsPanel className="lg:col-span-3" t={t} model={model} dateLocale={dateLocale} />
                         <GovernancePanel className="lg:col-span-2" t={t} model={model} dateLocale={dateLocale} />
                     </div>
                     <PlanPanel t={t} model={model} dateLocale={dateLocale} />
-                </>
+                </div>
             ) : null}
         </div>
     );
@@ -1222,7 +1187,7 @@ function ErrorState({ message }: { message: string }) {
 
 function DashboardSkeleton() {
     return (
-        <div className="flex flex-col gap-6" aria-hidden="true">
+        <div className="flex flex-col gap-4" aria-hidden="true">
             <div className="grid auto-rows-fr grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
                 {Array.from({ length: 6 }).map((_, index) => (
                     <Skeleton key={index} className="min-h-28 rounded-xl" />
@@ -1233,7 +1198,7 @@ function DashboardSkeleton() {
                 <Skeleton className="h-32 rounded-xl" />
                 <Skeleton className="h-32 rounded-xl" />
             </div>
-            <div className="grid gap-6 lg:grid-cols-5">
+            <div className="grid gap-4 lg:grid-cols-5">
                 <Skeleton className="h-96 rounded-xl lg:col-span-3" />
                 <Skeleton className="h-96 rounded-xl lg:col-span-2" />
             </div>
