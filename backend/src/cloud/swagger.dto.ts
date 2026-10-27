@@ -19,8 +19,8 @@ export class CloudAccountResponseDto {
 
     @ApiProperty({
         example: CloudProvider.AWS,
-
         description: 'Provider da conta de cloud',
+        enum: Object.values(CloudProvider),
     })
     provider: CloudProvider;
 

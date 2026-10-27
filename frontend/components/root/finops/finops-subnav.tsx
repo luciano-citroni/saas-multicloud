@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BarChart3, Cloud, FileText, LayoutDashboard } from 'lucide-react';
+import { BarChart3, Cloud, FileText, LayoutDashboard, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const LINKS = [
@@ -12,6 +12,12 @@ const LINKS = [
         label: 'Multicloud',
         icon: Cloud,
         match: (path: string) => path.startsWith('/finops/multicloud'),
+    },
+    {
+        href: '/finops/budgets',
+        label: 'Orçamentos',
+        icon: Target,
+        match: (path: string) => path.startsWith('/finops/budgets'),
     },
     {
         href: '/finops/reports',

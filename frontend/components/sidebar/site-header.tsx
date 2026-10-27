@@ -19,6 +19,7 @@ const routeNames: Record<string, string> = {
     analysis: 'Análise',
     finops: 'FinOps',
     multicloud: 'Multicloud',
+    budgets: 'Orçamentos',
     reports: 'Relatórios',
     accounts: 'Contas',
     tenant: 'Tenant',

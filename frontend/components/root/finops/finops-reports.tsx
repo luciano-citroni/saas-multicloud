@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Download, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
@@ -43,6 +43,7 @@ export function FinopsReports() {
     const [optimize, setOptimize] = useState<OrgFinopsOptimize | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
     const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
     const syncUrlState = useCallback(
@@ -185,6 +186,15 @@ export function FinopsReports() {
             ? (cloudAccounts.find((account) => account.id === urlFilters.accountId)?.alias ?? urlFilters.accountId)
             : 'Todas as contas';
 
+    const accountAliases = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const account of cloudAccounts) map[account.id] = account.alias;
+        for (const account of overview?.accounts ?? []) {
+            if (!map[account.id]) map[account.id] = account.alias;
+        }
+        return map;
+    }, [cloudAccounts, overview?.accounts]);
+
     const handleExport = () => {
         if (!overview) {
             toast.error('Gere a pré-visualização antes de exportar.');
@@ -235,11 +245,11 @@ export function FinopsReports() {
             ]),
             [],
             ['Oportunidades e anomalias'],
-            ['Tipo', 'Título', 'Conta', 'Provedor', 'Impacto', 'Severidade/Prioridade', 'Status'],
+            ['Tipo', 'Conta', 'Título', 'Provedor', 'Impacto', 'Severidade/Prioridade', 'Status'],
             ...filteredOptimizeItems.map((item) => [
                 item.kind,
+                accountAliases[item.cloudAccountId] ?? item.cloudAccountId,
                 item.title,
-                item.cloudAccountId,
                 item.cloudProvider,
                 String(item.impact),
                 item.severityOrPriority,
@@ -249,6 +259,41 @@ export function FinopsReports() {
 
         downloadCsv(`finops-report-${orgSlug}-${today}.csv`, rows);
         toast.success('Relatório CSV gerado (compatível com Excel).');
+    };
+
+    const handleExportPdf = async () => {
+        if (!overview || !generatedAt) {
+            toast.error('Gere a pré-visualização antes de exportar.');
+            return;
+        }
+
+        setExportingPdf(true);
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const orgSlug = (organizationId ?? 'org').slice(0, 8);
+            // Import dinâmico evita puxar o build Node do jsPDF no SSR.
+            const { exportFinopsReportPdf } = await import('@/components/root/finops/export-finops-report-pdf');
+            await exportFinopsReportPdf({
+                overview,
+                accounts: filteredAccounts,
+                services: filteredServices,
+                optimizeItems: filteredOptimizeItems,
+                accountAliases,
+                totalCost,
+                currency,
+                periodLabel: periodLabel(urlFilters.period),
+                accountLabel: accountAlias,
+                providerLabel: urlFilters.provider?.toUpperCase() ?? 'Todos',
+                serviceLabel: urlFilters.service ?? 'Todos',
+                generatedAt,
+                fileName: `finops-report-${orgSlug}-${today}.pdf`,
+            });
+            toast.success('Relatório PDF gerado.');
+        } catch {
+            toast.error('Não foi possível gerar o PDF.');
+        } finally {
+            setExportingPdf(false);
+        }
     };
 
     if (!organizationId) {
@@ -291,9 +336,13 @@ export function FinopsReports() {
                         <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
                         Atualizar
                     </Button>
-                    <Button size="sm" onClick={handleExport} disabled={!overview}>
+                    <Button size="sm" variant="outline" onClick={handleExport} disabled={!overview}>
                         <Download className="size-4" />
                         Exportar CSV
+                    </Button>
+                    <Button size="sm" onClick={() => void handleExportPdf()} disabled={!overview} isLoading={exportingPdf}>
+                        <FileText className="size-4" />
+                        Exportar PDF
                     </Button>
                 </div>
             </div>
@@ -403,7 +452,14 @@ export function FinopsReports() {
                             </div>
 
                             <div className="overflow-x-auto">
-                                <h3 className="mb-2 text-sm font-semibold">Top serviços</h3>
+                                <h3 className="mb-2 text-sm font-semibold">
+                                    Por serviço
+                                    {filteredServices.length > 0 ? (
+                                        <span className="ml-2 font-normal text-muted-foreground">
+                                            ({filteredServices.length})
+                                        </span>
+                                    ) : null}
+                                </h3>
                                 <table className="w-full min-w-[480px] text-sm">
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
@@ -414,30 +470,39 @@ export function FinopsReports() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredServices.slice(0, 15).map((item) => (
-                                            <tr key={item.service} className="border-b last:border-0">
-                                                <td className="py-2 font-medium">{item.service}</td>
-                                                <td className="py-2 text-right tabular-nums">
-                                                    {formatCurrency(item.currentMonthCost, item.currency)}
-                                                </td>
-                                                <td className="py-2 text-right tabular-nums">
-                                                    {formatCurrency(item.previousMonthCost, item.currency)}
-                                                </td>
-                                                <td className="py-2 text-right tabular-nums">
-                                                    {item.changePercentage.toFixed(1)}%
+                                        {filteredServices.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                                                    Nenhum serviço no filtro
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            filteredServices.map((item) => (
+                                                <tr key={item.service} className="border-b last:border-0">
+                                                    <td className="py-2 font-medium">{item.service}</td>
+                                                    <td className="py-2 text-right tabular-nums">
+                                                        {formatCurrency(item.currentMonthCost, item.currency)}
+                                                    </td>
+                                                    <td className="py-2 text-right tabular-nums">
+                                                        {formatCurrency(item.previousMonthCost, item.currency)}
+                                                    </td>
+                                                    <td className="py-2 text-right tabular-nums">
+                                                        {item.changePercentage.toFixed(1)}%
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
 
                             <div className="overflow-x-auto">
                                 <h3 className="mb-2 text-sm font-semibold">Oportunidades e anomalias</h3>
-                                <table className="w-full min-w-[640px] text-sm">
+                                <table className="w-full min-w-[720px] text-sm">
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
                                             <th className="pb-2 font-medium">Tipo</th>
+                                            <th className="pb-2 font-medium">Conta</th>
                                             <th className="pb-2 font-medium">Título</th>
                                             <th className="pb-2 font-medium">Provedor</th>
                                             <th className="pb-2 text-right font-medium">Impacto</th>
@@ -446,14 +511,17 @@ export function FinopsReports() {
                                     <tbody>
                                         {filteredOptimizeItems.length === 0 ? (
                                             <tr>
-                                                <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                                                <td colSpan={5} className="py-6 text-center text-muted-foreground">
                                                     Nenhuma oportunidade/anomalia aberta
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredOptimizeItems.slice(0, 20).map((item) => (
+                                            filteredOptimizeItems.map((item) => (
                                                 <tr key={`${item.kind}-${item.id}`} className="border-b last:border-0">
                                                     <td className="py-2 capitalize">{item.kind}</td>
+                                                    <td className="py-2 font-medium">
+                                                        {accountAliases[item.cloudAccountId] ?? item.cloudAccountId.slice(0, 8)}
+                                                    </td>
                                                     <td className="py-2">{item.title}</td>
                                                     <td className="py-2 uppercase text-muted-foreground">
                                                         {item.cloudProvider}

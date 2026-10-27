@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { AlertTriangle, Lightbulb, PiggyBank, Target, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
@@ -10,6 +11,7 @@ export type FinopsBudgetStatusItem = {
     currentSpend: number;
     remainingAmount: number;
     usagePercentage: number;
+    triggeredAlerts?: number[];
     currency: string;
 };
 
@@ -23,6 +25,7 @@ type FinopsKpiStripProps = {
     openRecommendations: number;
     budgetStatuses?: FinopsBudgetStatusItem[];
     singleAccountMode?: boolean;
+    budgetsHref?: string;
     isLoading?: boolean;
 };
 
@@ -36,6 +39,7 @@ export function FinopsKpiStrip({
     openRecommendations,
     budgetStatuses = [],
     singleAccountMode = false,
+    budgetsHref = '/finops/budgets',
     isLoading = false,
 }: FinopsKpiStripProps) {
     if (isLoading) {
@@ -50,6 +54,7 @@ export function FinopsKpiStrip({
 
     const growthPositive = momGrowth <= 0;
     const primaryBudget = budgetStatuses[0] ?? null;
+    const hasBudgetAlert = Boolean(primaryBudget?.triggeredAlerts && primaryBudget.triggeredAlerts.length > 0);
 
     return (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -129,19 +134,23 @@ export function FinopsKpiStrip({
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card className={cn(hasBudgetAlert && 'border-amber-500/50')}>
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <Target className="size-3.5" />
                         Orçamento
                     </CardDescription>
-                    <CardTitle className="text-xl sm:text-2xl">
-                        {singleAccountMode && primaryBudget
-                            ? `${primaryBudget.usagePercentage.toFixed(0)}%`
-                            : '—'}
+                    <CardTitle
+                        className={cn(
+                            'text-xl sm:text-2xl',
+                            hasBudgetAlert && 'text-amber-600',
+                            primaryBudget && primaryBudget.usagePercentage >= 100 && 'text-destructive'
+                        )}
+                    >
+                        {singleAccountMode && primaryBudget ? `${primaryBudget.usagePercentage.toFixed(0)}%` : '—'}
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-1">
                     <p className="text-xs text-muted-foreground">
                         {singleAccountMode && primaryBudget
                             ? `${formatCurrency(primaryBudget.currentSpend, primaryBudget.currency)} de ${formatCurrency(primaryBudget.budget.amount, primaryBudget.currency)}`
@@ -149,6 +158,15 @@ export function FinopsKpiStrip({
                               ? 'Nenhum orçamento ativo nesta conta'
                               : 'Disponível ao filtrar uma conta'}
                     </p>
+                    {hasBudgetAlert && (
+                        <p className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                            <AlertTriangle className="size-3" />
+                            Limiar atingido
+                        </p>
+                    )}
+                    <Link href={budgetsHref} className="text-xs font-medium text-primary hover:underline">
+                        Gerenciar orçamentos
+                    </Link>
                 </CardContent>
             </Card>
         </div>

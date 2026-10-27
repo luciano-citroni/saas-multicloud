@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, PlayCircle, RefreshCw } from 'lucide-react';
@@ -660,6 +661,19 @@ export function FinopsOverview() {
                     </Card>
                 )}
 
+                {selectedAccountId &&
+                    budgetStatuses.some((item) => (item.triggeredAlerts?.length ?? 0) > 0) && (
+                        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+                            Um ou mais orçamentos desta conta atingiram limiares de alerta.{' '}
+                            <Link
+                                href={`/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`}
+                                className="font-medium underline underline-offset-2"
+                            >
+                                Ver orçamentos
+                            </Link>
+                        </div>
+                    )}
+
                 <FinopsKpiStrip
                     cost={filteredTotals.cost}
                     currency={filteredTotals.currency}
@@ -670,6 +684,11 @@ export function FinopsOverview() {
                     openRecommendations={filteredTotals.openRecommendations}
                     budgetStatuses={budgetStatuses}
                     singleAccountMode={selectedAccountId != null}
+                    budgetsHref={
+                        selectedAccountId
+                            ? `/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`
+                            : '/finops/budgets'
+                    }
                     isLoading={loadingInitial && !overview}
                 />
 
