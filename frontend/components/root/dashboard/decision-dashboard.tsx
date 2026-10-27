@@ -118,7 +118,6 @@ export function DecisionDashboard() {
     const { locale } = useLocale();
     const [model, setModel] = useState<DashboardModel | null>(null);
     const [phase, setPhase] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
-    const [refreshing, setRefreshing] = useState(false);
     const requestId = useRef(0);
     const modelRef = useRef<DashboardModel | null>(null);
     modelRef.current = model;
@@ -132,13 +131,10 @@ export function DecisionDashboard() {
             if (request !== requestId.current) return;
             setModel(null);
             setPhase('empty');
-            setRefreshing(false);
             return;
         }
 
-        if (keepVisible) {
-            setRefreshing(true);
-        } else {
+        if (!keepVisible) {
             setModel(null);
             setPhase('loading');
         }
@@ -241,10 +237,6 @@ export function DecisionDashboard() {
             if (request !== requestId.current) return;
             setPhase((current) => (current === 'ready' ? current : 'error'));
             toast.error(t.loadError);
-        } finally {
-            if (request === requestId.current) {
-                setRefreshing(false);
-            }
         }
     }, [router, t]);
 
