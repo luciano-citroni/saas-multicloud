@@ -139,7 +139,7 @@ export function CloudAccountSync() {
     const [pendingDeleteAccountId, setPendingDeleteAccountId] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [midOrgs, setMidOrgs] = useState<MidOrg[]>([]);
-    const syncPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const syncPollingRef = useRef<number | null>(null);
 
     const stopSyncPolling = useCallback(() => {
         if (syncPollingRef.current) {

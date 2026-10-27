@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, SVGProps } from 'react';
 
 /** Paleta do design system — muda automaticamente com tema claro/escuro. */
 export const FINOPS_CHART_COLORS = [
@@ -25,7 +25,7 @@ export const finopsChartTooltipStyles: {
     contentStyle: CSSProperties;
     labelStyle: CSSProperties;
     itemStyle: CSSProperties;
-    cursor: CSSProperties;
+    cursor: SVGProps<SVGElement>;
 } = {
     contentStyle: {
         backgroundColor: 'var(--popover)',

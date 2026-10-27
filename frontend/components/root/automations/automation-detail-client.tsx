@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { WorkflowAutomationBuilder } from './workflow-automation-builder';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
-import { hasRequiredOrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
     fetchAutomation,
     fetchActionCatalog,
@@ -43,7 +43,7 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [role, setRole] = useState<string | null>(null);
+    const [role, setRole] = useState<OrganizationRole | null>(null);
 
     const load = useCallback(async () => {
         const orgId = getOrgId();
@@ -78,8 +78,8 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
             fetch('/api/sidebar/context', { cache: 'no-store' })
                 .then((r) => r.json())
                 .then((payload) => {
-                    const org = (payload?.organizations ?? []).find((o: { id: string }) => o.id === orgId);
-                    setRole(org?.currentRole ?? null);
+                    const org = (payload?.organizations ?? []).find((o: { id: string; currentRole?: string | null }) => o.id === orgId);
+                    setRole(normalizeOrganizationRole(org?.currentRole));
                 })
                 .catch(() => undefined);
         } catch {

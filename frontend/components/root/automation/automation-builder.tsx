@@ -12,7 +12,7 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { automationNodeTypes, type AutomationNodeData } from './automation-nodes';
 import { Ec2ConfigForm } from './ec2-config-form';
-import type { FlowDefinition, FlowNode } from '@/app/actions/automation';
+import type { FlowDefinition, FlowNode, ResourceType } from '@/app/actions/automation';
 import { cn } from '@/lib/utils';
 
 const PALETTE_ITEMS = [
@@ -243,7 +243,7 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
             const data = n.data as AutomationNodeData;
             return {
                 id: n.id,
-                type: data.resourceType,
+                type: data.resourceType as ResourceType,
                 label: data.label || undefined,
                 position: n.position,
                 config: data.config,

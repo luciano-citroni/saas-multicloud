@@ -7,13 +7,8 @@ import { modulesLabel } from '../../../lib/modules';
 import { useTranslations } from '@/lib/i18n';
 import { useLocale } from '@/components/providers/locale-provider';
 
-type BillingSubscription = {
-    id: string;
-    userId: string;
-    stripePriceId: string | null;
+type CurrentPlanSubscription = {
     status: string;
-    cancelAtPeriodEnd: boolean;
-    currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
     plan: {
         name: string;
@@ -21,7 +16,7 @@ type BillingSubscription = {
     } | null;
 };
 
-export default function CurrentPlanCard({ loading, subscription }: { loading: boolean; subscription: BillingSubscription | null }) {
+export default function CurrentPlanCard({ loading, subscription }: { loading: boolean; subscription: CurrentPlanSubscription | null }) {
     const t = useTranslations('billing');
     const { locale } = useLocale();
     const dateLocale = locale === 'en' ? 'en-US' : 'pt-BR';

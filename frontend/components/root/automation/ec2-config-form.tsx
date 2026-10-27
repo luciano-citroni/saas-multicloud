@@ -255,9 +255,9 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                         );
                     })}
                 </div>
-                {config.amiId && (
+                {config.amiId ? (
                     <p className="truncate text-[10px] text-muted-foreground font-mono">{String(config.amiId)}</p>
-                )}
+                ) : null}
                 {!config.osPreset && (
                     <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground">Ou informe AMI manualmente</Label>

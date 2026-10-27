@@ -290,26 +290,27 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
         const width = Math.max(1000, nodeBounds.maxX - nodeBounds.minX + SVG_PADDING * 2);
         const height = Math.max(700, nodeBounds.maxY - nodeBounds.minY + SVG_PADDING * 2);
 
-        const edgesToDraw = renderedEdges
-            .map((edge) => {
-                const source = nodeById.get(edge.source);
-                const target = nodeById.get(edge.target);
+        const edgesToDraw = renderedEdges.flatMap((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
 
-                if (!source || !target || source.type === 'resourceGroup' || target.type === 'resourceGroup') {
-                    return null;
-                }
+            if (!source || !target || source.type === 'resourceGroup' || target.type === 'resourceGroup') {
+                return [];
+            }
 
-                const style = edge.style as { stroke?: string; strokeWidth?: number | string; strokeDasharray?: string } | undefined;
+            const style = edge.style as { stroke?: string; strokeWidth?: number | string; strokeDasharray?: string } | undefined;
+            const strokeDasharray = style?.strokeDasharray;
 
-                return {
+            return [
+                {
                     id: edge.id,
                     path: buildEdgePath(source, target),
                     stroke: style?.stroke ?? 'var(--muted-foreground)',
                     strokeWidth: Number(style?.strokeWidth) || 1.5,
-                    strokeDasharray: style?.strokeDasharray,
-                };
-            })
-            .filter((edge): edge is GraphModel['edgesToDraw'][number] => edge !== null);
+                    ...(strokeDasharray ? { strokeDasharray } : {}),
+                },
+            ];
+        });
 
         return {
             viewBoxX,

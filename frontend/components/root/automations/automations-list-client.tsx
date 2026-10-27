@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
-import { hasRequiredOrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
 import {
     fetchAutomations,
     deleteAutomation,
@@ -40,7 +40,7 @@ export function AutomationsListClient() {
     const router = useRouter();
     const [automations, setAutomations] = useState<AutomationWorkflow[]>([]);
     const [loading, setLoading] = useState(true);
-    const [role, setRole] = useState<string | null>(null);
+    const [role, setRole] = useState<OrganizationRole | null>(null);
 
     const load = useCallback(async () => {
         const orgId = getOrgId();
@@ -73,8 +73,8 @@ export function AutomationsListClient() {
             fetch(`/api/sidebar/context`, { cache: 'no-store' })
                 .then((r) => r.json())
                 .then((payload) => {
-                    const org = (payload?.organizations ?? []).find((o: { id: string }) => o.id === orgId);
-                    setRole(org?.currentRole ?? null);
+                    const org = (payload?.organizations ?? []).find((o: { id: string; currentRole?: string | null }) => o.id === orgId);
+                    setRole(normalizeOrganizationRole(org?.currentRole));
                 })
                 .catch(() => undefined);
         }
