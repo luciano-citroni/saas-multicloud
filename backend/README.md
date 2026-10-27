@@ -1,130 +1,299 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Backend — SaaS MultiCloud
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API NestJS do SaaS MultiCloud (cloud accounts, assessment, FinOps, governance, automation).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Setup rápido
 
 ```bash
-$ npm install
+npm install
+cp .env.example .env   # preencha as variáveis
+npm run start:dev
 ```
 
-## Compile and run the project
+Swagger: `http://localhost:3000/api/docs`
+
+---
+
+## Tutorial: configurar AWS
+
+A plataforma **não** usa Access Keys das contas dos clientes. O fluxo é:
+
+```
+Backend (.env)
+  └─ IAM user: saas-multicloud  (credenciais da plataforma)
+       └─ STS AssumeRole
+            └─ IAM Role na conta do cliente
+                 └─ APIs AWS (EC2, S3, Cost Explorer, etc.)
+```
+
+Há **duas contas** envolvidas:
+
+| Conta | O que criar | Para quê |
+|-------|-------------|----------|
+| **Plataforma** (sua) | IAM user `saas-multicloud` + Access Key | O backend chama `sts:AssumeRole` |
+| **Cliente** (tenant) | IAM Role com trust + permissões | Assessment, FinOps, sync de recursos |
+
+---
+
+### Parte 1 — Conta da plataforma (user `saas-multicloud`)
+
+Faça isso **uma vez**, na conta AWS onde roda o backend.
+
+#### 1.1 Criar o usuário IAM
+
+1. Console AWS → **IAM** → **Users** → **Create user**
+2. Nome: `saas-multicloud`
+3. Não precisa de console password (só Access Key)
+4. Anote o ARN, por exemplo:
+
+```text
+arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud
+```
+
+#### 1.2 Policy do user (AssumeRole)
+
+Anexe uma policy inline (ou managed custom) ao user:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAssumeCustomerRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/SaasMulticloud*"
+    }
+  ]
+}
+```
+
+Notas:
+
+- O `Resource` pode ser mais restrito (`arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole`) se quiser limitar por conta.
+- O prefixo `SaasMulticloud*` deve bater com o nome da role criada no cliente.
+
+#### 1.3 Criar Access Key
+
+1. User `saas-multicloud` → **Security credentials** → **Create access key**
+2. Tipo: **Application running outside AWS**
+3. Copie `Access key ID` e `Secret access key` (o secret só aparece uma vez)
+
+#### 1.4 Variáveis no `.env` do backend
+
+```env
+AWS_ACCESS_KEY_ID=AKIA................
+AWS_SECRET_ACCESS_KEY=................
+AWS_USER_ARN=arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud
+# Opcional — default us-east-1
+AWS_STS_REGION=us-east-1
+```
+
+Regras importantes:
+
+- Use keys de longo prazo (`AKIA...`).
+- **Não** defina `AWS_SESSION_TOKEN` junto com `AKIA*` (token residual do SSO/CLI causa `InvalidClientTokenId`).
+- Se a key for revogada/rotacionada, atualize o `.env` e **reinicie** o Nest.
+
+Validação rápida (AWS CLI com as mesmas keys do `.env`):
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+unset AWS_SESSION_TOKEN
+aws sts get-caller-identity
 ```
+
+Deve retornar o ARN do user `saas-multicloud`. Se retornar `InvalidClientTokenId`, a Access Key está inválida/revogada.
+
+---
+
+### Parte 2 — Conta do cliente (IAM Role)
+
+Faça isso **em cada conta AWS** que for conectada no produto.
+
+#### 2.1 Criar a role
+
+1. Console AWS (conta do cliente) → **IAM** → **Roles** → **Create role**
+2. Trusted entity: **Custom trust policy**
+3. Cole a trust policy abaixo (troque o ARN do user e, se usar, o External ID)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "EXTERNAL_ID_SECRETO_DO_TENANT"
+        }
+      }
+    }
+  ]
+}
+```
+
+Sem External ID (menos seguro, só para testes):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+4. Nome sugerido: `SaasMulticloudRole`
+5. Anote o ARN:
+
+```text
+arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole
+```
+
+#### 2.2 Permissões da role (cliente)
+
+Anexe policies à role conforme os módulos que o tenant vai usar.
+
+##### Assessment / inventário (mínimo prático)
+
+AWS managed (rápido para começar):
+
+- `ReadOnlyAccess` — cobre Describe/List/Get da maioria dos serviços sincronizados (EC2, S3, RDS, IAM, EKS, etc.)
+
+Ou, se preferir least-privilege, use uma policy custom com ações `Describe*`, `List*`, `Get*` nos serviços que o produto sincroniza (EC2, VPC, ELB, ECS, EKS, RDS, S3, IAM, Lambda, CloudFront, Route53, CloudWatch, CloudTrail, API Gateway, KMS, Secrets Manager, ECR, DynamoDB, ElastiCache, SQS, SNS, WAF, GuardDuty).
+
+##### FinOps (obrigatório para sync de custos)
+
+Cost Explorer **não** está coberto só com `ReadOnlyAccess` em todos os casos. Anexe também:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FinOpsCostExplorer",
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
+        "ce:GetDimensionValues",
+        "ce:GetTags"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Mínimo absoluto para o sync atual: `ce:GetCostAndUsage`.
+
+##### Automation (opcional)
+
+Só se o tenant usar provisionamento/automação: permissões de escrita nos recursos alvo (EC2, IAM, etc.). Não anexe write policies se o uso for só leitura/FinOps.
+
+#### 2.3 Cadastrar a conta no produto
+
+Na UI (Cloud Accounts) ou API, envie:
+
+```json
+{
+  "provider": "aws",
+  "alias": "Produção",
+  "credentials": {
+    "roleArn": "arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole",
+    "region": "us-east-1",
+    "regions": ["us-east-1", "sa-east-1"],
+    "externalId": "EXTERNAL_ID_SECRETO_DO_TENANT"
+  }
+}
+```
+
+O backend valida com `sts:AssumeRole` na hora do cadastro. Se a trust policy / External ID / permissões do user estiverem erradas, a conexão falha.
+
+---
+
+### Parte 3 — Checklist
+
+**Plataforma**
+
+- [ ] User `saas-multicloud` criado
+- [ ] Policy `sts:AssumeRole` no user
+- [ ] Access Key válida no `.env` (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`)
+- [ ] Sem `AWS_SESSION_TOKEN` com key `AKIA*`
+- [ ] `aws sts get-caller-identity` funciona com essas keys
+
+**Cliente**
+
+- [ ] Role criada com trust apontando para o ARN do user da plataforma
+- [ ] External ID igual ao cadastrado no produto (se usado)
+- [ ] `ReadOnlyAccess` (ou equivalente) para assessment
+- [ ] Policy `ce:GetCostAndUsage` para FinOps
+- [ ] Conta cloud cadastrada e “connection verified”
+
+---
+
+### Troubleshooting
+
+| Erro | Causa comum | Correção |
+|------|-------------|----------|
+| `InvalidClientTokenId` / *security token included in the request is invalid* | Access Key da plataforma inválida, revogada, ou `AWS_SESSION_TOKEN` stale com `AKIA*` | Gere nova Access Key; atualize `.env`; remova `AWS_SESSION_TOKEN`; reinicie o Nest |
+| `AccessDenied` em `sts:AssumeRole` | Trust policy não confia no user, External ID errado, ou user sem `sts:AssumeRole` | Ajuste trust + External ID + policy do user |
+| `not authorized to perform: ce:GetCostAndUsage` | Role do cliente sem Cost Explorer | Anexe a policy FinOps da Parte 2.2 |
+| Sync enfileira mas não processa localmente | Redis compartilhado com outro worker | Defina `BULLMQ_PREFIX=local-dev` no `.env` local |
+
+---
 
 ## Database migrations
 
 ```bash
 # create empty migration
-$ npm run migration:create --name=nome-da-migration
+npm run migration:create --name=nome-da-migration
 
 # generate migration based on entity changes
-$ npm run migration:generate --name=nome-da-migration
+npm run migration:generate --name=nome-da-migration
 
 # run migrations in development
-$ npm run migration:run
+npm run migration:run
 
 # revert last migration
-$ npm run migration:revert
+npm run migration:revert
 
 # list migration status
-$ npm run migration:show
+npm run migration:show
 ```
 
 ### Production flow (recommended)
 
 ```bash
 # 1) build artifacts
-$ npm run build
+npm run build
 
 # 2) run migrations against production database
-$ npm run migration:run:prod
+npm run migration:run:prod
 
 # 3) start application
-$ npm run start:prod
+npm run start:prod
 ```
 
-## Run tests
+## Scripts
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:dev   # hot reload
+npm run build
+npm run start:prod
+npm run test
+npm run test:e2e
+npm run test:cov
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

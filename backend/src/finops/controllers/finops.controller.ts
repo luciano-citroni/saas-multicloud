@@ -28,6 +28,7 @@ import { FinopsForecastService } from '../services/finops-forecast.service';
 import { FinopsMonetizationService } from '../services/finops-monetization.service';
 import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detection.service';
 import { FinopsOptimizationService } from '../services/finops-optimization.service';
+import { FinopsOrgOverviewService } from '../services/finops-org-overview.service';
 
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
 
@@ -54,7 +55,7 @@ import {
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
-const cloudProviderSchema = z.enum(['aws', 'azure']);
+const cloudProviderSchema = z.enum(['aws', 'azure', 'gcp']);
 
 const consentSchema = z.object({
     cloudProvider: cloudProviderSchema,
@@ -104,10 +105,60 @@ export class FinopsController {
         private readonly monetizationService: FinopsMonetizationService,
         private readonly anomalyService: FinopsAnomalyDetectionService,
         private readonly optimizationService: FinopsOptimizationService,
+        private readonly orgOverviewService: FinopsOrgOverviewService,
 
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>
     ) {}
+
+    // =========================================================================
+    // Overview org-level
+    // =========================================================================
+
+    @Get('overview')
+    @ApiOperation({
+        summary: 'Overview FinOps da organização',
+        description:
+            'Retorna agregados de custo, tendência, anomalias e recomendações para todas as contas (ou uma conta via cloudAccountId). Aceita period=last7days|last30days|last90days|currentmonth|lastmonth|ytd ou year+month.',
+    })
+    @ApiQuery({ name: 'period', required: false, enum: ['last7days', 'last30days', 'last90days', 'currentmonth', 'lastmonth', 'ytd'] })
+    @ApiQuery({ name: 'year', required: false, type: Number })
+    @ApiQuery({ name: 'month', required: false, type: Number })
+    @ApiQuery({ name: 'anomalyDays', required: false, type: Number })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiResponse({ status: 200, description: 'Overview agregado' })
+    async getOrgOverview(
+        @Query('period') period: string,
+        @Query('year') year: string,
+        @Query('month') month: string,
+        @Query('anomalyDays') anomalyDays: string,
+        @Query('cloudAccountId') cloudAccountId: string,
+        @CurrentOrganization() org: Tenant
+    ) {
+        return this.orgOverviewService.getOverview(org.id, { period, year, month, anomalyDays, cloudAccountId });
+    }
+
+    @Get('optimize')
+    @ApiOperation({
+        summary: 'Fila de otimização da organização',
+        description: 'Lista anomalias e recomendações org-wide para a aba Otimizar.',
+    })
+    @ApiQuery({ name: 'status', required: false, enum: ['open', 'acknowledged', 'resolved'] })
+    @ApiQuery({ name: 'days', required: false, type: Number })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiResponse({ status: 200, description: 'Itens de otimização' })
+    async getOrgOptimize(
+        @Query('status') status: string,
+        @Query('days') days: string,
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('page') page: string,
+        @Query('limit') limit: string,
+        @CurrentOrganization() org: Tenant
+    ) {
+        return this.orgOverviewService.getOptimize(org.id, { status, days, cloudAccountId, page, limit });
+    }
 
     // =========================================================================
     // Consentimento
@@ -145,7 +196,7 @@ export class FinopsController {
     @ApiResponse({ status: 403, description: 'Sem permissão (requer ADMIN ou OWNER)' })
     async acceptConsent(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @Body(new ZodValidationPipe(consentSchema)) body: { cloudProvider: 'aws' | 'azure' },
+        @Body(new ZodValidationPipe(consentSchema)) body: { cloudProvider: 'aws' | 'azure' | 'gcp' },
         @CurrentOrganization() org: Tenant
     ): Promise<FinopsConsentResponseDto> {
         return this.finopsService.acceptConsent(cloudAccountId, org.id, body.cloudProvider);

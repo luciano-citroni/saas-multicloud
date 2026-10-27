@@ -2,7 +2,7 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 
 import { CloudAccount } from './cloud-account.entity';
 
-export type FinopsCloudProvider = 'aws' | 'azure';
+export type FinopsCloudProvider = 'aws' | 'azure' | 'gcp';
 
 @Entity('finops_consents')
 export class FinopsConsent {

@@ -9,6 +9,7 @@ import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 import { ErrorMessages } from '../../common/messages/error-messages';
+import { findCloudAccountForTenant } from '../utils/find-cloud-account';
 
 export interface CreateBudgetDto {
     name: string;
@@ -175,9 +176,7 @@ export class FinopsBudgetService {
     // =========================================================================
 
     private async requireCloudAccount(cloudAccountId: string, organizationId: string): Promise<CloudAccount> {
-        const account = await this.cloudAccountRepo.findOne({
-            where: { id: cloudAccountId, organizationId },
-        });
+        const account = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId);
 
         if (!account) {
             throw new BadRequestException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);

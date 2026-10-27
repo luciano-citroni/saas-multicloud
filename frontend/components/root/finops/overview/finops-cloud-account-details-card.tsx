@@ -26,7 +26,7 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
     const costChangePercent = previousCost > 0 ? (costChange / previousCost) * 100 : 0;
     const currency = dashboard?.currency ?? 'USD';
     const isIncreasing = costChange > 0;
-    const accountDashboardHref = `/finops/dashboard?account=${encodeURIComponent(account.id)}`;
+    const accountDashboardHref = `/finops/accounts/${encodeURIComponent(account.id)}`;
 
     return (
         <div className="group rounded-xl border p-4 transition-colors hover:bg-muted/50">

@@ -30,23 +30,10 @@ export class AwsAssessmentExcelService {
 
     constructor() {
         // Usar variável de ambiente ou calcular caminho robusto
-        const envDir = process.env.EXCEL_UPLOADS_DIR;
-        if (envDir) {
-            this.outputDir = envDir;
-        } else {
-            // Calcular baseado no diretório do projeto
-            let projectRoot = process.cwd();
-            if (!projectRoot.endsWith('backend') && projectRoot.includes('backend')) {
-                projectRoot = path.join(projectRoot, 'backend');
-            } else if (!projectRoot.endsWith('saas-multicloud') && !projectRoot.endsWith('backend')) {
-                // Se não identifica, assume que está um nível acima de backend
-                const parent = path.dirname(projectRoot);
-                if (fs.existsSync(path.join(parent, 'backend'))) {
-                    projectRoot = path.join(parent);
-                }
-            }
-            this.outputDir = path.join(projectRoot, 'uploads', 'assessments');
-        }
+        // Preferir tmp fora do repo: gravar em ./uploads com nest --watch (e OneDrive em Documents)
+        // dispara "File change detected" e reinicia o backend no meio do sync.
+        const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
+        this.outputDir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
         this.logger.debug(`Excel upload directory: ${this.outputDir}`);
     }
 

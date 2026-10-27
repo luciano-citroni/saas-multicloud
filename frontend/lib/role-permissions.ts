@@ -1,4 +1,4 @@
-const DEFAULT_PLATFORM_USER_ARN = 'arn:aws:iam::371117669756:user/saas-multicloud';
+const DEFAULT_PLATFORM_USER_ARN = 'arn:aws:iam::069637868680:user/saas-multicloud';
 
 /**
  * ARN do usuário IAM da plataforma que assume roles nos clientes.

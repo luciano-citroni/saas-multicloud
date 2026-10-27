@@ -1,11 +1,5 @@
-import { Suspense } from 'react';
-import { FinopsAnomalies } from '@/components/root/finops/anomalies/finops-anomalies';
-import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
+import { redirect } from 'next/navigation';
 
-export default function FinopsAnomaliesPage() {
-    return (
-        <Suspense fallback={<FinopsLoadingSkeleton />}>
-            <FinopsAnomalies />
-        </Suspense>
-    );
+export default function FinopsAnomaliesRedirectPage() {
+    redirect('/finops?tab=optimize');
 }

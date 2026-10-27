@@ -145,3 +145,43 @@ export async function fetchFinopsSyncRuns(organizationId: string, cloudAccountId
         cache: 'no-store',
     });
 }
+
+export async function fetchFinopsOrgOverview(
+    organizationId: string,
+    options?: {
+        period?: string;
+        year?: number;
+        month?: number;
+        anomalyDays?: number;
+        cloudAccountId?: string;
+    }
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.period) params.set('period', options.period);
+    if (options?.year !== undefined) params.set('year', String(options.year));
+    if (options?.month !== undefined) params.set('month', String(options.month));
+    if (options?.anomalyDays !== undefined) params.set('anomalyDays', String(options.anomalyDays));
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+
+    return fetch(`/api/finops/overview?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsOrgOptimize(
+    organizationId: string,
+    options?: {
+        status?: string;
+        days?: number;
+        cloudAccountId?: string;
+        page?: number;
+        limit?: number;
+    }
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.status) params.set('status', options.status);
+    if (options?.days !== undefined) params.set('days', String(options.days));
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.page !== undefined) params.set('page', String(options.page));
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+
+    return fetch(`/api/finops/optimize?${params.toString()}`, { cache: 'no-store' });
+}

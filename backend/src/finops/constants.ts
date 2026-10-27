@@ -10,12 +10,13 @@ export const FINOPS_CONSENT_VERSION = '1.0';
 
 /**
  * Texto exibido ao usuário antes da aceitação do consentimento.
- * A aceitação é obrigatória para consumir AWS Cost Explorer e Azure Cost Management.
+ * A aceitação é obrigatória para consumir AWS Cost Explorer, Azure Cost Management
+ * e GCP Cloud Billing Export (BigQuery).
  */
 export const FINOPS_CONSENT_TERMS = `
 Ao aceitar este termo, você autoriza o SaaS MultiCloud a consultar as APIs de
-gestão de custos da(s) sua(s) conta(s) de nuvem (AWS Cost Explorer e/ou Azure
-Cost Management). Essas APIs podem gerar custos adicionais de acordo com o
-modelo de preços do provedor escolhido. Consulte a documentação do provedor
-para mais informações sobre tarifas.
+gestão de custos da(s) sua(s) conta(s) de nuvem (AWS Cost Explorer, Azure Cost
+Management e/ou GCP Cloud Billing Export via BigQuery). Essas APIs podem gerar
+custos adicionais de acordo com o modelo de preços do provedor escolhido.
+Consulte a documentação do provedor para mais informações sobre tarifas.
 `.trim();

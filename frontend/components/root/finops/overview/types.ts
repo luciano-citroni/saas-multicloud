@@ -160,3 +160,72 @@ export type SyncRun = {
     triggerType: 'manual' | 'scheduled_daily' | 'scheduled_monthly_close';
     createdAt: string;
 };
+
+export type DashboardPeriod = 'last7days' | 'last30days' | 'last90days' | 'currentmonth' | 'lastmonth' | 'ytd';
+
+export type OrgOverviewAccount = {
+    id: string;
+    alias: string;
+    provider: string;
+    totalCost: number;
+    openAnomalies: number;
+    openRecs: number;
+    hasConsent: boolean;
+    isActive?: boolean;
+    finopsSupported?: boolean;
+};
+
+export type OrgCostTrendPoint = {
+    date: string;
+    cost: number;
+    currency: string;
+};
+
+export type OrgFinopsOverview = {
+    period: {
+        period: string;
+        year: number;
+        month: number;
+        anomalyDays: number;
+        startDate: string;
+        endDate: string;
+    };
+    totals: {
+        cost: number;
+        currency: string;
+        momGrowth: number;
+        forecastedCost: number | null;
+        potentialSavings: number;
+    };
+    costByService: CostByServiceItem[];
+    costTrend: OrgCostTrendPoint[];
+    anomalies: Array<FinopsAnomaly & { cloudAccountId: string }>;
+    recommendations: Array<FinopsRecommendation & { cloudAccountId: string }>;
+    accounts: OrgOverviewAccount[];
+};
+
+export type OrgOptimizeItem = {
+    kind: 'anomaly' | 'recommendation';
+    id: string;
+    cloudAccountId: string;
+    cloudProvider: string;
+    title: string;
+    description: string;
+    impact: number;
+    currency: string;
+    severityOrPriority: string;
+    status: string;
+    service?: string;
+    resourceId?: string;
+    createdAt: string;
+};
+
+export type OrgFinopsOptimize = {
+    items: OrgOptimizeItem[];
+    totals: {
+        openAnomalies: number;
+        openRecommendations: number;
+        potentialSavings: number;
+        currency: string;
+    };
+};

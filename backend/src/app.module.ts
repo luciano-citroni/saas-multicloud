@@ -40,13 +40,20 @@ import { OrgsModule } from './orgs/orgs.module';
         ]),
         BullModule.forRootAsync({
             inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-                connection: {
-                    host: config.get<string>('REDIS_HOST', 'localhost'),
-                    port: config.get<number>('REDIS_PORT', 6379),
-                    password: config.get<string>('REDIS_PASSWORD') || undefined,
-                },
-            }),
+            useFactory: (config: ConfigService) => {
+                // Prefixo isola filas quando REDIS é compartilhado (ex.: local vs container /app).
+                // Sem isso, um worker remoto pode consumir jobs do Nest local e falhar com DB/código diferente.
+                const prefix = config.get<string>('BULLMQ_PREFIX')?.trim() || undefined;
+
+                return {
+                    ...(prefix ? { prefix } : {}),
+                    connection: {
+                        host: config.get<string>('REDIS_HOST', 'localhost'),
+                        port: config.get<number>('REDIS_PORT', 6379),
+                        password: config.get<string>('REDIS_PASSWORD') || undefined,
+                    },
+                };
+            },
         }),
         TypeOrmModule.forFeature([UserSession]),
         DbModule,

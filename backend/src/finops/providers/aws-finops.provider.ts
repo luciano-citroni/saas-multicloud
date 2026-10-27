@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { STSClient, AssumeRoleCommand, type AssumeRoleCommandInput } from '@aws-sdk/client-sts';
@@ -22,13 +22,17 @@ export class AwsFinopsProvider implements IFinopsProvider {
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
-        granularity: 'DAILY' | 'MONTHLY',
+        granularity: 'DAILY' | 'MONTHLY'
     ): Promise<FinopsCostCollectionResult> {
         const { credentials, cloudAccountId } = creds;
         const { roleArn, externalId } = credentials as {
             roleArn: string;
             externalId?: string;
         };
+
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
 
         this.logger.log(`[AWS FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
@@ -47,7 +51,12 @@ export class AwsFinopsProvider implements IFinopsProvider {
             ],
         };
 
-        const response = await awsClient.send(new GetCostAndUsageCommand(input));
+        let response;
+        try {
+            response = await awsClient.send(new GetCostAndUsageCommand(input));
+        } catch (error) {
+            throw this.mapAwsError(error, 'Cost Explorer', roleArn);
+        }
 
         const entries: FinopsCostCollectionResult['entries'] = [];
         const currency = 'USD';
@@ -57,7 +66,6 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
             for (const group of result.Groups ?? []) {
                 const [service, region] = group.Keys ?? ['Unknown', ''];
-                const usageType = '';
                 const amount = Number(group.Metrics?.['AmortizedCost']?.Amount ?? '0');
                 const usageQty = Number(group.Metrics?.['UsageQuantity']?.Amount ?? '0');
                 const unit = group.Metrics?.['UsageQuantity']?.Unit ?? '';
@@ -67,7 +75,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
                 if (amount < 0) {
                     this.logger.log(
-                        `[AWS FinOps] Crédito detectado: service="${service}", region="${region}", valor=${amount} ${currency}`,
+                        `[AWS FinOps] Crédito detectado: service="${service}", region="${region}", valor=${amount} ${currency}`
                     );
                 }
 
@@ -75,7 +83,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     service: service ?? 'Unknown',
                     resourceId: '',
                     region: region || null,
-                    usageType: usageType ?? '',
+                    usageType: '',
                     operation: '',
                     cost: amount,
                     currency,
@@ -98,8 +106,20 @@ export class AwsFinopsProvider implements IFinopsProvider {
     }
 
     private async buildCostExplorerClient(roleArn: string, externalId?: string): Promise<CostExplorerClient> {
-        const stsRegion = this.configService.get<string>('AWS_STS_REGION', 'us-east-1');
-        const sts = new STSClient({ region: stsRegion });
+        const temporary = await this.assumeRole(roleArn, externalId);
+
+        // Cost Explorer disponível apenas em us-east-1
+        return new CostExplorerClient({
+            region: 'us-east-1',
+            credentials: temporary,
+        });
+    }
+
+    private async assumeRole(
+        roleArn: string,
+        externalId?: string
+    ): Promise<{ accessKeyId: string; secretAccessKey: string; sessionToken?: string }> {
+        const sts = this.buildPlatformStsClient();
 
         const assumeInput: AssumeRoleCommandInput = {
             RoleArn: roleArn,
@@ -108,21 +128,85 @@ export class AwsFinopsProvider implements IFinopsProvider {
             ...(externalId ? { ExternalId: externalId } : {}),
         };
 
-        const assumed = await sts.send(new AssumeRoleCommand(assumeInput));
-        const awsCreds = assumed.Credentials;
+        try {
+            const assumed = await sts.send(new AssumeRoleCommand(assumeInput));
+            const awsCreds = assumed.Credentials;
 
-        if (!awsCreds?.AccessKeyId || !awsCreds.SecretAccessKey || !awsCreds.SessionToken) {
-            throw new Error(`[AWS FinOps] Falha ao assumir role ${roleArn}`);
-        }
+            if (!awsCreds?.AccessKeyId || !awsCreds.SecretAccessKey || !awsCreds.SessionToken) {
+                throw new Error(`STS retornou credenciais incompletas para ${roleArn}`);
+            }
 
-        // Cost Explorer disponível apenas em us-east-1
-        return new CostExplorerClient({
-            region: 'us-east-1',
-            credentials: {
+            return {
                 accessKeyId: awsCreds.AccessKeyId,
                 secretAccessKey: awsCreds.SecretAccessKey,
                 sessionToken: awsCreds.SessionToken,
-            },
-        });
+            };
+        } catch (error) {
+            throw this.mapAwsError(error, 'STS AssumeRole', roleArn);
+        }
+    }
+
+    /**
+     * Credenciais da plataforma (IAM user) para AssumeRole.
+     * Access keys de longo prazo (AKIA*) não devem carregar AWS_SESSION_TOKEN stale —
+     * isso gera "The security token included in the request is invalid".
+     */
+    private buildPlatformStsClient(): STSClient {
+        const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID')?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+        const secretAccessKey =
+            this.configService.get<string>('AWS_SECRET_ACCESS_KEY')?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+        const sessionToken =
+            this.configService.get<string>('AWS_SESSION_TOKEN')?.trim() || process.env.AWS_SESSION_TOKEN?.trim();
+        const stsRegion =
+            this.configService.get<string>('AWS_STS_REGION')?.trim() || process.env.AWS_STS_REGION?.trim() || 'us-east-1';
+
+        if (!accessKeyId || !secretAccessKey) {
+            throw new BadRequestException(
+                'Credenciais AWS da plataforma não configuradas. Defina AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY.'
+            );
+        }
+
+        const isTemporaryKey = accessKeyId.startsWith('ASIA');
+        const credentials = {
+            accessKeyId,
+            secretAccessKey,
+            ...(isTemporaryKey && sessionToken ? { sessionToken } : {}),
+        };
+
+        if (!isTemporaryKey && sessionToken) {
+            this.logger.warn(
+                '[AWS FinOps] AWS_SESSION_TOKEN presente com access key de longo prazo (AKIA*). Ignorando session token para evitar InvalidClientTokenId.'
+            );
+        }
+
+        return new STSClient({ region: stsRegion, credentials });
+    }
+
+    private mapAwsError(error: unknown, stage: string, roleArn: string): Error {
+        const message = error instanceof Error ? error.message : String(error);
+        const name = error && typeof error === 'object' && 'name' in error ? String((error as { name?: string }).name) : '';
+
+        this.logger.error(`[AWS FinOps] Falha em ${stage}: ${name || 'Error'} — ${message}`);
+
+        if (/security token|InvalidClientTokenId|UnrecognizedClientException/i.test(`${name} ${message}`)) {
+            return new BadRequestException(
+                `Credenciais AWS da plataforma inválidas ou expiradas (${stage}). ` +
+                    'Verifique AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY no backend. ' +
+                    'Se AWS_SESSION_TOKEN estiver definido com uma key AKIA*, remova o session token. ' +
+                    `Detalhe: ${message}`
+            );
+        }
+
+        if (/AccessDenied|not authorized|UnauthorizedOperation/i.test(`${name} ${message}`)) {
+            return new BadRequestException(
+                `Permissão insuficiente na role "${roleArn}" para ${stage}. ` +
+                    'A role precisa permitir sts:AssumeRole (trust) e ce:GetCostAndUsage no Cost Explorer. ' +
+                    `Detalhe: ${message}`
+            );
+        }
+
+        return new BadRequestException(
+            `Falha AWS FinOps em ${stage} para role "${roleArn}". Detalhe: ${message}`
+        );
     }
 }

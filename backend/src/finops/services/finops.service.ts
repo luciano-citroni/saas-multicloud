@@ -15,6 +15,7 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { ErrorMessages } from '../../common/messages/error-messages';
 
 import { FINOPS_QUEUE, FINOPS_JOB_NAME, FINOPS_PENDING_STATES, FINOPS_CONSENT_VERSION, FINOPS_CONSENT_TERMS } from '../constants';
+import { findCloudAccountForTenant } from '../utils/find-cloud-account';
 
 export interface FinopsConsentResponse {
     cloudAccountId: string;
@@ -67,7 +68,7 @@ export class FinopsService {
      * Retorna o estado de consentimento para a conta e provider informados.
      * Cria um registro pendente se ainda não existir.
      */
-    async getConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure'): Promise<FinopsConsentResponse> {
+    async getConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure' | 'gcp'): Promise<FinopsConsentResponse> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existing = await this.consentRepo.findOne({
@@ -88,7 +89,7 @@ export class FinopsService {
      * Registra a aceitação do termo de consentimento pelo usuário.
      * Cria ou atualiza o registro para a conta + provider.
      */
-    async acceptConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure'): Promise<FinopsConsentResponse> {
+    async acceptConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure' | 'gcp'): Promise<FinopsConsentResponse> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existing = await this.consentRepo.findOne({
@@ -130,7 +131,7 @@ export class FinopsService {
     /**
      * Revoga o consentimento. Não apaga dados históricos já coletados.
      */
-    async revokeConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure'): Promise<void> {
+    async revokeConsent(cloudAccountId: string, organizationId: string, cloudProvider: 'aws' | 'azure' | 'gcp'): Promise<void> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const existing = await this.consentRepo.findOne({
@@ -160,7 +161,7 @@ export class FinopsService {
     async startSync(
         cloudAccountId: string,
         organizationId: string,
-        cloudProvider: 'aws' | 'azure',
+        cloudProvider: 'aws' | 'azure' | 'gcp',
         granularity: 'daily' | 'monthly',
         startDate: string,
         endDate: string,
@@ -252,9 +253,7 @@ export class FinopsService {
     // =========================================================================
 
     private async requireCloudAccount(cloudAccountId: string, organizationId: string): Promise<CloudAccount> {
-        const account = await this.cloudAccountRepo.findOne({
-            where: { id: cloudAccountId, organizationId },
-        });
+        const account = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId);
 
         if (!account) {
             throw new BadRequestException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);

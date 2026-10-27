@@ -228,20 +228,32 @@ export class AwsConnectorService {
      */
 
     async assumeRole(creds: AwsRoleCredentials): Promise<AwsCredentialIdentity> {
-        // Validação das variáveis de ambiente (opcional mas recomendado)
+        const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+        const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
 
-        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+        if (!accessKeyId || !secretAccessKey) {
             throw new BadRequestException('Credenciais AWS não configuradas. Defina AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY nas variáveis de ambiente.');
         }
 
-        // O STSClient usa automaticamente as credenciais do ambiente
-
         const stsRegion = process.env.AWS_STS_REGION?.trim() || 'us-east-1';
+
+        // Access keys de longo prazo (AKIA*) não devem usar AWS_SESSION_TOKEN residual —
+        // isso causa "The security token included in the request is invalid".
+        const isTemporaryKey = accessKeyId.startsWith('ASIA');
+        if (!isTemporaryKey && sessionToken) {
+            this.logger.warn(
+                'AWS_SESSION_TOKEN presente com access key de longo prazo (AKIA*). Ignorando session token para STS AssumeRole.'
+            );
+        }
 
         const sts = new STSClient({
             region: stsRegion,
-
-            // As credenciais do usuário IAM são automaticamente carregadas das variáveis de ambiente
+            credentials: {
+                accessKeyId,
+                secretAccessKey,
+                ...(isTemporaryKey && sessionToken ? { sessionToken } : {}),
+            },
         });
 
         const { Credentials } = await sts

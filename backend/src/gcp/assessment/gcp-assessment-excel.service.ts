@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 import type { GcpAssessmentData } from './gcp-assessment-report.service';
@@ -15,28 +16,11 @@ export class GcpAssessmentExcelService {
     private readonly logger = new Logger(GcpAssessmentExcelService.name);
 
     private getOutputDir(): string {
-        // Usar variável de ambiente ou calcular caminho robusto
-        const envDir = process.env.EXCEL_UPLOADS_DIR;
-        if (envDir) {
-            return envDir;
-        }
-
-        // Encontrar a raiz do projeto
-        const projectRoot = this.getProjectRoot();
-        const dir = path.join(projectRoot, 'uploads', 'assessments');
+        const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
+        // tmp fora do repo evita reinício do nest --watch ao gerar Excel
+        const dir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         return dir;
-    }
-
-    private getProjectRoot(): string {
-        let current = process.cwd();
-        while (current !== path.dirname(current)) {
-            if (fs.existsSync(path.join(current, 'package.json'))) {
-                return current;
-            }
-            current = path.dirname(current);
-        }
-        return process.cwd();
     }
 
     getExcelFilePath(fileName: string): string {

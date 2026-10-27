@@ -8,6 +8,8 @@ import { AwsEc2Instance } from '../../db/entites/aws-ec2.entity';
 import { AwsRdsInstance } from '../../db/entites/aws-rds-instance.entity';
 import { AzureVirtualMachine } from '../../db/entites/azure-virtual-machine.entity';
 import { AzureDisk } from '../../db/entites/azure-disk.entity';
+import { GcpVmInstance } from '../../db/entites/gcp-vm-instance.entity';
+import { GcpSqlInstance } from '../../db/entites/gcp-sql-instance.entity';
 
 export interface OptimizationInsight {
     cloudAccountId: string;
@@ -41,6 +43,12 @@ export class FinopsOptimizationService {
 
         @InjectRepository(AzureDisk)
         private readonly azureDiskRepo: Repository<AzureDisk>,
+
+        @InjectRepository(GcpVmInstance)
+        private readonly gcpVmRepo: Repository<GcpVmInstance>,
+
+        @InjectRepository(GcpSqlInstance)
+        private readonly gcpSqlRepo: Repository<GcpSqlInstance>,
     ) {}
 
     /**
@@ -163,6 +171,8 @@ export class FinopsOptimizationService {
             await this.analyzeAwsResources(cloudAccountId, organizationId);
         } else if (cloudProvider === 'azure') {
             await this.analyzeAzureResources(cloudAccountId, organizationId);
+        } else if (cloudProvider === 'gcp') {
+            await this.analyzeGcpResources(cloudAccountId, organizationId);
         }
     }
 
@@ -313,6 +323,89 @@ export class FinopsOptimizationService {
                         priority: 'medium',
                         status: 'open',
                     }),
+                );
+            }
+        }
+    }
+
+    private async analyzeGcpResources(cloudAccountId: string, organizationId: string): Promise<void> {
+        // VMs paradas/terminadas ainda podem gerar custo de disco persistente (espelha EC2 stopped)
+        const stoppedVms = await this.gcpVmRepo.find({
+            where: [
+                { cloudAccountId, status: 'TERMINATED' },
+                { cloudAccountId, status: 'STOPPED' },
+            ],
+        });
+
+        for (const vm of stoppedVms) {
+            const existing = await this.recommendationRepo.findOne({
+                where: {
+                    organizationId,
+                    cloudAccountId,
+                    resourceId: vm.gcpInstanceId,
+                    type: 'stopped-gce-disk-cost',
+                    status: 'open',
+                },
+            });
+
+            if (!existing) {
+                await this.recommendationRepo.save(
+                    this.recommendationRepo.create({
+                        organizationId,
+                        cloudAccountId,
+                        cloudProvider: 'gcp',
+                        type: 'stopped-gce-disk-cost',
+                        resourceId: vm.gcpInstanceId,
+                        resourceType: 'GCE Instance',
+                        description: `Instância GCE ${vm.name} (${vm.machineType}) está ${vm.status.toLowerCase()} mas os discos persistentes continuam gerando custo`,
+                        recommendation:
+                            'Considere deletar a instância e criar snapshot dos discos se os dados forem necessários, ou reinicie-a se estiver em uso',
+                        potentialSaving: 5,
+                        currency: 'USD',
+                        priority: 'medium',
+                        status: 'open',
+                    })
+                );
+            }
+        }
+
+        // Cloud SQL com IP público (espelha RDS publiclyAccessible)
+        const sqlInstances = await this.gcpSqlRepo.find({ where: { cloudAccountId } });
+
+        for (const sql of sqlInstances) {
+            const hasPublicIp = (sql.ipAddresses ?? []).some((ip) => {
+                const type = String(ip?.type ?? '').toUpperCase();
+                return type === 'PRIMARY' || type === 'PUBLIC';
+            });
+
+            if (!hasPublicIp) continue;
+
+            const existing = await this.recommendationRepo.findOne({
+                where: {
+                    organizationId,
+                    cloudAccountId,
+                    resourceId: sql.gcpInstanceId,
+                    type: 'public-cloudsql-governance-risk',
+                    status: 'open',
+                },
+            });
+
+            if (!existing) {
+                await this.recommendationRepo.save(
+                    this.recommendationRepo.create({
+                        organizationId,
+                        cloudAccountId,
+                        cloudProvider: 'gcp',
+                        type: 'public-cloudsql-governance-risk',
+                        resourceId: sql.gcpInstanceId,
+                        resourceType: 'Cloud SQL Instance',
+                        description: `Cloud SQL ${sql.name} possui IP público — risco de segurança e possível custo de transferência`,
+                        recommendation: 'Remova o IP público e use Private IP / Cloud SQL Auth Proxy / PSC',
+                        potentialSaving: null,
+                        currency: 'USD',
+                        priority: 'high',
+                        status: 'open',
+                    })
                 );
             }
         }

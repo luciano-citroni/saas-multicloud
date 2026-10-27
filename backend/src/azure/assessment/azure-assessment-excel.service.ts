@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import type { AzureAssessmentData } from './azure-assessment-report.service';
 
 @Injectable()
@@ -491,32 +492,15 @@ export class AzureAssessmentExcelService {
     }
 
     private getOutputDir(): string {
-        // Usar variável de ambiente ou calcular caminho robusto
-        const envDir = process.env.EXCEL_UPLOADS_DIR;
-        if (envDir) {
-            return envDir;
-        }
-
-        // Encontrar a raiz do projeto
-        const projectRoot = this.getProjectRoot();
-        const outputDir = path.join(projectRoot, 'uploads', 'assessments');
+        const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
+        // tmp fora do repo evita reinício do nest --watch ao gerar Excel
+        const outputDir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
 
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
         }
 
         return outputDir;
-    }
-
-    private getProjectRoot(): string {
-        let current = process.cwd();
-        while (current !== path.dirname(current)) {
-            if (fs.existsSync(path.join(current, 'package.json'))) {
-                return current;
-            }
-            current = path.dirname(current);
-        }
-        return process.cwd();
     }
 
     async deleteExcel(fileName: string): Promise<void> {

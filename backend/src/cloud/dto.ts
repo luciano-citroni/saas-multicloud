@@ -55,6 +55,15 @@ export const gcpCredentialSchema = z.object({
         .trim()
         .email('serviceAccountEmail deve ser um e-mail válido')
         .regex(gcpServiceAccountEmailRegex, 'serviceAccountEmail deve ser uma Service Account GCP (ex: sa@projeto.iam.gserviceaccount.com)'),
+
+    /** Projeto do BigQuery Billing Export (default = projectId). */
+    billingExportProjectId: z.string().trim().min(6).max(30).regex(gcpProjectIdRegex).optional(),
+
+    /** Dataset do Cloud Billing export (auto-descoberta se omitido). */
+    billingExportDataset: z.string().trim().min(1).max(1024).optional(),
+
+    /** Tabela do export (auto-descoberta se omitido). */
+    billingExportTable: z.string().trim().min(1).max(1024).optional(),
 });
 
 export const azureCredentialSchema = z

@@ -15,9 +15,12 @@ import { AwsRdsInstance } from '../../db/entites/aws-rds-instance.entity';
 import { AwsS3Bucket } from '../../db/entites/aws-s3-bucket.entity';
 import { AzureVirtualMachine } from '../../db/entites/azure-virtual-machine.entity';
 import { AzureDisk } from '../../db/entites/azure-disk.entity';
+import { GcpVmInstance } from '../../db/entites/gcp-vm-instance.entity';
+import { GcpSqlInstance } from '../../db/entites/gcp-sql-instance.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { ErrorMessages } from '../../common/messages/error-messages';
+import { findCloudAccountForTenant } from '../utils/find-cloud-account';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -157,6 +160,12 @@ export class FinopsAnalysisService {
 
         @InjectRepository(AzureDisk)
         private readonly azureDiskRepo: Repository<AzureDisk>,
+
+        @InjectRepository(GcpVmInstance)
+        private readonly gcpVmRepo: Repository<GcpVmInstance>,
+
+        @InjectRepository(GcpSqlInstance)
+        private readonly gcpSqlRepo: Repository<GcpSqlInstance>,
 
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepo: Repository<CloudAccount>,
@@ -377,6 +386,9 @@ export class FinopsAnalysisService {
         } else if (cloudProvider === 'azure') {
             const azureRecs = await this.analyzeAzureResources(cloudAccountId, organizationId);
             recommendations.push(...azureRecs);
+        } else if (cloudProvider === 'gcp') {
+            const gcpRecs = await this.analyzeGcpResources(cloudAccountId, organizationId);
+            recommendations.push(...gcpRecs);
         }
 
         if (recommendations.length === 0) {
@@ -526,12 +538,9 @@ export class FinopsAnalysisService {
         startDate: string,
         endDate: string
     ): Promise<FinopsDebugComparison> {
-        const cloudAccount = await this.cloudAccountRepo
-            .createQueryBuilder('ca')
-            .addSelect('ca.credentialsEncrypted')
-            .where('ca.id = :id', { id: cloudAccountId })
-            .andWhere('ca.organizationId = :organizationId', { organizationId })
-            .getOne();
+        const cloudAccount = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId, {
+            withCredentials: true,
+        });
 
         if (!cloudAccount) {
             throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
@@ -953,5 +962,77 @@ export class FinopsAnalysisService {
         }
 
         return recommendations;
+    }
+
+    // ─── GCP Resource Analysis ────────────────────────────────────────────────
+
+    private async analyzeGcpResources(cloudAccountId: string, organizationId: string): Promise<Partial<FinopsRecommendation>[]> {
+        const recommendations: Partial<FinopsRecommendation>[] = [];
+
+        const stoppedVms = await this.gcpVmRepo.find({
+            where: [
+                { cloudAccountId, status: 'TERMINATED' },
+                { cloudAccountId, status: 'STOPPED' },
+            ],
+        });
+
+        for (const vm of stoppedVms) {
+            recommendations.push({
+                organizationId,
+                cloudAccountId,
+                cloudProvider: 'gcp',
+                type: 'underutilized_gce',
+                resourceId: vm.gcpInstanceId,
+                resourceType: 'GCEInstance',
+                description: `Instância GCE ${vm.name} (${vm.machineType}) está ${vm.status.toLowerCase()} e pode estar gerando custos de disco persistente.`,
+                recommendation: 'Considere deletar a instância ou criar um snapshot e deletá-la para reduzir custos.',
+                potentialSaving: this.estimateGceDiskSaving(vm.machineType),
+                currency: 'USD',
+                priority: 'medium',
+                metadata: { machineType: vm.machineType, zone: vm.zone, status: vm.status },
+                status: 'open',
+            });
+        }
+
+        const sqlInstances = await this.gcpSqlRepo.find({ where: { cloudAccountId } });
+
+        for (const sql of sqlInstances) {
+            const hasPublicIp = (sql.ipAddresses ?? []).some((ip) => {
+                const type = String(ip?.type ?? '').toUpperCase();
+                return type === 'PRIMARY' || type === 'PUBLIC';
+            });
+
+            if (!hasPublicIp) continue;
+
+            recommendations.push({
+                organizationId,
+                cloudAccountId,
+                cloudProvider: 'gcp',
+                type: 'public_cloudsql',
+                resourceId: sql.gcpInstanceId,
+                resourceType: 'CloudSqlInstance',
+                description: `Cloud SQL ${sql.name} está com IP público, o que pode indicar má configuração e custo de transferência.`,
+                recommendation:
+                    'Avalie se a instância precisa de IP público. Prefira Private IP, PSC ou Cloud SQL Auth Proxy.',
+                potentialSaving: 25.0,
+                currency: 'USD',
+                priority: 'high',
+                metadata: { databaseVersion: sql.databaseVersion, tier: sql.tier, region: sql.region },
+                status: 'open',
+            });
+        }
+
+        return recommendations;
+    }
+
+    private estimateGceDiskSaving(machineType: string | null): number {
+        if (!machineType) return 10.0;
+        const type = machineType.toLowerCase();
+        if (type.includes('e2-micro') || type.includes('f1-micro')) return 5.0;
+        if (type.includes('e2-small') || type.includes('g1-small')) return 8.0;
+        if (type.includes('e2-medium') || type.includes('n1-standard-1')) return 12.0;
+        if (type.includes('e2-standard') || type.includes('n1-standard')) return 20.0;
+        if (type.includes('n2-') || type.includes('c2-')) return 25.0;
+        return 15.0;
     }
 }

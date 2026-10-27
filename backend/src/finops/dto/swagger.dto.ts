@@ -6,7 +6,7 @@ export class FinopsConsentResponseDto {
     @ApiProperty({ format: 'uuid' })
     cloudAccountId!: string;
 
-    @ApiProperty({ example: 'aws', description: 'aws | azure' })
+    @ApiProperty({ example: 'aws', description: 'aws | azure | gcp' })
     cloudProvider!: string;
 
     @ApiProperty({ example: true })
@@ -23,15 +23,15 @@ export class FinopsConsentResponseDto {
 }
 
 export class AcceptConsentRequestDto {
-    @ApiProperty({ example: 'aws', description: 'aws | azure' })
-    cloudProvider!: 'aws' | 'azure';
+    @ApiProperty({ example: 'aws', description: 'aws | azure | gcp' })
+    cloudProvider!: 'aws' | 'azure' | 'gcp';
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 
 export class FinopsSyncRequestDto {
-    @ApiProperty({ example: 'aws', description: 'aws | azure' })
-    cloudProvider!: 'aws' | 'azure';
+    @ApiProperty({ example: 'aws', description: 'aws | azure | gcp' })
+    cloudProvider!: 'aws' | 'azure' | 'gcp';
 
     @ApiProperty({ example: 'monthly', description: 'daily | monthly' })
     granularity!: 'daily' | 'monthly';

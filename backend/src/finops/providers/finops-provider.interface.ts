@@ -28,7 +28,7 @@ export interface FinopsProviderCredentials {
  * Permite estender facilmente para novos provedores (GCP, OCI, etc.).
  */
 export interface IFinopsProvider {
-    /** Identificador único do provider (ex: 'aws', 'azure'). */
+    /** Identificador único do provider (ex: 'aws', 'azure', 'gcp'). */
     readonly provider: string;
 
     /**

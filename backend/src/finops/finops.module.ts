@@ -16,6 +16,7 @@ import { FinopsAnomalyDetectionService } from './services/finops-anomaly-detecti
 import { FinopsForecastService } from './services/finops-forecast.service';
 import { FinopsMonetizationService } from './services/finops-monetization.service';
 import { FinopsOptimizationService } from './services/finops-optimization.service';
+import { FinopsOrgOverviewService } from './services/finops-org-overview.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -23,6 +24,7 @@ import { FinopsProcessor } from './processors/finops.processor';
 // Providers
 import { AwsFinopsProvider } from './providers/aws-finops.provider';
 import { AzureFinopsProvider } from './providers/azure-finops.provider';
+import { GcpFinopsProvider } from './providers/gcp-finops.provider';
 
 // FinOps core entities
 import { FinopsConsent } from '../db/entites/finops-consent.entity';
@@ -44,6 +46,8 @@ import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
 import { AwsS3Bucket } from '../db/entites/aws-s3-bucket.entity';
 import { AzureVirtualMachine } from '../db/entites/azure-virtual-machine.entity';
 import { AzureDisk } from '../db/entites/azure-disk.entity';
+import { GcpVmInstance } from '../db/entites/gcp-vm-instance.entity';
+import { GcpSqlInstance } from '../db/entites/gcp-sql-instance.entity';
 
 // Supporting modules
 import { TenantModule } from '../tenant/tenant.module';
@@ -74,6 +78,8 @@ import { FINOPS_QUEUE } from './constants';
             AwsS3Bucket,
             AzureVirtualMachine,
             AzureDisk,
+            GcpVmInstance,
+            GcpSqlInstance,
         ]),
 
         TenantModule,
@@ -93,11 +99,13 @@ import { FINOPS_QUEUE } from './constants';
         FinopsForecastService,
         FinopsMonetizationService,
         FinopsOptimizationService,
+        FinopsOrgOverviewService,
         // Processor
         FinopsProcessor,
         // Providers
         AwsFinopsProvider,
         AzureFinopsProvider,
+        GcpFinopsProvider,
     ],
     exports: [
         FinopsService,

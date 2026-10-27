@@ -15,6 +15,8 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { AzureFinopsProvider } from '../providers/azure-finops.provider';
+import { GcpFinopsProvider } from '../providers/gcp-finops.provider';
+import type { IFinopsProvider } from '../providers/finops-provider.interface';
 
 import { FinopsCostIngestionService } from '../services/finops-cost-ingestion.service';
 import { FinopsCostAggregationService } from '../services/finops-cost-aggregation.service';
@@ -22,6 +24,7 @@ import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detect
 import { FinopsOptimizationService } from '../services/finops-optimization.service';
 
 import { FINOPS_QUEUE, FINOPS_WORKER_CONCURRENCY } from '../constants';
+import { findCloudAccountForTenant } from '../utils/find-cloud-account';
 
 import type { FinopsSyncJobPayload } from '../services/finops.service';
 
@@ -38,6 +41,7 @@ export class FinopsProcessor extends WorkerHost {
 
         private readonly awsProvider: AwsFinopsProvider,
         private readonly azureProvider: AzureFinopsProvider,
+        private readonly gcpProvider: GcpFinopsProvider,
 
         private readonly ingestionService: FinopsCostIngestionService,
         private readonly aggregationService: FinopsCostAggregationService,
@@ -59,12 +63,9 @@ export class FinopsProcessor extends WorkerHost {
             this.logger.log(`[${jobId}] Fase 1/5: Carregando credenciais...`);
             await job.updateProgress(10);
 
-            const cloudAccount = await this.cloudAccountRepo
-                .createQueryBuilder('ca')
-                .addSelect('ca.credentialsEncrypted')
-                .where('ca.id = :id', { id: cloudAccountId })
-                .andWhere('ca.organizationId = :organizationId', { organizationId })
-                .getOne();
+            const cloudAccount = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId, {
+                withCredentials: true,
+            });
 
             if (!cloudAccount) {
                 throw new Error(`CloudAccount ${cloudAccountId} não encontrada`);
@@ -74,7 +75,7 @@ export class FinopsProcessor extends WorkerHost {
             this.logger.log(`[${jobId}] Fase 2/5: Coletando custos via ${cloudProvider}...`);
             await job.updateProgress(25);
 
-            const provider = cloudProvider === 'aws' ? this.awsProvider : this.azureProvider;
+            const provider = this.resolveProvider(cloudProvider);
             const decryptedCredentials = this.decryptCloudCredentials(cloudAccount.credentialsEncrypted);
 
             const { entries } = await provider.collectCosts(
@@ -165,6 +166,13 @@ export class FinopsProcessor extends WorkerHost {
             await this.jobRepo.update(jobId, { status: 'failed', error });
             throw err;
         }
+    }
+
+    private resolveProvider(cloudProvider: string): IFinopsProvider {
+        if (cloudProvider === 'aws') return this.awsProvider;
+        if (cloudProvider === 'azure') return this.azureProvider;
+        if (cloudProvider === 'gcp') return this.gcpProvider;
+        throw new Error(`Provider FinOps não suportado: ${cloudProvider}`);
     }
 
     /**
