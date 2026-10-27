@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { AwsVpc } from './aws-vpc.entity';
 
@@ -189,7 +198,7 @@ export class AwsSubnet {
 
     @ManyToOne(() => AwsVpc, (vpc) => vpc.subnets, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc;
+    vpc!: Relation<AwsVpc>;
 
     /**
 
@@ -215,5 +224,5 @@ export class AwsSubnet {
 
     @ManyToOne(() => AwsRouteTable, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'route_table_id' })
-    routeTable!: AwsRouteTable | null;
+    routeTable!: Relation<AwsRouteTable | null>;
 }

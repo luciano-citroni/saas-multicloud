@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -143,13 +152,13 @@ export class AwsLambdaFunction {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @ManyToOne(() => AwsVpc, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc | null;
+    vpc!: Relation<AwsVpc | null>;
 
     @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'iam_role_id' })
-    iamRole!: AwsIamRole | null;
+    iamRole!: Relation<AwsIamRole | null>;
 }

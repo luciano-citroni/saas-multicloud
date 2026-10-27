@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    OneToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { Tenant } from './tenant.entity';
 
 export enum TenantSubscriptionStatus {
@@ -52,5 +61,5 @@ export class OrganizationSubscription {
 
     @OneToOne(() => Tenant)
     @JoinColumn({ name: 'tenant_id' })
-    tenant!: Tenant;
+    tenant!: Relation<Tenant>;
 }

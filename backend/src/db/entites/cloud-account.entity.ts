@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { Organization } from './organization.entity';
 import { Tenant } from './tenant.entity';
@@ -46,9 +55,9 @@ export class CloudAccount {
 
     @ManyToOne(() => Organization, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'organization_id' })
-    organization!: Organization | null;
+    organization!: Relation<Organization | null>;
 
     @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'tenant_id' })
-    tenant!: Tenant;
+    tenant!: Relation<Tenant>;
 }

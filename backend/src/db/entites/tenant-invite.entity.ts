@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { Tenant } from './tenant.entity';
 import { User } from './user.entity';
 
@@ -45,9 +54,9 @@ export class TenantInvite {
 
     @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'tenant_id' })
-    tenant!: Tenant;
+    tenant!: Relation<Tenant>;
 
     @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'invited_by_user_id' })
-    invitedBy!: User;
+    invitedBy!: Relation<User>;
 }

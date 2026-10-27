@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -133,21 +142,21 @@ export class AwsRdsInstance {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @ManyToOne(() => AwsVpc, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc | null;
+    vpc!: Relation<AwsVpc | null>;
 
     @ManyToOne(() => AwsSubnet, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'subnet_id' })
-    subnet!: AwsSubnet | null;
+    subnet!: Relation<AwsSubnet | null>;
 
     @ManyToOne(() => AwsSecurityGroup, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'security_group_id' })
-    securityGroup!: AwsSecurityGroup | null;
+    securityGroup!: Relation<AwsSecurityGroup | null>;
 
     @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'iam_role_id' })
-    iamRole!: AwsIamRole | null;
+    iamRole!: Relation<AwsIamRole | null>;
 }

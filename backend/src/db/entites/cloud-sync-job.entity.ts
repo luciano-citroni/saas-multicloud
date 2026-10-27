@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { CloudAccount } from './cloud-account.entity';
 import { CloudProvider } from './cloud-account.entity';
 
@@ -14,7 +23,7 @@ export class CloudSyncJob {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount: CloudAccount;
+    cloudAccount: Relation<CloudAccount>;
 
     @Column({ type: 'uuid', name: 'organization_id' })
     organizationId: string;

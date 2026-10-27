@@ -7,6 +7,7 @@ import {
     OneToMany,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
+    type Relation
 } from 'typeorm';
 import { Organization } from './organization.entity';
 import { CloudAccount } from './cloud-account.entity';
@@ -38,21 +39,21 @@ export class AutomationExecution {
 
     @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'organization_id' })
-    organization!: Organization;
+    organization!: Relation<Organization>;
 
     @Column({ name: 'cloud_account_id' })
     cloudAccountId!: string;
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @Column({ type: 'uuid', name: 'automation_id', nullable: true })
     automationId!: string | null;
 
     @ManyToOne(() => Automation, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'automation_id' })
-    automation!: Automation | null;
+    automation!: Relation<Automation | null>;
 
     @Column({ type: 'int', name: 'automation_version', nullable: true })
     automationVersion!: number | null;
@@ -85,10 +86,10 @@ export class AutomationExecution {
     finishedAt!: Date | null;
 
     @OneToMany('ProvisionedResource', 'execution')
-    resources!: unknown[];
+    resources!: Relation<unknown[]>;
 
     @OneToMany(() => AutomationExecutionNode, (node) => node.execution)
-    executionNodes!: AutomationExecutionNode[];
+    executionNodes!: Relation<AutomationExecutionNode[]>;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

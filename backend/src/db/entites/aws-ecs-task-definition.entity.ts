@@ -1,4 +1,14 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -309,18 +319,18 @@ export class AwsEcsTaskDefinition {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @OneToMany(() => AwsEcsService, (service) => service.taskDefinition)
-    services!: AwsEcsService[];
+    services!: Relation<AwsEcsService[]>;
 
     @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'execution_role_id' })
-    executionRole!: AwsIamRole | null;
+    executionRole!: Relation<AwsIamRole | null>;
 
     @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'task_role_id' })
-    taskRole!: AwsIamRole | null;
+    taskRole!: Relation<AwsIamRole | null>;
 
     // ========== TIMESTAMPS ==========
 

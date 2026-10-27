@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    type Relation
+} from 'typeorm';
 import { AutomationExecution, PricingModel } from './automation-execution.entity';
 
 export enum ProvisionedResourceStatus {
@@ -17,7 +25,7 @@ export class ProvisionedResource {
 
     @ManyToOne(() => AutomationExecution, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'execution_id' })
-    execution: AutomationExecution;
+    execution: Relation<AutomationExecution>;
 
     @Column({ name: 'resource_type' })
     resourceType: string;

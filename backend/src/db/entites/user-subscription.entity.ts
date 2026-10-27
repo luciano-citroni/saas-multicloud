@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    OneToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { User } from './user.entity';
 
 export enum SubscriptionStatus {
@@ -52,5 +61,5 @@ export class UserSubscription {
 
     @OneToOne(() => User)
     @JoinColumn({ name: 'user_id' })
-    user!: User;
+    user!: Relation<User>;
 }

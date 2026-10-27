@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    type Relation
+} from 'typeorm';
 import { Automation } from './automation.entity';
 
 @Entity('automation_versions')
@@ -11,7 +19,7 @@ export class AutomationVersion {
 
     @ManyToOne(() => Automation, (automation) => automation.versions, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'automation_id' })
-    automation!: Automation;
+    automation!: Relation<Automation>;
 
     @Column({ type: 'int' })
     version!: number;

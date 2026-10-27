@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('users_sessions')
@@ -23,5 +32,5 @@ export class UserSession {
 
     @ManyToOne(() => User, (user) => user.sessions, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id' })
-    user!: User;
+    user!: Relation<User>;
 }

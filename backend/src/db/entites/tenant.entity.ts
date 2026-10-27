@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    OneToMany,
+    type Relation
+} from 'typeorm';
 import { TenantMember } from './tenant-member.entity';
 
 @Entity('tenants')
@@ -28,5 +36,5 @@ export class Tenant {
     updatedAt!: Date;
 
     @OneToMany(() => TenantMember, (member) => member.tenant)
-    members!: TenantMember[];
+    members!: Relation<TenantMember[]>;
 }

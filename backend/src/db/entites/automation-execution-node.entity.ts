@@ -1,4 +1,11 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    type Relation
+} from 'typeorm';
 import { AutomationExecution } from './automation-execution.entity';
 
 export enum AutomationExecutionNodeStatus {
@@ -19,7 +26,7 @@ export class AutomationExecutionNode {
 
     @ManyToOne(() => AutomationExecution, (execution) => execution.executionNodes, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'execution_id' })
-    execution!: AutomationExecution;
+    execution!: Relation<AutomationExecution>;
 
     @Column({ type: 'uuid', name: 'node_id' })
     nodeId!: string;

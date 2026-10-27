@@ -6,6 +6,7 @@ import {
     ManyToOne,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
+    type Relation
 } from 'typeorm';
 import { Automation } from './automation.entity';
 
@@ -19,7 +20,7 @@ export class AutomationNode {
 
     @ManyToOne(() => Automation, (automation) => automation.nodes, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'automation_id' })
-    automation!: Automation;
+    automation!: Relation<Automation>;
 
     @Column({ type: 'varchar', length: 100 })
     type!: string;

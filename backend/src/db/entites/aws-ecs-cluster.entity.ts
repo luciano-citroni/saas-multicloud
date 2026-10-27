@@ -1,4 +1,14 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -185,10 +195,10 @@ export class AwsEcsCluster {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @OneToMany(() => AwsEcsService, (service) => service.cluster)
-    services!: AwsEcsService[];
+    services!: Relation<AwsEcsService[]>;
 
     // ========== TIMESTAMPS ==========
 

@@ -1,4 +1,14 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    Index,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 import { CloudAccount } from './cloud-account.entity';
 
 export type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -55,7 +65,7 @@ export class FinopsCostAnomaly {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

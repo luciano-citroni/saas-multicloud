@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { AwsLoadBalancer } from './aws-load-balancer.entity';
 
@@ -193,5 +202,5 @@ export class AwsLoadBalancerListener {
 
     @ManyToOne(() => AwsLoadBalancer, (lb) => lb.listeners, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'load_balancer_id' })
-    loadBalancer!: AwsLoadBalancer;
+    loadBalancer!: Relation<AwsLoadBalancer>;
 }

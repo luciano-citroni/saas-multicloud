@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -431,9 +440,9 @@ export class AwsCloudFrontDistribution {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @ManyToOne(() => AwsS3Bucket, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 's3_bucket_id' })
-    s3Bucket!: AwsS3Bucket | null;
+    s3Bucket!: Relation<AwsS3Bucket | null>;
 }

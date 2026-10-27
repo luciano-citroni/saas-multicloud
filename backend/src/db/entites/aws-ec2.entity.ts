@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { AwsVpc } from './aws-vpc.entity';
 
@@ -300,17 +309,17 @@ export class AwsEc2Instance {
 
     @ManyToOne(() => AwsSubnet, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'subnet_id' })
-    subnet!: AwsSubnet;
+    subnet!: Relation<AwsSubnet>;
 
     @ManyToOne(() => AwsVpc, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc;
+    vpc!: Relation<AwsVpc>;
 
     @ManyToOne(() => AwsSecurityGroup, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'security_group_id' })
-    securityGroup!: AwsSecurityGroup | null;
+    securityGroup!: Relation<AwsSecurityGroup | null>;
 
     @ManyToOne(() => AwsIamRole, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'iam_role_id' })
-    iamRole!: AwsIamRole | null;
+    iamRole!: Relation<AwsIamRole | null>;
 }

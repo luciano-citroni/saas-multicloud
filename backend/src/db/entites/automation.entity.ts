@@ -7,6 +7,7 @@ import {
     OneToMany,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
+    type Relation
 } from 'typeorm';
 import { CloudAccount } from './cloud-account.entity';
 import { Tenant } from './tenant.entity';
@@ -36,14 +37,14 @@ export class Automation {
 
     @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'tenant_id' })
-    tenant!: Tenant;
+    tenant!: Relation<Tenant>;
 
     @Column({ type: 'uuid', name: 'cloud_account_id' })
     cloudAccountId!: string;
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @Column({ type: 'varchar', length: 255 })
     name!: string;
@@ -67,13 +68,13 @@ export class Automation {
     updatedBy!: string | null;
 
     @OneToMany(() => AutomationNode, (node) => node.automation)
-    nodes!: AutomationNode[];
+    nodes!: Relation<AutomationNode[]>;
 
     @OneToMany(() => AutomationEdge, (edge) => edge.automation)
-    edges!: AutomationEdge[];
+    edges!: Relation<AutomationEdge[]>;
 
     @OneToMany(() => AutomationVersion, (version) => version.automation)
-    versions!: AutomationVersion[];
+    versions!: Relation<AutomationVersion[]>;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    Index,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    type Relation
+} from 'typeorm';
 
 import { GovernanceJob } from './governance-job.entity';
 
@@ -72,5 +81,5 @@ export class GovernanceFinding {
 
     @ManyToOne(() => GovernanceJob, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'job_id' })
-    job!: GovernanceJob;
+    job!: Relation<GovernanceJob>;
 }

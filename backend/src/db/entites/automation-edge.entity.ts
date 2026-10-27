@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    type Relation
+} from 'typeorm';
 import { Automation } from './automation.entity';
 import { AutomationNode } from './automation-node.entity';
 
@@ -12,21 +20,21 @@ export class AutomationEdge {
 
     @ManyToOne(() => Automation, (automation) => automation.edges, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'automation_id' })
-    automation!: Automation;
+    automation!: Relation<Automation>;
 
     @Column({ type: 'uuid', name: 'source_node_id' })
     sourceNodeId!: string;
 
     @ManyToOne(() => AutomationNode, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'source_node_id' })
-    sourceNode!: AutomationNode;
+    sourceNode!: Relation<AutomationNode>;
 
     @Column({ type: 'uuid', name: 'target_node_id' })
     targetNodeId!: string;
 
     @ManyToOne(() => AutomationNode, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'target_node_id' })
-    targetNode!: AutomationNode;
+    targetNode!: Relation<AutomationNode>;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

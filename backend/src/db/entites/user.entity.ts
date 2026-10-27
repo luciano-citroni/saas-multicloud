@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    OneToMany,
+    type Relation
+} from 'typeorm';
 import { UserSession } from './user-session.entity';
 import { OrganizationMembership } from './organization-membership.entity';
 
@@ -29,8 +37,8 @@ export class User {
     updatedAt!: Date;
 
     @OneToMany(() => UserSession, (session) => session.user)
-    sessions!: UserSession[];
+    sessions!: Relation<UserSession[]>;
 
     @OneToMany(() => OrganizationMembership, (member) => member.user)
-    organizationMemberships!: OrganizationMembership[];
+    organizationMemberships!: Relation<OrganizationMembership[]>;
 }

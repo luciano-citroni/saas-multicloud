@@ -1,4 +1,14 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
@@ -281,12 +291,12 @@ export class AwsLoadBalancer {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloud_account_id' })
-    cloudAccount!: CloudAccount;
+    cloudAccount!: Relation<CloudAccount>;
 
     @ManyToOne(() => AwsVpc, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc | null;
+    vpc!: Relation<AwsVpc | null>;
 
     @OneToMany('AwsLoadBalancerListener', 'loadBalancer')
-    listeners!: any[];
+    listeners!: Relation<any[]>;
 }

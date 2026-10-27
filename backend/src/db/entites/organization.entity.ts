@@ -1,4 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToOne,
+    JoinColumn,
+    OneToMany,
+    type Relation
+} from 'typeorm';
 import { Tenant } from './tenant.entity';
 import { OrganizationMembership } from './organization-membership.entity';
 
@@ -21,8 +31,8 @@ export class Organization {
 
     @ManyToOne(() => Tenant, (tenant) => tenant.members, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'tenant_id' })
-    tenant!: Tenant;
+    tenant!: Relation<Tenant>;
 
     @OneToMany(() => OrganizationMembership, (member) => member.organization)
-    members!: OrganizationMembership[];
+    members!: Relation<OrganizationMembership[]>;
 }

@@ -1,4 +1,13 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    type Relation
+} from 'typeorm';
 
 import { AwsVpc } from './aws-vpc.entity';
 
@@ -146,5 +155,5 @@ export class AwsRouteTable {
 
     @ManyToOne(() => AwsVpc, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'vpc_id' })
-    vpc!: AwsVpc;
+    vpc!: Relation<AwsVpc>;
 }

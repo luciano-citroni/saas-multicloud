@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToOne,
+    JoinColumn,
+    type Relation
+} from 'typeorm';
 import { CloudAccount } from './cloud-account.entity';
 
 export type AssessmentStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -13,7 +22,7 @@ export class AwsAssessmentJob {
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cloudAccountId' })
-    cloudAccount: CloudAccount;
+    cloudAccount: Relation<CloudAccount>;
 
     @Column()
     organizationId: string;
