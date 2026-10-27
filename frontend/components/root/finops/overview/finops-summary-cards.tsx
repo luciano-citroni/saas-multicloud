@@ -1,7 +1,7 @@
 import { FileText, Loader2, PlayCircle, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatDate, scoreColor, scoreLabel } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, formatDate, isTaxService, scoreColor, scoreLabel } from '@/components/root/finops/overview/helpers';
 import type { FinopsDashboard, FinopsScore } from '@/components/root/finops/overview/types';
 
 type FinopsSummaryCardsProps = {
@@ -120,21 +120,28 @@ export function FinopsSummaryCards({
 
                 <div className="rounded-lg border p-3">
                     <p className="text-xs text-muted-foreground">Maior serviço</p>
-                    {dashboard && dashboard.topServices.length > 0 ? (
-                        <>
-                            <p className="mt-1 truncate text-lg font-bold">{dashboard.topServices[0].service}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                                {formatCurrency(dashboard.topServices[0].cost, dashboard.currency)} ({dashboard.topServices[0].percentage.toFixed(1)}%)
-                            </p>
-                        </>
-                    ) : (
-                        <>
-                            <p className="mt-1 text-2xl font-bold text-muted-foreground">--</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                                {isBusy ? 'Coletando dados...' : 'Sincronize para ver dados'}
-                            </p>
-                        </>
-                    )}
+                    {(() => {
+                        const topService = dashboard?.topServices.find((item) => !isTaxService(item.service));
+                        if (!topService) {
+                            return (
+                                <>
+                                    <p className="mt-1 text-2xl font-bold text-muted-foreground">--</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        {isBusy ? 'Coletando dados...' : 'Sincronize para ver dados'}
+                                    </p>
+                                </>
+                            );
+                        }
+
+                        return (
+                            <>
+                                <p className="mt-1 truncate text-lg font-bold">{topService.service}</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {formatCurrency(topService.cost, dashboard!.currency)} ({topService.percentage.toFixed(1)}%)
+                                </p>
+                            </>
+                        );
+                    })()}
                 </div>
 
                 <div className="rounded-lg border p-3">

@@ -25,7 +25,7 @@ import {
     finopsChartTickProps,
     finopsChartTooltipStyles,
 } from '@/components/root/finops/overview/finops-chart-theme';
-import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
 import type { CostByServiceItem, OrgFinopsOverview, OrgOverviewAccount } from '@/components/root/finops/overview/types';
 import { cn } from '@/lib/utils';
 
@@ -67,12 +67,15 @@ export function FinopsSpendPanel({
     }
 
     const { totals, costTrend } = overview;
-    const topServices = costByService.slice(0, 8).map((item) => ({
-        name: serviceLabel(item.service),
-        cost: Number(item.currentMonthCost),
-        fullName: item.service,
-        changePercentage: item.changePercentage,
-    }));
+    const topServices = costByService
+        .filter((item) => !isTaxService(item.service))
+        .slice(0, 8)
+        .map((item) => ({
+            name: serviceLabel(item.service),
+            cost: Number(item.currentMonthCost),
+            fullName: item.service,
+            changePercentage: item.changePercentage,
+        }));
 
     const byProviderMap = new Map<string, number>();
     for (const account of accounts) {

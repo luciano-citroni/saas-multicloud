@@ -120,3 +120,11 @@ export function formatDate(dateStr: string | null): string {
 export function granularityLabel(granularity: string): string {
     return granularity === 'daily' ? 'Diária' : 'Mensal';
 }
+
+/** Impostos e taxas não são recurso — fora de gráficos de consumo. */
+export function isTaxService(service: string): boolean {
+    const normalized = service.trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized === 'tax' || normalized === 'taxes' || normalized === 'vat') return true;
+    return /\btax(es)?\b/.test(normalized) || /\bimposto\b/.test(normalized);
+}

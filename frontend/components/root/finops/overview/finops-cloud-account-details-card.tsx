@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { MoreVertical, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { FinopsDashboard } from './types';
@@ -93,15 +93,22 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
 
                     <div className="rounded-lg border p-2.5">
                         <p className="text-xs text-muted-foreground">Top serviço</p>
-                        <p className="mt-1 truncate text-sm font-semibold">
-                            {dashboard.topServices?.[0]?.service
-                                ?.replace(/^Amazon\s+/i, '')
-                                .replace(/^AWS\s+/i, '')
-                                .slice(0, 20) || 'N/A'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {dashboard.topServices?.[0] ? formatCurrency(Number(dashboard.topServices[0].cost), currency) : '--'}
-                        </p>
+                        {(() => {
+                            const topService = dashboard.topServices?.find((item) => !isTaxService(item.service));
+                            return (
+                                <>
+                                    <p className="mt-1 truncate text-sm font-semibold">
+                                        {topService?.service
+                                            ?.replace(/^Amazon\s+/i, '')
+                                            .replace(/^AWS\s+/i, '')
+                                            .slice(0, 20) || 'N/A'}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        {topService ? formatCurrency(Number(topService.cost), currency) : '--'}
+                                    </p>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             ) : (

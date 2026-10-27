@@ -75,6 +75,8 @@ export async function GET(request: Request) {
     const organizationId = searchParams.get('organizationId');
     const name = searchParams.get('name');
     const isActive = searchParams.get('isActive');
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
 
     if (!organizationId) {
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
@@ -94,6 +96,14 @@ export async function GET(request: Request) {
 
     if (isActive === 'true' || isActive === 'false') {
         backendSearchParams.set('isActive', isActive);
+    }
+
+    if (page && /^[1-9]\d*$/.test(page)) {
+        backendSearchParams.set('page', page);
+    }
+
+    if (limit && /^[1-9]\d*$/.test(limit)) {
+        backendSearchParams.set('limit', limit);
     }
 
     const backendUrl = backendSearchParams.size > 0 ? `/api/cloud/accounts?${backendSearchParams.toString()}` : '/api/cloud/accounts';

@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from 'rec
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
 import type { CostByServiceItem } from '@/components/root/finops/overview/types';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -215,11 +215,14 @@ export function FinopsCostDetails() {
     const increasingServices = serviceItems.filter((i) => i.trend === 'up' && i.changePercentage > 10);
     const currency = items[0]?.currency ?? 'USD';
 
-    // Chart: top 8 services (exclude credits — negative bars break layout)
-    const chartItems = serviceItems.slice(0, 8).map((i) => ({
-        ...i,
-        label: shortenServiceName(i.service),
-    }));
+    // Chart: top 8 resource services (exclude credits and tax)
+    const chartItems = serviceItems
+        .filter((i) => !isTaxService(i.service))
+        .slice(0, 8)
+        .map((i) => ({
+            ...i,
+            label: shortenServiceName(i.service),
+        }));
     const chartHeight = Math.max(220, chartItems.length * 44);
 
     const chartConfig = {

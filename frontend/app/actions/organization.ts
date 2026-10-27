@@ -114,6 +114,14 @@ export async function fetchOrganizationCloudAccounts(organizationId: string, opt
         searchParams.set('isActive', String(options.isActive));
     }
 
+    if (typeof options.page === 'number') {
+        searchParams.set('page', String(options.page));
+    }
+
+    if (typeof options.limit === 'number') {
+        searchParams.set('limit', String(options.limit));
+    }
+
     const url = `/api/cloud/accounts?${searchParams.toString()}`;
 
     return fetch(url, {

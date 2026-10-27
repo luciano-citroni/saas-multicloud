@@ -13,7 +13,7 @@ import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { fetchFinopsForecast, fetchFinopsForecastNextMonths } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
-import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
 import type { ForecastResult, ForecastMonthProjection } from '@/components/root/finops/overview/types';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
@@ -142,7 +142,10 @@ export function FinopsForecast() {
     }
 
     const currency = forecast?.currency ?? 'USD';
-    const chartData = (forecast?.byService ?? []).slice(0, 8).map((s) => ({ ...s, label: shortenService(s.service) }));
+    const chartData = (forecast?.byService ?? [])
+        .filter((s) => !isTaxService(s.service))
+        .slice(0, 8)
+        .map((s) => ({ ...s, label: shortenService(s.service) }));
     const chartHeight = Math.max(180, chartData.length * 36);
     const dashboardHref = useMemo(() => {
         if (!cloudAccountId) {
