@@ -118,18 +118,23 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
         import('jspdf/dist/jspdf.es.min.js'),
         import('jspdf-autotable/es'),
     ]);
-    const jsPDFCtor =
-        (jspdfModule as { jsPDF?: new (options: object) => PdfDoc }).jsPDF ??
-        (jspdfModule as { default?: { jsPDF?: new (options: object) => PdfDoc } }).default?.jsPDF ??
-        (jspdfModule as { default?: new (options: object) => PdfDoc }).default;
+
+    type JsPdfCtor = new (options: object) => PdfDoc;
+    const jspdfAny = jspdfModule as unknown as {
+        jsPDF?: JsPdfCtor;
+        default?: JsPdfCtor | { jsPDF?: JsPdfCtor };
+    };
+    const jsPDFCtor: JsPdfCtor | undefined =
+        jspdfAny.jsPDF ??
+        (typeof jspdfAny.default === 'function'
+            ? jspdfAny.default
+            : jspdfAny.default?.jsPDF);
 
     if (!jsPDFCtor) {
         throw new Error('Falha ao carregar jsPDF no navegador.');
     }
 
-    const autoTable =
-        (autoTableModule as { default?: (doc: never, options: object) => void }).default ??
-        (autoTableModule as unknown as (doc: never, options: object) => void);
+    const autoTable = (autoTableModule as unknown as { default: (doc: PdfDoc, options: object) => void }).default;
 
     const doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
