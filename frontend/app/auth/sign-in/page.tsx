@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { LoginForm } from '@/components/auth/login/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DefaultFramer } from '@/components/ui/frame-motion';
@@ -17,7 +18,9 @@ export default function SignInPage() {
                         <CardDescription>{t.signInDesc}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <LoginForm />
+                        <Suspense fallback={null}>
+                            <LoginForm />
+                        </Suspense>
                     </CardContent>
                 </Card>
             </DefaultFramer>
