@@ -67,6 +67,12 @@ export class Automation {
     @Column({ type: 'uuid', name: 'updated_by', nullable: true })
     updatedBy!: string | null;
 
+    @Column({ type: 'jsonb', default: {} })
+    variables!: Record<string, unknown>;
+
+    @Column({ type: 'jsonb', name: 'pending_plan', nullable: true })
+    pendingPlan!: Record<string, unknown> | null;
+
     @OneToMany(() => AutomationNode, (node) => node.automation)
     nodes!: Relation<AutomationNode[]>;
 

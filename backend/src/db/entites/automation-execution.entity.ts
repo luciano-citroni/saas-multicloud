@@ -21,6 +21,7 @@ export enum AutomationStatus {
     SUCCESS = 'SUCCESS',
     FAILED = 'FAILED',
     CANCELLED = 'CANCELLED',
+    ROLLED_BACK = 'ROLLED_BACK',
 }
 
 export enum PricingModel {
@@ -61,11 +62,20 @@ export class AutomationExecution {
     @Column({ type: 'uuid', name: 'triggered_by', nullable: true })
     triggeredBy!: string | null;
 
+    @Column({ type: 'varchar', length: 80, name: 'client_request_id', nullable: true })
+    clientRequestId!: string | null;
+
+    @Column({ type: 'varchar', length: 20, name: 'inventory_sync_status', default: 'NOT_APPLICABLE' })
+    inventorySyncStatus!: string;
+
     @Column({ type: 'varchar', name: 'pricing_model', nullable: true })
     pricingModel!: PricingModel | null;
 
     @Column({ type: 'decimal', precision: 10, scale: 4, name: 'total_estimated_cost', default: 0 })
     totalEstimatedCost!: number;
+
+    @Column({ type: 'text', name: 'parameters_encrypted', nullable: true, select: false })
+    parametersEncrypted!: string | null;
 
     @Column({ type: 'varchar', default: AutomationStatus.PENDING })
     status!: AutomationStatus;

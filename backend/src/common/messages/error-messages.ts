@@ -205,6 +205,36 @@ export const ErrorMessages = {
         INVALID_EDGE: 'Workflow edge references invalid nodes.',
 
         CLOUD_ACCOUNT_NOT_FOUND: 'Cloud account not found or not accessible.',
+
+        TEMPLATE_NOT_FOUND: 'Automation template not found.',
+
+        TEMPLATE_INVALID: 'Automation template is invalid.',
+
+        TEMPLATE_TOO_LARGE: 'Automation template exceeds the CloudFormation body limit.',
+
+        TEMPLATE_UNSUPPORTED: 'Automation template contains a construct that cannot be provisioned.',
+
+        PROVIDER_NOT_SUPPORTED: 'Action provider does not match the automation cloud provider.',
+
+        CONFIRMATION_REQUIRED: 'Provisioning requires explicit confirmation.',
+
+        EXECUTION_IN_PROGRESS: 'An automation execution is already in progress.',
+
+        CAPABILITY_NOT_CONFIRMED: 'CloudFormation IAM capabilities were not confirmed.',
+
+        VARIABLE_UNRESOLVED: 'A required automation variable is unresolved.',
+
+        INVALID_BINDING: 'Automation value binding is invalid.',
+
+        STACK_FAILED: 'CloudFormation stack did not complete successfully.',
+
+        RESOURCE_NOT_FOUND: 'The referenced AWS resource was not found.',
+
+        ROLLBACK_NOT_ALLOWED: 'Only finished successful executions can be rolled back.',
+
+        ROLLBACK_FAILED: 'Rollback could not remove one or more provisioned resources.',
+
+        ROLLBACK_IN_PROGRESS: 'A rollback is already in progress for this execution.',
     },
 
     // General

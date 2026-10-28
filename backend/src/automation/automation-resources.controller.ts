@@ -7,6 +7,7 @@ import { Tenant } from '../db/entites/tenant.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { z } from 'zod';
 import { AwsResourcesService } from './aws-resources.service';
+import { ExistingResourceService } from './existing-resource.service';
 
 const createKeyPairSchema = z.object({
     cloudAccountId: z.string().uuid(),
@@ -20,7 +21,25 @@ const createKeyPairSchema = z.object({
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('automation/resources')
 export class AutomationResourcesController {
-    constructor(private readonly awsResources: AwsResourcesService) {}
+    constructor(
+        private readonly awsResources: AwsResourcesService,
+        private readonly existingResources: ExistingResourceService,
+    ) {}
+
+    @Get('catalog')
+    @ApiOperation({ summary: 'Listar recursos capturados pelo assessment da conta' })
+    @ApiQuery({ name: 'cloudAccountId', required: true })
+    @ApiQuery({ name: 'region', required: true })
+    @ApiQuery({ name: 'resourceType', required: true })
+    @ApiResponse({ status: 200 })
+    listCatalog(
+        @CurrentOrganization() org: Tenant,
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('region') region: string,
+        @Query('resourceType') resourceType: string,
+    ) {
+        return this.existingResources.list(cloudAccountId, org.id, region, resourceType);
+    }
 
     @Get('vpcs')
     @ApiOperation({ summary: 'Listar VPCs disponíveis na região' })

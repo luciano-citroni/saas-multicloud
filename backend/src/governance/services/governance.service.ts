@@ -164,7 +164,13 @@ export class GovernanceService {
         return job;
     }
 
-    async listJobs(cloudAccountId: string, organizationId: string, page?: number, limit?: number): Promise<PaginatedGovernanceJobsResponse> {
+    async listJobs(
+        cloudAccountId: string,
+        organizationId: string,
+        page?: number,
+        limit?: number,
+        status?: GovernanceJobStatus
+    ): Promise<PaginatedGovernanceJobsResponse> {
         await this.requireCloudAccount(cloudAccountId, organizationId);
 
         const safeLimit = this.normalizeLimit(limit);
@@ -176,6 +182,10 @@ export class GovernanceService {
             .andWhere('job.organizationId = :organizationId', { organizationId })
             .orderBy('COALESCE(job.completedAt, job.createdAt)', 'DESC')
             .addOrderBy('job.createdAt', 'DESC');
+
+        if (status) {
+            query.andWhere('job.status = :status', { status });
+        }
 
         const totalItems = await query.getCount();
         const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
@@ -234,9 +244,9 @@ export class GovernanceService {
             );
         }
 
-        if (options.resourceType) {
-            query.andWhere('finding.resourceType ILIKE :resourceType', {
-                resourceType: `%${options.resourceType.trim()}%`,
+        if (options.resourceType?.trim()) {
+            query.andWhere('finding.resourceType = :resourceType', {
+                resourceType: options.resourceType.trim(),
             });
         }
 

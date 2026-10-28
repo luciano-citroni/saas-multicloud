@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { AutomationCloudProvider } from '../db/entites/automation.entity';
-import { nodeOutputReferenceSchema } from './action-definitions';
-
-const awsRegionRegex = /^[a-z]{2}(?:-(?:gov|iso|isob|isof))?-[a-z0-9-]+-\d+$/i;
+import { nodeOutputReferenceSchema, automationVariablesSchema } from './bindings';
 
 export const automationNodeInputSchema = z.object({
     id: z.string().uuid(),
@@ -31,6 +29,7 @@ export const updateAutomationSchema = z.object({
     cloudAccountId: z.string().uuid().optional(),
     nodes: z.array(automationNodeInputSchema).optional(),
     edges: z.array(automationEdgeInputSchema).optional(),
+    variables: automationVariablesSchema.optional(),
 });
 
 export const automationIdParamSchema = z.object({
@@ -42,8 +41,23 @@ export const automationExecutionParamSchema = z.object({
     executionId: z.string().uuid(),
 });
 
+export const executeAutomationSchema = z.object({
+    confirm: z.literal(true),
+    clientRequestId: z.string().min(8).max(80).optional(),
+    acknowledgeCapabilities: z.boolean().optional().default(false),
+    parameters: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const importTemplateSchema = z.object({
+    name: z.string().min(1).max(255),
+    description: z.string().max(2000).optional().nullable(),
+    content: z.string().min(1),
+});
+
 export type CreateAutomationDto = z.infer<typeof createAutomationSchema>;
 export type UpdateAutomationDto = z.infer<typeof updateAutomationSchema>;
+export type ExecuteAutomationDto = z.infer<typeof executeAutomationSchema>;
+export type ImportTemplateDto = z.infer<typeof importTemplateSchema>;
 
 // Re-export node output schema for frontend reference
 export { nodeOutputReferenceSchema };

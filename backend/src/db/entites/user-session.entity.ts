@@ -21,6 +21,15 @@ export class UserSession {
     @Column({ type: 'varchar', length: 255 })
     token!: string;
 
+    @Column({ type: 'varchar', length: 64, name: 'previous_token_hash', nullable: true })
+    previousTokenHash!: string | null;
+
+    @Column({ type: 'timestamp', name: 'rotated_at', nullable: true })
+    rotatedAt!: Date | null;
+
+    @Column({ type: 'text', name: 'successor_token', nullable: true })
+    successorToken!: string | null;
+
     @Column({ type: 'timestamp', name: 'expires_at' })
     expiresAt!: Date;
 

@@ -11,10 +11,12 @@ export async function fetchGovernanceJobs(
     options?: {
         page?: number;
         limit?: number;
+        status?: string;
     }
 ) {
     const page = options?.page;
     const limit = options?.limit;
+    const status = options?.status?.trim();
     const query = new URLSearchParams({ organizationId });
 
     if (page && Number.isInteger(page) && page > 0) {
@@ -23,6 +25,10 @@ export async function fetchGovernanceJobs(
 
     if (limit && Number.isInteger(limit) && limit > 0) {
         query.set('limit', String(limit));
+    }
+
+    if (status) {
+        query.set('status', status);
     }
 
     return fetch(

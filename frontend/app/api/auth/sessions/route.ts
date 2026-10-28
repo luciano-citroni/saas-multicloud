@@ -50,7 +50,7 @@ async function resolveAccessToken() {
 
     return {
         accessToken: rotatedTokens.accessToken,
-        refreshToken,
+        refreshToken: rotatedTokens.refreshToken,
         rotatedTokens,
     };
 }

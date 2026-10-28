@@ -65,6 +65,21 @@ describe('WorkflowValidator', () => {
         };
         expect(() => validator.validate(invalid)).toThrow(BadRequestException);
     });
+
+    it('rejeita variável inexistente', () => {
+        const snapshot: WorkflowSnapshot = {
+            nodes: [
+                {
+                    id: 'input',
+                    type: 'AWS_DATA_INPUT',
+                    name: 'Dados',
+                    config: { values: { env: { type: 'VARIABLE', name: 'environment' } } },
+                },
+            ],
+            edges: [],
+        };
+        expect(() => validator.validate(snapshot)).toThrow(BadRequestException);
+    });
 });
 
 describe('DependencyResolver', () => {
@@ -103,6 +118,19 @@ describe('DependencyResolver', () => {
         expect(batches[1]).toContain('subnet-a');
         expect(batches[1]).toContain('subnet-b');
     });
+
+    it('marca dependentes de uma etapa que falhou', () => {
+        const snapshot: WorkflowSnapshot = {
+            nodes: [
+                { id: 'vpc', type: 'AWS_S3_BUCKET_CREATE', name: 'VPC', config: { bucketName: 'vpc', region: 'us-east-1' } },
+                { id: 'service', type: 'AWS_S3_BUCKET_CREATE', name: 'Service', config: { bucketName: 'svc', region: 'us-east-1' } },
+                { id: 'other', type: 'AWS_S3_BUCKET_CREATE', name: 'Other', config: { bucketName: 'other', region: 'us-east-1' } },
+            ],
+            edges: [{ id: 'e1', sourceNodeId: 'vpc', targetNodeId: 'service' }],
+        };
+        expect(resolver.getDependents(snapshot, 'vpc').has('service')).toBe(true);
+        expect(resolver.getDependents(snapshot, 'vpc').has('other')).toBe(false);
+    });
 });
 
 describe('OutputResolver', () => {
@@ -121,6 +149,19 @@ describe('OutputResolver', () => {
         );
 
         expect(resolved.origin).toBe('my-bucket.s3.amazonaws.com');
+    });
+
+    it('resolve variável, literal e referência de recurso', () => {
+        const resolved = resolver.resolveConfig(
+            {
+                name: { type: 'VARIABLE', name: 'environment' },
+                image: { type: 'LITERAL', value: 'nginx:1' },
+                vpc: { type: 'EXISTING_RESOURCE', resourceType: 'vpc', resourceId: 'vpc-123' },
+            },
+            new Map(),
+            { environment: 'dev' },
+        );
+        expect(resolved).toEqual({ name: 'dev', image: 'nginx:1', vpc: 'vpc-123' });
     });
 
     it('falha quando output não existe', () => {

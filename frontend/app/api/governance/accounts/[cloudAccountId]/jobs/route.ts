@@ -34,7 +34,7 @@ async function resolveAccessToken() {
         return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
-    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
+    return { accessToken: rotatedTokens.accessToken, refreshToken: rotatedTokens.refreshToken, rotatedTokens };
 }
 
 function withAuthHeaders(accessToken: string, organizationId: string): HeadersInit {
@@ -60,6 +60,7 @@ export async function GET(request: Request, { params }: Params) {
     const organizationId = searchParams.get('organizationId');
     const page = searchParams.get('page');
     const limit = searchParams.get('limit');
+    const status = searchParams.get('status');
 
     if (!organizationId) {
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
@@ -73,6 +74,7 @@ export async function GET(request: Request, { params }: Params) {
     const backendQuery = new URLSearchParams();
     if (page) backendQuery.set('page', page);
     if (limit) backendQuery.set('limit', limit);
+    if (status) backendQuery.set('status', status);
     const backendPath = backendQuery.size
         ? `/api/governance/accounts/${cloudAccountId}/jobs?${backendQuery.toString()}`
         : `/api/governance/accounts/${cloudAccountId}/jobs`;

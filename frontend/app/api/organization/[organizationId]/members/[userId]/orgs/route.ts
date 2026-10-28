@@ -23,7 +23,7 @@ async function resolveAccessToken() {
     const rotatedTokens = await refreshAccessToken(refreshToken);
     if (!rotatedTokens) return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
 
-    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
+    return { accessToken: rotatedTokens.accessToken, refreshToken: rotatedTokens.refreshToken, rotatedTokens };
 }
 
 function buildUnauthorizedResponse() {

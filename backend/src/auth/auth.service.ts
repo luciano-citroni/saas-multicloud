@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { JwtService } from '@nestjs/jwt';
 
@@ -44,6 +45,7 @@ export interface ActiveSessionDto {
 }
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_REUSE_GRACE_MS = 16 * 60 * 1000;
 const MAX_ACTIVE_SESSIONS = 3;
 
 const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
@@ -60,6 +62,8 @@ export class AuthService {
         private readonly googleAuthCodeRepository: Repository<GoogleAuthCode>,
 
         private readonly jwtService: JwtService,
+
+        private readonly configService: ConfigService,
 
         private readonly usersService: UsersService,
 
@@ -172,37 +176,31 @@ export class AuthService {
     }
 
     async refresh(token: string) {
-        try {
-            const hashedRefreshToken = this.hashToken(token);
+        const hashedRefreshToken = this.hashToken(token);
+        const now = new Date();
 
-            const session = await this.sessionRepository.findOne({
-                where: { token: hashedRefreshToken },
+        const session = await this.sessionRepository.findOne({
+            where: { token: hashedRefreshToken },
+            relations: ['user'],
+        });
 
-                relations: ['user'],
-            });
-
-            if (!session) {
-                throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
-            }
-
-            if (session.expiresAt < new Date()) {
+        if (session) {
+            if (session.expiresAt < now) {
                 await this.sessionRepository.delete({ id: session.id });
-
                 throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
             }
 
-            if (!session.user || !session.user.isActive) {
+            if (!session.user?.isActive) {
                 throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
             }
 
-            return this.rotateSessionTokens(session);
-        } catch (error) {
-            if (error instanceof UnauthorizedException) {
-                throw error;
+            const rotated = await this.rotateSessionTokens(session, hashedRefreshToken, now);
+            if (rotated) {
+                return rotated;
             }
-
-            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
         }
+
+        return this.replayRotatedRefreshToken(hashedRefreshToken, now);
     }
 
     async logout(sessionId: string) {
@@ -370,17 +368,62 @@ export class AuthService {
         };
     }
 
-    private async rotateSessionTokens(session: UserSession): Promise<AuthTokens> {
+    private async rotateSessionTokens(session: UserSession, hashedRefreshToken: string, now: Date): Promise<AuthTokens | null> {
         const refreshToken = this.generateOpaqueToken();
+        const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
-        session.token = this.hashToken(refreshToken);
+        const updateResult = await this.sessionRepository
+            .createQueryBuilder()
+            .update(UserSession)
+            .set({
+                token: this.hashToken(refreshToken),
+                previousTokenHash: hashedRefreshToken,
+                rotatedAt: now,
+                successorToken: this.sealRefreshToken(refreshToken),
+                expiresAt,
+                updatedAt: now,
+            })
+            .where('id = :id', { id: session.id })
+            .andWhere('token = :token', { token: hashedRefreshToken })
+            .execute();
 
-        await this.sessionRepository.save(session);
+        if (updateResult.affected !== 1) {
+            return null;
+        }
 
         return {
             accessToken: await this.signAccessToken(session.userId, session.id),
-
             refreshToken,
+        };
+    }
+
+    private async replayRotatedRefreshToken(hashedRefreshToken: string, now: Date): Promise<AuthTokens> {
+        const session = await this.sessionRepository.findOne({
+            where: { previousTokenHash: hashedRefreshToken },
+            relations: ['user'],
+        });
+
+        const rotatedAt = session?.rotatedAt?.getTime();
+        const withinGrace = rotatedAt != null && now.getTime() - rotatedAt <= REFRESH_REUSE_GRACE_MS;
+
+        if (!session?.successorToken || !withinGrace) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        if (session.expiresAt < now) {
+            await this.sessionRepository.delete({ id: session.id });
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        if (!session.user?.isActive) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
+        }
+
+        this.logger.debug(`Replayed refresh token for session ${session.id} inside the rotation grace window`);
+
+        return {
+            accessToken: await this.signAccessToken(session.userId, session.id),
+            refreshToken: this.openRefreshToken(session.successorToken),
         };
     }
 
@@ -414,6 +457,32 @@ export class AuthService {
         return crypto.createHash('sha256').update(token).digest('hex');
     }
 
+    private getRefreshTokenKey(): Buffer {
+        return crypto.createHash('sha256').update(this.configService.getOrThrow<string>('JWT_SECRET')).digest();
+    }
+
+    private sealRefreshToken(value: string): string {
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', this.getRefreshTokenKey(), iv);
+        const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+        const authTag = cipher.getAuthTag();
+
+        return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+    }
+
+    private openRefreshToken(payload: string): string {
+        const [ivHex, authTagHex, encryptedHex] = payload.split(':');
+
+        if (!ivHex || !authTagHex || !encryptedHex) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_REFRESH_TOKEN);
+        }
+
+        const decipher = crypto.createDecipheriv('aes-256-gcm', this.getRefreshTokenKey(), Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+
+        return Buffer.concat([decipher.update(Buffer.from(encryptedHex, 'hex')), decipher.final()]).toString('utf8');
+    }
+
     private async getAuthUserPayload(userId: string) {
         const user = await this.usersService.findEntityById(userId);
 
@@ -435,6 +504,7 @@ export class AuthService {
         const activeSessions = await this.sessionRepository.find({
             where: { userId },
             order: {
+                updatedAt: 'DESC',
                 createdAt: 'DESC',
             },
         });

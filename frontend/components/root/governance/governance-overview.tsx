@@ -9,12 +9,16 @@ import { GovernanceJobsTable } from '@/components/root/governance/overview/gover
 import { GovernanceLoadingSkeleton } from '@/components/root/governance/overview/governance-loading-skeleton';
 import { GovernanceSummaryCards } from '@/components/root/governance/overview/governance-summary-cards';
 import {
+    JOB_STATUS_FILTER_ALL,
+    type JobStatusFilter,
+} from '@/components/root/governance/overview/governance-jobs-filter-bar';
+import {
     DEFAULT_JOBS_LIMIT,
     DEFAULT_JOBS_PAGE,
     normalizeJobs,
     normalizeJobsLimit,
     normalizePagination,
-    readPaginationFromLocation,
+    readJobsFiltersFromLocation,
 } from '@/components/root/governance/overview/helpers';
 import type { GovernanceJob, GovernanceScore, PaginationMeta, SidebarContextPayload } from '@/components/root/governance/overview/types';
 import {
@@ -75,6 +79,7 @@ export function GovernanceOverview() {
     const [jobsPagination, setJobsPagination] = useState<PaginationMeta | null>(null);
     const [jobsPage, setJobsPage] = useState(DEFAULT_JOBS_PAGE);
     const [jobsLimit, setJobsLimit] = useState(DEFAULT_JOBS_LIMIT);
+    const [statusFilter, setStatusFilter] = useState<JobStatusFilter>(JOB_STATUS_FILTER_ALL);
 
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [loadingTable, setLoadingTable] = useState(false);
@@ -88,7 +93,7 @@ export function GovernanceOverview() {
         cloudAccountId: null,
     });
 
-    const syncPaginationUrlState = useCallback((nextPage: number, nextLimit: number) => {
+    const syncJobsUrlState = useCallback((nextPage: number, nextLimit: number, nextStatus: JobStatusFilter) => {
         if (typeof window === 'undefined') {
             return;
         }
@@ -109,6 +114,12 @@ export function GovernanceOverview() {
             params.set('limit', String(normalizedLimit));
         }
 
+        if (nextStatus === JOB_STATUS_FILTER_ALL) {
+            params.delete('status');
+        } else {
+            params.set('status', nextStatus);
+        }
+
         const nextQuery = params.toString();
         const currentQuery = window.location.search.startsWith('?') ? window.location.search.slice(1) : window.location.search;
 
@@ -122,9 +133,10 @@ export function GovernanceOverview() {
 
     useEffect(() => {
         const syncFromUrl = () => {
-            const { page, limit } = readPaginationFromLocation();
+            const { page, limit, status } = readJobsFiltersFromLocation();
             setJobsPage((current) => (current === page ? current : page));
             setJobsLimit((current) => (current === limit ? current : limit));
+            setStatusFilter((current) => (current === status ? current : status));
         };
 
         syncFromUrl();
@@ -237,7 +249,8 @@ export function GovernanceOverview() {
             setOrganizationId(nextOrgId);
             setCloudAccountId(nextCloudId);
             setJobsPage(DEFAULT_JOBS_PAGE);
-            syncPaginationUrlState(DEFAULT_JOBS_PAGE, jobsLimit);
+            setStatusFilter(JOB_STATUS_FILTER_ALL);
+            syncJobsUrlState(DEFAULT_JOBS_PAGE, jobsLimit, JOB_STATUS_FILTER_ALL);
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
@@ -251,7 +264,7 @@ export function GovernanceOverview() {
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
             window.removeEventListener('storage', handleContextChange);
         };
-    }, [jobsLimit, syncPaginationUrlState]);
+    }, [jobsLimit, syncJobsUrlState]);
 
     // -- Load RBAC role ---------------------------------------------------------
 
@@ -277,7 +290,11 @@ export function GovernanceOverview() {
     // -- Load data --------------------------------------------------------------
 
     const loadData = useCallback(
-        async (orgId: string, cloudId: string, options: { silent?: boolean; tableOnly?: boolean; page?: number; limit?: number } = {}) => {
+        async (
+            orgId: string,
+            cloudId: string,
+            options: { silent?: boolean; tableOnly?: boolean; page?: number; limit?: number; status?: JobStatusFilter } = {}
+        ) => {
             if (options.tableOnly) {
                 setLoadingTable(true);
             } else if (!options.silent) {
@@ -286,10 +303,16 @@ export function GovernanceOverview() {
 
             const page = options.page ?? jobsPage;
             const limit = options.limit ?? jobsLimit;
+            const status = options.status ?? statusFilter;
+            const jobsQuery = {
+                page,
+                limit,
+                status: status === JOB_STATUS_FILTER_ALL ? undefined : status,
+            };
 
             try {
                 if (options.tableOnly) {
-                    const jobsRes = await fetchGovernanceJobs(orgId, cloudId, { page, limit });
+                    const jobsRes = await fetchGovernanceJobs(orgId, cloudId, jobsQuery);
 
                     if (jobsRes.status === 401) {
                         toast.error(tc.sessionExpired);
@@ -305,7 +328,7 @@ export function GovernanceOverview() {
                 } else {
                     const [scoreRes, jobsRes] = await Promise.all([
                         fetchGovernanceScore(orgId, cloudId),
-                        fetchGovernanceJobs(orgId, cloudId, { page, limit }),
+                        fetchGovernanceJobs(orgId, cloudId, jobsQuery),
                     ]);
 
                     if (scoreRes.status === 401 || jobsRes.status === 401) {
@@ -335,7 +358,7 @@ export function GovernanceOverview() {
                 }
             }
         },
-        [jobsLimit, jobsPage, router]
+        [jobsLimit, jobsPage, router, statusFilter, tc.sessionExpired, tg.loadError]
     );
 
     useEffect(() => {
@@ -353,11 +376,16 @@ export function GovernanceOverview() {
         prevOrgCloudRef.current = { organizationId, cloudAccountId };
 
         if (isContextChange) {
-            void loadData(organizationId, cloudAccountId, { page: jobsPage, limit: jobsLimit });
+            void loadData(organizationId, cloudAccountId, { page: jobsPage, limit: jobsLimit, status: statusFilter });
         } else {
-            void loadData(organizationId, cloudAccountId, { tableOnly: true, page: jobsPage, limit: jobsLimit });
+            void loadData(organizationId, cloudAccountId, {
+                tableOnly: true,
+                page: jobsPage,
+                limit: jobsLimit,
+                status: statusFilter,
+            });
         }
-    }, [cloudAccountId, isContextLoading, jobsLimit, jobsPage, loadData, organizationId]);
+    }, [cloudAccountId, isContextLoading, jobsLimit, jobsPage, loadData, organizationId, statusFilter]);
 
     // -- Polling for running jobs -----------------------------------------------
 
@@ -385,7 +413,12 @@ export function GovernanceOverview() {
 
                     if (job.status === 'completed') {
                         toast.success(tg.scanComplete);
-                        void loadData(orgId, cloudId, { silent: true, page: jobsPage, limit: jobsLimit });
+                        void loadData(orgId, cloudId, {
+                            silent: true,
+                            page: jobsPage,
+                            limit: jobsLimit,
+                            status: statusFilter,
+                        });
                     } else {
                         toast.error(tg.scanFailed);
                     }
@@ -394,7 +427,7 @@ export function GovernanceOverview() {
                 // ignore polling errors
             }
         },
-        [jobsLimit, jobsPage, loadData, stopPolling]
+        [jobsLimit, jobsPage, loadData, statusFilter, stopPolling, tg.scanComplete, tg.scanFailed]
     );
 
     useEffect(() => {
@@ -458,7 +491,12 @@ export function GovernanceOverview() {
             toast.success(tg.scanStarted);
 
             // Refresh job list
-            await loadData(organizationId, cloudAccountId, { silent: true, page: jobsPage, limit: jobsLimit });
+            await loadData(organizationId, cloudAccountId, {
+                silent: true,
+                page: jobsPage,
+                limit: jobsLimit,
+                status: statusFilter,
+            });
 
             // Start polling
             stopPolling();
@@ -474,7 +512,12 @@ export function GovernanceOverview() {
     const handleRefresh = async () => {
         if (!organizationId || !cloudAccountId) return;
         setRefreshing(true);
-        await loadData(organizationId, cloudAccountId, { silent: true, page: jobsPage, limit: jobsLimit });
+        await loadData(organizationId, cloudAccountId, {
+            silent: true,
+            page: jobsPage,
+            limit: jobsLimit,
+            status: statusFilter,
+        });
         setRefreshing(false);
     };
 
@@ -522,32 +565,43 @@ export function GovernanceOverview() {
                 jobsPage={jobsPage}
                 jobsLimit={jobsLimit}
                 jobsPagination={jobsPagination}
+                statusFilter={statusFilter}
                 loadingTable={loadingTable}
+                onStatusFilterChange={(status) => {
+                    setStatusFilter(status);
+                    setJobsPage(DEFAULT_JOBS_PAGE);
+                    syncJobsUrlState(DEFAULT_JOBS_PAGE, jobsLimit, status);
+                }}
+                onClearFilters={() => {
+                    setStatusFilter(JOB_STATUS_FILTER_ALL);
+                    setJobsPage(DEFAULT_JOBS_PAGE);
+                    syncJobsUrlState(DEFAULT_JOBS_PAGE, jobsLimit, JOB_STATUS_FILTER_ALL);
+                }}
                 onOpenAnalysis={handleOpenAnalysis}
                 onChangeLimit={(limit) => {
                     const nextLimit = normalizeJobsLimit(limit);
                     setJobsLimit(nextLimit);
                     setJobsPage(DEFAULT_JOBS_PAGE);
-                    syncPaginationUrlState(DEFAULT_JOBS_PAGE, nextLimit);
+                    syncJobsUrlState(DEFAULT_JOBS_PAGE, nextLimit, statusFilter);
                 }}
                 onGoFirst={() => {
                     setJobsPage(DEFAULT_JOBS_PAGE);
-                    syncPaginationUrlState(DEFAULT_JOBS_PAGE, jobsLimit);
+                    syncJobsUrlState(DEFAULT_JOBS_PAGE, jobsLimit, statusFilter);
                 }}
                 onGoPrevious={() => {
                     const nextPage = Math.max(jobsPage - 1, DEFAULT_JOBS_PAGE);
                     setJobsPage(nextPage);
-                    syncPaginationUrlState(nextPage, jobsLimit);
+                    syncJobsUrlState(nextPage, jobsLimit, statusFilter);
                 }}
                 onGoNext={() => {
                     const nextPage = jobsPage + 1;
                     setJobsPage(nextPage);
-                    syncPaginationUrlState(nextPage, jobsLimit);
+                    syncJobsUrlState(nextPage, jobsLimit, statusFilter);
                 }}
                 onGoLast={() => {
                     const nextPage = jobsPagination?.totalPages ?? DEFAULT_JOBS_PAGE;
                     setJobsPage(nextPage);
-                    syncPaginationUrlState(nextPage, jobsLimit);
+                    syncJobsUrlState(nextPage, jobsLimit, statusFilter);
                 }}
             />
         </div>

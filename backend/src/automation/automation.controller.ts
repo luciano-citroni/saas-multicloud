@@ -1,5 +1,5 @@
-﻿import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+﻿import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
@@ -10,8 +10,8 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { estimateCostBodySchema, runAutomationBodySchema } from './dto';
 import type { EstimateCostBodyDto, RunAutomationBodyDto } from './dto';
 import { AutomationService } from './automation.service';
-import { AutomationsCrudService } from './automations-crud.service';
-import { ACTION_DEFINITIONS } from './action-definitions';
+import { listActions as listActionDefinitions } from './action-definitions';
+import { normalizeAutomationProvider } from './provider-resource-catalog';
 import {
     AutomationExecutionResponseDto,
     CostEstimateResponseDto,
@@ -34,9 +34,10 @@ export class AutomationController {
 
     @Get('actions')
     @ApiOperation({ summary: 'Catálogo de ações de automação disponíveis' })
+    @ApiQuery({ name: 'provider', required: false, enum: ['AWS', 'GCP', 'AZURE'] })
     @ApiResponse({ status: 200, description: 'Lista de definições de ações' })
-    listActions() {
-        return ACTION_DEFINITIONS;
+    listActions(@Query('provider') provider?: string) {
+        return listActionDefinitions(normalizeAutomationProvider(provider) ?? undefined);
     }
 
     @Post('estimate')

@@ -237,6 +237,98 @@ export const ErrorMessages = {
             en: 'Failed to provision one or more resources',
             pt: 'Falha ao provisionar um ou mais recursos',
         },
+        WORKFLOW_NOT_FOUND: {
+            en: 'Automation workflow not found.',
+            pt: 'Automação não encontrada.',
+        },
+        NOT_DRAFT: {
+            en: 'Automation can only be edited while in DRAFT status.',
+            pt: 'A automação só pode ser editada enquanto estiver em rascunho.',
+        },
+        NOT_PUBLISHED: {
+            en: 'Automation must be published before execution.',
+            pt: 'A automação precisa ser publicada antes da execução.',
+        },
+        NOT_ACTIVE: {
+            en: 'Automation is not active.',
+            pt: 'A automação não está ativa.',
+        },
+        CYCLE_DETECTED: {
+            en: 'Workflow contains a dependency cycle.',
+            pt: 'O fluxo contém um ciclo de dependências.',
+        },
+        INVALID_NODE_REFERENCE: {
+            en: 'Invalid node output reference.',
+            pt: 'Referência de saída de bloco inválida.',
+        },
+        INVALID_EDGE: {
+            en: 'Workflow edge references invalid nodes.',
+            pt: 'A conexão referencia blocos inválidos.',
+        },
+        CLOUD_ACCOUNT_NOT_FOUND: {
+            en: 'Cloud account not found or not accessible.',
+            pt: 'Conta cloud não encontrada ou sem acesso.',
+        },
+        TEMPLATE_NOT_FOUND: {
+            en: 'Automation template not found.',
+            pt: 'Template de automação não encontrado.',
+        },
+        TEMPLATE_INVALID: {
+            en: 'Automation template is invalid.',
+            pt: 'O template de automação é inválido.',
+        },
+        TEMPLATE_TOO_LARGE: {
+            en: 'Automation template exceeds the CloudFormation body limit.',
+            pt: 'O template excede o limite de corpo do CloudFormation.',
+        },
+        TEMPLATE_UNSUPPORTED: {
+            en: 'Automation template contains a construct that cannot be provisioned.',
+            pt: 'O template contém um recurso que não pode ser provisionado.',
+        },
+        PROVIDER_NOT_SUPPORTED: {
+            en: 'Action provider does not match the automation cloud provider.',
+            pt: 'O provedor da ação não corresponde ao provedor da automação.',
+        },
+        CONFIRMATION_REQUIRED: {
+            en: 'Provisioning requires explicit confirmation.',
+            pt: 'O provisionamento exige confirmação explícita.',
+        },
+        EXECUTION_IN_PROGRESS: {
+            en: 'An automation execution is already in progress.',
+            pt: 'Já existe uma execução desta automação em andamento.',
+        },
+        CAPABILITY_NOT_CONFIRMED: {
+            en: 'CloudFormation IAM capabilities were not confirmed.',
+            pt: 'As capabilities IAM do CloudFormation não foram confirmadas.',
+        },
+        VARIABLE_UNRESOLVED: {
+            en: 'A required automation variable is unresolved.',
+            pt: 'Uma variável obrigatória da automação não foi resolvida.',
+        },
+        INVALID_BINDING: {
+            en: 'Automation value binding is invalid.',
+            pt: 'O vínculo de valor da automação é inválido.',
+        },
+        STACK_FAILED: {
+            en: 'CloudFormation stack did not complete successfully.',
+            pt: 'A stack CloudFormation não concluiu com sucesso.',
+        },
+        RESOURCE_NOT_FOUND: {
+            en: 'The referenced AWS resource was not found.',
+            pt: 'O recurso AWS referenciado não foi encontrado.',
+        },
+        ROLLBACK_NOT_ALLOWED: {
+            en: 'Only finished successful executions can be rolled back.',
+            pt: 'Só é possível reverter execuções finalizadas com sucesso.',
+        },
+        ROLLBACK_FAILED: {
+            en: 'Rollback could not remove one or more provisioned resources.',
+            pt: 'O rollback não conseguiu remover um ou mais recursos provisionados.',
+        },
+        ROLLBACK_IN_PROGRESS: {
+            en: 'A rollback is already in progress for this execution.',
+            pt: 'Já existe um rollback em andamento para esta execução.',
+        },
     },
 
     // Plans / billing limits

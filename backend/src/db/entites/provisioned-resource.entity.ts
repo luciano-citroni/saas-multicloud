@@ -13,6 +13,7 @@ export enum ProvisionedResourceStatus {
     PENDING = 'PENDING',
     PROVISIONED = 'PROVISIONED',
     FAILED = 'FAILED',
+    ROLLED_BACK = 'ROLLED_BACK',
 }
 
 @Entity('provisioned_resource')
@@ -32,6 +33,15 @@ export class ProvisionedResource {
 
     @Column({ type: 'varchar', name: 'aws_resource_id', nullable: true })
     awsResourceId: string | null;
+
+    @Column({ type: 'varchar', length: 1024, nullable: true })
+    arn: string | null;
+
+    @Column({ type: 'varchar', name: 'stack_id', length: 512, nullable: true })
+    stackId: string | null;
+
+    @Column({ type: 'varchar', name: 'inventory_sync_status', length: 20, default: 'NOT_APPLICABLE' })
+    inventorySyncStatus: string;
 
     @Column()
     region: string;

@@ -21,7 +21,7 @@ async function resolveAccessToken() {
     if (!refreshToken) return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     const rotatedTokens = await refreshAccessToken(refreshToken);
     if (!rotatedTokens) return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
-    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
+    return { accessToken: rotatedTokens.accessToken, refreshToken: rotatedTokens.refreshToken, rotatedTokens };
 }
 
 function withAuthHeaders(accessToken: string, organizationId: string): HeadersInit {

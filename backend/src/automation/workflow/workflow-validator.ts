@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ErrorMessages } from '../../common/messages/error-messages';
-import { getActionDefinition, getConfigSchemaForAction, nodeOutputReferenceSchema } from '../action-definitions';
+import { getActionDefinition, getConfigSchemaForAction, getOutputFieldsForNode } from '../action-definitions';
+import { collectNodeOutputReferences, collectVariableNames } from '../bindings';
 import { normalizeActionType } from '../constants';
 import type { WorkflowEdgeSnapshot, WorkflowGraph, WorkflowNodeSnapshot, WorkflowSnapshot } from './workflow.types';
 
@@ -47,7 +48,7 @@ export class WorkflowValidator {
             }
 
             if (definition.provider !== cloudProvider) {
-                throw new BadRequestException(ErrorMessages.AUTOMATION.FLOW_INVALID);
+                throw new BadRequestException(ErrorMessages.AUTOMATION.PROVIDER_NOT_SUPPORTED);
             }
 
             const schema = getConfigSchemaForAction(canonicalType);
@@ -57,6 +58,8 @@ export class WorkflowValidator {
 
             this.validateNodeReferences(node, snapshot.nodes, snapshot.edges);
         }
+
+        this.validateVariableBindings(snapshot);
     }
 
     private detectCycle(snapshot: WorkflowSnapshot): void {
@@ -98,7 +101,7 @@ export class WorkflowValidator {
         const definition = getActionDefinition(canonicalType);
         if (!definition) return;
 
-        const refs = this.collectNodeOutputReferences(node.config);
+        const refs = collectNodeOutputReferences(node.config);
 
         for (const ref of refs) {
             const sourceNode = allNodes.find((n) => n.id === ref.nodeId);
@@ -108,7 +111,8 @@ export class WorkflowValidator {
 
             const sourceType = normalizeActionType(sourceNode.type);
             const sourceDef = getActionDefinition(sourceType);
-            if (!sourceDef || !sourceDef.outputFields.includes(ref.field)) {
+            const outputFields = getOutputFieldsForNode(sourceNode);
+            if (!sourceDef || !outputFields.includes(ref.field)) {
                 throw new BadRequestException(ErrorMessages.AUTOMATION.INVALID_NODE_REFERENCE);
             }
 
@@ -118,28 +122,15 @@ export class WorkflowValidator {
         }
     }
 
-    private collectNodeOutputReferences(value: unknown): Array<{ nodeId: string; field: string }> {
-        const refs: Array<{ nodeId: string; field: string }> = [];
-
-        const walk = (current: unknown) => {
-            if (!current || typeof current !== 'object') return;
-
-            const parsed = nodeOutputReferenceSchema.safeParse(current);
-            if (parsed.success) {
-                refs.push({ nodeId: parsed.data.nodeId, field: parsed.data.field });
-                return;
+    private validateVariableBindings(snapshot: WorkflowSnapshot): void {
+        const variables = snapshot.variables ?? {};
+        for (const node of snapshot.nodes) {
+            for (const name of collectVariableNames(node.config)) {
+                if (!variables[name]) {
+                    throw new BadRequestException(ErrorMessages.AUTOMATION.INVALID_BINDING);
+                }
             }
-
-            if (Array.isArray(current)) {
-                current.forEach(walk);
-                return;
-            }
-
-            Object.values(current as Record<string, unknown>).forEach(walk);
-        };
-
-        walk(value);
-        return refs;
+        }
     }
 
     private hasDependencyPath(sourceId: string, targetId: string, edges: WorkflowEdgeSnapshot[]): boolean {

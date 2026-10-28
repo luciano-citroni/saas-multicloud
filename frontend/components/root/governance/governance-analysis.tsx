@@ -1,24 +1,24 @@
 'use client';
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, RefreshCcw, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, RefreshCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+    GovernanceAnalysisFilterBar,
+    RESOURCE_TYPE_FILTER_ALL,
+    SEVERITY_FILTER_ALL,
+    type ResourceTypeFilter,
+    type SeverityFilter,
+} from '@/components/root/governance/analysis/governance-analysis-filter-bar';
 import { fetchGovernanceJobFindings, fetchGovernanceJobStatus } from '@/app/actions/governance';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import {
+    GOVERNANCE_RESOURCE_TYPES_BY_PROVIDER,
     translateGovernanceDescription,
     translateGovernancePolicyName,
     translateGovernanceRecommendation,
@@ -29,6 +29,7 @@ import { useTranslations } from '@/lib/i18n';
 
 type GovernanceJob = {
     id: string;
+    provider?: string | null;
     status: 'pending' | 'running' | 'completed' | 'failed';
     score: number | null;
     totalFindings: number | null;
@@ -66,8 +67,6 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
 
-type SeverityFilter = 'all' | GovernanceFinding['severity'];
-
 function normalizePage(value: string | null): number {
     const parsedValue = Number.parseInt(value ?? '', 10);
 
@@ -88,8 +87,13 @@ function normalizeSeverityFilter(value: string | null): SeverityFilter {
         case 'low':
             return value;
         default:
-            return 'all';
+            return SEVERITY_FILTER_ALL;
     }
+}
+
+function normalizeResourceTypeFilter(value: string | null): ResourceTypeFilter {
+    const normalized = value?.trim();
+    return normalized && normalized.length > 0 ? normalized : RESOURCE_TYPE_FILTER_ALL;
 }
 
 function normalizeFindingsResponse(payload: unknown): { items: GovernanceFinding[]; pagination: GovernancePaginationMeta | null } {
@@ -183,6 +187,10 @@ export function GovernanceAnalysis() {
     const jobId = useMemo(() => searchParams.get('jobId'), [searchParams]);
     const nameFilter = useMemo(() => searchParams.get('name') ?? '', [searchParams]);
     const severityFilter = useMemo(() => normalizeSeverityFilter(searchParams.get('severity')), [searchParams]);
+    const resourceTypeFilter = useMemo(
+        () => normalizeResourceTypeFilter(searchParams.get('resourceType')),
+        [searchParams]
+    );
     const page = useMemo(() => normalizePage(searchParams.get('page')), [searchParams]);
     const pageSize = useMemo(() => normalizePageSize(searchParams.get('limit')), [searchParams]);
 
@@ -191,6 +199,7 @@ export function GovernanceAnalysis() {
 
     const [job, setJob] = useState<GovernanceJob | null>(null);
     const [findings, setFindings] = useState<GovernanceFinding[]>([]);
+    const [seenResourceTypes, setSeenResourceTypes] = useState<string[]>([]);
     const [pagination, setPagination] = useState<GovernancePaginationMeta | null>(null);
     const [jobError, setJobError] = useState<string | null>(null);
     const [findingsError, setFindingsError] = useState<string | null>(null);
@@ -200,10 +209,14 @@ export function GovernanceAnalysis() {
     const [loading, setLoading] = useState(true);
     const [loadingFindings, setLoadingFindings] = useState(true);
     const deferredNameFilter = useDeferredValue(nameFilter);
-    const hasActiveFilters = nameFilter.trim().length > 0 || severityFilter !== 'all';
-
     const syncFilterUrlState = useCallback(
-        (nextState: { nameFilter: string; severityFilter: SeverityFilter; page: number; pageSize: number }) => {
+        (nextState: {
+            nameFilter: string;
+            severityFilter: SeverityFilter;
+            resourceTypeFilter: ResourceTypeFilter;
+            page: number;
+            pageSize: number;
+        }) => {
             const params = new URLSearchParams(searchParams.toString());
             const normalizedName = nextState.nameFilter.trim();
 
@@ -213,10 +226,16 @@ export function GovernanceAnalysis() {
                 params.delete('name');
             }
 
-            if (nextState.severityFilter === 'all') {
+            if (nextState.severityFilter === SEVERITY_FILTER_ALL) {
                 params.delete('severity');
             } else {
                 params.set('severity', nextState.severityFilter);
+            }
+
+            if (nextState.resourceTypeFilter === RESOURCE_TYPE_FILTER_ALL) {
+                params.delete('resourceType');
+            } else {
+                params.set('resourceType', nextState.resourceTypeFilter);
             }
 
             if (nextState.page <= DEFAULT_PAGE) {
@@ -242,6 +261,29 @@ export function GovernanceAnalysis() {
         },
         [pathname, router, searchParams]
     );
+
+    const syncFilterUrlStateRef = useRef(syncFilterUrlState);
+    const filterUrlStateRef = useRef({
+        nameFilter,
+        severityFilter,
+        resourceTypeFilter,
+        page,
+        pageSize,
+    });
+
+    useEffect(() => {
+        syncFilterUrlStateRef.current = syncFilterUrlState;
+    }, [syncFilterUrlState]);
+
+    useEffect(() => {
+        filterUrlStateRef.current = {
+            nameFilter,
+            severityFilter,
+            resourceTypeFilter,
+            page,
+            pageSize,
+        };
+    }, [nameFilter, page, pageSize, resourceTypeFilter, severityFilter]);
 
     useEffect(() => {
         setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
@@ -305,7 +347,8 @@ export function GovernanceAnalysis() {
                     page,
                     limit: pageSize,
                     name: deferredNameFilter,
-                    severity: severityFilter === 'all' ? undefined : severityFilter,
+                    resourceType: resourceTypeFilter === RESOURCE_TYPE_FILTER_ALL ? undefined : resourceTypeFilter,
+                    severity: severityFilter === SEVERITY_FILTER_ALL ? undefined : severityFilter,
                 });
 
                 if (findingsResponse.status === 401) {
@@ -326,6 +369,40 @@ export function GovernanceAnalysis() {
                 const normalizedResponse = normalizeFindingsResponse(findingsPayload);
                 setFindings(normalizedResponse.items);
                 setPagination(normalizedResponse.pagination);
+                setSeenResourceTypes((previous) => {
+                    const next = new Set(previous);
+                    for (const finding of normalizedResponse.items) {
+                        if (finding.resourceType?.trim()) {
+                            next.add(finding.resourceType);
+                        }
+                    }
+
+                    const sorted = Array.from(next).sort((left, right) =>
+                        translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), 'pt-BR')
+                    );
+
+                    if (sorted.length === previous.length && sorted.every((value, index) => value === previous[index])) {
+                        return previous;
+                    }
+
+                    return sorted;
+                });
+
+                const resolvedPage = normalizedResponse.pagination?.page;
+                const resolvedLimit = normalizedResponse.pagination?.limit;
+                if (
+                    (typeof resolvedPage === 'number' && resolvedPage !== page) ||
+                    (typeof resolvedLimit === 'number' && resolvedLimit !== pageSize)
+                ) {
+                    const currentFilters = filterUrlStateRef.current;
+                    syncFilterUrlStateRef.current({
+                        nameFilter: currentFilters.nameFilter,
+                        severityFilter: currentFilters.severityFilter,
+                        resourceTypeFilter: currentFilters.resourceTypeFilter,
+                        page: resolvedPage ?? page,
+                        pageSize: resolvedLimit ?? pageSize,
+                    });
+                }
             } catch {
                 setFindingsError(tg.loadAnalysisError);
                 toast.error(tg.loadAnalysisError);
@@ -335,27 +412,43 @@ export function GovernanceAnalysis() {
         };
 
         void loadFindings();
-    }, [cloudAccountId, deferredNameFilter, findingsRetryNonce, jobId, organizationId, page, pageSize, router, severityFilter, tc.sessionExpired, tg.loadAnalysisError]);
+    }, [
+        cloudAccountId,
+        deferredNameFilter,
+        findingsRetryNonce,
+        jobId,
+        organizationId,
+        page,
+        pageSize,
+        resourceTypeFilter,
+        router,
+        severityFilter,
+        tc.sessionExpired,
+        tg.loadAnalysisError,
+    ]);
 
     const totalPages = Math.max(1, pagination?.totalPages ?? 1);
     const currentPage = pagination?.page ?? page;
     const filteredTotalItems = pagination?.totalItems ?? findings.length;
     const hasAnyFindings = (job?.totalFindings ?? 0) > 0;
 
-    useEffect(() => {
-        if (!pagination) {
-            return;
+    const resourceTypeOptions = useMemo(() => {
+        const providerKey = (job?.provider ?? '').trim().toLowerCase();
+        const providerTypes = GOVERNANCE_RESOURCE_TYPES_BY_PROVIDER[providerKey] ?? [];
+        const merged = new Set([...providerTypes, ...seenResourceTypes]);
+
+        if (resourceTypeFilter !== RESOURCE_TYPE_FILTER_ALL) {
+            merged.add(resourceTypeFilter);
         }
 
-        if (page !== pagination.page || pageSize !== pagination.limit) {
-            syncFilterUrlState({
-                nameFilter,
-                severityFilter,
-                page: pagination.page,
-                pageSize: pagination.limit,
-            });
-        }
-    }, [nameFilter, page, pageSize, pagination, severityFilter, syncFilterUrlState]);
+        return Array.from(merged).sort((left, right) =>
+            translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), 'pt-BR')
+        );
+    }, [job?.provider, resourceTypeFilter, seenResourceTypes]);
+
+    useEffect(() => {
+        setSeenResourceTypes([]);
+    }, [jobId]);
 
     if (!jobId) {
         return (
@@ -485,125 +578,61 @@ export function GovernanceAnalysis() {
                         <p className="text-xs text-muted-foreground">Exibindo achados não-conformes e avisos com recomendações.</p>
                     </div>
 
-                    <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-                                <div className="relative w-full sm:max-w-sm">
-                                    <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        value={nameFilter}
-                                        onChange={(event) =>
-                                            syncFilterUrlState({
-                                                nameFilter: event.target.value,
-                                                severityFilter,
-                                                page: DEFAULT_PAGE,
-                                                pageSize,
-                                            })
-                                        }
-                                        placeholder="Filtrar por nome da política, tipo ou recurso"
-                                        className="w-full pr-9 pl-9"
-                                    />
-                                    {nameFilter.trim().length > 0 && (
-                                        <button
-                                            type="button"
-                                            aria-label="Limpar filtro de texto"
-                                            className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                                            onClick={() =>
-                                                syncFilterUrlState({
-                                                    nameFilter: '',
-                                                    severityFilter,
-                                                    page: DEFAULT_PAGE,
-                                                    pageSize,
-                                                })
-                                            }
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    )}
-                                </div>
-
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-between sm:w-44">
-                                        <span className="truncate">
-                                            {severityFilter === 'all' ? 'Todas as criticidades' : translateGovernanceSeverity(severityFilter)}
-                                        </span>
-                                        <ChevronDown className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-44">
-                                    <DropdownMenuRadioGroup
-                                        value={severityFilter}
-                                        onValueChange={(value) =>
-                                            syncFilterUrlState({
-                                                nameFilter,
-                                                severityFilter: value as SeverityFilter,
-                                                page: DEFAULT_PAGE,
-                                                pageSize,
-                                            })
-                                        }
-                                    >
-                                        <DropdownMenuRadioItem value="all">Todas as criticidades</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="critical">{translateGovernanceSeverity('critical')}</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="high">{translateGovernanceSeverity('high')}</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="medium">{translateGovernanceSeverity('medium')}</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="low">{translateGovernanceSeverity('low')}</DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
-                            {hasActiveFilters && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-fit"
-                                    onClick={() =>
-                                        syncFilterUrlState({
-                                            nameFilter: '',
-                                            severityFilter: 'all',
-                                            page: DEFAULT_PAGE,
-                                            pageSize,
-                                        })
-                                    }
-                                >
-                                    <X className="mr-2 h-4 w-4" />
-                                    Limpar filtros
-                                </Button>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>
-                                {filteredTotalItems} de {job?.totalFindings ?? findings.length} achados
-                            </span>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="w-24 justify-between">
-                                        <span>{pageSize}/pág.</span>
-                                        <ChevronDown className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-24">
-                                    <DropdownMenuRadioGroup
-                                        value={String(pageSize)}
-                                        onValueChange={(value) =>
-                                            syncFilterUrlState({
-                                                nameFilter,
-                                                severityFilter,
-                                                page: DEFAULT_PAGE,
-                                                pageSize: Number(value),
-                                            })
-                                        }
-                                    >
-                                        {PAGE_SIZE_OPTIONS.map((size) => (
-                                            <DropdownMenuRadioItem key={size} value={String(size)}>
-                                                {size}/pág.
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
+                    <GovernanceAnalysisFilterBar
+                        nameFilter={nameFilter}
+                        severityFilter={severityFilter}
+                        resourceTypeFilter={resourceTypeFilter}
+                        resourceTypeOptions={resourceTypeOptions}
+                        totalFiltered={filteredTotalItems}
+                        totalFindings={job?.totalFindings ?? findings.length}
+                        pageSize={pageSize}
+                        pageSizeOptions={PAGE_SIZE_OPTIONS}
+                        onNameChange={(value) =>
+                            syncFilterUrlState({
+                                nameFilter: value,
+                                severityFilter,
+                                resourceTypeFilter,
+                                page: DEFAULT_PAGE,
+                                pageSize,
+                            })
+                        }
+                        onSeverityChange={(value) =>
+                            syncFilterUrlState({
+                                nameFilter,
+                                severityFilter: value,
+                                resourceTypeFilter,
+                                page: DEFAULT_PAGE,
+                                pageSize,
+                            })
+                        }
+                        onResourceTypeChange={(value) =>
+                            syncFilterUrlState({
+                                nameFilter,
+                                severityFilter,
+                                resourceTypeFilter: value,
+                                page: DEFAULT_PAGE,
+                                pageSize,
+                            })
+                        }
+                        onPageSizeChange={(value) =>
+                            syncFilterUrlState({
+                                nameFilter,
+                                severityFilter,
+                                resourceTypeFilter,
+                                page: DEFAULT_PAGE,
+                                pageSize: value,
+                            })
+                        }
+                        onClear={() =>
+                            syncFilterUrlState({
+                                nameFilter: '',
+                                severityFilter: SEVERITY_FILTER_ALL,
+                                resourceTypeFilter: RESOURCE_TYPE_FILTER_ALL,
+                                page: DEFAULT_PAGE,
+                                pageSize,
+                            })
+                        }
+                    />
 
                     <div className="space-y-3 p-3">
                         {findingsError && !loadingFindings && (
@@ -663,7 +692,9 @@ export function GovernanceAnalysis() {
                             <Card className="border-dashed">
                                 <CardContent className="py-10 text-center">
                                     <p className="text-sm font-medium">Nenhum achado corresponde aos filtros</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">Ajuste o nome ou a criticidade para refinar a análise.</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Ajuste a busca, a criticidade ou o tipo de recurso para refinar a análise.
+                                    </p>
                                 </CardContent>
                             </Card>
                         )}
@@ -682,6 +713,7 @@ export function GovernanceAnalysis() {
                                     syncFilterUrlState({
                                         nameFilter,
                                         severityFilter,
+                                        resourceTypeFilter,
                                         page: Math.max(currentPage - 1, DEFAULT_PAGE),
                                         pageSize,
                                     })
@@ -698,6 +730,7 @@ export function GovernanceAnalysis() {
                                     syncFilterUrlState({
                                         nameFilter,
                                         severityFilter,
+                                        resourceTypeFilter,
                                         page: Math.min(currentPage + 1, totalPages),
                                         pageSize,
                                     })

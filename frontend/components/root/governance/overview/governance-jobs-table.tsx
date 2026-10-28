@@ -2,6 +2,11 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    GovernanceJobsFilterBar,
+    JOB_STATUS_FILTER_ALL,
+    type JobStatusFilter,
+} from '@/components/root/governance/overview/governance-jobs-filter-bar';
 import { JOBS_LIMIT_OPTIONS, formatDate, scoreColor } from '@/components/root/governance/overview/helpers';
 import { JobStatusBadge, JobStatusIcon } from '@/components/root/governance/overview/job-status';
 import { cn } from '@/lib/utils';
@@ -12,7 +17,10 @@ type GovernanceJobsTableProps = {
     jobsPage: number;
     jobsLimit: number;
     jobsPagination: PaginationMeta | null;
+    statusFilter: JobStatusFilter;
     loadingTable?: boolean;
+    onStatusFilterChange: (status: JobStatusFilter) => void;
+    onClearFilters: () => void;
     onOpenAnalysis: (job: GovernanceJob) => void;
     onChangeLimit: (limit: number) => void;
     onGoFirst: () => void;
@@ -26,7 +34,10 @@ export function GovernanceJobsTable({
     jobsPage,
     jobsLimit,
     jobsPagination,
+    statusFilter,
     loadingTable = false,
+    onStatusFilterChange,
+    onClearFilters,
     onOpenAnalysis,
     onChangeLimit,
     onGoFirst,
@@ -34,6 +45,11 @@ export function GovernanceJobsTable({
     onGoNext,
     onGoLast,
 }: GovernanceJobsTableProps) {
+    const emptyMessage =
+        statusFilter !== JOB_STATUS_FILTER_ALL
+            ? 'Nenhuma varredura corresponde ao filtro selecionado.'
+            : 'Nenhuma varredura executada ainda para esta conta.';
+
     return (
         <div className="rounded-xl border">
             <div className="border-b px-4 py-3">
@@ -41,8 +57,10 @@ export function GovernanceJobsTable({
                 <p className="text-xs text-muted-foreground">Clique em uma varredura concluída para abrir a análise detalhada</p>
             </div>
 
+            <GovernanceJobsFilterBar status={statusFilter} onStatusChange={onStatusFilterChange} onClear={onClearFilters} />
+
             {jobs.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">Nenhuma varredura executada ainda para esta conta.</div>
+                <div className="px-4 py-6 text-sm text-muted-foreground">{emptyMessage}</div>
             ) : (
                 <>
                     <div className={cn('relative transition-opacity duration-150', loadingTable && 'pointer-events-none opacity-50')}>

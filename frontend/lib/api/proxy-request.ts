@@ -16,19 +16,23 @@ export async function resolveAccessToken() {
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return { accessToken: null, rotatedTokens: null as AuthTokens | null };
+        return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     }
     if (accessToken) {
-        return { accessToken, rotatedTokens: null as AuthTokens | null };
+        return { accessToken, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
     if (!refreshToken) {
-        return { accessToken: null, rotatedTokens: null as AuthTokens | null };
+        return { accessToken: null, refreshToken: null, rotatedTokens: null as AuthTokens | null };
     }
     const rotatedTokens = await refreshAccessToken(refreshToken);
     if (!rotatedTokens) {
-        return { accessToken: null, rotatedTokens: null as AuthTokens | null };
+        return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
-    return { accessToken: rotatedTokens.accessToken, rotatedTokens };
+    return {
+        accessToken: rotatedTokens.accessToken,
+        refreshToken: rotatedTokens.refreshToken,
+        rotatedTokens,
+    };
 }
 
 export function unauthorizedResponse() {
@@ -61,15 +65,27 @@ export async function proxyToBackend(
     const body =
         method === 'GET' || method === 'DELETE' ? undefined : await request.text();
 
-    const response = await backendFetch(backendPath, {
-        method,
-        headers: {
-            Authorization: `Bearer ${resolved.accessToken}`,
-            ...(organizationId ? { 'x-organization-id': organizationId } : {}),
-            ...(body ? { 'Content-Type': 'application/json' } : {}),
-        },
-        body: body || undefined,
-    });
+    const send = (accessToken: string) =>
+        backendFetch(backendPath, {
+            method,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                ...(organizationId ? { 'x-organization-id': organizationId } : {}),
+                ...(body ? { 'Content-Type': 'application/json' } : {}),
+            },
+            body: body || undefined,
+        });
+
+    let response = await send(resolved.accessToken);
+    let rotatedTokens = resolved.rotatedTokens;
+
+    if (response.status === 401 && resolved.refreshToken) {
+        const refreshResult = await refreshAccessToken(resolved.refreshToken);
+        if (!refreshResult) return unauthorizedResponse();
+
+        rotatedTokens = refreshResult;
+        response = await send(refreshResult.accessToken);
+    }
 
     const payload = await parseJsonSafe<unknown>(response);
     const nextResponse =
@@ -77,6 +93,6 @@ export async function proxyToBackend(
             ? new NextResponse(null, { status: 204 })
             : NextResponse.json(payload ?? {}, { status: response.status });
 
-    if (resolved.rotatedTokens) setAuthCookies(nextResponse, resolved.rotatedTokens);
+    if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);
     return nextResponse;
 }

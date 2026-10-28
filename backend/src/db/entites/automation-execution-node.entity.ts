@@ -14,6 +14,7 @@ export enum AutomationExecutionNodeStatus {
     SUCCESS = 'SUCCESS',
     FAILED = 'FAILED',
     SKIPPED = 'SKIPPED',
+    CANCELLED = 'CANCELLED',
 }
 
 @Entity('automation_execution_nodes')
@@ -51,4 +52,7 @@ export class AutomationExecutionNode {
 
     @Column({ type: 'varchar', name: 'resource_id', length: 512, nullable: true })
     resourceId!: string | null;
+
+    @Column({ type: 'varchar', name: 'aws_operation_id', length: 512, nullable: true })
+    awsOperationId!: string | null;
 }

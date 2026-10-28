@@ -285,7 +285,9 @@ export async function GET() {
     const refreshToken = await getRefreshTokenFromCookies();
 
     if (!accessToken && !refreshToken) {
-        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+        const response = NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+        clearAuthCookies(response);
+        return response;
     }
 
     let currentAccessToken = accessToken;
@@ -310,13 +312,15 @@ export async function GET() {
     let [meResponse, organizationsResponse] = await fetchContext(currentAccessToken);
 
     if (meResponse.status === 401 || organizationsResponse.status === 401) {
-        if (!refreshToken) {
+        const tokenForRefresh = rotatedTokens?.refreshToken ?? refreshToken;
+
+        if (!tokenForRefresh) {
             const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
             clearAuthCookies(response);
             return response;
         }
 
-        rotatedTokens = await refreshAccessToken(refreshToken);
+        rotatedTokens = await refreshAccessToken(tokenForRefresh);
 
         if (!rotatedTokens) {
             const response = NextResponse.json({ message: 'Sessao expirada' }, { status: 401 });
@@ -358,11 +362,15 @@ export async function GET() {
     }
 
     if (!meResponse.ok) {
-        return NextResponse.json(meBody ?? { message: 'Erro ao carregar usuário' }, { status: meResponse.status });
+        const response = NextResponse.json(meBody ?? { message: 'Erro ao carregar usuário' }, { status: meResponse.status });
+        if (rotatedTokens) setAuthCookies(response, rotatedTokens);
+        return response;
     }
 
     if (!organizationsResponse.ok) {
-        return NextResponse.json(organizationsBody ?? { message: 'Erro ao carregar organizações' }, { status: organizationsResponse.status });
+        const response = NextResponse.json(organizationsBody ?? { message: 'Erro ao carregar organizações' }, { status: organizationsResponse.status });
+        if (rotatedTokens) setAuthCookies(response, rotatedTokens);
+        return response;
     }
 
     const response = NextResponse.json(normalizePayload(meBody, organizationsBody));

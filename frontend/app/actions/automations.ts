@@ -28,17 +28,33 @@ export interface AutomationWorkflow {
     updatedBy: string | null;
     nodes: AutomationNodeInput[];
     edges: AutomationEdgeInput[];
+    variables?: Record<string, { type: string; default?: unknown; required?: boolean; description?: string }>;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface ActionFieldDescriptor {
+    key: string;
+    label: string;
+    input: 'text' | 'region' | 'boolean' | 'select' | 'template' | 'resource' | 'keyValue' | 'families';
+    required?: boolean;
+    sensitive?: boolean;
+    acceptsBinding?: boolean;
+    bindingModes?: Array<'LITERAL' | 'VARIABLE' | 'NODE_OUTPUT' | 'EXISTING_RESOURCE'>;
+    options?: { value: string; label: string }[];
+    defaultValue?: string | number | boolean | null;
 }
 
 export interface ActionDefinition {
     type: string;
     provider: string;
+    kind?: 'native' | 'cloudformation' | 'existing_resource' | 'data';
     name: string;
     category: string;
     outputFields: readonly string[];
     requiredIamActions: readonly string[];
+    dynamicOutputs?: boolean;
+    fields?: ActionFieldDescriptor[];
 }
 
 export interface NodeOutputReference {
@@ -47,8 +63,8 @@ export interface NodeOutputReference {
     field: string;
 }
 
-export type ExecutionNodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
-export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'COMPLETED' | 'CANCELLED';
+export type ExecutionNodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'CANCELLED';
+export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'ROLLED_BACK';
 
 export interface AutomationExecutionNode {
     id: string;
@@ -61,6 +77,7 @@ export interface AutomationExecutionNode {
     output: Record<string, unknown> | null;
     error: string | null;
     resourceId: string | null;
+    awsOperationId?: string | null;
 }
 
 export interface AutomationWorkflowExecution {
@@ -75,6 +92,7 @@ export interface AutomationWorkflowExecution {
     durationMs: number | null;
     startedAt: string | null;
     finishedAt: string | null;
+    inventorySyncStatus?: string;
     createdAt: string;
     executionNodes?: AutomationExecutionNode[];
 }
@@ -114,6 +132,7 @@ export async function updateAutomation(
         cloudAccountId?: string;
         nodes?: AutomationNodeInput[];
         edges?: AutomationEdgeInput[];
+        variables?: AutomationWorkflow['variables'];
     },
 ): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}?${orgQuery(organizationId)}`, {
@@ -152,11 +171,75 @@ export async function deactivateAutomation(automationId: string, organizationId:
     });
 }
 
-export async function executeAutomation(automationId: string, organizationId: string): Promise<Response> {
+export async function executeAutomation(
+    automationId: string,
+    organizationId: string,
+    body: { confirm: true; clientRequestId?: string; acknowledgeCapabilities?: boolean; parameters?: Record<string, unknown> },
+): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}/execute?${orgQuery(organizationId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+    });
+}
+
+export async function validateAutomation(automationId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automations/${encodeURIComponent(automationId)}/validate?${orgQuery(organizationId)}`, {
         method: 'POST',
         cache: 'no-store',
     });
+}
+
+export async function planAutomation(automationId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automations/${encodeURIComponent(automationId)}/plan?${orgQuery(organizationId)}`, {
+        method: 'POST',
+        cache: 'no-store',
+    });
+}
+
+export async function cancelAutomationPlan(automationId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automations/${encodeURIComponent(automationId)}/plan/cancel?${orgQuery(organizationId)}`, {
+        method: 'POST',
+        cache: 'no-store',
+    });
+}
+
+export async function reviseAutomation(automationId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automations/${encodeURIComponent(automationId)}/revise?${orgQuery(organizationId)}`, {
+        method: 'POST',
+        cache: 'no-store',
+    });
+}
+
+export async function fetchAutomationTemplates(organizationId: string): Promise<Response> {
+    return fetch(`/api/automation/templates?${orgQuery(organizationId)}`, { cache: 'no-store' });
+}
+
+export async function fetchAutomationTemplate(templateId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automation/templates/${encodeURIComponent(templateId)}?${orgQuery(organizationId)}`, { cache: 'no-store' });
+}
+
+export async function importAutomationTemplate(
+    organizationId: string,
+    body: { name: string; description?: string; content: string },
+): Promise<Response> {
+    return fetch(`/api/automation/templates?${orgQuery(organizationId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+    });
+}
+
+export async function fetchExistingResources(
+    organizationId: string,
+    cloudAccountId: string,
+    region: string,
+    resourceType: string,
+): Promise<Response> {
+    const params = new URLSearchParams({ organizationId, cloudAccountId, region, resourceType });
+    return fetch(`/api/automation/resources/catalog?${params.toString()}`, { cache: 'no-store' });
 }
 
 export async function duplicateAutomation(automationId: string, organizationId: string): Promise<Response> {
@@ -183,6 +266,19 @@ export async function fetchAutomationExecution(
     );
 }
 
-export async function fetchActionCatalog(organizationId: string): Promise<Response> {
-    return fetch(`/api/automation/actions?${orgQuery(organizationId)}`, { cache: 'no-store' });
+export async function rollbackAutomationExecution(
+    automationId: string,
+    executionId: string,
+    organizationId: string,
+): Promise<Response> {
+    return fetch(
+        `/api/automations/${encodeURIComponent(automationId)}/executions/${encodeURIComponent(executionId)}/rollback?${orgQuery(organizationId)}`,
+        { method: 'POST', cache: 'no-store' },
+    );
+}
+
+export async function fetchActionCatalog(organizationId: string, provider?: AutomationCloudProvider): Promise<Response> {
+    const params = new URLSearchParams({ organizationId });
+    if (provider) params.set('provider', provider);
+    return fetch(`/api/automation/actions?${params.toString()}`, { cache: 'no-store' });
 }

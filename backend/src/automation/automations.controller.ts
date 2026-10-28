@@ -33,8 +33,10 @@ import {
     automationExecutionParamSchema,
     automationIdParamSchema,
     createAutomationSchema,
+    executeAutomationSchema,
     updateAutomationSchema,
     type CreateAutomationDto,
+    type ExecuteAutomationDto,
     type UpdateAutomationDto,
 } from './automations.dto';
 
@@ -161,8 +163,49 @@ export class AutomationsController {
         @CurrentOrganization() org: Tenant,
         @CurrentUser() user: JwtPayload,
         @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+        @Body(new ZodValidationPipe(executeAutomationSchema)) dto: ExecuteAutomationDto,
     ) {
-        return this.automationsService.execute(params.id, org.id, user.sub);
+        return this.automationsService.execute(params.id, org.id, user.sub, dto);
+    }
+
+    @Post(':id/validate')
+    @ApiOperation({ summary: 'Validar grafo, bindings e templates' })
+    validate(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.validate(params.id, org.id);
+    }
+
+    @Post(':id/plan')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({ summary: 'Gerar plano e change sets quando os parâmetros já estão resolvidos' })
+    plan(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.plan(params.id, org.id);
+    }
+
+    @Post(':id/plan/cancel')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({ summary: 'Descartar change set em REVIEW_IN_PROGRESS' })
+    cancelPlan(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.cancelPlan(params.id, org.id);
+    }
+
+    @Post(':id/revise')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({ summary: 'Reabrir uma versão publicada como rascunho' })
+    revise(
+        @CurrentOrganization() org: Tenant,
+        @CurrentUser() user: JwtPayload,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.revise(params.id, org.id, user.sub);
     }
 
     @Get(':id/executions')
@@ -182,5 +225,19 @@ export class AutomationsController {
         @Param(new ZodValidationPipe(automationExecutionParamSchema)) params: { id: string; executionId: string },
     ) {
         return this.automationsService.getExecution(params.id, params.executionId, org.id);
+    }
+
+    @Post(':id/executions/:executionId/rollback')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Reverter recursos provisionados de uma execução finalizada com sucesso' })
+    @ApiResponse({ status: 200, description: 'Rollback concluído' })
+    @ApiResponse({ status: 400, description: 'Execução não elegível ou rollback parcial' })
+    rollbackExecution(
+        @CurrentOrganization() org: Tenant,
+        @CurrentUser() user: JwtPayload,
+        @Param(new ZodValidationPipe(automationExecutionParamSchema)) params: { id: string; executionId: string },
+    ) {
+        return this.automationsService.rollbackExecution(params.id, params.executionId, org.id, user.sub);
     }
 }

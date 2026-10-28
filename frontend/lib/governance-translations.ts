@@ -25,10 +25,39 @@ export function translateGovernanceResourceType(resourceType: string): string {
     const resourceTypeMap: Record<string, string> = {
         EC2Instance: 'Instância EC2',
         S3Bucket: 'Bucket S3',
+        SecurityGroup: 'Security Group',
+        RDSInstance: 'Instância RDS',
+        IAMRole: 'Role IAM',
+        LambdaFunction: 'Função Lambda',
+        EKSCluster: 'Cluster EKS',
+        CloudTrailTrail: 'CloudTrail',
+        KMSKey: 'Chave KMS',
+        GuardDutyDetector: 'GuardDuty',
+        GcpVmInstance: 'Instância VM (GCP)',
+        GcpStorageBucket: 'Bucket Storage (GCP)',
+        GcpFirewallRule: 'Regra de Firewall (GCP)',
+        GcpSqlInstance: 'Cloud SQL (GCP)',
+        GcpGkeCluster: 'Cluster GKE',
     };
 
     return resourceTypeMap[resourceType] ?? resourceType;
 }
+
+export const GOVERNANCE_RESOURCE_TYPES_BY_PROVIDER: Record<string, string[]> = {
+    aws: [
+        'EC2Instance',
+        'S3Bucket',
+        'SecurityGroup',
+        'RDSInstance',
+        'IAMRole',
+        'LambdaFunction',
+        'EKSCluster',
+        'CloudTrailTrail',
+        'KMSKey',
+        'GuardDutyDetector',
+    ],
+    gcp: ['GcpVmInstance', 'GcpStorageBucket', 'GcpFirewallRule', 'GcpSqlInstance', 'GcpGkeCluster'],
+};
 
 function applyCommonEnglishReplacements(text: string): string {
     return text

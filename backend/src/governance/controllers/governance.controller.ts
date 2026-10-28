@@ -92,17 +92,21 @@ export class GovernanceController {
         description: 'Retorna os jobs de governança para a conta com paginação.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiQuery({ name: 'status', required: false, example: 'completed', description: 'Filtrar por status: pending | running | completed | failed' })
     @ApiResponse({ status: 200, description: 'Lista de jobs paginada', type: GovernanceJobsPaginatedResponseDto })
     async listJobs(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @CurrentOrganization() org: Tenant,
         @Query('page') page?: string,
-        @Query('limit') limit?: string
+        @Query('limit') limit?: string,
+        @Query('status') status?: string
     ): Promise<GovernanceJobsPaginatedResponseDto> {
         const parsedPage = page ? Number.parseInt(page, 10) : undefined;
         const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+        const statusFilter =
+            status === 'pending' || status === 'running' || status === 'completed' || status === 'failed' ? status : undefined;
 
-        return this.governanceService.listJobs(cloudAccountId, org.id, parsedPage, parsedLimit);
+        return this.governanceService.listJobs(cloudAccountId, org.id, parsedPage, parsedLimit, statusFilter);
     }
 
     @Get('accounts/:cloudAccountId/jobs/:jobId')

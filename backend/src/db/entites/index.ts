@@ -97,3 +97,6 @@ export { AutomationVersion } from './automation-version.entity';
 export { AutomationExecution, AutomationStatus, PricingModel } from './automation-execution.entity';
 export { AutomationExecutionNode, AutomationExecutionNodeStatus } from './automation-execution-node.entity';
 export { ProvisionedResource, ProvisionedResourceStatus } from './provisioned-resource.entity';
+export { AutomationTemplate, AutomationTemplateOrigin, AutomationTemplateType } from './automation-template.entity';
+export { AutomationTemplateVersion } from './automation-template-version.entity';
+export { AutomationAuditEvent } from './automation-audit-event.entity';

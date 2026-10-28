@@ -1,3 +1,5 @@
+import type { JobStatusFilter } from '@/components/root/governance/overview/governance-jobs-filter-bar';
+import { JOB_STATUS_FILTER_ALL } from '@/components/root/governance/overview/governance-jobs-filter-bar';
 import type { GovernanceJob, PaginationMeta } from '@/components/root/governance/overview/types';
 
 export const DEFAULT_JOBS_PAGE = 1;
@@ -13,16 +15,29 @@ export function normalizeJobsLimit(value: number): number {
     return JOBS_LIMIT_OPTIONS.includes(value as (typeof JOBS_LIMIT_OPTIONS)[number]) ? value : DEFAULT_JOBS_LIMIT;
 }
 
-export function readPaginationFromLocation(): { page: number; limit: number } {
+export function normalizeJobStatusFilter(value: string | null): JobStatusFilter {
+    switch (value) {
+        case 'pending':
+        case 'running':
+        case 'completed':
+        case 'failed':
+            return value;
+        default:
+            return JOB_STATUS_FILTER_ALL;
+    }
+}
+
+export function readJobsFiltersFromLocation(): { page: number; limit: number; status: JobStatusFilter } {
     if (typeof window === 'undefined') {
-        return { page: DEFAULT_JOBS_PAGE, limit: DEFAULT_JOBS_LIMIT };
+        return { page: DEFAULT_JOBS_PAGE, limit: DEFAULT_JOBS_LIMIT, status: JOB_STATUS_FILTER_ALL };
     }
 
     const params = new URLSearchParams(window.location.search);
     const page = parsePositiveInteger(params.get('page'), DEFAULT_JOBS_PAGE);
     const limit = normalizeJobsLimit(parsePositiveInteger(params.get('limit'), DEFAULT_JOBS_LIMIT));
+    const status = normalizeJobStatusFilter(params.get('status'));
 
-    return { page, limit };
+    return { page, limit, status };
 }
 
 export function normalizeJobs(payload: unknown): GovernanceJob[] {

@@ -29,7 +29,9 @@
         "migration:show": "npm run typeorm -- migration:show"
     },
     "dependencies": {
+        "@aws-sdk/client-amplify": "^3.1158.0",
         "@aws-sdk/client-api-gateway": "^3.1005.0",
+        "@aws-sdk/client-cloudformation": "^3.1158.0",
         "@aws-sdk/client-cloudfront": "^3.1004.0",
         "@aws-sdk/client-cloudtrail": "^3.1005.0",
         "@aws-sdk/client-cloudwatch": "^3.1005.0",
@@ -76,6 +78,7 @@
         "google-auth-library": "^10.6.2",
         "googleapis": "^171.4.0",
         "helmet": "^8.1.0",
+        "js-yaml": "^4.3.2",
         "nodemailer": "^8.0.1",
         "passport": "^0.7.0",
         "passport-google-oauth20": "^2.0.0",
@@ -99,6 +102,7 @@
         "@types/bcrypt": "^6.0.0",
         "@types/express": "^5.0.0",
         "@types/jest": "^30.0.0",
+        "@types/js-yaml": "^4.0.9",
         "@types/node": "^22.10.7",
         "@types/passport": "^1.0.17",
         "@types/passport-google-oauth20": "^2.0.17",

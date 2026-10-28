@@ -28,6 +28,8 @@ import { LambdaClient } from '@aws-sdk/client-lambda';
 
 import { APIGatewayClient } from '@aws-sdk/client-api-gateway';
 
+import { AmplifyClient } from '@aws-sdk/client-amplify';
+
 import { KMSClient } from '@aws-sdk/client-kms';
 
 import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
@@ -45,6 +47,8 @@ import { SNSClient } from '@aws-sdk/client-sns';
 import { WAFV2Client } from '@aws-sdk/client-wafv2';
 
 import { GuardDutyClient } from '@aws-sdk/client-guardduty';
+
+import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
 
 import type { AwsCredentialIdentity } from '@aws-sdk/types';
 
@@ -305,6 +309,13 @@ export class AwsConnectorService {
 
      */
 
+    async getCloudFormationClient(cloudAccountId: string, organizationId: string, region?: string): Promise<CloudFormationClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+        return new CloudFormationClient({ region: finalRegion, credentials: temporaryCreds });
+    }
+
     async getEc2Client(cloudAccountId: string, organizationId: string, region?: string): Promise<EC2Client> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
 
@@ -532,6 +543,16 @@ export class AwsConnectorService {
         const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
 
         return new APIGatewayClient({ region: finalRegion, credentials: temporaryCreds });
+    }
+
+    /**
+     * Retorna um AmplifyClient autenticado via AssumeRole.
+     */
+    async getAmplifyClient(cloudAccountId: string, organizationId: string, region?: string): Promise<AmplifyClient> {
+        const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const finalRegion = region && region.trim() !== '' ? region : creds.region;
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
+        return new AmplifyClient({ region: finalRegion, credentials: temporaryCreds });
     }
 
     /**

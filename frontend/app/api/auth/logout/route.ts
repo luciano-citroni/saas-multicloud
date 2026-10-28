@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { backendFetch, clearAuthCookies, getAccessTokenFromCookies } from '@/lib/auth/session';
+import { backendFetch, clearAuthCookies, getAccessTokenFromCookies, getRefreshTokenFromCookies, refreshAccessToken } from '@/lib/auth/session';
 import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 export async function POST(request: Request) {
@@ -7,7 +7,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
     }
 
-    const accessToken = await getAccessTokenFromCookies();
+    let accessToken = await getAccessTokenFromCookies();
+
+    if (!accessToken) {
+        const refreshToken = await getRefreshTokenFromCookies();
+        if (refreshToken) {
+            const refreshed = await refreshAccessToken(refreshToken).catch(() => null);
+            accessToken = refreshed?.accessToken ?? null;
+        }
+    }
 
     if (accessToken) {
         await backendFetch('/api/auth/logout', {

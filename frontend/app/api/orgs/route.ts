@@ -33,7 +33,7 @@ async function resolveAccessToken() {
         return { accessToken: null, refreshToken, rotatedTokens: null as AuthTokens | null };
     }
 
-    return { accessToken: rotatedTokens.accessToken, refreshToken, rotatedTokens };
+    return { accessToken: rotatedTokens.accessToken, refreshToken: rotatedTokens.refreshToken, rotatedTokens };
 }
 
 function withAuthHeaders(accessToken: string, tenantId: string, extra?: HeadersInit): HeadersInit {

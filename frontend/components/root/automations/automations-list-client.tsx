@@ -7,6 +7,16 @@ import { toast } from 'sonner';
 import { Loader2, Plus, Play, Copy, Trash2, Power, PowerOff, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
@@ -14,26 +24,17 @@ import { hasRequiredOrganizationRole, normalizeOrganizationRole, type Organizati
 import {
     fetchAutomations,
     deleteAutomation,
-    executeAutomation,
     duplicateAutomation,
     activateAutomation,
     deactivateAutomation,
     type AutomationWorkflow,
 } from '@/app/actions/automations';
 import { cn } from '@/lib/utils';
+import { workflowStatusClass } from './status-styles';
 
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-}
-
-function statusBadge(status: AutomationWorkflow['status']) {
-    const map: Record<string, string> = {
-        DRAFT: 'bg-muted text-muted-foreground',
-        ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-        INACTIVE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    };
-    return map[status] ?? map.DRAFT;
 }
 
 export function AutomationsListClient() {
@@ -41,6 +42,8 @@ export function AutomationsListClient() {
     const [automations, setAutomations] = useState<AutomationWorkflow[]>([]);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState<OrganizationRole | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<AutomationWorkflow | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const load = useCallback(async () => {
         const orgId = getOrgId();
@@ -87,15 +90,18 @@ export function AutomationsListClient() {
         if (!orgId) return;
 
         const handlers: Record<string, () => Promise<Response>> = {
-            execute: () => executeAutomation(id, orgId),
+            execute: async () => {
+                router.push(`/automations/${id}?execute=1`);
+                return new Response(null, { status: 499 });
+            },
             duplicate: () => duplicateAutomation(id, orgId),
             activate: () => activateAutomation(id, orgId),
             deactivate: () => deactivateAutomation(id, orgId),
-            delete: () => deleteAutomation(id, orgId),
         };
 
         const response = await handlers[action]();
         const body = await response.json().catch(() => ({}));
+        if (response.status === 499) return;
         if (!response.ok && response.status !== 204) {
             toast.error(extractErrorMessage(body as never, 'pt'));
             return;
@@ -104,12 +110,33 @@ export function AutomationsListClient() {
         if (action === 'execute') {
             toast.success('Execução enfileirada');
             router.push(`/automations/${id}`);
-        } else if (action === 'delete') {
-            toast.success('Automação excluída');
         } else {
             toast.success('Automação atualizada');
         }
         await load();
+    }
+
+    async function confirmDelete() {
+        if (!deleteTarget) return;
+        const orgId = getOrgId();
+        if (!orgId) return;
+
+        setDeleting(true);
+        try {
+            const response = await deleteAutomation(deleteTarget.id, orgId);
+            if (!response.ok && response.status !== 204) {
+                const body = await response.json().catch(() => ({}));
+                toast.error(extractErrorMessage(body as never, 'pt'));
+                return;
+            }
+            toast.success('Automação excluída');
+            setDeleteTarget(null);
+            await load();
+        } catch {
+            toast.error('Falha ao excluir automação');
+        } finally {
+            setDeleting(false);
+        }
     }
 
     if (loading) {
@@ -164,7 +191,7 @@ export function AutomationsListClient() {
                                     </TableCell>
                                     <TableCell>{automation.cloudProvider}</TableCell>
                                     <TableCell>
-                                        <Badge className={cn('text-[10px]', statusBadge(automation.status))}>
+                                        <Badge className={cn('text-[10px]', workflowStatusClass(automation.status))}>
                                             {automation.status}
                                         </Badge>
                                     </TableCell>
@@ -200,7 +227,7 @@ export function AutomationsListClient() {
                                                 </Button>
                                             )}
                                             {canAdmin && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('delete', automation.id)}>
+                                                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(automation)}>
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                             )}
@@ -212,6 +239,31 @@ export function AutomationsListClient() {
                     </TableBody>
                 </Table>
             </div>
+
+            <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir automação?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A automação <span className="font-medium text-foreground">{deleteTarget?.name}</span> será
+                            removida permanentemente. Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={deleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void confirmDelete();
+                            }}
+                        >
+                            {deleting ? 'Excluindo...' : 'Excluir'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
