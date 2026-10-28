@@ -391,7 +391,12 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
                         </Button>
                     )}
                     <Button variant="outline" onClick={handleValidate}><ShieldCheck className="mr-2 h-4 w-4" />{t.validate}</Button>
-                    {canAdmin && <Button variant="outline" onClick={handlePlan}><ListChecks className="mr-2 h-4 w-4" />{t.viewPlan}</Button>}
+                    {canAdmin && (
+                        <Button variant="outline" onClick={() => void handlePlan()}>
+                            <ListChecks className="mr-2 h-4 w-4" />
+                            {t.viewPlan}
+                        </Button>
+                    )}
                     {isDraft && canAdmin && (
                         <Button onClick={handlePublish} disabled={saving}><Upload className="mr-2 h-4 w-4" />{t.publish}</Button>
                     )}
@@ -399,7 +404,10 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
                         <Button variant="outline" onClick={handleRevise}><Pencil className="mr-2 h-4 w-4" />{t.revise}</Button>
                     )}
                     {canAdmin && automation.status === 'ACTIVE' && (
-                        <Button onClick={handlePlan}><Play className="mr-2 h-4 w-4" />{t.execute}</Button>
+                        <Button onClick={() => void handlePlan()}>
+                            <Play className="mr-2 h-4 w-4" />
+                            {t.execute}
+                        </Button>
                     )}
                 </div>
             </div>
