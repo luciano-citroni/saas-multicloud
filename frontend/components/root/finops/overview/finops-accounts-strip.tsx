@@ -1,17 +1,21 @@
 'use client';
 
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight, Check, MoreVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { OrgOverviewAccount } from '@/components/root/finops/overview/types';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useTranslations } from '@/lib/i18n';
 
 type FinopsAccountsStripProps = {
     accounts: OrgOverviewAccount[];
     currency: string;
     selectedAccountId?: string | null;
     isLoading?: boolean;
+    canManage?: boolean;
     onSelectAccount?: (accountId: string) => void;
+    onRevokeConsent?: (account: OrgOverviewAccount) => void;
 };
 
 function statusLabel(account: OrgOverviewAccount): string {
@@ -26,8 +30,12 @@ export function FinopsAccountsStrip({
     currency,
     selectedAccountId = null,
     isLoading = false,
+    canManage = false,
     onSelectAccount,
+    onRevokeConsent,
 }: FinopsAccountsStripProps) {
+    const tf = useTranslations('finops');
+
     if (isLoading) {
         return (
             <div className="space-y-3">
@@ -70,6 +78,7 @@ export function FinopsAccountsStrip({
                               : account.openRecs > 0
                                 ? 'opportunity'
                                 : 'ok';
+                    const showRevoke = canManage && supported && account.hasConsent;
 
                     return (
                         <div
@@ -96,16 +105,36 @@ export function FinopsAccountsStrip({
                                     </div>
                                     <p className="mt-0.5 text-[11px] uppercase text-muted-foreground">{account.provider}</p>
                                 </div>
-                                <span
-                                    className={cn(
-                                        'shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
-                                        account.hasConsent && supported
-                                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                                            : 'bg-muted text-muted-foreground'
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <span
+                                        className={cn(
+                                            'rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                                            account.hasConsent && supported
+                                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                                                : 'bg-muted text-muted-foreground'
+                                        )}
+                                    >
+                                        {statusLabel(account)}
+                                    </span>
+                                    {showRevoke && (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                                    <MoreVertical className="size-4" />
+                                                    <span className="sr-only">Menu</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+                                                    onClick={() => onRevokeConsent?.(account)}
+                                                >
+                                                    {tf.consentRevokeLabel}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
-                                >
-                                    {statusLabel(account)}
-                                </span>
+                                </div>
                             </div>
 
                             <div>

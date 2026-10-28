@@ -8,6 +8,16 @@ import { Loader2, PlayCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsConsentDialog } from '@/components/root/finops/overview/finops-consent-dialog';
 import { FinopsSyncDialog } from '@/components/root/finops/overview/finops-sync-dialog';
@@ -29,6 +39,7 @@ import type {
     FinopsJob,
     OrgFinopsOptimize,
     OrgFinopsOverview,
+    OrgOverviewAccount,
     SidebarContextPayload,
     SyncRun,
 } from '@/components/root/finops/overview/types';
@@ -43,6 +54,7 @@ import {
     fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
+    revokeFinopsConsent,
     startFinopsSync,
 } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
@@ -78,6 +90,8 @@ export function FinopsOverview() {
 
     const [showConsentDialog, setShowConsentDialog] = useState(false);
     const [showSyncDialog, setShowSyncDialog] = useState(false);
+    const [revokeTarget, setRevokeTarget] = useState<OrgOverviewAccount | null>(null);
+    const [revokingConsent, setRevokingConsent] = useState(false);
 
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -400,6 +414,29 @@ export function FinopsOverview() {
             toast.error(tf.consentError);
         } finally {
             setAcceptingConsent(false);
+        }
+    };
+
+    const handleRevokeConsent = async () => {
+        if (!organizationId || !revokeTarget) return;
+
+        setRevokingConsent(true);
+        try {
+            const response = await revokeFinopsConsent(organizationId, revokeTarget.id, revokeTarget.provider);
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                toast.error(extractErrorMessage(payload, 'pt'));
+                return;
+            }
+
+            setRevokeTarget(null);
+            toast.success(tf.consentRevokeSuccess);
+            await loadOverview(organizationId, { silent: true });
+            if (tab === 'optimize') await loadOptimize(organizationId);
+        } catch {
+            toast.error(tf.consentRevokeError);
+        } finally {
+            setRevokingConsent(false);
         }
     };
 
@@ -731,7 +768,9 @@ export function FinopsOverview() {
                     currency={overview?.totals.currency ?? 'USD'}
                     selectedAccountId={selectedAccountId}
                     isLoading={loadingCloudAccounts && displayAccounts.length === 0}
+                    canManage={canSync}
                     onSelectAccount={(accountId) => syncUrlState({ account: accountId })}
+                    onRevokeConsent={(account) => setRevokeTarget(account)}
                 />
             </div>
 
@@ -750,6 +789,34 @@ export function FinopsOverview() {
                 onCancel={() => setShowSyncDialog(false)}
                 isLoading={syncing}
             />
+
+            <AlertDialog
+                open={Boolean(revokeTarget)}
+                onOpenChange={(open) => {
+                    if (!open && !revokingConsent) setRevokeTarget(null);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{tf.consentRevokeTitle}</AlertDialogTitle>
+                        <AlertDialogDescription>{tf.consentRevokeDescription}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={revokingConsent}>{tc.cancel}</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={revokingConsent}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleRevokeConsent();
+                            }}
+                        >
+                            {revokingConsent ? <Loader2 className="size-4 animate-spin" /> : null}
+                            {tf.consentRevokeConfirm}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

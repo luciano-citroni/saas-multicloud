@@ -9,6 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsConsentDialog } from '@/components/root/finops/overview/finops-consent-dialog';
 import { FinopsSyncDialog } from '@/components/root/finops/overview/finops-sync-dialog';
@@ -42,6 +52,7 @@ import {
     fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
+    revokeFinopsConsent,
     startFinopsSync,
 } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
@@ -81,6 +92,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
 
     const [showConsentDialog, setShowConsentDialog] = useState(false);
     const [showSyncDialog, setShowSyncDialog] = useState(false);
+    const [showRevokeDialog, setShowRevokeDialog] = useState(false);
+    const [revokingConsent, setRevokingConsent] = useState(false);
 
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -380,6 +393,27 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         }
     };
 
+    const handleRevokeConsent = async () => {
+        if (!organizationId || !account) return;
+        setRevokingConsent(true);
+        try {
+            const response = await revokeFinopsConsent(organizationId, account.id, account.provider);
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                toast.error(extractErrorMessage(payload, 'pt'));
+                return;
+            }
+            setShowRevokeDialog(false);
+            setHasConsent(false);
+            toast.success(tf.consentRevokeSuccess);
+            void loadOverview(organizationId, { silent: true });
+        } catch {
+            toast.error(tf.consentRevokeError);
+        } finally {
+            setRevokingConsent(false);
+        }
+    };
+
     const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
 
     if (!organizationId) {
@@ -493,10 +527,22 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                     setShowSyncDialog(true);
                                 }}
                                 isLoading={syncing}
-                                disabled={syncing}
+                                disabled={syncing || revokingConsent}
                             >
                                 <PlayCircle className="size-4" />
                                 {hasConsent ? 'Sincronizar' : 'Aceitar termos'}
+                            </Button>
+                        )}
+
+                        {canSync && hasConsent === true && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => setShowRevokeDialog(true)}
+                                disabled={revokingConsent || syncing}
+                            >
+                                {tf.consentRevokeLabel}
                             </Button>
                         )}
                     </div>
@@ -617,6 +663,29 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                 onCancel={() => setShowSyncDialog(false)}
                 isLoading={syncing}
             />
+
+            <AlertDialog open={showRevokeDialog} onOpenChange={(open) => !revokingConsent && setShowRevokeDialog(open)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{tf.consentRevokeTitle}</AlertDialogTitle>
+                        <AlertDialogDescription>{tf.consentRevokeDescription}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={revokingConsent}>{tc.cancel}</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={revokingConsent}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleRevokeConsent();
+                            }}
+                        >
+                            {revokingConsent ? <Loader2 className="size-4 animate-spin" /> : null}
+                            {tf.consentRevokeConfirm}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }
