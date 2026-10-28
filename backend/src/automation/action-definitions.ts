@@ -243,8 +243,51 @@ export interface ActionDefinition {
     category: string;
     outputFields: readonly string[];
     requiredIamActions: readonly string[];
+    /** Permissões necessárias para apagar o recurso no rollback. */
+    rollbackIamActions?: readonly string[];
     dynamicOutputs?: boolean;
     fields: ActionFieldDescriptor[];
+}
+
+/** Ações IAM de exclusão usadas no rollback automático / manual. */
+export const ROLLBACK_IAM_ACTIONS: Record<string, readonly string[]> = {
+    [AUTOMATION_ACTION_TYPES.AWS_S3_BUCKET_CREATE]: [
+        's3:ListBucketVersions',
+        's3:DeleteObject',
+        's3:DeleteObjectVersion',
+        's3:DeleteBucket',
+    ],
+    [AUTOMATION_ACTION_TYPES.AWS_CLOUDFRONT_DISTRIBUTION_CREATE]: [
+        'cloudfront:GetDistributionConfig',
+        'cloudfront:UpdateDistribution',
+        'cloudfront:DeleteDistribution',
+    ],
+    [AUTOMATION_ACTION_TYPES.AWS_ECS_CLUSTER_CREATE]: ['ecs:DeleteCluster'],
+    [AUTOMATION_ACTION_TYPES.AWS_ECR_REPOSITORY_CREATE]: ['ecr:DeleteRepository'],
+    [AUTOMATION_ACTION_TYPES.AWS_LOAD_BALANCER_CREATE]: ['elasticloadbalancing:DeleteLoadBalancer'],
+    [AUTOMATION_ACTION_TYPES.AWS_LAMBDA_FUNCTION_CREATE]: ['lambda:DeleteFunction'],
+    [AUTOMATION_ACTION_TYPES.AWS_IAM_ROLE_CREATE]: [
+        'iam:ListAttachedRolePolicies',
+        'iam:DetachRolePolicy',
+        'iam:DeleteRole',
+    ],
+    [AUTOMATION_ACTION_TYPES.AWS_SECURITY_GROUP_CREATE]: ['ec2:DeleteSecurityGroup'],
+    [AUTOMATION_ACTION_TYPES.AWS_VPC_CREATE]: ['ec2:DeleteVpc'],
+    [AUTOMATION_ACTION_TYPES.AWS_SUBNET_CREATE]: ['ec2:DeleteSubnet'],
+    [AUTOMATION_ACTION_TYPES.AWS_ROUTE_TABLE_CREATE]: ['ec2:DeleteRouteTable'],
+    [AUTOMATION_ACTION_TYPES.AWS_NAT_GATEWAY_CREATE]: ['ec2:DeleteNatGateway', 'ec2:ReleaseAddress'],
+    [AUTOMATION_ACTION_TYPES.AWS_RDS_INSTANCE_CREATE]: ['rds:DeleteDBInstance'],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_INSTANCE_CREATE]: ['ec2:TerminateInstances'],
+    [AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE]: ['amplify:DeleteApp'],
+    [AUTOMATION_ACTION_TYPES.AWS_API_GATEWAY_CREATE]: ['apigateway:DELETE'],
+    [AUTOMATION_ACTION_TYPES.AWS_CLOUDFORMATION_STACK]: [
+        'cloudformation:DeleteStack',
+        'cloudformation:DescribeStacks',
+    ],
+};
+
+export function getRollbackIamActions(type: string): readonly string[] {
+    return ROLLBACK_IAM_ACTIONS[type] ?? [];
 }
 
 const REGIONS = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1', 'eu-central-1', 'sa-east-1'].map((value) => ({
@@ -272,12 +315,10 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_S3_BUCKET_CREATE],
         requiredIamActions: [
             's3:CreateBucket',
-            's3:GetBucketLocation',
             's3:ListBucket',
             's3:PutBucketVersioning',
             's3:PutEncryptionConfiguration',
-            's3:PutPublicAccessBlock',
-            's3:PutBucketTagging',
+            's3:PutBucketPublicAccessBlock',
         ],
         fields: [
             { key: 'bucketName', label: 'Nome do bucket', input: 'text', required: true, acceptsBinding: true },
@@ -672,6 +713,25 @@ export function listActions(provider?: AutomationProvider | null): ActionDefinit
 
 export function getActionDefinition(type: string): ActionDefinition | undefined {
     return ACTION_DEFINITIONS.find((def) => def.type === type);
+}
+
+export function collectWorkflowIamActions(nodes: Array<{ type: string }>): {
+    create: string[];
+    rollback: string[];
+    all: string[];
+} {
+    const create = new Set<string>();
+    const rollback = new Set<string>();
+    for (const node of nodes) {
+        const definition = getActionDefinition(node.type);
+        for (const action of definition?.requiredIamActions ?? []) create.add(action);
+        for (const action of getRollbackIamActions(node.type)) rollback.add(action);
+    }
+    return {
+        create: [...create],
+        rollback: [...rollback],
+        all: [...new Set([...create, ...rollback])],
+    };
 }
 
 export function getConfigSchemaForAction(type: string): z.ZodType | undefined {

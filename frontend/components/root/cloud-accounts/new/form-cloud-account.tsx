@@ -518,7 +518,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3 py-2.5">
                                                     {[
-                                                        { service: 'S3', actions: 'CreateBucket, PutBucketVersioning, PutEncryptionConfiguration, PutPublicAccessBlock' },
+                                                        { service: 'S3', actions: 'CreateBucket, PutBucketVersioning, PutEncryptionConfiguration, PutBucketPublicAccessBlock' },
                                                         { service: 'CloudFront', actions: 'CreateDistribution, GetDistribution' },
                                                     ].map(({ service, actions }) => (
                                                         <div key={service} className="flex flex-col py-0.5">

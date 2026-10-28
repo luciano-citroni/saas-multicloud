@@ -26,6 +26,7 @@ import { AutomationInventorySyncService } from './automation-inventory-sync.serv
 import { AutomationTemplateService } from './automation-template.service';
 import { AutomationAuditService } from './automation-audit.service';
 import { AutomationPlanService } from './automation-plan.service';
+import { AutomationPermissionCheckService } from './automation-permission-check.service';
 import { ParameterCipher } from './parameter-cipher';
 import { AUTOMATION_EXECUTION_QUEUE } from './constants';
 import {
@@ -124,6 +125,7 @@ import { AwsSecretsManagerModule } from '../aws/secrets-manager/aws-secrets-mana
         AutomationTemplateService,
         AutomationAuditService,
         AutomationPlanService,
+        AutomationPermissionCheckService,
         ParameterCipher,
     ],
     exports: [AutomationService, AutomationsCrudService],

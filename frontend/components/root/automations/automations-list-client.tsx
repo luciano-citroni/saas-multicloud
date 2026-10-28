@@ -30,7 +30,7 @@ import {
     type AutomationWorkflow,
 } from '@/app/actions/automations';
 import { cn } from '@/lib/utils';
-import { workflowStatusClass } from './status-styles';
+import { executionStatusClass, workflowStatusClass } from './status-styles';
 
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -91,7 +91,13 @@ export function AutomationsListClient() {
 
         const handlers: Record<string, () => Promise<Response>> = {
             execute: async () => {
-                router.push(`/automations/${id}?execute=1`);
+                const automation = automations.find((item) => item.id === id);
+                const fromExecution =
+                    automation?.lastExecution?.status === 'FAILED' ? automation.lastExecution.id : null;
+                const query = fromExecution
+                    ? `execute=1&fromExecution=${encodeURIComponent(fromExecution)}`
+                    : 'execute=1';
+                router.push(`/automations/${id}?${query}`);
                 return new Response(null, { status: 499 });
             },
             duplicate: () => duplicateAutomation(id, orgId),
@@ -169,6 +175,7 @@ export function AutomationsListClient() {
                             <TableHead>Nome</TableHead>
                             <TableHead>Provider</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Última execução</TableHead>
                             <TableHead>Versão</TableHead>
                             <TableHead>Atualizado</TableHead>
                             <TableHead className="text-right">Ações</TableHead>
@@ -177,7 +184,7 @@ export function AutomationsListClient() {
                     <TableBody>
                         {automations.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                                <TableCell colSpan={7} className="text-center text-muted-foreground">
                                     Nenhuma automação criada
                                 </TableCell>
                             </TableRow>
@@ -194,6 +201,27 @@ export function AutomationsListClient() {
                                         <Badge className={cn('text-[10px]', workflowStatusClass(automation.status))}>
                                             {automation.status}
                                         </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {automation.lastExecution ? (
+                                            <div className="max-w-[260px] space-y-1.5">
+                                                <Link
+                                                    href={`/automations/${automation.id}/executions/${automation.lastExecution.id}`}
+                                                    className="block space-y-1 rounded-md p-1 -m-1 hover:bg-muted/60"
+                                                >
+                                                    <Badge className={cn('text-[10px]', executionStatusClass(automation.lastExecution.status))}>
+                                                        {automation.lastExecution.status}
+                                                    </Badge>
+                                                    {automation.lastExecution.status === 'FAILED' && automation.lastExecution.errorMessage && (
+                                                        <p className="line-clamp-2 text-[11px] text-destructive">
+                                                            {automation.lastExecution.errorMessage}
+                                                        </p>
+                                                    )}
+                                                </Link>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
                                     </TableCell>
                                     <TableCell>v{automation.version}</TableCell>
                                     <TableCell className="text-xs text-muted-foreground">

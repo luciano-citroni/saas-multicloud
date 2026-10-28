@@ -1,5 +1,7 @@
 export type AutomationWorkflowStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';
 export type AutomationCloudProvider = 'AWS' | 'GCP' | 'AZURE';
+export type ExecutionNodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'CANCELLED';
+export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'ROLLED_BACK';
 
 export interface AutomationNodeInput {
     id: string;
@@ -13,6 +15,15 @@ export interface AutomationEdgeInput {
     id: string;
     sourceNodeId: string;
     targetNodeId: string;
+}
+
+export interface AutomationLastExecutionSummary {
+    id: string;
+    status: ExecutionStatus;
+    errorMessage: string | null;
+    finishedAt: string | null;
+    createdAt: string;
+    automationVersion: number | null;
 }
 
 export interface AutomationWorkflow {
@@ -29,6 +40,7 @@ export interface AutomationWorkflow {
     nodes: AutomationNodeInput[];
     edges: AutomationEdgeInput[];
     variables?: Record<string, { type: string; default?: unknown; required?: boolean; description?: string }>;
+    lastExecution?: AutomationLastExecutionSummary | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -63,9 +75,6 @@ export interface NodeOutputReference {
     field: string;
 }
 
-export type ExecutionNodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'CANCELLED';
-export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'ROLLED_BACK';
-
 export interface AutomationExecutionNode {
     id: string;
     executionId: string;
@@ -95,6 +104,12 @@ export interface AutomationWorkflowExecution {
     inventorySyncStatus?: string;
     createdAt: string;
     executionNodes?: AutomationExecutionNode[];
+    flowDefinition?: {
+        nodes?: Array<{ id: string; type: string; name: string; config?: Record<string, unknown> }>;
+        edges?: Array<{ id: string; sourceNodeId: string; targetNodeId: string }>;
+    };
+    usedParameters?: Record<string, unknown> | null;
+    canReplayParameters?: boolean;
 }
 
 function orgQuery(organizationId: string) {
@@ -191,6 +206,35 @@ export async function validateAutomation(automationId: string, organizationId: s
     });
 }
 
+export type PermissionCheckItem = {
+    action: string;
+    purpose: 'create' | 'rollback';
+    decision: 'allowed' | 'denied' | 'unknown';
+    reason?: string;
+};
+
+export type AutomationPermissionCheck = {
+    roleArn: string;
+    simulated: boolean;
+    ok: boolean;
+    blocking: boolean;
+    message: string | null;
+    createActions: string[];
+    rollbackActions: string[];
+    items: PermissionCheckItem[];
+    missing: string[];
+};
+
+export async function validateAutomationPermissions(
+    automationId: string,
+    organizationId: string,
+): Promise<Response> {
+    return fetch(
+        `/api/automations/${encodeURIComponent(automationId)}/validate-permissions?${orgQuery(organizationId)}`,
+        { method: 'POST', cache: 'no-store' },
+    );
+}
+
 export async function planAutomation(automationId: string, organizationId: string): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}/plan?${orgQuery(organizationId)}`, {
         method: 'POST',
@@ -274,6 +318,17 @@ export async function rollbackAutomationExecution(
     return fetch(
         `/api/automations/${encodeURIComponent(automationId)}/executions/${encodeURIComponent(executionId)}/rollback?${orgQuery(organizationId)}`,
         { method: 'POST', cache: 'no-store' },
+    );
+}
+
+export async function fetchExecutionReplayParameters(
+    automationId: string,
+    executionId: string,
+    organizationId: string,
+): Promise<Response> {
+    return fetch(
+        `/api/automations/${encodeURIComponent(automationId)}/executions/${encodeURIComponent(executionId)}/parameters?${orgQuery(organizationId)}`,
+        { cache: 'no-store' },
     );
 }
 

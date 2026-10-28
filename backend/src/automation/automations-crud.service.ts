@@ -43,11 +43,12 @@ import type {
     UpdateAutomationDto,
 } from './automations.dto';
 import { AutomationPlanService } from './automation-plan.service';
+import { AutomationPermissionCheckService } from './automation-permission-check.service';
 import { AutomationTemplateService } from './automation-template.service';
 import { AutomationAuditService } from './automation-audit.service';
 import { CloudFormationAutomationService } from './cloudformation-automation.service';
 import { AwsAutomationProvider } from './providers/aws/aws-automation-provider';
-import { resolveIdempotentSlot, sensitiveVariableNames } from './bindings';
+import { redactSensitive, resolveIdempotentSlot, sensitiveVariableNames } from './bindings';
 import { ParameterCipher } from './parameter-cipher';
 import type { PreparedChangeSet } from './workflow/automation-node-runner';
 
@@ -90,17 +91,39 @@ export class AutomationsCrudService {
         private readonly cloudFormation: CloudFormationAutomationService,
         private readonly awsProvider: AwsAutomationProvider,
         private readonly parameterCipher: ParameterCipher,
+        private readonly permissionCheck: AutomationPermissionCheckService,
     ) {}
 
     listActionDefinitions(provider?: AutomationProvider | null) {
         return listActions(provider);
     }
 
-    async list(tenantId: string): Promise<Automation[]> {
-        return this.automationRepository.find({
+    async list(tenantId: string): Promise<Array<Automation & { lastExecution: AutomationExecution | null }>> {
+        const automations = await this.automationRepository.find({
             where: { tenantId },
             order: { updatedAt: 'DESC' },
         });
+        if (automations.length === 0) return [];
+
+        const recentExecutions = await this.executionRepository.find({
+            where: {
+                organizationId: tenantId,
+                automationId: In(automations.map((item) => item.id)),
+            },
+            order: { createdAt: 'DESC' },
+        });
+
+        const latestByAutomation = new Map<string, AutomationExecution>();
+        for (const execution of recentExecutions) {
+            if (!execution.automationId || latestByAutomation.has(execution.automationId)) continue;
+            latestByAutomation.set(execution.automationId, execution);
+        }
+
+        return automations.map((automation) =>
+            Object.assign(automation, {
+                lastExecution: latestByAutomation.get(automation.id) ?? null,
+            }),
+        );
     }
 
     async findById(id: string, tenantId: string): Promise<Automation> {
@@ -322,6 +345,18 @@ export class AutomationsCrudService {
         return { valid: true, version: automation.version, status: automation.status };
     }
 
+    async validatePermissions(id: string, tenantId: string) {
+        await this.accessService.assertAutomationModuleEnabled(tenantId);
+        const automation = await this.findById(id, tenantId);
+        const snapshot = await this.snapshotForRead(automation, tenantId);
+        this.workflowValidator.validate(snapshot, automation.cloudProvider);
+        return this.permissionCheck.check({
+            tenantId,
+            cloudAccountId: automation.cloudAccountId,
+            nodes: snapshot.nodes,
+        });
+    }
+
     async plan(id: string, tenantId: string) {
         await this.accessService.assertAutomationModuleEnabled(tenantId);
         const automation = await this.findById(id, tenantId);
@@ -372,8 +407,8 @@ export class AutomationsCrudService {
         automationId: string,
         executionId: string,
         tenantId: string,
-    ): Promise<AutomationExecution> {
-        await this.findById(automationId, tenantId);
+    ): Promise<AutomationExecution & { usedParameters?: Record<string, unknown> | null; canReplayParameters?: boolean }> {
+        const automation = await this.findById(automationId, tenantId);
 
         const execution = await this.executionRepository.findOne({
             where: { id: executionId, automationId, organizationId: tenantId },
@@ -384,7 +419,48 @@ export class AutomationsCrudService {
             throw new NotFoundException(ErrorMessages.AUTOMATION.NOT_FOUND);
         }
 
-        return execution;
+        const parameters = await this.readExecutionParameters(executionId);
+        const sensitive = sensitiveVariableNames(automation.variables as Record<string, { type?: string; sensitive?: boolean }>);
+        const usedParameters = parameters
+            ? (redactSensitive(parameters, sensitive) as Record<string, unknown>)
+            : null;
+
+        return Object.assign(execution, {
+            usedParameters,
+            canReplayParameters: Boolean(parameters),
+        });
+    }
+
+    async getExecutionReplayParameters(
+        automationId: string,
+        executionId: string,
+        tenantId: string,
+    ): Promise<{ parameters: Record<string, unknown>; available: boolean }> {
+        await this.findById(automationId, tenantId);
+        const execution = await this.executionRepository.findOne({
+            where: { id: executionId, automationId, organizationId: tenantId },
+        });
+        if (!execution) {
+            throw new NotFoundException(ErrorMessages.AUTOMATION.NOT_FOUND);
+        }
+
+        const parameters = await this.readExecutionParameters(executionId);
+        return {
+            available: Boolean(parameters),
+            parameters: parameters ?? {},
+        };
+    }
+
+    private async readExecutionParameters(executionId: string): Promise<Record<string, unknown> | null> {
+        const row = await this.executionRepository
+            .createQueryBuilder('execution')
+            .addSelect('execution.parametersEncrypted')
+            .where('execution.id = :id', { id: executionId })
+            .getOne();
+        if (!row?.parametersEncrypted) return null;
+        const decoded = this.parameterCipher.decrypt(row.parametersEncrypted);
+        if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return null;
+        return decoded as Record<string, unknown>;
     }
 
     async rollbackExecution(

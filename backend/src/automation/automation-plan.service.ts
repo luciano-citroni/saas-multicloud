@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AUTOMATION_ACTION_TYPES } from './constants';
-import { getActionDefinition } from './action-definitions';
+import { getActionDefinition, getRollbackIamActions } from './action-definitions';
 import { CostEstimatorService } from './cost-estimator.service';
 import { CloudFormationAutomationService } from './cloudformation-automation.service';
 import { AutomationTemplateService } from './automation-template.service';
@@ -78,7 +78,10 @@ export class AutomationPlanService {
                     type: node.type,
                     region: typeof node.config.region === 'string' ? node.config.region : null,
                     dependencies,
-                    iamActions: [...(definition?.requiredIamActions ?? [])],
+                    iamActions: [
+                        ...(definition?.requiredIamActions ?? []),
+                        ...getRollbackIamActions(node.type),
+                    ],
                     declaredResources: [],
                     existingReferences: [],
                     parameters: {},

@@ -206,7 +206,10 @@ export class WorkflowExecutor {
             await this.executionRepository.save(execution);
             throw error;
         } finally {
-            await this.clearParameters(executionId);
+            // Mantém parâmetros criptografados em falha para permitir "Rodar novamente" com os mesmos valores.
+            if (execution.status === AutomationStatus.SUCCESS || execution.status === AutomationStatus.COMPLETED) {
+                await this.clearParameters(executionId);
+            }
         }
     }
 

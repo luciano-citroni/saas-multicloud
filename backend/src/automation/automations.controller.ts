@@ -177,6 +177,19 @@ export class AutomationsController {
         return this.automationsService.validate(params.id, org.id);
     }
 
+    @Post(':id/validate-permissions')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({
+        summary: 'Simular permissões IAM de criação e exclusão (rollback) na role da conta',
+    })
+    @ApiResponse({ status: 200, description: 'Resultado da simulação IAM' })
+    validatePermissions(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.validatePermissions(params.id, org.id);
+    }
+
     @Post(':id/plan')
     @Roles(OrgRole.ADMIN, OrgRole.OWNER)
     @ApiOperation({ summary: 'Gerar plano e change sets quando os parâmetros já estão resolvidos' })
@@ -225,6 +238,17 @@ export class AutomationsController {
         @Param(new ZodValidationPipe(automationExecutionParamSchema)) params: { id: string; executionId: string },
     ) {
         return this.automationsService.getExecution(params.id, params.executionId, org.id);
+    }
+
+    @Get(':id/executions/:executionId/parameters')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({ summary: 'Parâmetros usados na execução para reexecução' })
+    @ApiResponse({ status: 200, description: 'Parâmetros disponíveis para replay' })
+    getExecutionParameters(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationExecutionParamSchema)) params: { id: string; executionId: string },
+    ) {
+        return this.automationsService.getExecutionReplayParameters(params.id, params.executionId, org.id);
     }
 
     @Post(':id/executions/:executionId/rollback')

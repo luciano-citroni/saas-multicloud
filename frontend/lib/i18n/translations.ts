@@ -665,6 +665,15 @@ const pt = {
         noEstimate: 'Sem estimativa confiável',
         inventorySync: 'Sincronização do inventário',
         limitations: 'Limitações',
+        validatePermissions: 'Validar permissões IAM',
+        validatePermissionsHint:
+            'Confere se a role pode criar os recursos e excluí-los no rollback.',
+        validatePermissionsRun: 'Verificar agora',
+        validatePermissionsOk: 'Permissões de criar e excluir OK',
+        validatePermissionsMissing: 'Permissões insuficientes',
+        permissionsCreate: 'Criar',
+        permissionsRollback: 'Excluir / rollback',
+        permissionsRequiredBeforeRun: 'Valide as permissões IAM antes de executar.',
     },
 } as const;
 
@@ -1335,6 +1344,15 @@ const en: TranslationMap<typeof pt> = {
         noEstimate: 'No reliable estimate',
         inventorySync: 'Inventory sync',
         limitations: 'Limitations',
+        validatePermissions: 'Validate IAM permissions',
+        validatePermissionsHint:
+            'Checks that the role can create the resources and delete them on rollback.',
+        validatePermissionsRun: 'Check now',
+        validatePermissionsOk: 'Create and delete permissions OK',
+        validatePermissionsMissing: 'Insufficient permissions',
+        permissionsCreate: 'Create',
+        permissionsRollback: 'Delete / rollback',
+        permissionsRequiredBeforeRun: 'Validate IAM permissions before running.',
     },
 };
 

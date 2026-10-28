@@ -36,6 +36,24 @@ export function parametersFromForm(variables: VariableMap, formValues: Record<st
     return parameters;
 }
 
+export function mergeReplayParameters(
+    variables: VariableMap,
+    base: Record<string, string>,
+    parameters: Record<string, unknown>,
+): Record<string, string> {
+    const next = { ...base };
+    for (const name of Object.keys(variables)) {
+        if (!(name in parameters) || parameters[name] == null) continue;
+        const value = parameters[name];
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            next[name] = String(value);
+        } else {
+            next[name] = JSON.stringify(value);
+        }
+    }
+    return next;
+}
+
 export function ExecutionParametersForm({
     variables,
     values,
