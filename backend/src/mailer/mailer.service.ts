@@ -46,13 +46,19 @@ export class MailerService {
 
         const bodyHtml = `
             <p style="margin:0 0 12px;">
-              <strong>${escapeHtml(params.inviterName)}</strong> convidou você para a organização
-              <strong>${escapeHtml(params.organizationName)}</strong>
-              com o cargo <strong>${escapeHtml(params.role)}</strong>.
+              <strong>${escapeHtml(params.inviterName)}</strong> convidou você para se juntar ao tenant
+              <strong>${escapeHtml(params.organizationName)}</strong> no ${EMAIL_BRAND.name}.
             </p>
-            <p style="margin:0;color:${EMAIL_BRAND.muted};">
-              Aceite o convite para começar a usar a plataforma de gestão multicloud.
+            <p style="margin:0 0 12px;color:${EMAIL_BRAND.muted};">
+              Aceite o convite para acessar contas cloud, FinOps, assessment e demais módulos habilitados.
             </p>
+            ${emailMetricsCard(
+                [
+                    emailMetricRow('Organização', params.organizationName),
+                    emailMetricRow('Convidado por', params.inviterName),
+                    emailMetricRow('Cargo', params.role),
+                ].join(''),
+            )}
         `;
 
         await this.transporter.sendMail({
