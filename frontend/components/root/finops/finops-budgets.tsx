@@ -4,7 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { AlertTriangle, Pencil, Plus, RefreshCw, Target, Trash2 } from 'lucide-react';
+import {
+    AlertTriangle,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Target,
+    Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +35,7 @@ import {
     deleteFinopsBudgetUnified,
     fetchFinopsBudgetStatuses,
     fetchOrganizationBudgetStatuses,
+    fetchOrganizationFinopsBudgetStatuses,
 } from '@/app/actions/finops';
 import { fetchNotificationGroups } from '@/app/actions/notifications';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
@@ -33,6 +45,17 @@ export type { FinopsBudgetStatusItem };
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const ORG_SCOPE_VALUE = 'organization';
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
+type BudgetViewPeriod = 'daily' | 'monthly' | 'all';
+
+function normalizeBudgetStatusesPayload(payload: unknown): FinopsBudgetStatusItem[] {
+    if (Array.isArray(payload)) return payload as FinopsBudgetStatusItem[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
+        return (payload as { items: FinopsBudgetStatusItem[] }).items;
+    }
+    return [];
+}
 
 function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroupOption[] {
     const items = Array.isArray(payload)
@@ -102,6 +125,19 @@ export function FinopsBudgets() {
 
     const urlFilters = useMemo(() => parseFinopsUrlFilters(searchParams), [searchParams]);
     const scopeFilter = searchParams.get('account') === ORG_SCOPE_VALUE ? ORG_SCOPE_VALUE : urlFilters.accountId;
+    const viewPeriod: BudgetViewPeriod =
+        searchParams.get('view') === 'daily'
+            ? 'daily'
+            : searchParams.get('view') === 'monthly'
+              ? 'monthly'
+              : 'all';
+
+    const pageParam = Number.parseInt(searchParams.get('page') ?? '1', 10);
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+    const limitParam = Number.parseInt(searchParams.get('limit') ?? String(DEFAULT_PAGE_SIZE), 10);
+    const pageSize = PAGE_SIZE_OPTIONS.includes(limitParam as (typeof PAGE_SIZE_OPTIONS)[number])
+        ? limitParam
+        : DEFAULT_PAGE_SIZE;
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
@@ -117,8 +153,28 @@ export function FinopsBudgets() {
     const [deleting, setDeleting] = useState(false);
 
     const syncUrlState = useCallback(
-        (next: Partial<{ account: string | null }>) => {
-            const nextQuery = buildFinopsQuery(searchParams, next);
+        (
+            next: Partial<{
+                account: string | null;
+                view: BudgetViewPeriod | null;
+                page: number | null;
+                limit: number | null;
+            }>
+        ) => {
+            const params = new URLSearchParams(buildFinopsQuery(searchParams, next));
+            if (next.view !== undefined) {
+                if (!next.view || next.view === 'all') params.delete('view');
+                else params.set('view', next.view);
+            }
+            if (next.page !== undefined) {
+                if (!next.page || next.page <= 1) params.delete('page');
+                else params.set('page', String(next.page));
+            }
+            if (next.limit !== undefined) {
+                if (!next.limit || next.limit === DEFAULT_PAGE_SIZE) params.delete('limit');
+                else params.set('limit', String(next.limit));
+            }
+            const nextQuery = params.toString();
             router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
         },
         [pathname, router, searchParams]
@@ -222,25 +278,75 @@ export function FinopsBudgets() {
             if (!silent) setLoading(true);
             else setRefreshing(true);
 
-            try {
-                const response =
-                    filter === ORG_SCOPE_VALUE
-                        ? await fetchOrganizationBudgetStatuses(orgId)
-                        : await fetchFinopsBudgetStatuses(orgId, filter);
+            const parseStatuses = async (
+                response: Response
+            ): Promise<{ ok: true; items: FinopsBudgetStatusItem[] } | { ok: false; status: number; body: unknown }> => {
+                const body = await response.json().catch(() => null);
+                if (!response.ok) {
+                    return { ok: false, status: response.status, body };
+                }
+                return { ok: true, items: normalizeBudgetStatusesPayload(body) };
+            };
 
-                if (response.status === 401) {
+            const mergeById = (items: FinopsBudgetStatusItem[]) => {
+                const map = new Map<string, FinopsBudgetStatusItem>();
+                for (const item of items) {
+                    map.set(item.budget.id, item);
+                }
+                return Array.from(map.values());
+            };
+
+            try {
+                // "organization" = visão completa (tenant + contas).
+                // Conta específica = budgets da conta + budgets do tenant (aplicam a todas as contas).
+                if (filter === ORG_SCOPE_VALUE) {
+                    const parsed = await parseStatuses(await fetchOrganizationFinopsBudgetStatuses(orgId, 50));
+                    if (!parsed.ok) {
+                        if (parsed.status === 401) {
+                            toast.error('Sessão expirada.');
+                            router.replace('/auth/sign-in');
+                            return;
+                        }
+                        toast.error(extractErrorMessage(parsed.body, 'pt'));
+                        setStatuses([]);
+                        return;
+                    }
+                    setStatuses(parsed.items);
+                    return;
+                }
+
+                const [accountParsed, orgParsed] = await Promise.all([
+                    parseStatuses(await fetchFinopsBudgetStatuses(orgId, filter)),
+                    parseStatuses(await fetchOrganizationBudgetStatuses(orgId)),
+                ]);
+
+                if (
+                    (!accountParsed.ok && accountParsed.status === 401) ||
+                    (!orgParsed.ok && orgParsed.status === 401)
+                ) {
                     toast.error('Sessão expirada.');
                     router.replace('/auth/sign-in');
                     return;
                 }
-                if (!response.ok) {
-                    const body = await response.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+
+                if (!accountParsed.ok && !orgParsed.ok) {
+                    toast.error(extractErrorMessage(accountParsed.body, 'pt'));
                     setStatuses([]);
                     return;
                 }
-                const payload = (await response.json().catch(() => null)) as FinopsBudgetStatusItem[] | null;
-                setStatuses(Array.isArray(payload) ? payload : []);
+
+                if (!accountParsed.ok) {
+                    toast.error(extractErrorMessage(accountParsed.body, 'pt'));
+                } else if (!orgParsed.ok) {
+                    toast.error(extractErrorMessage(orgParsed.body, 'pt'));
+                }
+
+                setStatuses(
+                    mergeById([
+                        ...(orgParsed.ok ? orgParsed.items : []),
+                        ...(accountParsed.ok ? accountParsed.items : []),
+                    ])
+                );
             } catch {
                 toast.error('Não foi possível carregar os orçamentos.');
                 setStatuses([]);
@@ -261,9 +367,32 @@ export function FinopsBudgets() {
         void loadStatuses(organizationId, scopeFilter);
     }, [organizationId, scopeFilter, loadStatuses]);
 
+    const visibleStatuses = useMemo(() => {
+        if (viewPeriod === 'all') return statuses;
+        return statuses.filter((item) => {
+            const period = item.budget.alertFrequency ?? item.budget.period;
+            return period === viewPeriod;
+        });
+    }, [statuses, viewPeriod]);
+
+    const totalPages = Math.max(1, Math.ceil(visibleStatuses.length / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const pagedStatuses = useMemo(() => {
+        const start = (safePage - 1) * pageSize;
+        return visibleStatuses.slice(start, start + pageSize);
+    }, [visibleStatuses, safePage, pageSize]);
+    const hasPreviousPage = safePage > 1;
+    const hasNextPage = safePage < totalPages;
+
+    useEffect(() => {
+        if (page !== safePage) {
+            syncUrlState({ page: safePage <= 1 ? null : safePage });
+        }
+    }, [page, safePage, syncUrlState]);
+
     const activeAlerts = useMemo(
         () =>
-            statuses
+            visibleStatuses
                 .filter((item) => item.triggeredAlerts.length > 0)
                 .map((item) => ({
                     id: item.budget.id,
@@ -274,7 +403,7 @@ export function FinopsBudgets() {
                     currentSpend: item.currentSpend,
                     amount: item.budget.amount,
                 })),
-        [statuses]
+        [visibleStatuses]
     );
 
     const onDelete = async (): Promise<boolean> => {
@@ -335,19 +464,39 @@ export function FinopsBudgets() {
                             if (value !== ORG_SCOPE_VALUE) {
                                 window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
                             }
-                            syncUrlState({ account: value });
+                            syncUrlState({ account: value, page: null });
                         }}
                     >
                         <SelectTrigger className="w-[240px]">
                             <SelectValue placeholder="Escopo" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={ORG_SCOPE_VALUE}>Toda a organização</SelectItem>
+                            <SelectItem value={ORG_SCOPE_VALUE}>Todos os orçamentos</SelectItem>
                             {cloudAccounts.map((account) => (
                                 <SelectItem key={account.id} value={account.id}>
                                     {`${account.alias} (${account.provider.toUpperCase()})`}
                                 </SelectItem>
                             ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={viewPeriod}
+                        onValueChange={(value) => {
+                            syncUrlState({
+                                view:
+                                    value === 'daily' ? 'daily' : value === 'monthly' ? 'monthly' : 'all',
+                                page: null,
+                            });
+                        }}
+                    >
+                        <SelectTrigger className="w-[170px]">
+                            <SelectValue placeholder="Avaliação" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todas avaliações</SelectItem>
+                            <SelectItem value="monthly">Alerta mensal</SelectItem>
+                            <SelectItem value="daily">Alerta diário</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -405,11 +554,13 @@ export function FinopsBudgets() {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>Orçamentos ativos</CardDescription>
-                        <CardTitle className="text-2xl">{statuses.length}</CardTitle>
+                        <CardTitle className="text-2xl">{visibleStatuses.length}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xs text-muted-foreground">
-                            {isOrgScope ? 'Organização inteira' : selectedAccount?.alias ?? 'Conta'} · período configurado
+                            {isOrgScope
+                                ? 'Tenant + contas'
+                                : `${selectedAccount?.alias ?? 'Conta'} + organização`}
                         </p>
                     </CardContent>
                 </Card>
@@ -428,20 +579,20 @@ export function FinopsBudgets() {
                     <CardHeader className="pb-2">
                         <CardDescription>Gasto vs limite (1º budget)</CardDescription>
                         <CardTitle className="text-2xl">
-                            {statuses[0] ? `${statuses[0].usagePercentage.toFixed(0)}%` : '—'}
+                            {visibleStatuses[0] ? `${visibleStatuses[0].usagePercentage.toFixed(0)}%` : '—'}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xs text-muted-foreground">
-                            {statuses[0]
-                                ? `${formatCurrency(statuses[0].currentSpend, statuses[0].currency)} de ${formatCurrency(statuses[0].budget.amount, statuses[0].currency)}`
+                            {visibleStatuses[0]
+                                ? `${formatCurrency(visibleStatuses[0].currentSpend, visibleStatuses[0].currency)} de ${formatCurrency(visibleStatuses[0].budget.amount, visibleStatuses[0].currency)}`
                                 : 'Nenhum orçamento'}
                         </p>
                     </CardContent>
                 </Card>
             </div>
 
-            {statuses.length === 0 ? (
+            {visibleStatuses.length === 0 ? (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-base">
@@ -467,7 +618,7 @@ export function FinopsBudgets() {
                 </Card>
             ) : (
                 <div className="grid gap-3">
-                    {statuses.map((item) => {
+                    {pagedStatuses.map((item) => {
                         const tone = usageTone(item.usagePercentage, item.triggeredAlerts);
                         const channels = item.budget.alertChannels ?? [];
                         const groupIds = item.budget.alertNotificationGroupIds ?? [];
@@ -585,6 +736,72 @@ export function FinopsBudgets() {
                             </Card>
                         );
                     })}
+
+                    <div className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                            <Select
+                                value={`${pageSize}`}
+                                onValueChange={(value) => {
+                                    syncUrlState({ limit: Number(value), page: null });
+                                }}
+                            >
+                                <SelectTrigger className="h-8 min-w-22">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PAGE_SIZE_OPTIONS.map((size) => (
+                                        <SelectItem key={size} value={`${size}`}>
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                            <span className="text-sm font-medium">
+                                Página {safePage} de {totalPages} · {visibleStatuses.length} orçamento(s)
+                            </span>
+                            <div className="flex items-center gap-1 self-start sm:self-auto">
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => syncUrlState({ page: null })}
+                                    disabled={!hasPreviousPage}
+                                >
+                                    <ChevronsLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => syncUrlState({ page: Math.max(1, safePage - 1) })}
+                                    disabled={!hasPreviousPage}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => syncUrlState({ page: safePage + 1 })}
+                                    disabled={!hasNextPage}
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => syncUrlState({ page: totalPages })}
+                                    disabled={!hasNextPage}
+                                >
+                                    <ChevronsRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

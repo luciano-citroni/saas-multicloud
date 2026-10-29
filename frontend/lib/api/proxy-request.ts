@@ -59,6 +59,13 @@ export async function proxyToBackend(
         return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     }
 
+    const forwardParams = new URLSearchParams(searchParams);
+    forwardParams.delete('organizationId');
+    // BFF-only flag used by /api/finops/budgets/status — not a Nest query param.
+    forwardParams.delete('onlyOrganization');
+    const query = forwardParams.toString();
+    const targetPath = query ? `${backendPath}?${query}` : backendPath;
+
     const resolved = await resolveAccessToken();
     if (!resolved.accessToken) return unauthorizedResponse();
 
@@ -66,7 +73,7 @@ export async function proxyToBackend(
         method === 'GET' || method === 'DELETE' ? undefined : await request.text();
 
     const send = (accessToken: string) =>
-        backendFetch(backendPath, {
+        backendFetch(targetPath, {
             method,
             headers: {
                 Authorization: `Bearer ${accessToken}`,

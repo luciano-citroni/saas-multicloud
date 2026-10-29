@@ -49,7 +49,11 @@ function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroup
 }
 
 function normalizeStatuses(payload: unknown): FinopsBudgetStatusItem[] {
-    return Array.isArray(payload) ? (payload as FinopsBudgetStatusItem[]) : [];
+    if (Array.isArray(payload)) return payload as FinopsBudgetStatusItem[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
+        return (payload as { items: FinopsBudgetStatusItem[] }).items;
+    }
+    return [];
 }
 
 function budgetToFormValues(
@@ -284,12 +288,10 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
 
             toast.success(mode === 'edit' ? 'Orçamento atualizado.' : 'Orçamento criado.');
 
-            const nextAccount =
-                data.scope === 'organization' ? ORG_SCOPE_VALUE : data.cloudAccountId || accountHint;
+            // Volta para a visão completa para não “esconder” budgets de outro escopo.
             const params = new URLSearchParams();
-            if (nextAccount) params.set('account', nextAccount);
-            const query = params.toString();
-            router.push(query ? `/finops/budgets?${query}` : '/finops/budgets');
+            params.set('account', ORG_SCOPE_VALUE);
+            router.push(`/finops/budgets?${params.toString()}`);
         } catch {
             toast.error('Não foi possível salvar o orçamento.');
         }

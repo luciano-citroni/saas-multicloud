@@ -544,9 +544,16 @@ export class FinopsController {
 
     @Get('budgets/organization/status')
     @ApiOperation({ summary: 'Status dos budgets do tenant (scope=organization)' })
+    @ApiQuery({ name: 'evaluationPeriod', required: false, enum: ['daily', 'monthly'] })
     @ApiResponse({ status: 200, type: [BudgetStatusDto] })
-    async listOrganizationOnlyBudgetStatuses(@CurrentOrganization() org: Tenant): Promise<BudgetStatusDto[]> {
-        return this.budgetService.listOrganizationBudgetStatuses(org.id);
+    async listOrganizationOnlyBudgetStatuses(
+        @CurrentOrganization() org: Tenant,
+        @Query('evaluationPeriod') evaluationPeriod?: string,
+    ): Promise<BudgetStatusDto[]> {
+        return this.budgetService.listOrganizationBudgetStatuses(
+            org.id,
+            evaluationPeriod === 'daily' || evaluationPeriod === 'monthly' ? evaluationPeriod : undefined,
+        );
     }
 
     @Post('accounts/:cloudAccountId/budgets')
@@ -579,13 +586,19 @@ export class FinopsController {
         description: 'Batch org-wide para o dashboard: status de budgets ativos nas contas FinOps (cap padrão 8 contas).',
     })
     @ApiQuery({ name: 'accountCap', required: false, type: Number })
+    @ApiQuery({ name: 'evaluationPeriod', required: false, enum: ['daily', 'monthly'] })
     @ApiResponse({ status: 200, type: [BudgetStatusDto] })
     async listOrgBudgetStatuses(
         @CurrentOrganization() org: Tenant,
-        @Query('accountCap') accountCap?: string
+        @Query('accountCap') accountCap?: string,
+        @Query('evaluationPeriod') evaluationPeriod?: string,
     ) {
         const parsedCap = accountCap ? Number.parseInt(accountCap, 10) : 8;
-        return this.budgetService.listOrgBudgetStatuses(org.id, Number.isFinite(parsedCap) ? parsedCap : 8);
+        return this.budgetService.listOrgBudgetStatuses(
+            org.id,
+            Number.isFinite(parsedCap) ? parsedCap : 8,
+            evaluationPeriod === 'daily' || evaluationPeriod === 'monthly' ? evaluationPeriod : undefined,
+        );
     }
 
     @Get('accounts/:cloudAccountId/budgets/status')
@@ -594,12 +607,18 @@ export class FinopsController {
         description: 'Retorna o gasto atual vs limite para cada budget ativo, com alertas disparados.',
     })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiQuery({ name: 'evaluationPeriod', required: false, enum: ['daily', 'monthly'] })
     @ApiResponse({ status: 200, type: [BudgetStatusDto] })
     async listBudgetStatuses(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
-        @CurrentOrganization() org: Tenant
+        @CurrentOrganization() org: Tenant,
+        @Query('evaluationPeriod') evaluationPeriod?: string,
     ): Promise<BudgetStatusDto[]> {
-        return this.budgetService.listBudgetStatuses(cloudAccountId, org.id);
+        return this.budgetService.listBudgetStatuses(
+            cloudAccountId,
+            org.id,
+            evaluationPeriod === 'daily' || evaluationPeriod === 'monthly' ? evaluationPeriod : undefined,
+        );
     }
 
     @Get('accounts/:cloudAccountId/budgets/:budgetId')

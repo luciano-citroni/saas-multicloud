@@ -330,8 +330,17 @@ export function FinopsBudgetForm({
                                     name="period"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Período do orçamento</FormLabel>
-                                            <Select value={field.value} onValueChange={field.onChange}>
+                                            <FormLabel>Período do limite</FormLabel>
+                                            <Select
+                                                value={field.value}
+                                                onValueChange={(value) => {
+                                                    field.onChange(value);
+                                                    form.setValue(
+                                                        'alertFrequency',
+                                                        value === 'daily' ? 'daily' : 'monthly'
+                                                    );
+                                                }}
+                                            >
                                                 <FormControl>
                                                     <SelectTrigger>
                                                         <SelectValue />
@@ -342,6 +351,9 @@ export function FinopsBudgetForm({
                                                     <SelectItem value="daily">Diário</SelectItem>
                                                 </SelectContent>
                                             </Select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Define se o limite vale para o mês ou para o dia.
+                                            </p>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -443,18 +455,31 @@ export function FinopsBudgetForm({
                                     name="alertFrequency"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Frequência</FormLabel>
-                                            <Select value={field.value} onValueChange={field.onChange}>
+                                            <FormLabel>Avaliação do alerta</FormLabel>
+                                            <Select
+                                                value={field.value}
+                                                onValueChange={(value) => {
+                                                    field.onChange(value);
+                                                    // Mantém o período do orçamento alinhado à janela do alerta.
+                                                    form.setValue(
+                                                        'period',
+                                                        value === 'daily' ? 'daily' : 'monthly'
+                                                    );
+                                                }}
+                                            >
                                                 <FormControl>
                                                     <SelectTrigger>
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="daily">Diário</SelectItem>
                                                     <SelectItem value="monthly">Mensal</SelectItem>
+                                                    <SelectItem value="daily">Diário</SelectItem>
                                                 </SelectContent>
                                             </Select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Mensal: gasto acumulado no mês até agora. Diário: gasto só de hoje.
+                                            </p>
                                             <FormMessage />
                                         </FormItem>
                                     )}

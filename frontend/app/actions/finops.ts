@@ -146,18 +146,33 @@ export async function fetchFinopsSyncRuns(organizationId: string, cloudAccountId
     });
 }
 
-export async function fetchFinopsBudgetStatuses(organizationId: string, cloudAccountId: string) {
+export async function fetchFinopsBudgetStatuses(
+    organizationId: string,
+    cloudAccountId: string,
+    evaluationPeriod?: 'daily' | 'monthly'
+) {
+    const searchParams = new URLSearchParams({
+        organizationId,
+        limit: '100',
+    });
+    if (evaluationPeriod) searchParams.set('evaluationPeriod', evaluationPeriod);
     return fetch(
-        `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/budgets/status?organizationId=${encodeURIComponent(organizationId)}`,
+        `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/budgets/status?${searchParams.toString()}`,
         { cache: 'no-store' }
     );
 }
 
-export async function fetchOrganizationFinopsBudgetStatuses(organizationId: string, accountCap = 8) {
+export async function fetchOrganizationFinopsBudgetStatuses(
+    organizationId: string,
+    accountCap = 8,
+    evaluationPeriod?: 'daily' | 'monthly'
+) {
     const searchParams = new URLSearchParams({
         organizationId,
         accountCap: String(accountCap),
+        limit: '100',
     });
+    if (evaluationPeriod) searchParams.set('evaluationPeriod', evaluationPeriod);
 
     return fetch(`/api/finops/budgets/status?${searchParams.toString()}`, {
         cache: 'no-store',
@@ -189,11 +204,20 @@ export async function fetchFinopsBudgets(organizationId: string, cloudAccountId:
     );
 }
 
-export async function fetchOrganizationBudgetStatuses(organizationId: string) {
-    return fetch(
-        `/api/finops/budgets/organization/status?organizationId=${encodeURIComponent(organizationId)}`,
-        { cache: 'no-store' }
-    );
+export async function fetchOrganizationBudgetStatuses(
+    organizationId: string,
+    evaluationPeriod?: 'daily' | 'monthly'
+) {
+    const searchParams = new URLSearchParams({
+        organizationId,
+        onlyOrganization: 'true',
+        limit: '100',
+    });
+    if (evaluationPeriod) searchParams.set('evaluationPeriod', evaluationPeriod);
+    // Uses /budgets/status?onlyOrganization=true to avoid Next.js conflict with /budgets/[budgetId].
+    return fetch(`/api/finops/budgets/status?${searchParams.toString()}`, {
+        cache: 'no-store',
+    });
 }
 
 export async function createFinopsBudget(organizationId: string, cloudAccountId: string, payload: FinopsBudgetPayload) {

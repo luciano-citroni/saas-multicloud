@@ -240,30 +240,42 @@ export class FinopsBudgetService {
         id: string,
         organizationId: string,
         cloudAccountId?: string,
+        evaluationPeriod?: FinopsBudgetPeriod,
     ): Promise<BudgetStatus> {
         const budget = cloudAccountId
             ? await this.findOne(id, cloudAccountId, organizationId)
             : await this.findOneInOrganization(id, organizationId);
 
-        return this.computeStatus(budget);
+        return this.computeStatus(budget, evaluationPeriod);
     }
 
-    async listBudgetStatuses(cloudAccountId: string, organizationId: string): Promise<BudgetStatus[]> {
+    async listBudgetStatuses(
+        cloudAccountId: string,
+        organizationId: string,
+        evaluationPeriod?: FinopsBudgetPeriod,
+    ): Promise<BudgetStatus[]> {
         const budgets = await this.list(cloudAccountId, organizationId);
         const activeBudgets = budgets.filter((b) => b.isActive);
-        return Promise.all(activeBudgets.map((b) => this.computeStatus(b)));
+        return Promise.all(activeBudgets.map((b) => this.computeStatus(b, evaluationPeriod)));
     }
 
-    async listOrganizationBudgetStatuses(organizationId: string): Promise<BudgetStatus[]> {
+    async listOrganizationBudgetStatuses(
+        organizationId: string,
+        evaluationPeriod?: FinopsBudgetPeriod,
+    ): Promise<BudgetStatus[]> {
         const budgets = await this.listOrganizationBudgets(organizationId);
-        return Promise.all(budgets.filter((b) => b.isActive).map((b) => this.computeStatus(b)));
+        return Promise.all(budgets.filter((b) => b.isActive).map((b) => this.computeStatus(b, evaluationPeriod)));
     }
 
     /**
      * Status de budgets ativos: tenant-wide + contas FinOps (dashboard batch).
      */
-    async listOrgBudgetStatuses(organizationId: string, accountCap = 8): Promise<OrgBudgetStatus[]> {
-        const orgStatuses = await this.listOrganizationBudgetStatuses(organizationId);
+    async listOrgBudgetStatuses(
+        organizationId: string,
+        accountCap = 8,
+        evaluationPeriod?: FinopsBudgetPeriod,
+    ): Promise<OrgBudgetStatus[]> {
+        const orgStatuses = await this.listOrganizationBudgetStatuses(organizationId, evaluationPeriod);
         const orgMapped: OrgBudgetStatus[] = orgStatuses.map((status) => ({
             ...status,
             cloudAccountAlias: 'Organização',
@@ -301,7 +313,7 @@ export class FinopsBudgetService {
 
         const accountStatuses = await Promise.all(
             budgets.map(async (budget) => {
-                const status = await this.computeStatus(budget);
+                const status = await this.computeStatus(budget, evaluationPeriod);
                 return {
                     ...status,
                     cloudAccountAlias: aliasById.get(budget.cloudAccountId ?? '') ?? budget.cloudAccountId ?? '—',
@@ -316,32 +328,16 @@ export class FinopsBudgetService {
     // Helpers
     // =========================================================================
 
-    private async computeStatus(budget: FinopsBudget): Promise<BudgetStatus> {
-        const evaluationPeriod = budget.alertFrequency ?? budget.period;
-        const { startDate, endDate } = this.getCurrentPeriodDates(evaluationPeriod);
-
-        let query = this.costRecordRepo
-            .createQueryBuilder('r')
-            .where('r.organizationId = :organizationId', { organizationId: budget.organizationId })
-            .andWhere('r.date >= :startDate', { startDate })
-            .andWhere('r.date <= :endDate', { endDate });
-
-        if (budget.scope === 'cloud_account' && budget.cloudAccountId) {
-            query = query.andWhere('r.cloudAccountId = :cloudAccountId', {
-                cloudAccountId: budget.cloudAccountId,
-            });
-        }
-
-        if (budget.service) {
-            query = query.andWhere('r.service = :service', { service: budget.service });
-        }
-
-        if (budget.alertType === 'resource' && budget.resourceId) {
-            query = query.andWhere('r.resourceId = :resourceId', { resourceId: budget.resourceId });
-        }
-
-        const records = await query.getMany();
-        const currentSpend = records.reduce((sum, r) => sum + Number(r.cost), 0);
+    private async computeStatus(
+        budget: FinopsBudget,
+        evaluationPeriod?: FinopsBudgetPeriod,
+    ): Promise<BudgetStatus> {
+        // Alerta mensal = acumulado do mês até agora; diário = só o dia.
+        // evaluationPeriod (visão da lista) sobrescreve; senão usa a frequência do alerta.
+        const spendPeriod: FinopsBudgetPeriod =
+            evaluationPeriod ?? budget.alertFrequency ?? budget.period;
+        const { from, toExclusive } = this.getCurrentPeriodDateRange(spendPeriod);
+        const currentSpend = await this.sumBudgetSpend(budget, from, toExclusive);
 
         const limitAmount =
             budget.alertType === 'amount' && budget.alertAmount != null
@@ -382,6 +378,43 @@ export class FinopsBudgetService {
             triggeredAlerts,
             currency: budget.currency,
         };
+    }
+
+    /**
+     * Soma custo no mesmo padrão do overview: daily-first, fallback monthly; datas como YYYY-MM-DD.
+     */
+    private async sumBudgetSpend(budget: FinopsBudget, from: string, toExclusive: string): Promise<number> {
+        const sumByGranularity = async (granularity: 'daily' | 'monthly'): Promise<number> => {
+            const qb = this.costRecordRepo
+                .createQueryBuilder('r')
+                .select('COALESCE(SUM(r.cost), 0)', 'total')
+                .where('r.organizationId = :organizationId', { organizationId: budget.organizationId })
+                .andWhere('r.date >= :from', { from })
+                .andWhere('r.date < :toExclusive', { toExclusive })
+                .andWhere('r.granularity = :granularity', { granularity });
+
+            if (budget.scope === 'cloud_account' && budget.cloudAccountId) {
+                qb.andWhere('r.cloudAccountId = :cloudAccountId', {
+                    cloudAccountId: budget.cloudAccountId,
+                });
+            }
+
+            if (budget.service) {
+                qb.andWhere('r.service = :service', { service: budget.service });
+            }
+
+            if (budget.alertType === 'resource' && budget.resourceId) {
+                qb.andWhere('r.resourceId = :resourceId', { resourceId: budget.resourceId });
+            }
+
+            const result = await qb.getRawOne<{ total: string }>();
+            return Number(result?.total ?? 0);
+        };
+
+        const daily = await sumByGranularity('daily');
+        if (daily > 0) return daily;
+
+        return sumByGranularity('monthly');
     }
 
     private dispatchPendingNotifications(
@@ -554,20 +587,25 @@ export class FinopsBudgetService {
         return account;
     }
 
-    private getCurrentPeriodDates(period: FinopsBudgetPeriod | FinopsBudgetAlertFrequency): {
-        startDate: Date;
-        endDate: Date;
-    } {
+    private formatDateOnly(date: Date): string {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    /** Intervalo half-open [from, toExclusive) no fuso local do servidor, igual ao overview. */
+    private getCurrentPeriodDateRange(period: FinopsBudgetPeriod): { from: string; toExclusive: string } {
         const now = new Date();
 
         if (period === 'daily') {
-            const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            return { startDate, endDate };
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+            return { from: this.formatDateOnly(start), toExclusive: this.formatDateOnly(next) };
         }
 
-        const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        return { startDate, endDate };
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return { from: this.formatDateOnly(start), toExclusive: this.formatDateOnly(next) };
     }
 }
