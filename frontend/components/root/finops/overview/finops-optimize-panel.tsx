@@ -101,6 +101,11 @@ export function FinopsOptimizePanel({
                                         >
                                             {priorityLabel(item.severityOrPriority)}
                                         </span>
+                                        {isAnomaly && item.status === 'acknowledged' && (
+                                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-600">
+                                                Reconhecida
+                                            </span>
+                                        )}
                                         <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                                             {alias}
                                         </span>

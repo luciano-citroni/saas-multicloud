@@ -9,6 +9,7 @@ import { ListRolesCommand, GetRoleCommand, ListAttachedRolePoliciesCommand, List
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsIamRole } from '../../db/entites/aws-iam-role.entity';
+import { paginateQuery, type PaginationInput } from '../../common/pagination/paginate';
 
 @Injectable()
 export class AwsIamRoleService {
@@ -54,20 +55,24 @@ export class AwsIamRoleService {
 
      */
 
-    async listRolesFromDatabase(cloudAccountId: string, pathPrefix?: string, roleScope: 'user' | 'all' = 'user') {
+    async listRolesFromDatabase(
+        cloudAccountId: string,
+        pathPrefix?: string,
+        roleScope: 'user' | 'all' = 'user',
+        pagination: PaginationInput = {}
+    ) {
         const query = this.iamRoleRepository.createQueryBuilder('role').where('role.cloudAccountId = :cloudAccountId', { cloudAccountId });
 
         if (pathPrefix) {
             query.andWhere('role.path LIKE :pathPrefix', { pathPrefix: `${pathPrefix}%` });
         } else if (roleScope === 'user') {
             // Apenas roles com path raiz '/' — garantidamente criadas por usuários
-
             query.andWhere("role.path = '/'");
         }
 
-        const roles = await query.orderBy('role.roleName', 'ASC').getMany();
-
-        return roles.map(mapDbRole);
+        query.orderBy('role.roleName', 'ASC');
+        const result = await paginateQuery(query, pagination);
+        return { items: result.items.map(mapDbRole), pagination: result.pagination };
     }
 
     /**

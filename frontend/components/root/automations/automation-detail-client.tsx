@@ -18,7 +18,8 @@ import { WorkflowAutomationBuilder, type TemplateOption } from './workflow-autom
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     fetchAutomation,
     fetchActionCatalog,
@@ -85,7 +86,9 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
     const [variables, setVariables] = useState<VariableMap>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [role, setRole] = useState<OrganizationRole | null>(null);
+    const [orgId, setOrgId] = useState<string | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(orgId);
+    const role = normalizeOrganizationRole(rawRole);
     const [plan, setPlan] = useState<Record<string, unknown> | null>(null);
     const [planOpen, setPlanOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
@@ -134,21 +137,16 @@ export function AutomationDetailClient({ automationId }: { automationId: string 
             setExecutions(Array.isArray(execItems) ? execItems : []);
             const templateItems = (templateBodyJson as { items?: TemplateOption[] }).items ?? templateBodyJson;
             setTemplates(Array.isArray(templateItems) ? templateItems : []);
-            fetch('/api/sidebar/context', { cache: 'no-store' })
-                .then((response) => response.json())
-                .then((payload) => {
-                    const org = (payload?.organizations ?? []).find((item: { id: string; currentRole?: string | null }) => item.id === orgId);
-                    setRole(normalizeOrganizationRole(org?.currentRole));
-                })
-                .catch(() => undefined);
         } catch {
             toast.error('Falha ao carregar automação');
         } finally {
             setLoading(false);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailsForm.reset is stable enough for initial load
     }, [automationId]);
 
     useEffect(() => {
+        setOrgId(getOrgId());
         void load();
     }, [load]);
 

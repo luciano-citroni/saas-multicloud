@@ -63,6 +63,12 @@ export async function PATCH(request: Request, { params }: Params) {
         });
     }
 
+    if (response.status === 204) {
+        const nextResponse = new NextResponse(null, { status: 204 });
+        if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);
+        return nextResponse;
+    }
+
     const payload = await parseJsonSafe<unknown>(response);
     const nextResponse = NextResponse.json(payload ?? {}, { status: response.status });
     if (rotatedTokens) setAuthCookies(nextResponse, rotatedTokens);

@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { finopsChartInitialDimension } from '@/components/root/finops/overview/finops-chart-theme';
 import type { AggregatedFinopsData } from './finops-aggregator';
 
 type DashboardPeriod = 'last7days' | 'last30days' | 'last90days' | 'currentmonth' | 'lastmonth' | 'ytd';
@@ -382,7 +383,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                         </CardHeader>
                         <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-center">
                             <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                                     <PieChart>
                                         <Pie
                                             data={pieData}
@@ -438,7 +439,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                         </CardHeader>
                         <CardContent>
                             <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                                     <BarChart data={barData}>
                                         <CartesianGrid strokeDasharray="3 3" />
                                         <XAxis dataKey="service" fontSize={12} />

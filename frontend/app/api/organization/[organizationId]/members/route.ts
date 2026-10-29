@@ -33,23 +33,31 @@ function buildUnauthorizedResponse() {
     return res;
 }
 
-export async function GET(_: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
     const { organizationId } = await params;
     if (!organizationId) return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
 
     const resolved = await resolveAccessToken();
     if (!resolved.accessToken) return buildUnauthorizedResponse();
 
+    const { searchParams } = new URL(request.url);
+    const backendQuery = new URLSearchParams();
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    if (page) backendQuery.set('page', page);
+    if (limit) backendQuery.set('limit', limit);
+    const backendPath = backendQuery.size > 0 ? `/api/organization/members?${backendQuery.toString()}` : '/api/organization/members';
+
     const headers = { Authorization: `Bearer ${resolved.accessToken}`, 'x-organization-id': organizationId };
 
-    let response = await backendFetch('/api/organization/members', { headers });
+    let response = await backendFetch(backendPath, { headers });
     let rotatedTokens = resolved.rotatedTokens;
 
     if (response.status === 401 && resolved.refreshToken) {
         const refreshResult = await refreshAccessToken(resolved.refreshToken);
         if (!refreshResult) return buildUnauthorizedResponse();
         rotatedTokens = refreshResult;
-        response = await backendFetch('/api/organization/members', {
+        response = await backendFetch(backendPath, {
             headers: { Authorization: `Bearer ${refreshResult.accessToken}`, 'x-organization-id': organizationId },
         });
     }

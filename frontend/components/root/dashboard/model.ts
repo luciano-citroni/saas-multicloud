@@ -324,7 +324,7 @@ export function parseOverview(payload: unknown): FinopsSnapshot | null {
     };
 }
 
-export function parseBudgets(payload: unknown, accountAlias: string): BudgetRisk[] {
+export function parseBudgets(payload: unknown, accountAlias?: string): BudgetRisk[] {
     return unwrapItems<Record<string, unknown>>(payload).flatMap((item) => {
         const budget = item.budget;
         if (!budget || typeof budget !== 'object') {
@@ -338,9 +338,14 @@ export function parseBudgets(payload: unknown, accountAlias: string): BudgetRisk
             return [];
         }
 
+        const resolvedAlias =
+            (typeof item.cloudAccountAlias === 'string' && item.cloudAccountAlias) ||
+            accountAlias ||
+            '—';
+
         return [
             {
-                accountAlias,
+                accountAlias: resolvedAlias,
                 name,
                 usagePercentage,
                 currentSpend: numberOrZero(item.currentSpend),

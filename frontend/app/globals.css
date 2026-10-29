@@ -193,3 +193,57 @@
     color: var(--foreground);
   }
 }
+
+@layer utilities {
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, var(--foreground) 12%, transparent) 45%,
+      transparent 90%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: shimmer-text 1.6s ease-in-out infinite;
+  }
+
+  .shimmer-bar {
+    background-image: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      color-mix(in oklab, var(--muted) 55%, var(--foreground) 12%) 50%,
+      var(--muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-bar 1.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer-text {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  @keyframes shimmer-bar {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer,
+    .shimmer-bar {
+      animation: none;
+      color: inherit;
+      background-image: none;
+    }
+  }
+}

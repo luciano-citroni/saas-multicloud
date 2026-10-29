@@ -6,14 +6,6 @@ import { z } from 'zod';
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4880';
 
 /**
- * Esquema de validação para login
- */
-const loginSchema = z.object({
-    email: z.email('E-mail inválido'),
-    password: z.string().min(1, 'Senha é obrigatória'),
-});
-
-/**
  * Esquema de validação para registro
  */
 const registerSchema = z.object({
@@ -30,56 +22,6 @@ interface ActionResult<T = null> {
     success: boolean;
     error?: string;
     data?: T;
-}
-
-/**
- * Ação para login
- * @param data - Dados de login (email e password)
- * @returns Resultado da ação com sucesso ou erro traduzido
- */
-export async function loginAction(data: unknown): Promise<ActionResult> {
-    try {
-        // Validar dados
-        const validatedData = loginSchema.parse(data);
-
-        // Fazer requisição para o backend
-        const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(validatedData),
-        });
-
-        const body = await response.json();
-
-        if (!response.ok) {
-            const errorMessage = extractErrorMessage(body as ApiErrorResponse);
-            return {
-                success: false,
-                error: errorMessage,
-            };
-        }
-
-        // Sucesso - a resposta deve conter o token
-        return {
-            success: true,
-            data: body,
-        };
-    } catch (error) {
-        // Erro de validação
-        if (error instanceof z.ZodError) {
-            const firstError = error.issues[0];
-            return {
-                success: false,
-                error: firstError.message,
-            };
-        }
-
-        // Erro de rede ou outro erro
-        return {
-            success: false,
-            error: 'Erro de conexão. Tente novamente.',
-        };
-    }
 }
 
 /**

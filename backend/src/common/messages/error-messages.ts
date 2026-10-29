@@ -22,6 +22,14 @@ export const ErrorMessages = {
         INVALID_REFRESH_TOKEN: 'Invalid or expired refresh token',
 
         INVALID_OR_EXPIRED_TOKEN: 'Token is invalid or expired',
+
+        EMAIL_CHANGE_NOT_ALLOWED:
+            'Email cannot be changed directly. Contact support or use a verified email-change flow.',
+
+        GOOGLE_EMAIL_NOT_VERIFIED: 'Google account email is not verified.',
+
+        GOOGLE_LINK_REQUIRED:
+            'An account with this email already exists. Sign in with your password first; Google linking is not automatic.',
     },
 
     // Users
@@ -235,6 +243,31 @@ export const ErrorMessages = {
         ROLLBACK_FAILED: 'Rollback could not remove one or more provisioned resources.',
 
         ROLLBACK_IN_PROGRESS: 'A rollback is already in progress for this execution.',
+    },
+
+    // AI Chat
+
+    AI_CHAT: {
+        CONVERSATION_NOT_FOUND: 'Chat conversation not found.',
+
+        MESSAGE_TOO_LONG: 'Message exceeds the maximum allowed length.',
+
+        PROVIDER_NOT_CONFIGURED: 'AI chat provider is not configured.',
+
+        PROVIDER_UNAVAILABLE: 'AI chat provider is temporarily unavailable.',
+
+        PROVIDER_TIMEOUT: 'AI chat provider timed out.',
+
+        OUT_OF_SCOPE:
+            'I can help with your organization data, cloud costs, inventory, assessments, governance, automations, and SaaS features. I cannot answer questions outside that scope.',
+
+        TOOL_LIMIT_EXCEEDED: 'Too many tool calls were requested for this interaction.',
+
+        GENERATION_CANCELLED: 'Generation was cancelled.',
+
+        RATE_LIMITED: 'Too many AI chat requests. Please try again later.',
+
+        NO_DATA: 'No data is available for this query in your organization.',
     },
 
     // General

@@ -1,4 +1,6 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -30,7 +32,7 @@ import {
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/ecs')
 export class AwsEcsController {
     constructor(private readonly service: EcsService) {}

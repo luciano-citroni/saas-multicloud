@@ -1,71 +1,56 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { OrganizationMembersTab } from '@/components/root/organizations/members/organization-members-tab';
-import { canManageMembers, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
-
-type SidebarContextPayload = {
-    organizations?: Array<{ id?: string; currentRole?: string | null }>;
-    user?: { id?: string };
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 export default function OrganizationMembersPage() {
     const params = useParams<{ organizationId: string }>();
     const organizationId = params?.organizationId;
-    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
     const router = useRouter();
     const tm = useTranslations('members');
     const to = useTranslations('organizations');
+    const sidebarQuery = useSidebarContext();
 
     useEffect(() => {
-        const checkAccess = async () => {
-            if (!organizationId) {
-                toast.error(to.invalidOrg);
-                router.replace('/organizations');
-                return;
-            }
+        if (!organizationId) {
+            toast.error(to.invalidOrg);
+            router.replace('/organizations');
+            return;
+        }
 
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
+        if (!sidebarQuery.isFetched || sidebarQuery.isLoading) {
+            return;
+        }
 
-                if (!response.ok) {
-                    setIsAuthorized(false);
-                    toast.error(to.validatePermissionsError);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (sidebarQuery.isError || !sidebarQuery.data) {
+            toast.error(to.validatePermissionsError);
+            router.replace('/organizations');
+            return;
+        }
 
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const targetOrg = payload?.organizations?.find((o) => o?.id === organizationId);
-                const role = normalizeOrganizationRole(targetOrg?.currentRole ?? null);
+        const targetOrg = sidebarQuery.data.organizations.find((o) => o.id === organizationId);
+        const role = normalizeOrganizationRole(targetOrg?.currentRole ?? null);
 
-                if (!canManageMembers(role)) {
-                    setIsAuthorized(false);
-                    toast.error(to.noEditPermission);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (!canManageMembers(role)) {
+            toast.error(to.noEditPermission);
+            router.replace('/organizations');
+        }
+    }, [organizationId, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, to]);
 
-                setCurrentRole(role);
-                setCurrentUserId(payload?.user?.id);
-                setIsAuthorized(true);
-            } catch {
-                setIsAuthorized(false);
-                toast.error(to.validatePermissionsError);
-                router.replace('/organizations');
-            }
-        };
+    if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+        return null;
+    }
 
-        void checkAccess();
-    }, [organizationId, router, to]);
+    const targetOrg = sidebarQuery.data.organizations.find((o) => o.id === organizationId);
+    const currentRole = normalizeOrganizationRole(targetOrg?.currentRole ?? null);
 
-    if (!organizationId || !currentRole || isAuthorized !== true) {
+    if (!currentRole || !canManageMembers(currentRole)) {
         return null;
     }
 
@@ -79,7 +64,7 @@ export default function OrganizationMembersPage() {
                     <OrganizationMembersTab
                         organizationId={organizationId}
                         currentRole={currentRole}
-                        currentUserId={currentUserId}
+                        currentUserId={sidebarQuery.data.user.id}
                     />
                 </CardContent>
             </Card>

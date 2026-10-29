@@ -100,3 +100,7 @@ export { ProvisionedResource, ProvisionedResourceStatus } from './provisioned-re
 export { AutomationTemplate, AutomationTemplateOrigin, AutomationTemplateType } from './automation-template.entity';
 export { AutomationTemplateVersion } from './automation-template-version.entity';
 export { AutomationAuditEvent } from './automation-audit-event.entity';
+export { AiChatConversation } from './ai-chat-conversation.entity';
+export { AiChatMessage } from './ai-chat-message.entity';
+export type { AiChatMessageRole, AiChatSource } from './ai-chat-message.entity';
+export { AiChatAuditEvent } from './ai-chat-audit-event.entity';

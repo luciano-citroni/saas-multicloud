@@ -33,7 +33,6 @@ import type {
     FinopsJob,
     OrgFinopsOptimize,
     OrgFinopsOverview,
-    SidebarContextPayload,
     SyncRun,
 } from '@/components/root/finops/overview/types';
 import {
@@ -43,7 +42,8 @@ import {
     notifyActiveCloudAccountChanged,
 } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     acceptFinopsConsent,
     fetchFinopsBudgetStatuses,
@@ -74,7 +74,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [account, setAccount] = useState<OrganizationCloudAccount | null>(null);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
+    const currentRole = normalizeOrganizationRole(rawRole);
     const [hasConsent, setHasConsent] = useState<boolean | null>(null);
 
     const [period, setPeriod] = useState<DashboardPeriod>('lastmonth');
@@ -140,24 +141,6 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
 
         void loadAccount();
     }, [cloudAccountId, organizationId]);
-
-    useEffect(() => {
-        if (!organizationId) return;
-
-        const loadRole = async () => {
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) return;
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const org = payload?.organizations?.find((o) => o?.id === organizationId);
-                setCurrentRole(normalizeOrganizationRole(org?.currentRole ?? null));
-            } catch {
-                // non-blocking
-            }
-        };
-
-        void loadRole();
-    }, [organizationId]);
 
     const loadConsent = useCallback(async (orgId: string, cloudId: string, provider: string) => {
         const response = await fetchFinopsConsent(orgId, cloudId, provider);

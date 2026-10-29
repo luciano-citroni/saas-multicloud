@@ -1,6 +1,6 @@
-import { Controller, Get, HttpCode, HttpStatus, Param } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
 
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Throttle } from '@nestjs/throttler';
 
@@ -8,7 +8,9 @@ import { OrganizationService } from './organization.service';
 
 import { SkipTenant } from '../tenant/tenant.decorators';
 
-import { Public } from '../auth/decorators';
+import { CurrentUser, Public, AllowMissingOrganization } from '../auth/decorators';
+
+import { TenantGuard } from '../tenant/tenant.guard';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
@@ -17,6 +19,8 @@ import { inviteTokenParamSchema } from './dto';
 import type { InviteTokenParam } from './dto';
 
 import { AcceptInviteSuccessResponseDto, AcceptInvitePendingRegistrationResponseDto } from './swagger.dto';
+
+type AuthUser = { sub: string; sessionId: string };
 
 /**
 
@@ -56,13 +60,13 @@ export class InvitesController {
      *
 
 
-     * Responde com dois tipos possíveis:
+     * Responde com:
 
 
-     * 1. Se o usuário tem conta: "accepted" - usuário é adicionado à organização
+     * 1. needs_registration — sem conta; frontend abre registro com invite
 
 
-     * 2. Se o usuário não tem conta: "needs_registration" - retorna dados para pré-registro
+     * 2. requires_authentication — conta existe; frontend pede login e POST autenticado
 
 
      */
@@ -141,5 +145,28 @@ export class InvitesController {
     })
     acceptInvite(@Param(new ZodValidationPipe(inviteTokenParamSchema)) params: InviteTokenParam) {
         return this.organizationService.acceptInvite(params.token);
+    }
+
+    @Post('accept/:token')
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({
+        summary: 'Aceitar convite autenticado',
+        description: 'Requer JWT do usuário convidado. Vincula membership apenas se o email da sessão bater com o do convite.',
+    })
+    @ApiResponse({ status: 200, description: 'Convite aceito', type: AcceptInviteSuccessResponseDto })
+    @ApiResponse({ status: 400, description: 'Email do usuário não corresponde ao convite' })
+    @ApiResponse({ status: 401, description: 'Não autenticado' })
+    acceptInviteAuthenticated(
+        @Param(new ZodValidationPipe(inviteTokenParamSchema)) params: InviteTokenParam,
+        @CurrentUser() user: AuthUser,
+    ) {
+        return this.organizationService.acceptInviteWithUserId(params.token, user.sub).then((result) => ({
+            status: 'accepted' as const,
+            ...result,
+        }));
     }
 }

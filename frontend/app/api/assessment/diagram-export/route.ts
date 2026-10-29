@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getAccessTokenFromCookies, getRefreshTokenFromCookies, refreshAccessToken } from '@/lib/auth/session';
+import { hasTrustedOrigin } from '@/lib/auth/request-origin';
 
 type DiagramExportRequest = {
     svgDataUrl?: unknown;
@@ -56,7 +58,26 @@ function extractSvgMarkup(dataUrl: string): string | null {
     }
 }
 
+async function hasValidSession(): Promise<boolean> {
+    const accessToken = await getAccessTokenFromCookies();
+    if (accessToken) return true;
+
+    const refreshToken = await getRefreshTokenFromCookies();
+    if (!refreshToken) return false;
+
+    const rotated = await refreshAccessToken(refreshToken);
+    return Boolean(rotated?.accessToken);
+}
+
 export async function POST(request: Request) {
+    if (!hasTrustedOrigin(request)) {
+        return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });
+    }
+
+    if (!(await hasValidSession())) {
+        return NextResponse.json({ message: 'Sessão expirada' }, { status: 401 });
+    }
+
     let body: DiagramExportRequest;
 
     try {

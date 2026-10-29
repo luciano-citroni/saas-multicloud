@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { LocaleProvider } from '@/components/providers/locale-provider';
+import { QueryProvider } from '@/components/providers/query-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -35,10 +36,12 @@ export default function RootLayout({
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
                     <LocaleProvider>
-                        <TooltipProvider>
-                            {children}
-                            <Toaster />
-                        </TooltipProvider>
+                        <QueryProvider>
+                            <TooltipProvider>
+                                {children}
+                                <Toaster />
+                            </TooltipProvider>
+                        </QueryProvider>
                     </LocaleProvider>
                 </ThemeProvider>
             </body>

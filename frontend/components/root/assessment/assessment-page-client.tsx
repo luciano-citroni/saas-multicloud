@@ -13,7 +13,6 @@ import {
     buildAssessmentExcelDownloadUrl,
     type AssessmentExcelJob,
 } from '@/app/actions/assessment';
-import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { MemoizedAssessmentGraphCard } from '@/components/root/assessment/assessment-graph-card';
 import { AssessmentToolbar, getGroupingModeLabel } from '@/components/root/assessment/assessment-toolbar';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +27,7 @@ import {
     normalizeNodes,
     removeOrphanNodesByType,
 } from '@/components/root/assessment/assessment-graph-utils';
-import type { AssessmentGraphPayload, GroupingDimension, ResourceVisibilityFilterId, SidebarContextPayload } from '@/components/root/assessment/types';
+import type { AssessmentGraphPayload, GroupingDimension, ResourceVisibilityFilterId } from '@/components/root/assessment/types';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import { canManageCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
@@ -39,6 +38,8 @@ import {
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
 import { useTranslations } from '@/lib/i18n';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
@@ -50,8 +51,6 @@ type ApiErrorPayload = {
     timestamp?: string;
 };
 
-type CloudAccountApiItem = OrganizationCloudAccount;
-type CloudAccountsApiPayload = CloudAccountApiItem[] | { items?: CloudAccountApiItem[] };
 type AssessmentExcelJobsApiPayload = AssessmentExcelJob[] | { items?: AssessmentExcelJob[] };
 
 type NodeBounds = {
@@ -335,17 +334,6 @@ async function composeExportWithLogo(
     }
 }
 
-function normalizeCloudAccounts(payload: unknown): OrganizationCloudAccount[] {
-    const normalizedPayload = payload as CloudAccountsApiPayload;
-    const items = Array.isArray(normalizedPayload) ? normalizedPayload : Array.isArray(normalizedPayload?.items) ? normalizedPayload.items : [];
-
-    return items.filter((item): item is OrganizationCloudAccount => {
-        return (
-            typeof item === 'object' && item !== null && typeof item.id === 'string' && typeof item.alias === 'string' && typeof item.provider === 'string'
-        );
-    });
-}
-
 function normalizeAssessmentExcelJobs(payload: unknown): AssessmentExcelJob[] {
     const normalizedPayload = payload as AssessmentExcelJobsApiPayload;
     const items = Array.isArray(normalizedPayload) ? normalizedPayload : Array.isArray(normalizedPayload?.items) ? normalizedPayload.items : [];
@@ -401,9 +389,23 @@ export function AssessmentPageClient() {
     const graphWrapperRef = useRef<HTMLDivElement | null>(null);
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
-    const [activeCloudAccount, setActiveCloudAccount] = useState<OrganizationCloudAccount | null>(null);
-    const [hasAssessmentModule, setHasAssessmentModule] = useState<boolean | null>(null);
-    const [canCreateCloudAccount, setCanCreateCloudAccount] = useState<boolean | null>(null);
+    const [localContextHydrated, setLocalContextHydrated] = useState(false);
+    const { organization, isLoading: sidebarLoading, isFetched: sidebarFetched } = useOrganizationFromSidebar(organizationId);
+    const cloudAccountsQuery = useCloudAccounts(organizationId);
+    const activeCloudAccount =
+        cloudAccountId && cloudAccountsQuery.data
+            ? (cloudAccountsQuery.data.find((account) => account.id === cloudAccountId) ?? null)
+            : null;
+    const modulesReady = localContextHydrated && Boolean(organizationId) && sidebarFetched && !sidebarLoading;
+    // null = ainda carregando contexto/planos; false = confirmado sem acesso; true = liberado
+    const hasAssessmentModule = modulesReady
+        ? hasModuleAccess(normalizePlanModules(organization?.plans ?? []), PlanModule.ASSESSMENT)
+        : null;
+    const canCreateCloudAccount = canManageCloudAccounts(normalizeOrganizationRole(organization?.currentRole ?? null));
+    const contextReady =
+        !localContextHydrated ||
+        !organizationId ||
+        (sidebarFetched && !sidebarLoading && (cloudAccountsQuery.isFetched || cloudAccountsQuery.isError));
     const [running, setRunning] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [isExportingDiagram, setIsExportingDiagram] = useState(false);
@@ -528,79 +530,37 @@ export function AssessmentPageClient() {
         });
     }, []);
 
-    const loadContext = useCallback(async () => {
-        const nextOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-        const nextCloudAccountId = window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
+    const syncLocalContext = useCallback(() => {
+        setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        setCloudAccountId(window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY));
+        setLocalContextHydrated(true);
+    }, []);
 
-        setOrganizationId(nextOrganizationId);
-        setCloudAccountId(nextCloudAccountId);
+    useEffect(() => {
+        syncLocalContext();
+    }, [syncLocalContext]);
 
-        if (!nextOrganizationId) {
-            setActiveCloudAccount(null);
-            setHasAssessmentModule(false);
-            setCanCreateCloudAccount(false);
+    useEffect(() => {
+        if (cloudAccountsQuery.isError && (cloudAccountsQuery.error as Error & { status?: number }).status === 401) {
+            toast.error(tc.sessionExpired);
+            router.replace('/auth/sign-in');
+            router.refresh();
+        }
+    }, [cloudAccountsQuery.error, cloudAccountsQuery.isError, router, tc.sessionExpired]);
+
+    useEffect(() => {
+        if (!organizationId || !cloudAccountsQuery.isSuccess) {
             return;
         }
 
-        try {
-            const [sidebarResponse, cloudAccountsResponse] = await Promise.all([
-                fetch('/api/sidebar/context', { cache: 'no-store' }),
-                fetchOrganizationCloudAccounts(nextOrganizationId),
-            ]);
-
-            if (sidebarResponse.status === 401 || cloudAccountsResponse.status === 401) {
-                toast.error(tc.sessionExpired);
-                router.replace('/auth/sign-in');
-                router.refresh();
-                return;
-            }
-
-            if (sidebarResponse.status === 404) {
-                setActiveCloudAccount(null);
-                setHasAssessmentModule(false);
-                setCanCreateCloudAccount(false);
-                return;
-            }
-
-            if (!sidebarResponse.ok) {
-                setActiveCloudAccount(null);
-                setHasAssessmentModule(false);
-                setCanCreateCloudAccount(false);
-                return;
-            }
-
-            const sidebarPayload = (await sidebarResponse.json()) as SidebarContextPayload;
-            const activeOrganization = sidebarPayload.organizations?.find((organization) => organization.id === nextOrganizationId);
-            const modules = normalizePlanModules(activeOrganization?.plans ?? []);
-
-            setHasAssessmentModule(hasModuleAccess(modules, PlanModule.ASSESSMENT));
-            setCanCreateCloudAccount(canManageCloudAccounts(normalizeOrganizationRole(activeOrganization?.currentRole ?? null)));
-
-            if (!cloudAccountsResponse.ok) {
-                setActiveCloudAccount(null);
-                return;
-            }
-
-            const cloudAccountsPayload = (await cloudAccountsResponse.json().catch(() => null)) as unknown;
-            const cloudAccounts = normalizeCloudAccounts(cloudAccountsPayload);
-            const nextActiveCloudAccount = cloudAccounts.find((account) => account.id === nextCloudAccountId) ?? null;
-
-            setCloudAccountId(nextActiveCloudAccount?.id ?? null);
-            setActiveCloudAccount(nextActiveCloudAccount);
-        } catch {
-            setActiveCloudAccount(null);
-            setHasAssessmentModule(false);
-            setCanCreateCloudAccount(false);
-        }
-    }, [router]);
-
-    useEffect(() => {
-        void loadContext();
-    }, [loadContext]);
+        const storedCloudId = window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
+        const nextActive = cloudAccountsQuery.data.find((account) => account.id === storedCloudId) ?? null;
+        setCloudAccountId(nextActive?.id ?? null);
+    }, [cloudAccountsQuery.data, cloudAccountsQuery.isSuccess, organizationId]);
 
     useEffect(() => {
         const handleContextChange = () => {
-            void loadContext();
+            syncLocalContext();
         };
 
         const handleStorage = (event: StorageEvent) => {
@@ -608,7 +568,7 @@ export function AssessmentPageClient() {
                 return;
             }
 
-            void loadContext();
+            syncLocalContext();
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
@@ -622,20 +582,30 @@ export function AssessmentPageClient() {
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
             window.removeEventListener('storage', handleStorage);
         };
-    }, [loadContext]);
+    }, [syncLocalContext]);
 
     useEffect(() => {
+        if (!localContextHydrated) {
+            return;
+        }
+
+        if (!organizationId) {
+            toast.error(ta.selectOrgAndAccount);
+            router.replace('/');
+            return;
+        }
+
         if (hasAssessmentModule !== false) {
             return;
         }
 
         toast.error(ta.moduleNotEnabled);
         router.replace('/');
-    }, [hasAssessmentModule, router]);
+    }, [hasAssessmentModule, localContextHydrated, organizationId, router, ta.moduleNotEnabled, ta.selectOrgAndAccount]);
 
     const activeProvider = normalizeAssessmentProvider(activeCloudAccount?.provider);
     const providerLabel = formatAssessmentProvider(activeProvider);
-    const canRun = Boolean(organizationId && cloudAccountId && activeProvider !== 'unknown' && hasAssessmentModule);
+    const canRun = Boolean(organizationId && cloudAccountId && activeProvider !== 'unknown' && hasAssessmentModule === true);
 
     const loadAssessmentExcelJobs = useCallback(async () => {
         if (!organizationId || !cloudAccountId || activeProvider === 'unknown') {
@@ -699,7 +669,7 @@ export function AssessmentPageClient() {
             return;
         }
 
-        if (!hasAssessmentModule) {
+        if (hasAssessmentModule !== true) {
             toast.error(ta.moduleNotEnabled);
             return;
         }
@@ -918,7 +888,7 @@ export function AssessmentPageClient() {
     const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
     const groupingModeLabel = getGroupingModeLabel(groupingModes);
 
-    if (hasAssessmentModule === null || canCreateCloudAccount === null) {
+    if (!contextReady) {
         return null;
     }
 

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { canManageCloudAccounts, canSyncCloudAccounts, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { canManageCloudAccounts, canSyncCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     deleteOrganizationCloudAccount,
     enqueueGeneralSync,
@@ -31,14 +32,6 @@ type ApiErrorPayload = {
     error?: string;
     path?: string;
     timestamp?: string;
-};
-
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        currentRole?: string | null;
-        maxCloudAccounts?: number;
-    }>;
 };
 
 type CloudAccountApiItem = CloudAccount & {
@@ -129,11 +122,11 @@ export function CloudAccountSync() {
     const tca = useTranslations('cloudAccounts');
     const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
-    const [organizationRole, setOrganizationRole] = useState<OrganizationRole | null>(null);
-    const [maxCloudAccounts, setMaxCloudAccounts] = useState(0);
+    const { organization, currentRole: rawRole, isLoading: resolvingRole } = useOrganizationFromSidebar(organizationId);
+    const organizationRole = normalizeOrganizationRole(rawRole);
+    const maxCloudAccounts = organization?.maxCloudAccounts ?? 0;
     const [accounts, setAccounts] = useState<CloudAccount[]>([]);
     const [loading, setLoading] = useState(true);
-    const [resolvingRole, setResolvingRole] = useState(true);
     const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
     const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
     const [pendingDeleteAccountId, setPendingDeleteAccountId] = useState<string | null>(null);
@@ -268,29 +261,6 @@ export function CloudAccountSync() {
 
     const hasSyncInProgress = accounts.some((account) => account.isSyncInProgress === true);
 
-    const loadOrganizationRole = useCallback(async (orgId: string) => {
-        setResolvingRole(true);
-
-        try {
-            const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-            if (!response.ok) {
-                setOrganizationRole(null);
-                return;
-            }
-
-            const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-            const activeOrganization = payload?.organizations?.find((organization) => organization?.id === orgId);
-
-            setOrganizationRole(normalizeOrganizationRole(activeOrganization?.currentRole ?? null));
-            setMaxCloudAccounts(typeof activeOrganization?.maxCloudAccounts === 'number' ? activeOrganization.maxCloudAccounts : 0);
-        } catch {
-            setOrganizationRole(null);
-            setMaxCloudAccounts(0);
-        } finally {
-            setResolvingRole(false);
-        }
-    }, []);
-
     const loadMidOrgs = useCallback(async (orgId: string) => {
         try {
             const response = await fetch(`/api/orgs?organizationId=${encodeURIComponent(orgId)}`, { cache: 'no-store' });
@@ -324,14 +294,12 @@ export function CloudAccountSync() {
 
         if (!activeOrganizationId) {
             setLoading(false);
-            setResolvingRole(false);
             setMidOrgs([]);
             return;
         }
 
-        void loadOrganizationRole(activeOrganizationId);
         void loadMidOrgs(activeOrganizationId);
-    }, [loadMidOrgs, loadOrganizationRole]);
+    }, [loadMidOrgs]);
 
     useEffect(() => {
         const syncActiveOrganization = () => {
@@ -344,13 +312,10 @@ export function CloudAccountSync() {
             if (!nextOrganizationId) {
                 setAccounts([]);
                 setMidOrgs([]);
-                setOrganizationRole(null);
                 setLoading(false);
-                setResolvingRole(false);
                 return;
             }
 
-            void loadOrganizationRole(nextOrganizationId);
             void loadMidOrgs(nextOrganizationId);
         };
 
@@ -363,7 +328,7 @@ export function CloudAccountSync() {
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, syncActiveOrganization);
             window.removeEventListener('storage', syncActiveOrganization);
         };
-    }, [loadMidOrgs, loadOrganizationRole]);
+    }, [loadMidOrgs]);
 
     const organizationNamesById = useMemo(() => {
         return Object.fromEntries(midOrgs.map((org) => [org.id, org.name]));

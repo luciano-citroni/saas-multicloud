@@ -27,6 +27,7 @@ import { AzureRecoveryVault } from '../../db/entites/azure-recovery-vault.entity
 import { AzureSyncModule } from '../sync/azure-sync.module';
 import { TenantModule } from '../../tenant/tenant.module';
 import { RbacModule } from '../../rbac/rbac.module';
+import { CloudModule } from '../../cloud/cloud.module';
 import { BillingModule } from '../../billing/billing.module';
 import { AZURE_ASSESSMENT_QUEUE } from './constants';
 import { AzureAssessmentController } from './azure-assessment.controller';
@@ -66,9 +67,11 @@ import { AzureAssessmentExcelService } from './azure-assessment-excel.service';
         AzureSyncModule,
         TenantModule,
         RbacModule,
+        CloudModule,
         BillingModule,
     ],
     providers: [AzureAssessmentService, AzureAssessmentProcessor, AzureAssessmentReportService, AzureAssessmentExcelService],
     controllers: [AzureAssessmentController],
+    exports: [AzureAssessmentService, AzureAssessmentReportService],
 })
 export class AzureAssessmentModule {}

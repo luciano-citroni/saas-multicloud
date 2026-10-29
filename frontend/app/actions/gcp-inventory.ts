@@ -141,58 +141,70 @@ export type GcpGkeCluster = {
     updatedAt: string;
 };
 
-export async function fetchGcpInstances(organizationId: string, cloudAccountId: string) {
+type GcpInventoryListOptions = {
+    page?: number;
+    limit?: number;
+};
+
+function buildGcpInventoryUrl(path: string, organizationId: string, options: GcpInventoryListOptions = {}) {
+    const searchParams = new URLSearchParams({ organizationId });
+    if (typeof options.page === 'number') searchParams.set('page', String(options.page));
+    if (typeof options.limit === 'number') searchParams.set('limit', String(options.limit));
+    return `${path}?${searchParams.toString()}`;
+}
+
+export async function fetchGcpInstances(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/compute/accounts/${encodeURIComponent(cloudAccountId)}/instances?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/compute/accounts/${encodeURIComponent(cloudAccountId)}/instances`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpNetworks(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpNetworks(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/networks?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/networks`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpSubnetworks(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpSubnetworks(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/subnetworks?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/subnetworks`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpFirewallRules(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpFirewallRules(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/firewall-rules?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/networking/accounts/${encodeURIComponent(cloudAccountId)}/firewall-rules`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpBuckets(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpBuckets(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/storage/accounts/${encodeURIComponent(cloudAccountId)}/buckets?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/storage/accounts/${encodeURIComponent(cloudAccountId)}/buckets`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpSqlInstances(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpSqlInstances(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/sql/accounts/${encodeURIComponent(cloudAccountId)}/instances?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/sql/accounts/${encodeURIComponent(cloudAccountId)}/instances`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpServiceAccounts(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpServiceAccounts(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/iam/accounts/${encodeURIComponent(cloudAccountId)}/service-accounts?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/iam/accounts/${encodeURIComponent(cloudAccountId)}/service-accounts`, organizationId, options),
         { cache: 'no-store' }
     );
 }
 
-export async function fetchGcpGkeClusters(organizationId: string, cloudAccountId: string) {
+export async function fetchGcpGkeClusters(organizationId: string, cloudAccountId: string, options: GcpInventoryListOptions = {}) {
     return fetch(
-        `/api/gcp/gke/accounts/${encodeURIComponent(cloudAccountId)}/clusters?organizationId=${encodeURIComponent(organizationId)}`,
+        buildGcpInventoryUrl(`/api/gcp/gke/accounts/${encodeURIComponent(cloudAccountId)}/clusters`, organizationId, options),
         { cache: 'no-store' }
     );
 }

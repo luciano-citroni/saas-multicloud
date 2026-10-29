@@ -1,78 +1,58 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FormOrganizationEdit } from '@/components/root/organizations/edit/form-organization-edit';
 import { OrganizationMembersTab } from '@/components/root/organizations/members/organization-members-tab';
-import { canEditOrganization, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { canEditOrganization, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
-
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        currentRole?: string | null;
-    }>;
-    user?: {
-        id?: string;
-    };
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 export default function EditOrganizationPage() {
     const params = useParams<{ organizationId: string }>();
     const organizationId = params?.organizationId;
-    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
     const router = useRouter();
     const to = useTranslations('organizations');
     const tm = useTranslations('members');
+    const sidebarQuery = useSidebarContext();
 
     useEffect(() => {
-        const loadPermissions = async () => {
-            if (!organizationId) {
-                toast.error(to.invalidOrg);
-                router.replace('/organizations');
-                return;
-            }
+        if (!organizationId) {
+            toast.error(to.invalidOrg);
+            router.replace('/organizations');
+            return;
+        }
 
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
+        if (!sidebarQuery.isFetched || sidebarQuery.isLoading) {
+            return;
+        }
 
-                if (!response.ok) {
-                    setIsAuthorized(false);
-                    toast.error(to.validatePermissionsError);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (sidebarQuery.isError || !sidebarQuery.data) {
+            toast.error(to.validatePermissionsError);
+            router.replace('/organizations');
+            return;
+        }
 
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const targetOrganization = payload?.organizations?.find((organization) => organization?.id === organizationId);
-                const role = normalizeOrganizationRole(targetOrganization?.currentRole ?? null);
+        const targetOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+        const role = normalizeOrganizationRole(targetOrganization?.currentRole ?? null);
 
-                if (!canEditOrganization(role)) {
-                    setIsAuthorized(false);
-                    toast.error(to.noEditPermission);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (!canEditOrganization(role)) {
+            toast.error(to.noEditPermission);
+            router.replace('/organizations');
+        }
+    }, [organizationId, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, to]);
 
-                setCurrentRole(role);
-                setCurrentUserId(payload?.user?.id);
-                setIsAuthorized(true);
-            } catch {
-                setIsAuthorized(false);
-                toast.error(to.validatePermissionsError);
-                router.replace('/organizations');
-            }
-        };
+    if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+        return null;
+    }
 
-        void loadPermissions();
-    }, [organizationId, router, to]);
+    const targetOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+    const currentRole = normalizeOrganizationRole(targetOrganization?.currentRole ?? null);
 
-    if (!organizationId || !currentRole || isAuthorized !== true) {
+    if (!currentRole || !canEditOrganization(currentRole)) {
         return null;
     }
 
@@ -107,7 +87,7 @@ export default function EditOrganizationPage() {
                             <OrganizationMembersTab
                                 organizationId={organizationId}
                                 currentRole={currentRole}
-                                currentUserId={currentUserId}
+                                currentUserId={sidebarQuery.data.user.id}
                             />
                         </CardContent>
                     </Card>

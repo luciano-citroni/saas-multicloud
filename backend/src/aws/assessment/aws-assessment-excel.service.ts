@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 import { AssessmentData } from './aws-assessment-report.service';
+import { safeJoinFilename } from '../../common/utils/safe-join-filename';
 
 const HEADER_FILL: ExcelJS.Fill = {
     type: 'pattern',
@@ -148,12 +149,12 @@ export class AwsAssessmentExcelService {
     }
 
     getExcelFilePath(fileName: string): string {
-        return path.join(this.outputDir, fileName);
+        return safeJoinFilename(this.outputDir, fileName);
     }
 
     resolveExistingExcelFilePath(fileName: string): string | null {
         for (const dir of this.getCandidateDirs()) {
-            const candidatePath = path.join(dir, fileName);
+            const candidatePath = safeJoinFilename(dir, fileName);
 
             if (fs.existsSync(candidatePath)) {
                 if (candidatePath !== this.getExcelFilePath(fileName)) {
@@ -168,7 +169,7 @@ export class AwsAssessmentExcelService {
     }
 
     async deleteExcel(fileName: string): Promise<void> {
-        const paths = this.getCandidateDirs().map((dir) => path.join(dir, fileName));
+        const paths = this.getCandidateDirs().map((dir) => safeJoinFilename(dir, fileName));
 
         await Promise.all(
             paths.map(async (filePath) => {

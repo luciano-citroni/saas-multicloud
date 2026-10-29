@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { FinopsBudget } from '../../db/entites/finops-budget.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
@@ -27,6 +27,10 @@ export interface BudgetStatus {
     usagePercentage: number;
     triggeredAlerts: number[];
     currency: string;
+}
+
+export interface OrgBudgetStatus extends BudgetStatus {
+    cloudAccountAlias: string;
 }
 
 @Injectable()
@@ -169,6 +173,48 @@ export class FinopsBudgetService {
         return Promise.all(
             activeBudgets.map((b) => this.getBudgetStatus(b.id, cloudAccountId, organizationId)),
         );
+    }
+
+    /**
+     * Status de budgets ativos em todas as contas FinOps da organização (dashboard batch).
+     */
+    async listOrgBudgetStatuses(organizationId: string, accountCap = 8): Promise<OrgBudgetStatus[]> {
+        const accounts = await this.cloudAccountRepo.find({
+            where: { tenantId: organizationId },
+            select: ['id', 'alias', 'provider'],
+            order: { createdAt: 'ASC' },
+        });
+
+        const finopsAccounts = accounts
+            .filter((account) => {
+                const provider = (account.provider ?? '').toLowerCase();
+                return provider === 'aws' || provider === 'azure' || provider === 'gcp';
+            })
+            .slice(0, Math.max(1, accountCap));
+
+        if (finopsAccounts.length === 0) {
+            return [];
+        }
+
+        const aliasById = new Map(finopsAccounts.map((account) => [account.id, account.alias]));
+        const accountIds = finopsAccounts.map((account) => account.id);
+
+        const budgets = await this.budgetRepo.find({
+            where: { cloudAccountId: In(accountIds), organizationId, isActive: true },
+            order: { createdAt: 'DESC' },
+        });
+
+        const statuses = await Promise.all(
+            budgets.map(async (budget) => {
+                const status = await this.getBudgetStatus(budget.id, budget.cloudAccountId, organizationId);
+                return {
+                    ...status,
+                    cloudAccountAlias: aliasById.get(budget.cloudAccountId) ?? budget.cloudAccountId,
+                };
+            })
+        );
+
+        return statuses;
     }
 
     // =========================================================================

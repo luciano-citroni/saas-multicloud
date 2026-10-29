@@ -183,7 +183,7 @@ export class AuthController {
 
     @Public()
     @Post('login')
-    @Throttle({ default: { limit: 30, ttl: 60_000 } })
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
     @ApiOperation({ summary: 'Fazer login' })
     @ApiBody({
         description: 'Credenciais para fazer login',
@@ -310,7 +310,7 @@ export class AuthController {
         @Body(new ZodValidationPipe(updateMyPasswordSchema))
         body: UpdateMyPasswordDto
     ) {
-        return this.authService.updateMyPassword(user.sub, body.currentPassword, body.newPassword);
+        return this.authService.updateMyPassword(user.sub, body.currentPassword, body.newPassword, user.sessionId);
     }
 
     @Get('sessions')

@@ -1,4 +1,6 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -17,7 +19,7 @@ import { WafWebAclResponseDto, WafWebAclSyncResponseDto } from './swagger.dto';
 @ApiTags('AWS WAF')
 @ApiBearerAuth('access-token')
 @ApiHeader({ name: 'x-organization-id', description: 'UUID da organização ativa (contexto de tenant)', required: true })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/waf')
 export class AwsWafController {
     constructor(private readonly service: AwsWafService) {}

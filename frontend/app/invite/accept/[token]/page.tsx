@@ -25,10 +25,20 @@ type InviteNeedsRegistrationState = {
     inviteToken: string;
 };
 
+type InviteRequiresAuthState = {
+    status: 'requires_authentication';
+    email: string;
+    organizationId: string;
+    organizationName: string;
+    role: string;
+    inviteToken: string;
+};
+
 type InviteState =
     | { phase: 'loading' }
     | { phase: 'accepted'; data: InviteAcceptedState }
     | { phase: 'needs_registration'; data: InviteNeedsRegistrationState }
+    | { phase: 'requires_authentication'; data: InviteRequiresAuthState }
     | { phase: 'error'; message: string };
 
 export default function InviteAcceptPage() {
@@ -38,26 +48,78 @@ export default function InviteAcceptPage() {
     const [state, setState] = useState<InviteState>({ phase: 'loading' });
 
     useEffect(() => {
-        if (!token) { setState({ phase: 'error', message: ti.invalidToken }); return; }
+        if (!token) {
+            setState({ phase: 'error', message: ti.invalidToken });
+            return;
+        }
 
-        fetch(`/api/invites/accept/${encodeURIComponent(token)}`)
-            .then(async (res) => {
-                const body = await res.json().catch(() => null);
-                if (!res.ok) {
-                    setState({ phase: 'error', message: body?.message ?? ti.genericError });
+        let cancelled = false;
+
+        const run = async () => {
+            try {
+                const previewRes = await fetch(`/api/invites/accept/${encodeURIComponent(token)}`);
+                const previewBody = await previewRes.json().catch(() => null);
+
+                if (cancelled) return;
+
+                if (!previewRes.ok) {
+                    setState({ phase: 'error', message: previewBody?.message ?? ti.genericError });
                     return;
                 }
 
-                if (body?.status === 'accepted') {
-                    setState({ phase: 'accepted', data: body as InviteAcceptedState });
-                } else if (body?.status === 'needs_registration') {
-                    setState({ phase: 'needs_registration', data: body as InviteNeedsRegistrationState });
-                } else {
-                    setState({ phase: 'error', message: ti.genericError });
+                if (previewBody?.status === 'needs_registration') {
+                    setState({ phase: 'needs_registration', data: previewBody as InviteNeedsRegistrationState });
+                    return;
                 }
-            })
-            .catch(() => setState({ phase: 'error', message: ti.genericError }));
+
+                if (previewBody?.status === 'requires_authentication') {
+                    const acceptRes = await fetch(`/api/invites/accept/${encodeURIComponent(token)}`, {
+                        method: 'POST',
+                    });
+                    const acceptBody = await acceptRes.json().catch(() => null);
+
+                    if (cancelled) return;
+
+                    if (acceptRes.ok && acceptBody?.status === 'accepted') {
+                        setState({ phase: 'accepted', data: acceptBody as InviteAcceptedState });
+                        return;
+                    }
+
+                    if (acceptRes.status === 401) {
+                        setState({
+                            phase: 'requires_authentication',
+                            data: previewBody as InviteRequiresAuthState,
+                        });
+                        return;
+                    }
+
+                    setState({
+                        phase: 'error',
+                        message: acceptBody?.message ?? ti.genericError,
+                    });
+                    return;
+                }
+
+                if (previewBody?.status === 'accepted') {
+                    setState({ phase: 'accepted', data: previewBody as InviteAcceptedState });
+                    return;
+                }
+
+                setState({ phase: 'error', message: ti.genericError });
+            } catch {
+                if (!cancelled) setState({ phase: 'error', message: ti.genericError });
+            }
+        };
+
+        void run();
+        return () => {
+            cancelled = true;
+        };
     }, [token, ti.invalidToken, ti.genericError]);
+
+    const signInHref = token
+        ? `/auth/sign-in?next=${encodeURIComponent(`/invite/accept/${token}`)}`
+        : '/auth/sign-in';
 
     return (
         <div className="flex justify-center items-center min-h-screen px-4">
@@ -79,11 +141,33 @@ export default function InviteAcceptPage() {
                             <CardDescription>{ti.acceptedDesc}</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3">
-                            <Button className="w-full" onClick={() => { router.replace('/'); router.refresh(); }}>
+                            <Button
+                                className="w-full"
+                                onClick={() => {
+                                    router.replace('/');
+                                    router.refresh();
+                                }}
+                            >
                                 {ti.goToDashboard}
                             </Button>
                             <Button variant="outline" className="w-full" asChild>
                                 <Link href="/auth/sign-in">{ti.signIn}</Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {state.phase === 'requires_authentication' && (
+                    <Card>
+                        <CardHeader className="items-center text-center gap-2">
+                            <CardTitle>{ti.signInToAcceptTitle}</CardTitle>
+                            <CardDescription>
+                                {ti.signInToAcceptDesc} ({state.data.email})
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3">
+                            <Button className="w-full" asChild>
+                                <Link href={signInHref}>{ti.signIn}</Link>
                             </Button>
                         </CardContent>
                     </Card>
@@ -105,7 +189,7 @@ export default function InviteAcceptPage() {
                             <p className="mt-4 text-center text-sm text-muted-foreground">
                                 {ti.alreadyHaveAccount}{' '}
                                 <Link
-                                    href={`/auth/sign-in`}
+                                    href={signInHref}
                                     className="text-primary underline underline-offset-4 hover:opacity-80 font-medium"
                                 >
                                     {ti.signIn}

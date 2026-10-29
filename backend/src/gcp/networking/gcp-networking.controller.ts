@@ -1,13 +1,15 @@
-﻿import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { TenantGuard } from '../../tenant/tenant.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
 import { CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Tenant } from '../../db/entites/tenant.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+import { parsePaginationQuery } from '../../common/pagination/parse-pagination-query';
 
 import { GcpNetworkingService } from './gcp-networking.service';
 import { GcpVpcNetworkResponseDto, GcpSubnetworkResponseDto, GcpFirewallRuleResponseDto } from './swagger.dto';
@@ -15,7 +17,7 @@ import { GcpVpcNetworkResponseDto, GcpSubnetworkResponseDto, GcpFirewallRuleResp
 @ApiTags('GCP Networking')
 @ApiBearerAuth('access-token')
 @ApiHeader({ name: 'x-organization-id', description: 'UUID da organização ativa', required: true })
-@UseGuards(TenantGuard, RolesGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('gcp/networking')
 export class GcpNetworkingController {
     constructor(private readonly service: GcpNetworkingService) {}
@@ -25,9 +27,13 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar VPC Networks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpVpcNetworkResponseDto] })
-    async listNetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        void org;
-        return this.service.listNetworksFromDatabase(cloudAccountId);
+    async listNetworks(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listNetworksFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Post('accounts/:cloudAccountId/networks/sync')
@@ -45,9 +51,13 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar Subnetworks GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpSubnetworkResponseDto] })
-    async listSubnetworks(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        void org;
-        return this.service.listSubnetworksFromDatabase(cloudAccountId);
+    async listSubnetworks(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listSubnetworksFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Post('accounts/:cloudAccountId/subnetworks/sync')
@@ -65,9 +75,13 @@ export class GcpNetworkingController {
     @ApiOperation({ summary: 'Listar Firewall Rules GCP' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: [GcpFirewallRuleResponseDto] })
-    async listFirewallRules(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        void org;
-        return this.service.listFirewallRulesFromDatabase(cloudAccountId);
+    async listFirewallRules(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listFirewallRulesFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Post('accounts/:cloudAccountId/firewall-rules/sync')

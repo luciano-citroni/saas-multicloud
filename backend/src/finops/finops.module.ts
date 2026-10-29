@@ -52,6 +52,8 @@ import { GcpSqlInstance } from '../db/entites/gcp-sql-instance.entity';
 // Supporting modules
 import { TenantModule } from '../tenant/tenant.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { BillingModule } from '../billing/billing.module';
+import { PlanModuleGuard } from '../common/guards/plan-module.guard';
 
 import { FINOPS_QUEUE } from './constants';
 
@@ -84,9 +86,11 @@ import { FINOPS_QUEUE } from './constants';
 
         TenantModule,
         RbacModule,
+        BillingModule,
     ],
     controllers: [FinopsController],
     providers: [
+        PlanModuleGuard,
         // Core services
         FinopsService,
         FinopsAnalysisService,
@@ -113,6 +117,7 @@ import { FINOPS_QUEUE } from './constants';
         FinopsCostIngestionService,
         FinopsAnomalyDetectionService,
         FinopsForecastService,
+        FinopsOrgOverviewService,
     ],
 })
 export class FinopsModule {}

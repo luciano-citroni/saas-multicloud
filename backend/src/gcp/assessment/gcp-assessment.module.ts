@@ -20,6 +20,7 @@ import { GcpCloudRunJob } from '../../db/entites/gcp-cloud-run-job.entity';
 
 import { TenantModule } from '../../tenant/tenant.module';
 import { RbacModule } from '../../rbac/rbac.module';
+import { CloudModule } from '../../cloud/cloud.module';
 import { BillingModule } from '../../billing/billing.module';
 
 import { GcpComputeModule } from '../compute/gcp-compute.module';
@@ -65,6 +66,7 @@ import { GcpAssessmentArchitectureService } from './gcp-assessment-architecture.
         ]),
         TenantModule,
         RbacModule,
+        CloudModule,
         BillingModule,
         GcpComputeModule,
         GcpNetworkingModule,
@@ -86,5 +88,6 @@ import { GcpAssessmentArchitectureService } from './gcp-assessment-architecture.
         GcpAssessmentArchitectureService,
     ],
     controllers: [GcpAssessmentController],
+    exports: [GcpAssessmentService, GcpAssessmentReportService],
 })
 export class GcpAssessmentModule {}

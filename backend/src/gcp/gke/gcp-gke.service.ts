@@ -4,6 +4,12 @@ import { Repository } from 'typeorm';
 
 import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpGkeCluster } from '../../db/entites/gcp-gke-cluster.entity';
+import {
+    buildPaginationMeta,
+    normalizePagination,
+    type PaginatedResult,
+    type PaginationInput,
+} from '../../common/pagination/paginate';
 
 @Injectable()
 export class GcpGkeService {
@@ -16,8 +22,18 @@ export class GcpGkeService {
         private readonly clusterRepo: Repository<GcpGkeCluster>
     ) {}
 
-    async listClustersFromDatabase(cloudAccountId: string): Promise<GcpGkeCluster[]> {
-        return this.clusterRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listClustersFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpGkeCluster>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.clusterRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncClustersFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpGkeCluster[]> {

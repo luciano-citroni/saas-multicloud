@@ -61,7 +61,12 @@ export async function GET(request: Request) {
     const resolved = await resolveAccessToken();
     if (!resolved.accessToken) return buildUnauthorizedResponse();
 
-    const backendUrl = '/api/organizations';
+    const backendQuery = new URLSearchParams();
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    if (page) backendQuery.set('page', page);
+    if (limit) backendQuery.set('limit', limit);
+    const backendUrl = backendQuery.size > 0 ? `/api/organizations?${backendQuery.toString()}` : '/api/organizations';
 
     let response = await backendFetch(backendUrl, {
         headers: withAuthHeaders(resolved.accessToken, tenantId),

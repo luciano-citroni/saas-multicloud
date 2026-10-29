@@ -11,6 +11,7 @@ import type { Vpc, Subnet } from '@aws-sdk/client-ec2';
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsVpc, AwsSubnet } from '../../db/entites/index';
+import { buildPaginationMeta, normalizePagination, type PaginationInput } from '../../common/pagination/paginate';
 
 @Injectable()
 export class AwsNetworkingService {
@@ -38,32 +39,28 @@ export class AwsNetworkingService {
 
      */
 
-    async listVpcsFromDatabase(cloudAccountId: string) {
-        const vpcs = await this.vpcRepository.find({
+    async listVpcsFromDatabase(cloudAccountId: string, pagination: PaginationInput = {}) {
+        const { page, limit } = normalizePagination(pagination);
+        const [vpcs, totalItems] = await this.vpcRepository.findAndCount({
             where: { cloudAccountId },
-
-            relations: ['subnets'],
-
             order: { createdAt: 'DESC' },
+            skip: (page - 1) * limit,
+            take: limit,
         });
 
-        return vpcs.map((vpc) => ({
-            id: vpc.id,
-
-            awsVpcId: vpc.awsVpcId,
-
-            cidrBlock: vpc.cidrBlock,
-
-            state: vpc.state,
-
-            isDefault: vpc.isDefault,
-
-            tags: vpc.tags ?? {},
-
-            lastSyncedAt: vpc.lastSyncedAt,
-
-            subnetsCount: vpc.subnets?.length ?? 0,
-        }));
+        return {
+            items: vpcs.map((vpc) => ({
+                id: vpc.id,
+                awsVpcId: vpc.awsVpcId,
+                cidrBlock: vpc.cidrBlock,
+                state: vpc.state,
+                isDefault: vpc.isDefault,
+                tags: vpc.tags ?? {},
+                lastSyncedAt: vpc.lastSyncedAt,
+                subnetsCount: 0,
+            })),
+            pagination: buildPaginationMeta(totalItems, page, limit),
+        };
     }
 
     /**

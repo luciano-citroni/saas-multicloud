@@ -89,3 +89,9 @@ export async function fetchGovernanceScore(organizationId: string, cloudAccountI
         { cache: 'no-store' }
     );
 }
+
+export async function fetchOrganizationGovernanceScores(organizationId: string) {
+    return fetch(`/api/governance/scores?organizationId=${encodeURIComponent(organizationId)}`, {
+        cache: 'no-store',
+    });
+}

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -90,7 +90,21 @@ export class MembersController {
     @ApiOperation({ summary: 'Listar membros da organização' })
     @ApiResponse({ status: 200, description: 'Lista de membros', type: [MemberWithUserResponseDto] })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    listMembers(@CurrentOrganization() organization: Tenant) {
+    listMembers(
+        @CurrentOrganization() organization: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        if (page != null || limit != null) {
+            const parsedPage = page ? Number.parseInt(page, 10) : 1;
+            const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+            return this.organizationService.listMembersPaginated(
+                organization.id,
+                Number.isFinite(parsedPage) ? parsedPage : 1,
+                Number.isFinite(parsedLimit) ? parsedLimit : 25
+            );
+        }
+
         return this.organizationService.listMembers(organization.id);
     }
 

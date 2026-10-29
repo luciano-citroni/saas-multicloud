@@ -20,6 +20,7 @@ import {
     FINOPS_CHART_GRID,
     FINOPS_CHART_MUTED,
     FINOPS_CHART_PRIMARY,
+    finopsChartInitialDimension,
     finopsChartSurfaceClassName,
     finopsChartTickProps,
     finopsChartTooltipStyles,
@@ -256,7 +257,7 @@ export function CostTrendChart({
             </CardHeader>
             <CardContent>
                 <div className={cn('h-72 w-full min-w-0', finopsChartSurfaceClassName)}>
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                         {chartType === 'line' ? (
                             <LineChart data={chartData}>
                                 {commonAxis}

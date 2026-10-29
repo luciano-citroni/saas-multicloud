@@ -29,6 +29,18 @@ export const ErrorMessages = {
             en: 'Token is invalid or expired',
             pt: 'Token inválido ou expirado',
         },
+        EMAIL_CHANGE_NOT_ALLOWED: {
+            en: 'Email cannot be changed directly. Contact support or use a verified email-change flow.',
+            pt: 'O e-mail não pode ser alterado diretamente. Use um fluxo de verificação ou fale com o suporte.',
+        },
+        GOOGLE_EMAIL_NOT_VERIFIED: {
+            en: 'Google account email is not verified.',
+            pt: 'O e-mail da conta Google não está verificado.',
+        },
+        GOOGLE_LINK_REQUIRED: {
+            en: 'An account with this email already exists. Sign in with your password first; Google linking is not automatic.',
+            pt: 'Já existe uma conta com este e-mail. Entre com a senha primeiro; o vínculo com Google não é automático.',
+        },
     },
 
     // Users
@@ -340,6 +352,53 @@ export const ErrorMessages = {
         CLOUD_ACCOUNT_LIMIT_REACHED: {
             en: 'Cloud account limit reached for your current plan.',
             pt: 'Limite de contas cloud atingido no seu plano atual.',
+        },
+        MODULE_NOT_ENABLED: {
+            en: 'This feature is not enabled in your current plan.',
+            pt: 'Este recurso não está habilitado no seu plano atual.',
+        },
+    },
+
+    AI_CHAT: {
+        CONVERSATION_NOT_FOUND: {
+            en: 'Chat conversation not found.',
+            pt: 'Conversa do chat não encontrada.',
+        },
+        MESSAGE_TOO_LONG: {
+            en: 'Message exceeds the maximum allowed length.',
+            pt: 'A mensagem excede o tamanho máximo permitido.',
+        },
+        PROVIDER_NOT_CONFIGURED: {
+            en: 'AI chat provider is not configured.',
+            pt: 'O provedor de IA do chat não está configurado.',
+        },
+        PROVIDER_UNAVAILABLE: {
+            en: 'AI chat provider is temporarily unavailable.',
+            pt: 'O provedor de IA do chat está temporariamente indisponível.',
+        },
+        PROVIDER_TIMEOUT: {
+            en: 'AI chat provider timed out.',
+            pt: 'O provedor de IA do chat excedeu o tempo limite.',
+        },
+        OUT_OF_SCOPE: {
+            en: 'I can help with your organization data, cloud costs, inventory, assessments, governance, automations, and SaaS features. I cannot answer questions outside that scope.',
+            pt: 'Posso ajudar com os dados da sua organização, custos cloud, inventário, assessments, governança, automações e funcionalidades do SaaS. Não consigo responder a perguntas fora desse escopo.',
+        },
+        TOOL_LIMIT_EXCEEDED: {
+            en: 'Too many tool calls were requested for this interaction.',
+            pt: 'Foram solicitadas demasiadas chamadas de ferramentas nesta interação.',
+        },
+        GENERATION_CANCELLED: {
+            en: 'Generation was cancelled.',
+            pt: 'A geração foi interrompida.',
+        },
+        RATE_LIMITED: {
+            en: 'Too many AI chat requests. Please try again later.',
+            pt: 'Muitas requisições ao chat de IA. Tente novamente mais tarde.',
+        },
+        NO_DATA: {
+            en: 'No data is available for this query in your organization.',
+            pt: 'Não há dados disponíveis para esta consulta na sua organização.',
         },
     },
 

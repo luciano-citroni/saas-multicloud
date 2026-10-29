@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -44,7 +44,23 @@ export class OrgsController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Listar organizações do tenant' })
     @ApiResponse({ status: 200, description: 'Lista de organizações' })
-    findAll(@CurrentOrganization() tenant: Tenant, @CurrentUser() user: JwtPayload) {
+    findAll(
+        @CurrentOrganization() tenant: Tenant,
+        @CurrentUser() user: JwtPayload,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        if (page != null || limit != null) {
+            const parsedPage = page ? Number.parseInt(page, 10) : 1;
+            const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+            return this.orgsService.findAllPaginated(
+                tenant.id,
+                user.sub,
+                Number.isFinite(parsedPage) ? parsedPage : 1,
+                Number.isFinite(parsedLimit) ? parsedLimit : 25
+            );
+        }
+
         return this.orgsService.findAll(tenant.id, user.sub);
     }
 
@@ -59,9 +75,10 @@ export class OrgsController {
 
     @Patch(':id')
     @HttpCode(HttpStatus.OK)
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.ADMIN)
     @ApiOperation({ summary: 'Atualizar organização' })
     @ApiResponse({ status: 200, description: 'Organização atualizada' })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     @ApiResponse({ status: 404, description: 'Organização não encontrada' })
     update(
         @CurrentOrganization() tenant: Tenant,
@@ -74,9 +91,10 @@ export class OrgsController {
 
     @Delete(':id')
     @HttpCode(HttpStatus.OK)
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.ADMIN)
     @ApiOperation({ summary: 'Deletar organização' })
     @ApiResponse({ status: 200, description: 'Organização deletada' })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     @ApiResponse({ status: 404, description: 'Organização não encontrada' })
     remove(@CurrentOrganization() tenant: Tenant, @CurrentUser() user: JwtPayload, @Param(new ZodValidationPipe(orgIdParamSchema)) params: OrgIdParam) {
         return this.orgsService.remove(params.id, tenant.id, user.sub);

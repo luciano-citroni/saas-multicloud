@@ -32,7 +32,7 @@ export function hasRequiredOrganizationRole(role: OrganizationRole | null, minim
 }
 
 export function canManageCloudAccounts(role: OrganizationRole | null): boolean {
-    return hasRequiredOrganizationRole(role, 'MEMBER');
+    return hasRequiredOrganizationRole(role, 'ADMIN');
 }
 
 export function canSyncCloudAccounts(role: OrganizationRole | null): boolean {
@@ -44,11 +44,11 @@ export function canManageBilling(role: OrganizationRole | null): boolean {
 }
 
 export function canEditOrganization(role: OrganizationRole | null): boolean {
-    return hasRequiredOrganizationRole(role, 'MEMBER');
+    return hasRequiredOrganizationRole(role, 'ADMIN');
 }
 
 export function canDeleteOrganization(role: OrganizationRole | null): boolean {
-    return hasRequiredOrganizationRole(role, 'MEMBER');
+    return hasRequiredOrganizationRole(role, 'ADMIN');
 }
 
 export function canManageMembers(role: OrganizationRole | null): boolean {

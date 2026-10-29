@@ -1,8 +1,11 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+import { parsePaginationQuery } from '../../common/pagination/parse-pagination-query';
 
 import { AwsIamRoleService } from './aws-iam-role.service';
 
@@ -23,7 +26,7 @@ import { IamRoleResponseDto, IamRoleSyncResponseDto } from './swagger.dto';
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/iam/roles')
 export class AwsIamRoleController {
     constructor(private readonly service: AwsIamRoleService) {}
@@ -81,11 +84,15 @@ export class AwsIamRoleController {
 
         @Query('pathPrefix') pathPrefix?: string,
 
+        @Query('page') page?: string,
+
+        @Query('limit') limit?: string,
+
         @CurrentOrganization() org?: Tenant
     ) {
         const scope = roleScope === 'all' ? 'all' : 'user';
 
-        return this.service.listRolesFromDatabase(cloudAccountId, pathPrefix, scope);
+        return this.service.listRolesFromDatabase(cloudAccountId, pathPrefix, scope, parsePaginationQuery(page, limit));
     }
 
     @Get('accounts/:cloudAccountId/roles/:roleId')

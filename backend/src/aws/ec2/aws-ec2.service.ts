@@ -11,6 +11,7 @@ import type { Instance } from '@aws-sdk/client-ec2';
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
+import { paginateQuery, type PaginationInput } from '../../common/pagination/paginate';
 
 @Injectable()
 export class Ec2Service {
@@ -47,22 +48,20 @@ export class Ec2Service {
 
      */
 
-    async listInstancesFromDatabase(cloudAccountId: string) {
-        const instances = await this.ec2Repository
-
+    async listInstancesFromDatabase(cloudAccountId: string, pagination: PaginationInput = {}) {
+        const qb = this.ec2Repository
             .createQueryBuilder('instance')
-
             .innerJoinAndSelect('instance.vpc', 'vpc')
-
             .innerJoinAndSelect('instance.subnet', 'subnet')
-
             .where('vpc.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .orderBy('instance.launchTime', 'DESC');
 
-            .orderBy('instance.launchTime', 'DESC')
+        const result = await paginateQuery(qb, pagination);
 
-            .getMany();
-
-        return instances.map(mapDbInstance);
+        return {
+            items: result.items.map(mapDbInstance),
+            pagination: result.pagination,
+        };
     }
 
     /**

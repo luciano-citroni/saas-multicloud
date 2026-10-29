@@ -20,7 +20,7 @@ import {
     normalizePagination,
     readJobsFiltersFromLocation,
 } from '@/components/root/governance/overview/helpers';
-import type { GovernanceJob, GovernanceScore, PaginationMeta, SidebarContextPayload } from '@/components/root/governance/overview/types';
+import type { GovernanceJob, GovernanceScore, PaginationMeta } from '@/components/root/governance/overview/types';
 import {
     ACTIVE_ORG_STORAGE_KEY,
     ACTIVE_ORG_CHANGED_EVENT,
@@ -28,9 +28,11 @@ import {
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { startGovernanceScan, fetchGovernanceJobs, fetchGovernanceJobStatus, fetchGovernanceScore } from '@/app/actions/governance';
 import { useTranslations } from '@/lib/i18n';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 
 // --- Helpers ------------------------------------------------------------------
 
@@ -71,8 +73,13 @@ export function GovernanceOverview() {
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
-    const [activeCloudAccount, setActiveCloudAccount] = useState<OrganizationCloudAccount | null>(null);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
+    const currentRole = normalizeOrganizationRole(rawRole);
+    const cloudAccountsQuery = useCloudAccounts(organizationId);
+    const activeCloudAccount =
+        cloudAccountId && cloudAccountsQuery.data
+            ? (cloudAccountsQuery.data.find((account) => account.id === cloudAccountId) ?? null)
+            : null;
 
     const [score, setScore] = useState<GovernanceScore | null>(null);
     const [jobs, setJobs] = useState<GovernanceJob[]>([]);
@@ -161,74 +168,12 @@ export function GovernanceOverview() {
                 setCloudAccountId(activeCloudId);
             }
 
-            if (!activeOrgId) {
-                if (!cancelled) {
-                    setCurrentRole(null);
-                    setActiveCloudAccount(null);
+            if (!cancelled) {
+                setIsContextLoading(false);
+                if (!activeOrgId) {
                     setScore(null);
                     setJobs([]);
                     setJobsPagination(null);
-                    setIsContextLoading(false);
-                }
-
-                return;
-            }
-
-            try {
-                const [sidebarResponse, cloudAccountsResponse] = await Promise.all([
-                    fetch('/api/sidebar/context', { cache: 'no-store' }),
-                    fetchOrganizationCloudAccounts(activeOrgId),
-                ]);
-
-                if (sidebarResponse.status === 401 || cloudAccountsResponse.status === 401) {
-                    toast.error(tc.sessionExpired);
-                    router.replace('/auth/sign-in');
-                    router.refresh();
-                    return;
-                }
-
-                if (!sidebarResponse.ok || !cloudAccountsResponse.ok) {
-                    if (!cancelled) {
-                        setCurrentRole(null);
-                        setActiveCloudAccount(null);
-                        setCloudAccountId(null);
-                        setScore(null);
-                        setJobs([]);
-                        setJobsPagination(null);
-                    }
-
-                    return;
-                }
-
-                const sidebarPayload = (await sidebarResponse.json().catch(() => null)) as SidebarContextPayload | null;
-                const activeOrganization = sidebarPayload?.organizations?.find((organization) => organization?.id === activeOrgId);
-                const cloudAccountsPayload = (await cloudAccountsResponse.json().catch(() => null)) as unknown;
-                const cloudAccounts = normalizeCloudAccounts(cloudAccountsPayload);
-                const resolvedActiveCloudAccount = cloudAccounts.find((account) => account.id === activeCloudId) ?? null;
-
-                if (!cancelled) {
-                    setCurrentRole(normalizeOrganizationRole(activeOrganization?.currentRole ?? null));
-                    setActiveCloudAccount(resolvedActiveCloudAccount);
-                    setCloudAccountId(resolvedActiveCloudAccount?.id ?? null);
-
-                    if (!resolvedActiveCloudAccount) {
-                        setScore(null);
-                        setJobs([]);
-                        setJobsPagination(null);
-                    }
-                }
-            } catch {
-                if (!cancelled) {
-                    setCurrentRole(null);
-                    setActiveCloudAccount(null);
-                    setCloudAccountId(null);
-                    setScore(null);
-                    setJobs([]);
-                    setJobsPagination(null);
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsContextLoading(false);
                 }
             }
         };
@@ -239,6 +184,36 @@ export function GovernanceOverview() {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        if (cloudAccountsQuery.isError && (cloudAccountsQuery.error as Error & { status?: number }).status === 401) {
+            toast.error(tc.sessionExpired);
+            router.replace('/auth/sign-in');
+            router.refresh();
+        }
+    }, [cloudAccountsQuery.error, cloudAccountsQuery.isError, router, tc.sessionExpired]);
+
+    useEffect(() => {
+        if (!organizationId) {
+            setScore(null);
+            setJobs([]);
+            setJobsPagination(null);
+            return;
+        }
+
+        if (!cloudAccountsQuery.isSuccess) {
+            return;
+        }
+
+        if (!activeCloudAccount) {
+            setCloudAccountId(null);
+            setScore(null);
+            setJobs([]);
+            setJobsPagination(null);
+        } else if (cloudAccountId !== activeCloudAccount.id) {
+            setCloudAccountId(activeCloudAccount.id);
+        }
+    }, [activeCloudAccount, cloudAccountId, cloudAccountsQuery.isSuccess, organizationId]);
 
     // -- React to org/cloud account changes ------------------------------------
 
@@ -265,27 +240,6 @@ export function GovernanceOverview() {
             window.removeEventListener('storage', handleContextChange);
         };
     }, [jobsLimit, syncJobsUrlState]);
-
-    // -- Load RBAC role ---------------------------------------------------------
-
-    useEffect(() => {
-        if (!organizationId) return;
-
-        const loadRole = async () => {
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) return;
-
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const org = payload?.organizations?.find((o) => o?.id === organizationId);
-                setCurrentRole(normalizeOrganizationRole(org?.currentRole ?? null));
-            } catch {
-                // non-blocking
-            }
-        };
-
-        void loadRole();
-    }, [organizationId]);
 
     // -- Load data --------------------------------------------------------------
 
@@ -463,7 +417,6 @@ export function GovernanceOverview() {
             const currentAccount = validationAccounts.find((account) => account.id === cloudAccountId) ?? null;
 
             if (!currentAccount) {
-                setActiveCloudAccount(null);
                 setCloudAccountId(null);
                 setScore(null);
                 setJobs([]);

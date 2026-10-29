@@ -39,7 +39,7 @@ export class AzureAssessmentService {
         await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
 
         const cloudAccount = await this.cloudAccountRepository.findOne({
-            where: { id: cloudAccountId, organizationId },
+            where: { id: cloudAccountId, tenantId: organizationId },
         });
 
         if (!cloudAccount) {

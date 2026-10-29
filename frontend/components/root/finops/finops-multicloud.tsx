@@ -32,6 +32,7 @@ import {
     FINOPS_CHART_COLORS,
     FINOPS_CHART_GRID,
     FINOPS_CHART_PRIMARY,
+    finopsChartInitialDimension,
     finopsChartSurfaceClassName,
     finopsChartTickProps,
     finopsChartTooltipStyles,
@@ -292,7 +293,7 @@ export function FinopsMulticloud() {
                         <p className="py-12 text-center text-sm text-muted-foreground">Sem dados para comparar</p>
                     ) : (
                         <div className={cn('h-72 w-full min-w-0', finopsChartSurfaceClassName)}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                                 {providerChartType === 'bar' ? (
                                     <BarChart data={chartData} margin={{ left: 8, right: 16, bottom: 8 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke={FINOPS_CHART_GRID} vertical={false} />

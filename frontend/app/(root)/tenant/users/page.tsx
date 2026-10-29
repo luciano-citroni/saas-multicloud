@@ -4,71 +4,60 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { TenantUsersPage } from '@/components/root/tenant/users/tenant-users-page';
-import { canManageMembers, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { useTranslations } from '@/lib/i18n';
-
-type SidebarOrg = { id?: string; currentRole?: string | null; name?: string };
-
-type SidebarContextPayload = {
-    organizations?: SidebarOrg[];
-    user?: { id?: string };
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 export default function TenantUsers() {
-    const [ready, setReady] = useState(false);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
-    const [organizationId, setOrganizationId] = useState<string | undefined>(undefined);
-    const [organizationName, setOrganizationName] = useState('');
+    const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
     const router = useRouter();
     const to = useTranslations('organizations');
+    const sidebarQuery = useSidebarContext();
 
     useEffect(() => {
-        const checkAccess = async () => {
-            try {
-                const activeOrgId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
+        setActiveOrgId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+    }, []);
 
-                if (!response.ok) {
-                    toast.error(to.validatePermissionsError);
-                    router.replace('/');
-                    return;
-                }
+    useEffect(() => {
+        if (!sidebarQuery.isFetched || sidebarQuery.isLoading) {
+            return;
+        }
 
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const orgId = activeOrgId ?? payload?.organizations?.[0]?.id;
-                const org = payload?.organizations?.find((o) => o?.id === orgId);
-                const role = normalizeOrganizationRole(org?.currentRole ?? null);
+        if (sidebarQuery.isError || !sidebarQuery.data) {
+            toast.error(to.validatePermissionsError);
+            router.replace('/');
+            return;
+        }
 
-                if (!canManageMembers(role)) {
-                    toast.error(to.noEditPermission);
-                    router.replace('/');
-                    return;
-                }
+        const orgId = activeOrgId ?? sidebarQuery.data.organizations[0]?.id;
+        const org = sidebarQuery.data.organizations.find((o) => o.id === orgId);
+        const role = normalizeOrganizationRole(org?.currentRole ?? null);
 
-                setOrganizationId(orgId);
-                setOrganizationName(org?.name ?? '');
-                setCurrentRole(role);
-                setCurrentUserId(payload?.user?.id);
-                setReady(true);
-            } catch {
-                toast.error(to.validatePermissionsError);
-                router.replace('/');
-            }
-        };
+        if (!canManageMembers(role)) {
+            toast.error(to.noEditPermission);
+            router.replace('/');
+        }
+    }, [activeOrgId, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, to]);
 
-        void checkAccess();
-    }, [router, to]);
+    if (!sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+        return null;
+    }
 
-    if (!ready || !organizationId || !currentRole) return null;
+    const orgId = activeOrgId ?? sidebarQuery.data.organizations[0]?.id;
+    const org = sidebarQuery.data.organizations.find((o) => o.id === orgId);
+    const currentRole = normalizeOrganizationRole(org?.currentRole ?? null);
+
+    if (!orgId || !currentRole || !canManageMembers(currentRole)) {
+        return null;
+    }
 
     return (
         <TenantUsersPage
-            organizationId={organizationId}
-            organizationName={organizationName}
+            organizationId={orgId}
+            organizationName={org?.name ?? ''}
             currentRole={currentRole}
-            currentUserId={currentUserId}
+            currentUserId={sidebarQuery.data.user.id}
         />
     );
 }

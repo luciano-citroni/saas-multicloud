@@ -20,7 +20,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import {
     fetchAutomations,
     deleteAutomation,
@@ -31,6 +31,7 @@ import {
 } from '@/app/actions/automations';
 import { cn } from '@/lib/utils';
 import { executionStatusClass, workflowStatusClass } from './status-styles';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -41,7 +42,9 @@ export function AutomationsListClient() {
     const router = useRouter();
     const [automations, setAutomations] = useState<AutomationWorkflow[]>([]);
     const [loading, setLoading] = useState(true);
-    const [role, setRole] = useState<OrganizationRole | null>(null);
+    const [orgId, setOrgId] = useState<string | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(orgId);
+    const role = normalizeOrganizationRole(rawRole);
     const [deleteTarget, setDeleteTarget] = useState<AutomationWorkflow | null>(null);
     const [deleting, setDeleting] = useState(false);
 
@@ -70,17 +73,8 @@ export function AutomationsListClient() {
     }, []);
 
     useEffect(() => {
+        setOrgId(getOrgId());
         void load();
-        const orgId = getOrgId();
-        if (orgId) {
-            fetch(`/api/sidebar/context`, { cache: 'no-store' })
-                .then((r) => r.json())
-                .then((payload) => {
-                    const org = (payload?.organizations ?? []).find((o: { id: string; currentRole?: string | null }) => o.id === orgId);
-                    setRole(normalizeOrganizationRole(org?.currentRole));
-                })
-                .catch(() => undefined);
-        }
     }, [load]);
 
     const canAdmin = hasRequiredOrganizationRole(role, 'ADMIN');

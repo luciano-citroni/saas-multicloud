@@ -41,6 +41,10 @@ export interface GovernanceScoreResult {
     evaluatedAt: Date;
 }
 
+export interface OrganizationGovernanceScore extends GovernanceScoreResult {
+    cloudAccountId: string;
+}
+
 export interface CategoryScore {
     category: string;
     score: number;
@@ -356,6 +360,66 @@ export class GovernanceService {
             categoryScores,
             evaluatedAt: job.completedAt ?? job.createdAt,
         };
+    }
+
+    /**
+     * Latest completed score per cloud account in the organization (dashboard batch).
+     * Omits category breakdown for payload size; critical/high counts are included.
+     */
+    async listLatestScoresForOrganization(organizationId: string): Promise<OrganizationGovernanceScore[]> {
+        const latestJobs = await this.jobRepo
+            .createQueryBuilder('job')
+            .distinctOn(['job.cloud_account_id'])
+            .where('job.organization_id = :organizationId', { organizationId })
+            .andWhere('job.status = :status', { status: 'completed' })
+            .orderBy('job.cloud_account_id')
+            .addOrderBy('job.completed_at', 'DESC')
+            .getMany();
+
+        if (latestJobs.length === 0) {
+            return [];
+        }
+
+        const jobIds = latestJobs.map((job) => job.id);
+        const severityRows = await this.findingRepo
+            .createQueryBuilder('f')
+            .select('f.jobId', 'jobId')
+            .addSelect('f.severity', 'severity')
+            .addSelect('COUNT(f.id)', 'count')
+            .where('f.jobId IN (:...jobIds)', { jobIds })
+            .andWhere('f.severity IN (:...severities)', { severities: ['critical', 'high'] })
+            .andWhere('f.status = :status', { status: 'non_compliant' })
+            .groupBy('f.jobId')
+            .addGroupBy('f.severity')
+            .getRawMany<{ jobId: string; severity: string; count: string }>();
+
+        const severityByJob = new Map<string, { critical: number; high: number }>();
+
+        for (const row of severityRows) {
+            const current = severityByJob.get(row.jobId) ?? { critical: 0, high: 0 };
+            if (row.severity === 'critical') {
+                current.critical = Number(row.count);
+            } else if (row.severity === 'high') {
+                current.high = Number(row.count);
+            }
+            severityByJob.set(row.jobId, current);
+        }
+
+        return latestJobs.map((job) => {
+            const severity = severityByJob.get(job.id) ?? { critical: 0, high: 0 };
+            return {
+                cloudAccountId: job.cloudAccountId,
+                jobId: job.id,
+                provider: job.provider,
+                score: job.score ?? 0,
+                totalFindings: job.totalFindings ?? 0,
+                totalChecks: job.totalChecks ?? 0,
+                criticalFindings: severity.critical,
+                highFindings: severity.high,
+                categoryScores: [],
+                evaluatedAt: job.completedAt ?? job.createdAt,
+            };
+        });
     }
 
     /**

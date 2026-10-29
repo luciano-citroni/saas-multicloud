@@ -1,4 +1,4 @@
-﻿import {
+import {
     BadRequestException,
     Controller,
     Get,
@@ -24,16 +24,18 @@ import { TenantMember } from '../../db/entites/tenant-member.entity';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
 
 import { GcpAssessmentService } from './gcp-assessment.service';
 import { GcpAssessmentExcelService } from './gcp-assessment-excel.service';
 import { GcpAssessmentJobResponseDto, GcpAssessmentArchitectureResponseDto, GcpGeneralSyncJobResponseDto, GcpGeneralSyncJobStatusResponseDto } from './dto/swagger.dto';
 import { GcpAssessmentReportService } from './gcp-assessment-report.service';
+import { attachmentContentDisposition } from '../../common/utils/safe-content-disposition';
 
 @ApiTags('GCP Assessment')
 @ApiBearerAuth('access-token')
 @ApiHeader({ name: 'x-organization-id', description: 'UUID da organização ativa', required: true })
-@UseGuards(TenantGuard, RolesGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('gcp/assessment')
 export class GcpAssessmentController {
     private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -229,7 +231,7 @@ export class GcpAssessmentController {
         const stream = fs.createReadStream(filePath);
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': `attachment; filename="${excelFileName}"`,
+            'Content-Disposition': attachmentContentDisposition(excelFileName ?? 'gcp-assessment.xlsx'),
         });
 
         return new StreamableFile(stream);

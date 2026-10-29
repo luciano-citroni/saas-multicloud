@@ -1,4 +1,6 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -23,7 +25,7 @@ import { CloudFrontDistributionResponseDto, CloudFrontSyncResponseDto } from './
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/cloudfront')
 export class CloudFrontController {
     constructor(private readonly service: CloudFrontService) {}

@@ -436,7 +436,7 @@ export class AutomationsCrudService {
         executionId: string,
         tenantId: string,
     ): Promise<{ parameters: Record<string, unknown>; available: boolean }> {
-        await this.findById(automationId, tenantId);
+        const automation = await this.findById(automationId, tenantId);
         const execution = await this.executionRepository.findOne({
             where: { id: executionId, automationId, organizationId: tenantId },
         });
@@ -445,9 +445,10 @@ export class AutomationsCrudService {
         }
 
         const parameters = await this.readExecutionParameters(executionId);
+        const sensitive = sensitiveVariableNames(automation.variables as Record<string, { type?: string; sensitive?: boolean }>);
         return {
             available: Boolean(parameters),
-            parameters: parameters ?? {},
+            parameters: parameters ? (redactSensitive(parameters, sensitive) as Record<string, unknown>) : {},
         };
     }
 

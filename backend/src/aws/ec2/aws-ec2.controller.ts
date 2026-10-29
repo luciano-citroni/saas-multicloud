@@ -1,4 +1,6 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -13,6 +15,7 @@ import { CurrentOrganization } from '../../tenant/tenant.decorators';
 import { Tenant } from '../../db/entites/tenant.entity';
 
 import { Ec2InstanceResponseDto, Ec2SyncResponseDto, Ec2WithRelationsResponseDto } from './swagger.dto';
+import { parsePaginationQuery } from '../../common/pagination/parse-pagination-query';
 
 @ApiTags('AWS EC2')
 @ApiBearerAuth('access-token')
@@ -23,7 +26,7 @@ import { Ec2InstanceResponseDto, Ec2SyncResponseDto, Ec2WithRelationsResponseDto
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/ec2')
 export class Ec2Controller {
     constructor(private readonly service: Ec2Service) {}
@@ -52,8 +55,13 @@ export class Ec2Controller {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listInstances(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        return this.service.listInstancesFromDatabase(cloudAccountId);
+    listInstances(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listInstancesFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Get('accounts/:cloudAccountId/vpcs/:vpcId/instances')

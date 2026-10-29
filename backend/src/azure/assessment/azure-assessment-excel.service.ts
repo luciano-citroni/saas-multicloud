@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { safeJoinFilename } from '../../common/utils/safe-join-filename';
 import type { AzureAssessmentData } from './azure-assessment-report.service';
 
 @Injectable()
@@ -488,7 +489,7 @@ export class AzureAssessmentExcelService {
     }
 
     getExcelFilePath(fileName: string): string {
-        return path.join(this.getOutputDir(), fileName);
+        return safeJoinFilename(this.getOutputDir(), fileName);
     }
 
     private getOutputDir(): string {

@@ -31,6 +31,8 @@ import { Roles } from '../../rbac/roles.decorator';
 
 import { OrgRole } from '../../rbac/roles.enum';
 
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+
 import { AzureAssessmentService } from './azure-assessment.service';
 
 import { AzureAssessmentExcelService } from './azure-assessment-excel.service';
@@ -38,6 +40,7 @@ import { AzureAssessmentExcelService } from './azure-assessment-excel.service';
 import { AzureAssessmentJob } from '../../db/entites/azure-assessment-job.entity';
 
 import { AzureAssessmentJobResponseDto } from './dto/swagger.dto';
+import { attachmentContentDisposition } from '../../common/utils/safe-content-disposition';
 
 @ApiTags('Azure Assessment')
 @ApiBearerAuth('access-token')
@@ -48,7 +51,7 @@ import { AzureAssessmentJobResponseDto } from './dto/swagger.dto';
 
     required: true,
 })
-@UseGuards(TenantGuard, RolesGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('azure/assessment')
 export class AzureAssessmentController {
     private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -65,7 +68,7 @@ export class AzureAssessmentController {
 
     @Post('accounts/:cloudAccountId')
     @HttpCode(202)
-    @Roles(OrgRole.VIEWER)
+    @Roles(OrgRole.MEMBER, OrgRole.ADMIN, OrgRole.OWNER)
     @ApiOperation({
         summary: 'Iniciar assessment Azure da conta',
 
@@ -197,7 +200,7 @@ export class AzureAssessmentController {
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 
-            'Content-Disposition': `attachment; filename="${job.excelFileName}"`,
+            'Content-Disposition': attachmentContentDisposition(job.excelFileName ?? 'azure-assessment.xlsx'),
         });
 
         return new StreamableFile(stream);

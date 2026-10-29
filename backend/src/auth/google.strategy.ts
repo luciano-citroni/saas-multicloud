@@ -7,6 +7,7 @@ export interface GoogleProfile {
     googleId: string;
     email: string;
     name: string;
+    emailVerified: boolean;
 }
 
 @Injectable()
@@ -21,7 +22,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     }
 
     validate(_accessToken: string, _refreshToken: string, profile: Profile, done: VerifyCallback): void {
-        const email = profile.emails?.[0]?.value;
+        const primaryEmail = profile.emails?.[0];
+        const email = primaryEmail?.value;
         if (!email) {
             done(new Error('No email returned from Google'), undefined);
             return;
@@ -31,6 +33,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
             googleId: profile.id,
             email,
             name: profile.displayName ?? `${profile.name?.givenName ?? ''} ${profile.name?.familyName ?? ''}`.trim(),
+            emailVerified: primaryEmail?.verified !== false,
         };
 
         done(null, googleProfile);

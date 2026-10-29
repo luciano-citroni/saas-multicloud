@@ -95,6 +95,9 @@ import { GcpGkeCluster } from '../db/entites/gcp-gke-cluster.entity';
 
 // Supporting modules
 import { TenantModule } from '../tenant/tenant.module';
+import { RbacModule } from '../rbac/rbac.module';
+import { BillingModule } from '../billing/billing.module';
+import { PlanModuleGuard } from '../common/guards/plan-module.guard';
 
 import { GOVERNANCE_QUEUE } from './constants';
 
@@ -129,9 +132,12 @@ import { GOVERNANCE_QUEUE } from './constants';
         ]),
 
         TenantModule,
+        RbacModule,
+        BillingModule,
     ],
     controllers: [GovernanceController],
     providers: [
+        PlanModuleGuard,
         // Core services
         GovernanceService,
         GovernanceScanService,
@@ -190,5 +196,6 @@ import { GOVERNANCE_QUEUE } from './constants';
         GcpGkeMonitoringDisabledPolicy,
         GcpSqlNoHighAvailabilityPolicy,
     ],
+    exports: [GovernanceService, PolicyRegistryService],
 })
 export class GovernanceModule {}

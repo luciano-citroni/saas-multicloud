@@ -13,6 +13,7 @@ import { GoogleButton } from '@/components/auth/google-button';
 import { Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getSafeNextPath } from '@/lib/auth/request-origin';
 import { useTranslations } from '@/lib/i18n';
 
 type LoginFormData = { email: string; password: string };
@@ -73,7 +74,8 @@ export function LoginForm() {
                 return;
             }
 
-            router.replace('/');
+            const nextPath = getSafeNextPath(searchParams.get('next'), '/');
+            router.replace(nextPath);
             router.refresh();
         } catch {
             toast.error(tc.connectionError);

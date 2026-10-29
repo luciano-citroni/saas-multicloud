@@ -255,9 +255,12 @@ export class FinopsOrgOverviewService {
         }
 
         const recStatus = status === 'open' ? 'open' : status === 'resolved' ? 'resolved' : 'dismissed';
+        // Na fila de otimização (status=open), mantém anomalias reconhecidas visíveis.
+        const anomalyStatuses: Array<'open' | 'acknowledged' | 'resolved'> =
+            status === 'open' ? ['open', 'acknowledged'] : [status];
 
         const [anomalies, recommendations] = await Promise.all([
-            this.listOrgAnomalies(organizationId, supportedIds, status, Number.isFinite(days) ? days : 90),
+            this.listOrgAnomalies(organizationId, supportedIds, anomalyStatuses, Number.isFinite(days) ? days : 90),
             this.listOrgRecommendations(organizationId, supportedIds, recStatus === 'dismissed' ? 'dismissed' : recStatus),
         ]);
 
@@ -292,7 +295,10 @@ export class FinopsOrgOverviewService {
         }));
 
         const severityRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+        const statusRank: Record<string, number> = { open: 2, acknowledged: 1, resolved: 0, dismissed: 0 };
         const items = [...anomalyItems, ...recItems].sort((left, right) => {
+            const statusDiff = (statusRank[right.status] ?? 0) - (statusRank[left.status] ?? 0);
+            if (statusDiff !== 0) return statusDiff;
             const rankDiff = (severityRank[right.severityOrPriority] ?? 0) - (severityRank[left.severityOrPriority] ?? 0);
             if (rankDiff !== 0) return rankDiff;
             return right.impact - left.impact;
@@ -525,18 +531,19 @@ export class FinopsOrgOverviewService {
     private async listOrgAnomalies(
         organizationId: string,
         accountIds: string[],
-        status: 'open' | 'acknowledged' | 'resolved',
+        status: 'open' | 'acknowledged' | 'resolved' | Array<'open' | 'acknowledged' | 'resolved'>,
         days: number,
         take?: number
     ): Promise<FinopsCostAnomaly[]> {
         const since = new Date();
         since.setUTCDate(since.getUTCDate() - days);
+        const statuses = Array.isArray(status) ? status : [status];
 
         const qb = this.anomalyRepo
             .createQueryBuilder('a')
             .where('a.organizationId = :organizationId', { organizationId })
             .andWhere('a.cloudAccountId IN (:...accountIds)', { accountIds })
-            .andWhere('a.status = :status', { status })
+            .andWhere('a.status IN (:...statuses)', { statuses })
             .andWhere('a.anomalyDate >= :since', { since })
             .orderBy('a.severity', 'DESC')
             .addOrderBy('a.financialImpact', 'DESC');

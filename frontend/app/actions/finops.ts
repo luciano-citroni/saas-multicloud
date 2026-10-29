@@ -153,6 +153,17 @@ export async function fetchFinopsBudgetStatuses(organizationId: string, cloudAcc
     );
 }
 
+export async function fetchOrganizationFinopsBudgetStatuses(organizationId: string, accountCap = 8) {
+    const searchParams = new URLSearchParams({
+        organizationId,
+        accountCap: String(accountCap),
+    });
+
+    return fetch(`/api/finops/budgets/status?${searchParams.toString()}`, {
+        cache: 'no-store',
+    });
+}
+
 export type FinopsBudgetPayload = {
     name: string;
     amount: number;

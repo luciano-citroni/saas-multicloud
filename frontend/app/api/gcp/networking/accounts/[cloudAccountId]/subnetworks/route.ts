@@ -69,7 +69,12 @@ export async function GET(request: Request, { params }: Params) {
         return buildUnauthorizedResponse();
     }
 
-    const backendUrl = `/api/gcp/networking/accounts/${cloudAccountId}/subnetworks`;
+    const backendQuery = new URLSearchParams();
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    if (page) backendQuery.set('page', page);
+    if (limit) backendQuery.set('limit', limit);
+    const backendUrl = backendQuery.size > 0 ? `/api/gcp/networking/accounts/${cloudAccountId}/subnetworks?${backendQuery.toString()}` : `/api/gcp/networking/accounts/${cloudAccountId}/subnetworks`;
 
     let response = await backendFetch(backendUrl, {
         headers: withAuthHeaders(resolved.accessToken, organizationId),

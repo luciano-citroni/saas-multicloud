@@ -23,6 +23,7 @@ import type { Bucket } from '@aws-sdk/client-s3';
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsS3Bucket } from '../../db/entites/aws-s3-bucket.entity';
+import { paginateQuery, type PaginationInput } from '../../common/pagination/paginate';
 
 @Injectable()
 export class S3Service {
@@ -47,18 +48,13 @@ export class S3Service {
 
      */
 
-    async listBucketsFromDatabase(cloudAccountId: string) {
-        const buckets = await this.s3Repository
-
+    async listBucketsFromDatabase(cloudAccountId: string, pagination: PaginationInput = {}) {
+        const qb = this.s3Repository
             .createQueryBuilder('bucket')
-
             .where('bucket.cloudAccountId = :cloudAccountId', { cloudAccountId })
-
-            .orderBy('bucket.creationDate', 'DESC')
-
-            .getMany();
-
-        return buckets.map(mapDbBucket);
+            .orderBy('bucket.creationDate', 'DESC');
+        const result = await paginateQuery(qb, pagination);
+        return { items: result.items.map(mapDbBucket), pagination: result.pagination };
     }
 
     /**

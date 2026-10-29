@@ -21,6 +21,10 @@ import { Roles } from '../../rbac/roles.decorator';
 
 import { OrgRole } from '../../rbac/roles.enum';
 
+import { PlanModuleGuard, RequirePlanModule } from '../../common/guards/plan-module.guard';
+
+import { SystemModule } from '../../common/modules/system-modules';
+
 import { FinopsService } from '../services/finops.service';
 import { FinopsAnalysisService } from '../services/finops-analysis.service';
 import { FinopsBudgetService } from '../services/finops-budget.service';
@@ -94,7 +98,8 @@ const budgetSchema = z.object({
     description: 'UUID da organização ativa (contexto de tenant)',
     required: true,
 })
-@UseGuards(TenantGuard, RolesGuard)
+@RequirePlanModule(SystemModule.FINOPS)
+@UseGuards(TenantGuard, RolesGuard, PlanModuleGuard)
 @Controller('finops')
 export class FinopsController {
     constructor(
@@ -484,6 +489,21 @@ export class FinopsController {
     @ApiResponse({ status: 200, type: [BudgetDto] })
     async listBudgets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant): Promise<BudgetDto[]> {
         return this.budgetService.list(cloudAccountId, org.id);
+    }
+
+    @Get('budgets/status')
+    @ApiOperation({
+        summary: 'Status de budgets ativos da organização',
+        description: 'Batch org-wide para o dashboard: status de budgets ativos nas contas FinOps (cap padrão 8 contas).',
+    })
+    @ApiQuery({ name: 'accountCap', required: false, type: Number })
+    @ApiResponse({ status: 200, type: [BudgetStatusDto] })
+    async listOrgBudgetStatuses(
+        @CurrentOrganization() org: Tenant,
+        @Query('accountCap') accountCap?: string
+    ) {
+        const parsedCap = accountCap ? Number.parseInt(accountCap, 10) : 8;
+        return this.budgetService.listOrgBudgetStatuses(org.id, Number.isFinite(parsedCap) ? parsedCap : 8);
     }
 
     @Get('accounts/:cloudAccountId/budgets/status')

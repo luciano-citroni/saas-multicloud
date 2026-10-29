@@ -78,16 +78,20 @@ export class BillingController {
     // =========================================================================
 
     @Get('payment-methods')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @ApiOperation({ summary: "List tenant's saved payment methods (cards)" })
     @ApiResponse({ status: 200, description: 'List of saved payment methods', type: PaymentMethodDto, isArray: true })
+    @ApiResponse({ status: 403, description: 'Insufficient role — OWNER or ADMIN required' })
     listPaymentMethods(@CurrentOrganization() tenant: Tenant) {
         return this.billingService.listTenantPaymentMethods(tenant.id);
     }
 
     @Post('payment-methods/setup-intent')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Create a Stripe SetupIntent to add a new card for the tenant' })
     @ApiResponse({ status: 200, description: 'SetupIntent created — use clientSecret in Stripe.js', type: SetupIntentDto })
+    @ApiResponse({ status: 403, description: 'Insufficient role — OWNER or ADMIN required' })
     createSetupIntent(@CurrentOrganization() tenant: Tenant) {
         return this.billingService.createTenantSetupIntent(tenant.id);
     }

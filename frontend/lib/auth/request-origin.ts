@@ -117,6 +117,26 @@ export function hasTrustedOrigin(request: Request): boolean {
         return isOriginAllowed(refererOrigin, allowedOrigins);
     }
 
-    // Alguns fluxos de redirect não enviam Origin/Referer; nesse caso não bloquear.
-    return true;
+    // Fail-closed for cookie-authenticated mutating requests: missing Origin/Referer
+    // is only accepted for same-site navigations that browsers treat as "no CORS".
+    // Sec-Fetch-Site=none|same-origin|same-site covers top-level and same-site POSTs.
+    const fetchSite = request.headers.get('sec-fetch-site')?.toLowerCase();
+    if (fetchSite === 'none' || fetchSite === 'same-origin' || fetchSite === 'same-site') {
+        return true;
+    }
+
+    return false;
+}
+
+/** Only allow relative in-app paths for post-login redirects (blocks open redirects). */
+export function getSafeNextPath(rawNext: string | null | undefined, fallback = '/'): string {
+    if (!rawNext) return fallback;
+    const trimmed = rawNext.trim();
+    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('://')) {
+        return fallback;
+    }
+    if (trimmed.includes('\\') || trimmed.includes('\n') || trimmed.includes('\r')) {
+        return fallback;
+    }
+    return trimmed;
 }

@@ -11,17 +11,19 @@ import { toast } from 'sonner';
 import {
     ACTIVE_ORG_MODULES_STORAGE_KEY,
     ACTIVE_ORG_STORAGE_KEY,
-    SIDEBAR_CONTEXT_UPDATED_EVENT,
+    getActiveMidOrgStorageKey,
     notifyActiveCloudAccountChanged,
     notifyActiveOrganizationChanged,
+    SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
 import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
+import type { SidebarContextOrganization } from '@/lib/queries/types';
 
 const ACTIVE_CLOUD_STORAGE_KEY_PREFIX = 'smc_active_cloud_account_id:';
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
-const ACTIVE_MID_ORG_STORAGE_KEY_PREFIX = 'smc_active_mid_org_id:';
 
 type SidebarUser = {
     id: string;
@@ -51,41 +53,14 @@ type SidebarCloudAccount = {
     organizationId?: string | null;
 };
 
-type BackendOrganization = {
-    id?: string;
-    name?: string;
-    currentRole?: string;
-    current_role?: string;
-    maxCloudAccounts?: number;
-    maxUsers?: number;
-    max_cloud_accounts?: number;
-    max_users?: number;
-    plans?: unknown;
-};
-
 type SidebarMidOrgsResponse = SidebarMidOrg[] | { items?: SidebarMidOrg[] };
 
 type SidebarCloudAccountsResponse = {
     items?: SidebarCloudAccount[];
 };
 
-type SidebarContextResponse = {
-    user: SidebarUser;
-    organizations: SidebarOrganization[];
-};
-
-type OrganizationsApiResponse =
-    | BackendOrganization[]
-    | {
-          items?: BackendOrganization[];
-      };
-
 function getCloudStorageKey(organizationId: string) {
     return `${ACTIVE_CLOUD_STORAGE_KEY_PREFIX}${organizationId}`;
-}
-
-function getMidOrgStorageKey(tenantId: string) {
-    return `${ACTIVE_MID_ORG_STORAGE_KEY_PREFIX}${tenantId}`;
 }
 
 function normalizeMidOrgsPayload(payload: SidebarMidOrgsResponse): SidebarMidOrg[] {
@@ -105,112 +80,36 @@ function normalizeCloudAccountsPayload(payload: SidebarCloudAccount[] | SidebarC
     );
 }
 
-function parseOrganizationPlans(plans: unknown): string[] {
-    const normalize = (values: string[]) => {
-        const normalized = values.map((value) => value.trim().toLowerCase()).filter(Boolean);
-
-        if (normalized.includes('*')) {
-            return ['*'];
-        }
-
-        return Array.from(new Set(normalized));
-    };
-
-    if (Array.isArray(plans)) {
-        return normalize(plans.filter((entry): entry is string => typeof entry === 'string'));
-    }
-
-    if (typeof plans !== 'string') {
-        return [];
-    }
-
-    const raw = plans.trim();
-
-    if (!raw) {
-        return [];
-    }
-
-    if (raw === '*') {
-        return ['*'];
-    }
-
-    if (raw.startsWith('[') && raw.endsWith(']')) {
-        try {
-            const parsed = JSON.parse(raw) as unknown;
-
-            if (Array.isArray(parsed)) {
-                return normalize(parsed.filter((entry): entry is string => typeof entry === 'string'));
-            }
-        } catch {
-            return normalize(raw.split(','));
-        }
-    }
-
-    if (raw.startsWith('{') && raw.endsWith('}')) {
-        const entries = raw
-            .slice(1, -1)
-            .split(',')
-            .map((entry) => entry.replace(/^"|"$/g, '').trim())
-            .filter(Boolean);
-
-        return normalize(entries);
-    }
-
-    return normalize(raw.split(','));
-}
-
-function toSlug(value: string): string {
-    return value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-}
-
-function normalizeOrganizationsPayload(payload: OrganizationsApiResponse | null | undefined): SidebarOrganization[] {
-    const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
-
-    return items
-        .filter((organization): organization is BackendOrganization => typeof organization?.id === 'string' && typeof organization?.name === 'string')
-        .map((organization) => ({
-            id: organization.id as string,
-            name: organization.name as string,
-            slug: toSlug(organization.name as string),
-            currentRole:
-                typeof organization.currentRole === 'string'
-                    ? organization.currentRole
-                    : typeof organization.current_role === 'string'
-                      ? organization.current_role
-                      : null,
-            maxCloudAccounts:
-                typeof organization.maxCloudAccounts === 'number'
-                    ? organization.maxCloudAccounts
-                    : typeof organization.max_cloud_accounts === 'number'
-                      ? organization.max_cloud_accounts
-                      : 0,
-            maxUsers:
-                typeof organization.maxUsers === 'number'
-                    ? organization.maxUsers
-                    : typeof organization.max_users === 'number'
-                      ? organization.max_users
-                      : 0,
-            plans: parseOrganizationPlans(organization.plans),
-        }));
+function toSidebarOrganizations(organizations: SidebarContextOrganization[]): SidebarOrganization[] {
+    return organizations.map((organization) => ({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug ?? organization.id,
+        currentRole: organization.currentRole ?? null,
+        maxCloudAccounts: organization.maxCloudAccounts ?? 0,
+        maxUsers: organization.maxUsers ?? 0,
+        plans: normalizePlanModules(organization.plans ?? []),
+    }));
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const router = useRouter();
     const tn = useTranslations('nav');
-    const [loading, setLoading] = React.useState(true);
-    const [user, setUser] = React.useState<SidebarUser | null>(null);
-    const [organizations, setOrganizations] = React.useState<SidebarOrganization[]>([]);
+    const sidebarQuery = useSidebarContext();
     const [cloudAccounts, setCloudAccounts] = React.useState<SidebarCloudAccount[]>([]);
     const [activeOrganizationId, setActiveOrganizationId] = React.useState<string | undefined>(undefined);
     const [midOrgs, setMidOrgs] = React.useState<SidebarMidOrg[]>([]);
     const [activeMidOrgId, setActiveMidOrgId] = React.useState<string | undefined>(undefined);
     const [activeCloudAccountId, setActiveCloudAccountId] = React.useState<string | undefined>(undefined);
     const [activeOrganizationModules, setActiveOrganizationModules] = React.useState<string[]>([]);
+    const [orgShellLoading, setOrgShellLoading] = React.useState(false);
+
+    const user = sidebarQuery.data?.user ?? null;
+    const organizations = React.useMemo(
+        () => toSidebarOrganizations(sidebarQuery.data?.organizations ?? []),
+        [sidebarQuery.data?.organizations]
+    );
+    const loading = sidebarQuery.isLoading || orgShellLoading;
 
     React.useEffect(() => {
         const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -218,6 +117,112 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             setActiveOrganizationId(storedOrganizationId);
         }
     }, []);
+
+    React.useEffect(() => {
+        if (sidebarQuery.error && (sidebarQuery.error as Error & { status?: number }).status === 401) {
+            router.replace('/auth/sign-in');
+            router.refresh();
+        }
+    }, [router, sidebarQuery.error]);
+
+    React.useEffect(() => {
+        if (sidebarQuery.isError && (sidebarQuery.error as Error & { status?: number }).status !== 401) {
+            toast.error(tn.loadSidebarError);
+        }
+    }, [sidebarQuery.error, sidebarQuery.isError, tn.loadSidebarError]);
+
+    const applyCloudAccounts = React.useCallback(
+        (organizationId: string, allCloudAccounts: SidebarCloudAccount[], activeMidOrganizationId?: string) => {
+            const cloudAccountsList = activeMidOrganizationId
+                ? allCloudAccounts.filter((cloudAccount) => cloudAccount.organizationId === activeMidOrganizationId)
+                : allCloudAccounts;
+
+            setCloudAccounts(cloudAccountsList);
+
+            const cloudStorageKey = getCloudStorageKey(organizationId);
+            const storedCloudAccountId = window.localStorage.getItem(cloudStorageKey) ?? window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
+
+            const validStoredCloudAccountId =
+                storedCloudAccountId && cloudAccountsList.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
+                    ? storedCloudAccountId
+                    : cloudAccountsList[0]?.id;
+
+            if (!validStoredCloudAccountId) {
+                setActiveCloudAccountId(undefined);
+                window.localStorage.removeItem(cloudStorageKey);
+                window.localStorage.removeItem(ACTIVE_CLOUD_GLOBAL_KEY);
+                notifyActiveCloudAccountChanged();
+                return;
+            }
+
+            window.localStorage.setItem(cloudStorageKey, validStoredCloudAccountId);
+            window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, validStoredCloudAccountId);
+            setActiveCloudAccountId(validStoredCloudAccountId);
+            notifyActiveCloudAccountChanged();
+        },
+        []
+    );
+
+    const loadOrgShell = React.useCallback(
+        async (organizationId: string) => {
+            setOrgShellLoading(true);
+
+            try {
+                const [midOrgsResponse, accountsResponse] = await Promise.all([
+                    fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' }),
+                    fetch(`/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' }),
+                ]);
+
+                if (accountsResponse.status === 401 || midOrgsResponse.status === 401) {
+                    router.replace('/auth/sign-in');
+                    router.refresh();
+                    return;
+                }
+
+                let selectedMidOrgId: string | undefined;
+
+                if (midOrgsResponse.ok) {
+                    const payload = (await midOrgsResponse.json()) as SidebarMidOrgsResponse;
+                    const list = normalizeMidOrgsPayload(payload);
+                    setMidOrgs(list);
+
+                    const key = getActiveMidOrgStorageKey(organizationId);
+                    const stored = window.localStorage.getItem(key);
+                    selectedMidOrgId = stored && list.some((o) => o.id === stored) ? stored : list[0]?.id;
+
+                    if (!selectedMidOrgId) {
+                        setActiveMidOrgId(undefined);
+                        window.localStorage.removeItem(key);
+                    } else {
+                        window.localStorage.setItem(key, selectedMidOrgId);
+                        setActiveMidOrgId(selectedMidOrgId);
+                    }
+                } else {
+                    setMidOrgs([]);
+                    setActiveMidOrgId(undefined);
+                }
+
+                if (!accountsResponse.ok) {
+                    setCloudAccounts([]);
+                    setActiveCloudAccountId(undefined);
+                    toast.error(tn.loadCloudError);
+                    return;
+                }
+
+                const accountsPayload = (await accountsResponse.json()) as SidebarCloudAccount[] | SidebarCloudAccountsResponse;
+                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(accountsPayload), selectedMidOrgId);
+            } catch {
+                setMidOrgs([]);
+                setActiveMidOrgId(undefined);
+                setCloudAccounts([]);
+                setActiveCloudAccountId(undefined);
+                toast.error(tn.loadCloudError);
+            } finally {
+                setOrgShellLoading(false);
+            }
+        },
+        [applyCloudAccounts, router, tn.loadCloudError]
+    );
 
     const loadCloudAccounts = React.useCallback(
         async (organizationId: string, activeMidOrganizationId?: string) => {
@@ -240,33 +245,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 const payload = (await response.json()) as SidebarCloudAccount[] | SidebarCloudAccountsResponse;
-                const allCloudAccounts = normalizeCloudAccountsPayload(payload);
-                const cloudAccountsList = activeMidOrganizationId
-                    ? allCloudAccounts.filter((cloudAccount) => cloudAccount.organizationId === activeMidOrganizationId)
-                    : allCloudAccounts;
-
-                setCloudAccounts(cloudAccountsList);
-
-                const cloudStorageKey = getCloudStorageKey(organizationId);
-                const storedCloudAccountId = window.localStorage.getItem(cloudStorageKey) ?? window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
-
-                const validStoredCloudAccountId =
-                    storedCloudAccountId && cloudAccountsList.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
-                        ? storedCloudAccountId
-                        : cloudAccountsList[0]?.id;
-
-                if (!validStoredCloudAccountId) {
-                    setActiveCloudAccountId(undefined);
-                    window.localStorage.removeItem(cloudStorageKey);
-                    window.localStorage.removeItem(ACTIVE_CLOUD_GLOBAL_KEY);
-                    notifyActiveCloudAccountChanged();
-                    return;
-                }
-
-                window.localStorage.setItem(cloudStorageKey, validStoredCloudAccountId);
-                window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, validStoredCloudAccountId);
-                setActiveCloudAccountId(validStoredCloudAccountId);
-                notifyActiveCloudAccountChanged();
+                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(payload), activeMidOrganizationId);
             } catch {
                 setCloudAccounts([]);
                 setActiveCloudAccountId(undefined);
@@ -275,140 +254,67 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 toast.error(tn.loadCloudError);
             }
         },
-        [router, tn]
+        [applyCloudAccounts, router, tn.loadCloudError]
     );
 
-    const loadMidOrgs = React.useCallback(async (tenantId: string) => {
-        try {
-            const response = await fetch(`/api/orgs?organizationId=${encodeURIComponent(tenantId)}`, {
-                cache: 'no-store',
-            });
+    React.useEffect(() => {
+        if (!sidebarQuery.isSuccess || !sidebarQuery.data) {
+            return;
+        }
 
-            if (!response.ok) {
-                setMidOrgs([]);
-                setActiveMidOrgId(undefined);
-                return undefined;
-            }
+        const nextOrganizations = toSidebarOrganizations(sidebarQuery.data.organizations);
+        const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+        const validStoredOrganization =
+            storedOrganizationId && nextOrganizations.some((organization) => organization.id === storedOrganizationId)
+                ? storedOrganizationId
+                : nextOrganizations[0]?.id;
 
-            const payload = (await response.json()) as SidebarMidOrgsResponse;
-            const list = normalizeMidOrgsPayload(payload);
-            setMidOrgs(list);
-
-            const key = getMidOrgStorageKey(tenantId);
-            const stored = window.localStorage.getItem(key);
-            const valid = stored && list.some((o) => o.id === stored) ? stored : list[0]?.id;
-
-            if (!valid) {
-                setActiveMidOrgId(undefined);
-                window.localStorage.removeItem(key);
-                return undefined;
-            }
-
-            window.localStorage.setItem(key, valid);
-            setActiveMidOrgId(valid);
-            return valid;
-        } catch {
+        if (!validStoredOrganization) {
+            window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+            window.localStorage.removeItem(ACTIVE_ORG_MODULES_STORAGE_KEY);
+            setActiveOrganizationId(undefined);
+            setActiveOrganizationModules([]);
+            setCloudAccounts([]);
+            setActiveCloudAccountId(undefined);
             setMidOrgs([]);
             setActiveMidOrgId(undefined);
-            return undefined;
+            return;
         }
-    }, []);
 
-    const loadSidebarContext = React.useCallback(async () => {
-        setLoading(true);
-
-        try {
-            const response = await fetch('/api/sidebar/context', {
-                cache: 'no-store',
-            });
-
-            if (response.status === 401) {
-                router.replace('/auth/sign-in');
-                router.refresh();
-                return;
-            }
-
-            if (!response.ok) {
-                toast.error(tn.loadSidebarError);
-                return;
-            }
-
-            const payload = (await response.json()) as SidebarContextResponse;
-            setUser(payload.user);
-
-            let nextOrganizations = payload.organizations ?? [];
-
-            if (nextOrganizations.length === 0) {
-                const organizationsResponse = await fetch('/api/organization?page=1&limit=100', {
-                    cache: 'no-store',
-                });
-
-                if (organizationsResponse.ok) {
-                    const organizationsPayload = (await organizationsResponse.json().catch(() => null)) as OrganizationsApiResponse | null;
-
-                    nextOrganizations = normalizeOrganizationsPayload(organizationsPayload);
-                }
-            }
-
-            setOrganizations(nextOrganizations);
-
-            const storedOrganizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-
-            const validStoredOrganization =
-                storedOrganizationId && nextOrganizations.some((organization) => organization.id === storedOrganizationId)
-                    ? storedOrganizationId
-                    : nextOrganizations[0]?.id;
-
-            if (!validStoredOrganization) {
-                window.localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
-                window.localStorage.removeItem(ACTIVE_ORG_MODULES_STORAGE_KEY);
-                setActiveOrganizationId(undefined);
-                setActiveOrganizationModules([]);
-                setCloudAccounts([]);
-                setActiveCloudAccountId(undefined);
-                return;
-            }
-
-            window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
-            setActiveOrganizationId(validStoredOrganization);
-            const activeOrganization = nextOrganizations.find((organization) => organization.id === validStoredOrganization);
-            const activeModules = normalizePlanModules(activeOrganization?.plans ?? []);
-            setActiveOrganizationModules(activeModules);
-            window.localStorage.setItem(ACTIVE_ORG_MODULES_STORAGE_KEY, JSON.stringify(activeModules));
-            const selectedMidOrgId = await loadMidOrgs(validStoredOrganization);
-            await loadCloudAccounts(validStoredOrganization, selectedMidOrgId);
-        } catch {
-            toast.error(tn.loadSidebarError);
-        } finally {
-            setLoading(false);
-        }
-    }, [loadCloudAccounts, loadMidOrgs, router, tn]);
+        window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, validStoredOrganization);
+        setActiveOrganizationId(validStoredOrganization);
+        const activeOrganization = nextOrganizations.find((organization) => organization.id === validStoredOrganization);
+        const activeModules = normalizePlanModules(activeOrganization?.plans ?? []);
+        setActiveOrganizationModules(activeModules);
+        window.localStorage.setItem(ACTIVE_ORG_MODULES_STORAGE_KEY, JSON.stringify(activeModules));
+        void loadOrgShell(validStoredOrganization);
+    }, [loadOrgShell, sidebarQuery.data, sidebarQuery.isSuccess]);
 
     React.useEffect(() => {
-        void loadSidebarContext();
-    }, [loadSidebarContext]);
-
-    React.useEffect(() => {
-        const handleSidebarContextUpdated = () => {
-            void loadSidebarContext();
-        };
-
         const handleStorage = (event: StorageEvent) => {
             if (event.key && event.key !== ACTIVE_ORG_STORAGE_KEY) {
                 return;
             }
 
-            void loadSidebarContext();
+            void sidebarQuery.refetch();
         };
 
-        window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleSidebarContextUpdated);
         window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, [sidebarQuery]);
 
-        return () => {
-            window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleSidebarContextUpdated);
-            window.removeEventListener('storage', handleStorage);
+    React.useEffect(() => {
+        if (!activeOrganizationId) {
+            return;
+        }
+
+        const handleContextUpdated = () => {
+            void loadOrgShell(activeOrganizationId);
         };
-    }, [loadSidebarContext]);
+
+        window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextUpdated);
+        return () => window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextUpdated);
+    }, [activeOrganizationId, loadOrgShell]);
 
     const handleTenantChange = React.useCallback(
         (tenant: { id: string }) => {
@@ -423,17 +329,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             setActiveMidOrgId(undefined);
             setCloudAccounts([]);
             setActiveCloudAccountId(undefined);
-            void loadMidOrgs(tenant.id).then((selectedMidOrgId) => {
-                void loadCloudAccounts(tenant.id, selectedMidOrgId);
-            });
+            void loadOrgShell(tenant.id);
         },
-        [loadCloudAccounts, loadMidOrgs, organizations]
+        [loadOrgShell, organizations]
     );
 
     const handleMidOrgChange = React.useCallback(
         (org: SidebarMidOrg) => {
             if (!activeOrganizationId) return;
-            const key = getMidOrgStorageKey(activeOrganizationId);
+            const key = getActiveMidOrgStorageKey(activeOrganizationId);
             window.localStorage.setItem(key, org.id);
             setActiveMidOrgId(org.id);
             void loadCloudAccounts(activeOrganizationId, org.id);

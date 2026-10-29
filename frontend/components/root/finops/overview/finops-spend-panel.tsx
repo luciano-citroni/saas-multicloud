@@ -21,6 +21,7 @@ import {
     FINOPS_CHART_COLORS,
     FINOPS_CHART_GRID,
     FINOPS_CHART_PRIMARY,
+    finopsChartInitialDimension,
     finopsChartSurfaceClassName,
     finopsChartTickProps,
     finopsChartTooltipStyles,
@@ -121,7 +122,7 @@ export function FinopsSpendPanel({
                             </p>
                         ) : (
                             <div className={cn('h-72 w-full min-w-0', finopsChartSurfaceClassName)}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                                     {servicesChartType === 'bar' ? (
                                         <BarChart data={topServices} layout="vertical" margin={{ left: 8, right: 16 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke={FINOPS_CHART_GRID} horizontal={false} />
@@ -244,7 +245,7 @@ export function FinopsSpendPanel({
                             <p className="py-10 text-center text-sm text-muted-foreground">Sem dados de provedor</p>
                         ) : (
                             <div className={cn('h-72 w-full min-w-0', finopsChartSurfaceClassName)}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                                     {providerChartType === 'bar' ? (
                                         <BarChart data={byProvider} margin={{ left: 8, right: 16, bottom: 8 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke={FINOPS_CHART_GRID} vertical={false} />

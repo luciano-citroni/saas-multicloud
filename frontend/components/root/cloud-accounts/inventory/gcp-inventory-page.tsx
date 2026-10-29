@@ -33,7 +33,39 @@ import { AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Se
 
 type Tab = 'compute' | 'networks' | 'subnetworks' | 'firewall' | 'storage' | 'sql' | 'iam' | 'gke';
 
-type LoadState<T> = { status: 'idle' } | { status: 'loading' } | { status: 'success'; data: T[] } | { status: 'error'; message: string };
+type PaginationMeta = {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+};
+
+type LoadState<T> =
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'success'; data: T[]; pagination: PaginationMeta | null }
+    | { status: 'error'; message: string };
+
+function normalizePagination(payload: unknown): PaginationMeta | null {
+    if (!payload || typeof payload !== 'object') return null;
+    const pagination = (payload as { pagination?: Record<string, unknown> }).pagination;
+    if (!pagination) return null;
+    const page = Number(pagination.page);
+    const limit = Number(pagination.limit);
+    const totalItems = Number(pagination.totalItems);
+    const totalPages = Number(pagination.totalPages);
+    if (![page, limit, totalItems, totalPages].every((value) => Number.isFinite(value))) return null;
+    return {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: pagination.hasNextPage === true,
+        hasPreviousPage: pagination.hasPreviousPage === true,
+    };
+}
 
 function formatDate(value: string | null | undefined) {
     if (!value) return '—';
@@ -372,16 +404,20 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
         const stored = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (stored) {
             try {
-                const parsed = JSON.parse(stored) as { id?: string };
-                if (parsed?.id) setOrganizationId(parsed.id);
+                const parsed = JSON.parse(stored) as { id?: string } | string;
+                if (typeof parsed === 'string') {
+                    setOrganizationId(parsed);
+                } else if (parsed?.id) {
+                    setOrganizationId(parsed.id);
+                }
             } catch {
-                // ignore
+                setOrganizationId(stored);
             }
         }
     }, []);
 
     const loadTab = useCallback(
-        async (tab: Tab, orgId: string) => {
+        async (tab: Tab, orgId: string, page: number, limit: number) => {
             const setters: Record<Tab, (s: LoadState<never>) => void> = {
                 compute: setCompute as (s: LoadState<never>) => void,
                 networks: setNetworks as (s: LoadState<never>) => void,
@@ -393,21 +429,19 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                 gke: setGke as (s: LoadState<never>) => void,
             };
 
-            const currentState = { compute, networks, subnetworks, firewall, storage, sql, iam, gke }[tab];
-            if (currentState.status !== 'idle') return;
-
             setters[tab]({ status: 'loading' } as LoadState<never>);
 
             try {
+                const options = { page, limit };
                 const fetchMap: Record<Tab, () => Promise<Response>> = {
-                    compute: () => fetchGcpInstances(orgId, cloudAccountId),
-                    networks: () => fetchGcpNetworks(orgId, cloudAccountId),
-                    subnetworks: () => fetchGcpSubnetworks(orgId, cloudAccountId),
-                    firewall: () => fetchGcpFirewallRules(orgId, cloudAccountId),
-                    storage: () => fetchGcpBuckets(orgId, cloudAccountId),
-                    sql: () => fetchGcpSqlInstances(orgId, cloudAccountId),
-                    iam: () => fetchGcpServiceAccounts(orgId, cloudAccountId),
-                    gke: () => fetchGcpGkeClusters(orgId, cloudAccountId),
+                    compute: () => fetchGcpInstances(orgId, cloudAccountId, options),
+                    networks: () => fetchGcpNetworks(orgId, cloudAccountId, options),
+                    subnetworks: () => fetchGcpSubnetworks(orgId, cloudAccountId, options),
+                    firewall: () => fetchGcpFirewallRules(orgId, cloudAccountId, options),
+                    storage: () => fetchGcpBuckets(orgId, cloudAccountId, options),
+                    sql: () => fetchGcpSqlInstances(orgId, cloudAccountId, options),
+                    iam: () => fetchGcpServiceAccounts(orgId, cloudAccountId, options),
+                    gke: () => fetchGcpGkeClusters(orgId, cloudAccountId, options),
                 };
 
                 const response = await fetchMap[tab]();
@@ -420,22 +454,25 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                     return;
                 }
 
-                setters[tab]({ status: 'success', data: normalizeItems(body) } as LoadState<never>);
+                setters[tab]({
+                    status: 'success',
+                    data: normalizeItems(body),
+                    pagination: normalizePagination(body),
+                } as LoadState<never>);
             } catch {
                 const message = 'Erro ao carregar recursos GCP';
                 setters[tab]({ status: 'error', message } as LoadState<never>);
                 toast.error(message);
             }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [cloudAccountId, compute.status, networks.status, subnetworks.status, firewall.status, storage.status, sql.status, iam.status, gke.status]
+        [cloudAccountId]
     );
 
     useEffect(() => {
         if (organizationId) {
-            void loadTab(activeTab, organizationId);
+            void loadTab(activeTab, organizationId, pageIndex + 1, pageSize);
         }
-    }, [organizationId, activeTab, loadTab]);
+    }, [organizationId, activeTab, pageIndex, pageSize, loadTab]);
 
     function renderTabContent<T>(state: LoadState<T>, getName: (item: T) => string, renderTable: (data: T[]) => React.ReactNode) {
         if (state.status === 'loading' || state.status === 'idle') return <LoadingSkeleton />;
@@ -450,16 +487,16 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
         const data = state.data;
         const q = nameFilter.trim().toLowerCase();
         const filtered = q ? data.filter((item) => getName(item).toLowerCase().includes(q)) : data;
-        const total = Math.ceil(filtered.length / pageSize) || 1;
-        const paginated = filtered.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+        const totalPages = Math.max(1, state.pagination?.totalPages ?? 1);
+        const totalItems = state.pagination?.totalItems ?? data.length;
 
         return (
             <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <Input
                         value={nameFilter}
-                        onChange={(e) => { setNameFilter(e.target.value); setPageIndex(0); }}
-                        placeholder="Filtrar por nome..."
+                        onChange={(e) => { setNameFilter(e.target.value); }}
+                        placeholder="Filtrar na página..."
                         className="h-8 w-50"
                     />
                 </div>
@@ -468,9 +505,9 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                         Nenhum resultado para o filtro aplicado.
                     </div>
                 ) : (
-                    renderTable(paginated)
+                    renderTable(filtered)
                 )}
-                {data.length > 0 && (
+                {totalItems > 0 && (
                     <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
                             <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
@@ -482,7 +519,7 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                             </Select>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                            <span className="text-sm font-medium">Página {pageIndex + 1} de {total}</span>
+                            <span className="text-sm font-medium">Página {pageIndex + 1} de {totalPages}</span>
                             <div className="flex items-center gap-1 self-start sm:self-auto">
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>
                                     <ChevronsLeft className="h-4 w-4" />
@@ -490,10 +527,10 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex((p) => Math.max(p - 1, 0))} disabled={pageIndex === 0}>
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex((p) => Math.min(p + 1, total - 1))} disabled={pageIndex >= total - 1}>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex((p) => Math.min(p + 1, totalPages - 1))} disabled={pageIndex >= totalPages - 1}>
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(total - 1)} disabled={pageIndex >= total - 1}>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(totalPages - 1)} disabled={pageIndex >= totalPages - 1}>
                                     <ChevronsRight className="h-4 w-4" />
                                 </Button>
                             </div>

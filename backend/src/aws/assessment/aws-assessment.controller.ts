@@ -1,4 +1,4 @@
-﻿import {
+import {
     BadRequestException,
     Controller,
     Get,
@@ -35,10 +35,13 @@ import { Roles } from '../../rbac/roles.decorator';
 
 import { OrgRole } from '../../rbac/roles.enum';
 
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+
 import { AwsAssessmentService } from './aws-assessment.service';
 
 import { AwsAssessmentExcelService } from './aws-assessment-excel.service';
 import { AwsAssessmentReportService } from './aws-assessment-report.service';
+import { attachmentContentDisposition } from '../../common/utils/safe-content-disposition';
 
 import {
     AssessmentArchitectureResponseDto,
@@ -56,7 +59,7 @@ import {
 
     required: true,
 })
-@UseGuards(TenantGuard, RolesGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/assessment')
 export class AwsAssessmentController {
     private static readonly EXCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -332,7 +335,7 @@ export class AwsAssessmentController {
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 
-            'Content-Disposition': `attachment; filename="${excelFileName}"`,
+            'Content-Disposition': attachmentContentDisposition(excelFileName ?? 'assessment.xlsx'),
         });
 
         return new StreamableFile(stream);

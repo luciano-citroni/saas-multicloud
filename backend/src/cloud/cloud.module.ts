@@ -10,7 +10,11 @@ import { CloudService } from './cloud.service';
 
 import { CloudConnectionService } from './cloud-connection.service';
 
+import { CloudAccountAccessGuard } from './cloud-account-access.guard';
+
 import { CloudAccount } from '../db/entites/cloud-account.entity';
+
+import { Organization } from '../db/entites/organization.entity';
 
 import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 import { CloudSyncJob } from '../db/entites/cloud-sync-job.entity';
@@ -37,7 +41,7 @@ import { GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([CloudAccount, AzureAssessmentJob, CloudSyncJob]),
+        TypeOrmModule.forFeature([CloudAccount, Organization, AzureAssessmentJob, CloudSyncJob]),
         BullModule.registerQueue({ name: GENERAL_SYNC_QUEUE }),
         BullModule.registerQueue({ name: GCP_GENERAL_SYNC_QUEUE }),
         TenantModule,
@@ -45,10 +49,10 @@ import { GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
         BillingModule,
     ],
 
-    providers: [CloudService, CloudConnectionService],
+    providers: [CloudService, CloudConnectionService, CloudAccountAccessGuard],
 
     controllers: [CloudController],
 
-    exports: [CloudService],
+    exports: [CloudService, CloudAccountAccessGuard],
 })
 export class CloudModule {}

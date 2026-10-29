@@ -9,6 +9,7 @@ import { ListFunctionsCommand, GetFunctionCommand, ListTagsCommand, type Functio
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsLambdaFunction, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites';
+import { paginateQuery, type PaginationInput } from '../../common/pagination/paginate';
 
 @Injectable()
 export class AwsLambdaService {
@@ -33,22 +34,15 @@ export class AwsLambdaService {
         private readonly iamRoleRepository: Repository<AwsIamRole>
     ) {}
 
-    async listFunctionsFromDatabase(cloudAccountId: string) {
-        const functions = await this.lambdaRepository
-
+    async listFunctionsFromDatabase(cloudAccountId: string, pagination: PaginationInput = {}) {
+        const qb = this.lambdaRepository
             .createQueryBuilder('fn')
-
             .leftJoinAndSelect('fn.vpc', 'vpc')
-
             .leftJoinAndSelect('fn.iamRole', 'iamRole')
-
             .where('fn.cloudAccountId = :cloudAccountId', { cloudAccountId })
-
-            .orderBy('fn.functionName', 'ASC')
-
-            .getMany();
-
-        return functions.map(mapDbFunction);
+            .orderBy('fn.functionName', 'ASC');
+        const result = await paginateQuery(qb, pagination);
+        return { items: result.items.map(mapDbFunction), pagination: result.pagination };
     }
 
     async getFunctionById(functionId: string, cloudAccountId: string) {

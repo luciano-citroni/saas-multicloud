@@ -12,13 +12,7 @@ import {
     ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
-
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        plans?: unknown;
-    }>;
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 type ModuleRouteConfig = {
     prefix: string;
@@ -50,8 +44,9 @@ export function ModuleAccessGuard() {
     const pathname = usePathname();
     const tn = useTranslations('nav');
     const blockedPathRef = useRef<string | null>(null);
+    const sidebarQuery = useSidebarContext();
 
-    const validateCurrentRouteAccess = useCallback(async () => {
+    const validateCurrentRouteAccess = useCallback(() => {
         const requiredModule = resolveRequiredModule(pathname);
 
         if (!requiredModule) {
@@ -71,65 +66,50 @@ export function ModuleAccessGuard() {
             return;
         }
 
-        // Fast path: use the modules already resolved and cached by AppSidebar.
-        // This avoids a duplicate /api/sidebar/context request on every pathname change.
         const cachedModulesJson = window.localStorage.getItem(ACTIVE_ORG_MODULES_STORAGE_KEY);
         if (cachedModulesJson !== null) {
             try {
                 const enabledModules = JSON.parse(cachedModulesJson) as string[];
-                const hasAccess = checkModuleAccess(enabledModules, requiredModule);
-                if (hasAccess) {
+                // Cache só libera acesso cedo; negação sempre confirma com o sidebar fresco.
+                if (checkModuleAccess(enabledModules, requiredModule)) {
                     blockedPathRef.current = null;
                     return;
                 }
-                if (blockedPathRef.current !== pathname) {
-                    toast.error(tn.moduleNotEnabled);
-                    blockedPathRef.current = pathname;
-                }
-                router.replace('/');
-                return;
             } catch {
-                // Corrupted cache entry — fall through to network fetch below.
+                // Corrupted cache — fall through to shared query data.
             }
         }
 
-        // Slow path: cache not yet populated (first-load race before AppSidebar finishes).
-        // Falls back to a direct fetch so the guard never incorrectly blocks on first navigation.
-        try {
-            const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-
-            if (!response.ok) {
-                return;
-            }
-
-            const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-            const activeOrganization = payload?.organizations?.find((organization) => organization?.id === activeOrganizationId);
-            const enabledModules = normalizePlanModules(activeOrganization?.plans ?? []);
-            const hasAccess = checkModuleAccess(enabledModules, requiredModule);
-
-            if (hasAccess) {
-                blockedPathRef.current = null;
-                return;
-            }
-
-            if (blockedPathRef.current !== pathname) {
-                toast.error(tn.moduleNotEnabled);
-                blockedPathRef.current = pathname;
-            }
-
-            router.replace('/');
-        } catch {
-            // Se nao for possivel validar contexto, nao bloqueia para evitar falso negativo.
+        if (!sidebarQuery.data) {
+            return;
         }
-    }, [pathname, router, tn]);
+
+        const activeOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === activeOrganizationId);
+        const enabledModules = normalizePlanModules(activeOrganization?.plans ?? []);
+        const hasAccess = checkModuleAccess(enabledModules, requiredModule);
+
+        if (hasAccess) {
+            blockedPathRef.current = null;
+            // Mantém o cache alinhado com o snapshot mais recente.
+            window.localStorage.setItem(ACTIVE_ORG_MODULES_STORAGE_KEY, JSON.stringify(enabledModules));
+            return;
+        }
+
+        if (blockedPathRef.current !== pathname) {
+            toast.error(tn.moduleNotEnabled);
+            blockedPathRef.current = pathname;
+        }
+
+        router.replace('/');
+    }, [pathname, router, sidebarQuery.data, tn.moduleNotEnabled]);
 
     useEffect(() => {
-        void validateCurrentRouteAccess();
+        validateCurrentRouteAccess();
     }, [validateCurrentRouteAccess]);
 
     useEffect(() => {
         const handleContextChange = () => {
-            void validateCurrentRouteAccess();
+            validateCurrentRouteAccess();
         };
 
         const handleStorage = (event: StorageEvent) => {
@@ -137,7 +117,7 @@ export function ModuleAccessGuard() {
                 return;
             }
 
-            void validateCurrentRouteAccess();
+            validateCurrentRouteAccess();
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);

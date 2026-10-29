@@ -25,6 +25,7 @@ import { AutomationModule } from './automation/automation.module';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { FileStorageModule } from './file-storage/file-storage.module';
 import { OrgsModule } from './orgs/orgs.module';
+import { AiChatModule } from './ai-chat/ai-chat.module';
 
 @Module({
     imports: [
@@ -32,10 +33,10 @@ import { OrgsModule } from './orgs/orgs.module';
         ScheduleModule.forRoot(),
         ThrottlerModule.forRoot([
             {
-                // Limite global para uso diário com múltiplas requisições concorrentes no frontend
+                // Limite global por tracker (user id ou IP). Endpoints sensíveis usam @Throttle mais baixo.
                 name: 'default',
                 ttl: 60_000,
-                limit: 1200,
+                limit: 300,
             },
         ]),
         BullModule.forRootAsync({
@@ -45,12 +46,18 @@ import { OrgsModule } from './orgs/orgs.module';
                 // Sem isso, um worker remoto pode consumir jobs do Nest local e falhar com DB/código diferente.
                 const prefix = config.get<string>('BULLMQ_PREFIX')?.trim() || undefined;
 
+                const isProduction = config.get<string>('NODE_ENV') === 'production';
+                const redisPassword = config.get<string>('REDIS_PASSWORD')?.trim();
+                if (isProduction && !redisPassword) {
+                    throw new Error('REDIS_PASSWORD is required when NODE_ENV=production');
+                }
+
                 return {
                     ...(prefix ? { prefix } : {}),
                     connection: {
                         host: config.get<string>('REDIS_HOST', 'localhost'),
                         port: config.get<number>('REDIS_PORT', 6379),
-                        password: config.get<string>('REDIS_PASSWORD') || undefined,
+                        password: redisPassword || undefined,
                     },
                 };
             },
@@ -68,6 +75,7 @@ import { OrgsModule } from './orgs/orgs.module';
         FinopsModule,
         GcpModule,
         AutomationModule,
+        AiChatModule,
         FileStorageModule,
         OrgsModule,
     ],

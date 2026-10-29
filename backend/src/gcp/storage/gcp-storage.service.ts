@@ -4,6 +4,12 @@ import { Repository } from 'typeorm';
 
 import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpStorageBucket } from '../../db/entites/gcp-storage-bucket.entity';
+import {
+    buildPaginationMeta,
+    normalizePagination,
+    type PaginatedResult,
+    type PaginationInput,
+} from '../../common/pagination/paginate';
 
 @Injectable()
 export class GcpStorageService {
@@ -16,8 +22,18 @@ export class GcpStorageService {
         private readonly bucketRepo: Repository<GcpStorageBucket>
     ) {}
 
-    async listBucketsFromDatabase(cloudAccountId: string): Promise<GcpStorageBucket[]> {
-        return this.bucketRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listBucketsFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpStorageBucket>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.bucketRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncBucketsFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpStorageBucket[]> {

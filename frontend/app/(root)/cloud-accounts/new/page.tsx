@@ -6,91 +6,95 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormCloudAccount } from '@/components/root/cloud-accounts/new/form-cloud-account';
 import { canManageCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
-import { fetchOrganizationCloudAccounts } from '@/app/actions/organization';
 import { useTranslations } from '@/lib/i18n';
-
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        currentRole?: string | null;
-        maxCloudAccounts?: number;
-    }>;
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 
 export default function NewCloudAccountPage() {
     const [organizationId, setOrganizationId] = useState<string | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
     const router = useRouter();
     const tca = useTranslations('cloudAccounts');
+    const sidebarQuery = useSidebarContext({ enabled: Boolean(organizationId) });
+    const accountsQuery = useCloudAccounts(organizationId);
 
     useEffect(() => {
-        const loadPermissions = async () => {
-            const orgId = window.localStorage.getItem('smc_active_organization_id');
+        const orgId = window.localStorage.getItem('smc_active_organization_id');
 
-            if (!orgId) {
-                toast.error(tca.noOrgSelected);
-                router.replace('/');
-                return;
-            }
+        if (!orgId) {
+            toast.error(tca.noOrgSelected);
+            router.replace('/');
+            return;
+        }
 
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) {
-                    setIsAuthorized(false);
-                    toast.error(tca.validatePermissionsError);
-                    router.replace('/');
-                    return;
-                }
+        setOrganizationId(orgId);
+    }, [router, tca.noOrgSelected]);
 
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const activeOrganization = payload?.organizations?.find((organization) => organization?.id === orgId);
-                const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
-                const maxCloudAccounts = typeof activeOrganization?.maxCloudAccounts === 'number' ? activeOrganization.maxCloudAccounts : 0;
+    useEffect(() => {
+        if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading) {
+            return;
+        }
 
-                if (!canManageCloudAccounts(role)) {
-                    setIsAuthorized(false);
-                    toast.error(tca.noManagePermission);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (sidebarQuery.isError || !sidebarQuery.data) {
+            toast.error(tca.validatePermissionsError);
+            router.replace('/');
+            return;
+        }
 
-                const accountsResponse = await fetchOrganizationCloudAccounts(orgId);
-                const accountsPayload = (await accountsResponse.json().catch(() => null)) as unknown;
+        const activeOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+        const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
+        const maxCloudAccounts = activeOrganization?.maxCloudAccounts ?? 0;
 
-                if (!accountsResponse.ok) {
-                    setIsAuthorized(false);
-                    toast.error(tca.validateLimitError);
-                    router.replace('/cloud-accounts');
-                    return;
-                }
+        if (!canManageCloudAccounts(role)) {
+            toast.error(tca.noManagePermission);
+            router.replace('/organizations');
+            return;
+        }
 
-                const accountItems = Array.isArray(accountsPayload)
-                    ? accountsPayload
-                    : accountsPayload && typeof accountsPayload === 'object' && Array.isArray((accountsPayload as { items?: unknown[] }).items)
-                      ? (accountsPayload as { items: unknown[] }).items
-                      : [];
+        if (!accountsQuery.isFetched || accountsQuery.isLoading) {
+            return;
+        }
 
-                if (maxCloudAccounts > 0 && accountItems.length >= maxCloudAccounts) {
-                    setIsAuthorized(false);
-                    toast.error(tca.planLimitReached);
-                    router.replace('/cloud-accounts');
-                    return;
-                }
+        if (accountsQuery.isError) {
+            toast.error(tca.validateLimitError);
+            router.replace('/cloud-accounts');
+            return;
+        }
 
-                setOrganizationId(orgId);
-                setIsAuthorized(true);
-            } catch {
-                setIsAuthorized(false);
-                toast.error(tca.validatePermissionsError);
-                router.replace('/');
-            }
-        };
+        if (maxCloudAccounts > 0 && (accountsQuery.data?.length ?? 0) >= maxCloudAccounts) {
+            toast.error(tca.planLimitReached);
+            router.replace('/cloud-accounts');
+        }
+    }, [
+        accountsQuery.data,
+        accountsQuery.isError,
+        accountsQuery.isFetched,
+        accountsQuery.isLoading,
+        organizationId,
+        router,
+        sidebarQuery.data,
+        sidebarQuery.isError,
+        sidebarQuery.isFetched,
+        sidebarQuery.isLoading,
+        tca,
+    ]);
 
-        void loadPermissions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router]);
+    if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+        return null;
+    }
 
-    if (!organizationId || isAuthorized !== true) {
+    if (!accountsQuery.isFetched || accountsQuery.isLoading) {
+        return null;
+    }
+
+    const activeOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+    const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
+    const maxCloudAccounts = activeOrganization?.maxCloudAccounts ?? 0;
+
+    if (!canManageCloudAccounts(role)) {
+        return null;
+    }
+
+    if (maxCloudAccounts > 0 && (accountsQuery.data?.length ?? 0) >= maxCloudAccounts) {
         return null;
     }
 

@@ -1,8 +1,11 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+import { parsePaginationQuery } from '../../common/pagination/parse-pagination-query';
 
 import { S3Service } from './aws-s3.service';
 
@@ -23,7 +26,7 @@ import { S3BucketResponseDto, S3SyncResponseDto } from './swagger.dto';
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/s3')
 export class S3Controller {
     constructor(private readonly service: S3Service) {}
@@ -52,8 +55,13 @@ export class S3Controller {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listBuckets(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        return this.service.listBucketsFromDatabase(cloudAccountId);
+    listBuckets(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listBucketsFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Get('accounts/:cloudAccountId/buckets/:bucketId')

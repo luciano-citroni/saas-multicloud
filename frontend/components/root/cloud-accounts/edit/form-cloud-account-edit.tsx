@@ -259,7 +259,8 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                     awsRegions: normalizeRegionFields(credentials.regions, primaryRegion),
                     tenantId: typeof credentials.tenantId === 'string' ? credentials.tenantId : '',
                     clientId: typeof credentials.clientId === 'string' ? credentials.clientId : '',
-                    clientSecret: typeof credentials.clientSecret === 'string' ? credentials.clientSecret : '',
+                    // Secrets are never returned by the API — leave blank; omit on save to keep existing.
+                    clientSecret: '',
                     subscriptionId: typeof credentials.subscriptionId === 'string' ? credentials.subscriptionId : '',
                     gcpProjectId: typeof credentials.projectId === 'string' ? credentials.projectId : '',
                     gcpServiceAccountEmail: typeof credentials.serviceAccountEmail === 'string' ? credentials.serviceAccountEmail : '',
@@ -677,7 +678,18 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                                     <FormItem>
                                         <FormLabel>Client Secret</FormLabel>
                                         <FormControl>
-                                            <IconInput placeholder={tca.clientSecretPlaceholder} StartIcon={KeyRound} type="password" {...field} />
+                                            <IconInput
+                                                placeholder={
+                                                    (cloudAccount?.credentials as { hasClientSecret?: boolean } | undefined)
+                                                        ?.hasClientSecret
+                                                        ? '•••••••• (deixe em branco para manter)'
+                                                        : tca.clientSecretPlaceholder
+                                                }
+                                                StartIcon={KeyRound}
+                                                type="password"
+                                                autoComplete="new-password"
+                                                {...field}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

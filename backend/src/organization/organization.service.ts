@@ -94,9 +94,10 @@ export class OrganizationService {
         await Promise.all(
             entities.map(async (tenant) => {
                 const currentModules = normalizePlanModules(tenant.plans ?? []);
-                const hasSnapshot = currentModules.length > 0 || tenant.maxCloudAccounts > 0 || tenant.maxUsers > 0;
 
-                if (hasSnapshot) {
+                // Refresh when modules snapshot is empty (limits alone must not skip Stripe sync).
+                if (currentModules.length > 0) {
+                    tenant.plans = currentModules;
                     return;
                 }
 
@@ -107,6 +108,7 @@ export class OrganizationService {
                     tenant.maxUsers = Number.isFinite(plan.metadata.maxUsers) ? plan.metadata.maxUsers : 0;
                 } catch {
                     // Keep graceful fallback for tenants without active paid plan.
+                    tenant.plans = currentModules;
                 }
             })
         );
@@ -182,6 +184,18 @@ export class OrganizationService {
 
         await this.ensureCanAddUserToTenant(tenantId, true);
 
+        const inviterMembership = await this.memberRepository.findOne({ where: { tenantId, userId: inviterUserId } });
+        if (!inviterMembership) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const inviterLevel = ROLE_HIERARCHY[inviterMembership.role as OrgRole] ?? 0;
+        const invitedRoleLevel = ROLE_HIERARCHY[dto.role as OrgRole] ?? 0;
+        // Same rule as updateMemberRole: cannot assign a role >= own level (ADMIN cannot mint peer ADMINs).
+        if (invitedRoleLevel >= inviterLevel) {
+            throw new ForbiddenException(ErrorMessages.MEMBERS.INSUFFICIENT_ROLE_TO_MODIFY);
+        }
+
         const inviter = await this.userRepository.findOne({ where: { id: inviterUserId } });
         const existingUser = await this.userRepository.findOne({ where: { email: dto.email.toLowerCase() } });
 
@@ -226,9 +240,8 @@ export class OrganizationService {
     async acceptInvite(
         token: string
     ): Promise<
-        | { status: 'accepted'; message: string; organizationId: string; role: string }
         | {
-              status: 'needs_registration';
+              status: 'needs_registration' | 'requires_authentication';
               message: string;
               email: string;
               organizationId: string;
@@ -253,31 +266,15 @@ export class OrganizationService {
             };
         }
 
-        const alreadyMember = await this.memberRepository.findOne({ where: { tenantId: invite.tenantId, userId: user.id } });
-        if (alreadyMember) {
-            invite.status = TenantInviteStatus.ACCEPTED;
-            await this.inviteRepository.save(invite);
-            throw new ConflictException(ErrorMessages.INVITES.USER_ALREADY_MEMBER);
-        }
-
-        await this.ensureCanAddUserToTenant(invite.tenantId, false);
-
-        await this.memberRepository.save({
-            tenantId: invite.tenantId,
-            userId: user.id,
-            role: invite.role,
-        } as Partial<TenantMember>);
-
-        await this.addUserToInviteOrganizations(invite.tenantId, user.id, invite.role as OrgRole, invite.organizationIds);
-
-        invite.status = TenantInviteStatus.ACCEPTED;
-        await this.inviteRepository.save(invite);
-
+        // Existing accounts must accept while authenticated (prevents unauthenticated membership grant).
         return {
-            status: 'accepted',
-            message: 'Invite accepted successfully. You are now a member of the tenant.',
+            status: 'requires_authentication',
+            message: 'Sign in with the invited email to accept this invite.',
+            email: invite.email,
             organizationId: invite.tenantId,
+            organizationName: tenant?.name ?? 'Unknown Tenant',
             role: invite.role,
+            inviteToken: token,
         };
     }
 
@@ -367,8 +364,14 @@ export class OrganizationService {
             where: { tenantId: organization.tenantId, userId: requesterUserId },
         });
 
-        if (!requesterMembership || (ROLE_HIERARCHY[requesterMembership.role as OrgRole] ?? 0) < ROLE_HIERARCHY[OrgRole.ADMIN]) {
+        const requesterLevel = ROLE_HIERARCHY[requesterMembership?.role as OrgRole] ?? 0;
+        if (!requesterMembership || requesterLevel < ROLE_HIERARCHY[OrgRole.ADMIN]) {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const assignedRoleLevel = ROLE_HIERARCHY[dto.role as OrgRole] ?? 0;
+        if (assignedRoleLevel >= requesterLevel) {
+            throw new ForbiddenException(ErrorMessages.MEMBERS.INSUFFICIENT_ROLE_TO_MODIFY);
         }
 
         const targetUser = await this.userRepository.findOne({ where: { id: targetUserId } });
@@ -450,6 +453,39 @@ export class OrganizationService {
             relations: ['user'],
             order: { joinedAt: 'ASC' },
         });
+    }
+
+    async countMembers(tenantId: string): Promise<number> {
+        return this.memberRepository.count({ where: { tenantId } });
+    }
+
+    async listMembersPaginated(
+        tenantId: string,
+        page: number,
+        limit: number
+    ): Promise<{ items: TenantMember[]; pagination: { page: number; limit: number; totalItems: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean } }> {
+        const safePage = Math.max(1, page);
+        const safeLimit = Math.min(100, Math.max(1, limit));
+        const [items, totalItems] = await this.memberRepository.findAndCount({
+            where: { tenantId },
+            relations: ['user'],
+            order: { joinedAt: 'ASC' },
+            skip: (safePage - 1) * safeLimit,
+            take: safeLimit,
+        });
+        const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
+
+        return {
+            items,
+            pagination: {
+                page: safePage,
+                limit: safeLimit,
+                totalItems,
+                totalPages,
+                hasNextPage: safePage < totalPages,
+                hasPreviousPage: safePage > 1,
+            },
+        };
     }
 
     async listPendingInvites(tenantId: string): Promise<TenantInvite[]> {

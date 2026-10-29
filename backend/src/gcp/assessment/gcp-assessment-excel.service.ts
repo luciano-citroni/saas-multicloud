@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import type { GcpAssessmentData } from './gcp-assessment-report.service';
+import { safeJoinFilename } from '../../common/utils/safe-join-filename';
 
 // GCP blue
 const GCP_HEADER_BG = 'FF4285F4';
@@ -24,7 +25,7 @@ export class GcpAssessmentExcelService {
     }
 
     getExcelFilePath(fileName: string): string {
-        return path.join(this.getOutputDir(), fileName);
+        return safeJoinFilename(this.getOutputDir(), fileName);
     }
 
     resolveExistingExcelFilePath(fileName: string): string | null {
@@ -36,7 +37,7 @@ export class GcpAssessmentExcelService {
 
         const envDir = process.env.EXCEL_UPLOADS_DIR;
         if (envDir) {
-            const candidatePath = path.join(envDir, fileName);
+            const candidatePath = safeJoinFilename(envDir, fileName);
             if (fs.existsSync(candidatePath)) {
                 if (candidatePath !== filePath) {
                     this.logger.warn(`Excel GCP encontrado fora do diretório principal: ${candidatePath}`);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
     AlertTriangle,
@@ -16,8 +17,8 @@ import {
     Wallet,
 } from 'lucide-react';
 import { fetchSubscription } from '@/app/actions/billing';
-import { fetchFinopsBudgetStatuses, fetchFinopsOrgOverview } from '@/app/actions/finops';
-import { fetchGovernanceScore } from '@/app/actions/governance';
+import { fetchOrganizationFinopsBudgetStatuses, fetchFinopsOrgOverview } from '@/app/actions/finops';
+import { fetchOrganizationGovernanceScores } from '@/app/actions/governance';
 import { fetchOrganizationCloudAccounts } from '@/app/actions/organization';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,11 +46,12 @@ import { useTranslations } from '@/lib/i18n';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/queries/keys';
+import { fetchSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 const VISIBLE_DECISIONS = 6;
 const VISIBLE_ACCOUNTS = 6;
 const BUDGET_ACCOUNT_CAP = 8;
-const SCORE_CONCURRENCY = 4;
 
 type DecisionTone = 'action' | 'watch' | 'opportunity';
 
@@ -83,22 +85,6 @@ function fill(template: string, values: Record<string, string | number>) {
     return Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
 }
 
-async function mapPool<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let cursor = 0;
-
-    async function run() {
-        while (cursor < items.length) {
-            const index = cursor;
-            cursor += 1;
-            results[index] = await worker(items[index]);
-        }
-    }
-
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()));
-    return results;
-}
-
 function pressure(used: number, limit: number | null): 'ok' | 'near' | 'full' {
     if (limit == null || limit <= 0) return 'ok';
     if (used >= limit) return 'full';
@@ -114,6 +100,7 @@ function scoreTone(score: number): 'good' | 'fair' | 'low' {
 
 export function DecisionDashboard() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const t = useTranslations('home');
     const { locale } = useLocale();
     const [model, setModel] = useState<DashboardModel | null>(null);
@@ -140,29 +127,32 @@ export function DecisionDashboard() {
         }
 
         try {
-            const [sidebarResponse, subscriptionResponse, accountsResponse, orgsResponse, membersResponse] = await Promise.all([
-                fetch('/api/sidebar/context', { cache: 'no-store' }),
+            const [sidebarPayload, subscriptionResponse, accountsResponse, orgsResponse, membersResponse] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: queryKeys.sidebarContext,
+                    queryFn: fetchSidebarContext,
+                }),
                 fetchSubscription(organizationId),
                 fetchOrganizationCloudAccounts(organizationId, { page: 1, limit: 100 }),
-                fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' }),
-                fetch(`/api/organization/${encodeURIComponent(organizationId)}/members`, { cache: 'no-store' }),
+                fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}&page=1&limit=1`, { cache: 'no-store' }),
+                fetch(`/api/organization/${encodeURIComponent(organizationId)}/members?page=1&limit=1`, { cache: 'no-store' }),
             ]);
 
             if (request !== requestId.current) return;
 
-            if ([sidebarResponse, subscriptionResponse, accountsResponse].some((response) => response.status === 401)) {
+            if ([subscriptionResponse, accountsResponse].some((response) => response.status === 401)) {
                 router.replace('/auth/sign-in');
                 router.refresh();
                 return;
             }
 
-            if (!sidebarResponse.ok || !accountsResponse.ok) {
+            if (!accountsResponse.ok) {
                 setPhase('error');
                 toast.error(t.loadError);
                 return;
             }
 
-            const org = parseOrg(await sidebarResponse.json(), organizationId);
+            const org = parseOrg(sidebarPayload, organizationId);
             if (!org) {
                 setPhase('error');
                 toast.error(t.loadError);
@@ -178,9 +168,8 @@ export function DecisionDashboard() {
             const modules = normalizePlanModules(subscription?.modules.length ? subscription.modules : org.plans);
             const finopsEnabled = hasModuleAccess(modules, PlanModule.FINOPS);
             const governanceEnabled = hasModuleAccess(modules, PlanModule.GOVERNANCE);
-            const budgetTargets = accounts.filter((account) => isFinopsProvider(account.provider)).slice(0, BUDGET_ACCOUNT_CAP);
 
-            const [finopsResult, governanceResult, budgetGroups] = await Promise.all([
+            const [finopsResult, governanceResult, budgetResult] = await Promise.all([
                 finopsEnabled
                     ? loadFinops(organizationId)
                     : Promise.resolve({ snapshot: null, locked: false, failed: false, unauthorized: false }),
@@ -188,33 +177,19 @@ export function DecisionDashboard() {
                     ? loadGovernance(organizationId, accounts)
                     : Promise.resolve({ rows: [], failed: false, unauthorized: false }),
                 finopsEnabled
-                    ? mapPool(budgetTargets, SCORE_CONCURRENCY, async (account) => {
-                          try {
-                              const response = await fetchFinopsBudgetStatuses(organizationId, account.id);
-                              if (response.status === 401) return { unauthorized: true as const, items: [] as BudgetRisk[] };
-                              if (!response.ok) return { unauthorized: false as const, items: [] as BudgetRisk[] };
-                              return {
-                                  unauthorized: false as const,
-                                  items: parseBudgets(await response.json(), account.alias),
-                              };
-                          } catch {
-                              return { unauthorized: false as const, items: [] as BudgetRisk[] };
-                          }
-                      })
-                    : Promise.resolve([]),
+                    ? loadBudgets(organizationId)
+                    : Promise.resolve({ items: [] as BudgetRisk[], unauthorized: false, failed: false }),
             ]);
 
             if (request !== requestId.current) return;
 
-            if (finopsResult.unauthorized || governanceResult.unauthorized || budgetGroups.some((group) => group.unauthorized)) {
+            if (finopsResult.unauthorized || governanceResult.unauthorized || budgetResult.unauthorized) {
                 router.replace('/auth/sign-in');
                 router.refresh();
                 return;
             }
 
-            const budgets = budgetGroups
-                .flatMap((group) => group.items)
-                .sort((left, right) => right.usagePercentage - left.usagePercentage);
+            const budgets = budgetResult.items.sort((left, right) => right.usagePercentage - left.usagePercentage);
 
             setModel({
                 org,
@@ -238,7 +213,7 @@ export function DecisionDashboard() {
             setPhase((current) => (current === 'ready' ? current : 'error'));
             toast.error(t.loadError);
         }
-    }, [router, t]);
+    }, [queryClient, router, t]);
 
     useEffect(() => {
         void load();
@@ -320,31 +295,53 @@ async function loadGovernance(
         return { rows: [], failed: false, unauthorized: false };
     }
 
-    let failures = 0;
-    let unauthorized = false;
-    const rows = await mapPool(accounts, SCORE_CONCURRENCY, async (account) => {
-        try {
-            const response = await fetchGovernanceScore(organizationId, account.id);
-            if (response.status === 401) {
-                unauthorized = true;
-                return { ...account, score: null };
-            }
-            if (response.status === 404) {
-                return { ...account, score: null };
-            }
-            if (!response.ok) {
-                failures += 1;
-                return { ...account, score: null };
-            }
-
-            return { ...account, score: parseScore(await response.json()) };
-        } catch {
-            failures += 1;
-            return { ...account, score: null };
+    try {
+        const response = await fetchOrganizationGovernanceScores(organizationId);
+        if (response.status === 401) {
+            return { rows: [], failed: false, unauthorized: true };
         }
-    });
+        if (!response.ok) {
+            return { rows: accounts.map((account) => ({ ...account, score: null })), failed: true, unauthorized: false };
+        }
 
-    return { rows, failed: failures === accounts.length, unauthorized };
+        const payload = await response.json();
+        const scores = Array.isArray(payload) ? payload : [];
+        const scoreByAccount = new Map<string, ReturnType<typeof parseScore>>();
+
+        for (const item of scores) {
+            if (!item || typeof item !== 'object') continue;
+            const cloudAccountId = (item as { cloudAccountId?: unknown }).cloudAccountId;
+            if (typeof cloudAccountId !== 'string') continue;
+            scoreByAccount.set(cloudAccountId, parseScore(item));
+        }
+
+        const rows = accounts.map((account) => ({
+            ...account,
+            score: scoreByAccount.get(account.id) ?? null,
+        }));
+
+        return { rows, failed: false, unauthorized: false };
+    } catch {
+        return { rows: accounts.map((account) => ({ ...account, score: null })), failed: true, unauthorized: false };
+    }
+}
+
+async function loadBudgets(
+    organizationId: string
+): Promise<{ items: BudgetRisk[]; unauthorized: boolean; failed: boolean }> {
+    try {
+        const response = await fetchOrganizationFinopsBudgetStatuses(organizationId, BUDGET_ACCOUNT_CAP);
+        if (response.status === 401) {
+            return { items: [], unauthorized: true, failed: false };
+        }
+        if (!response.ok) {
+            return { items: [], unauthorized: false, failed: true };
+        }
+
+        return { items: parseBudgets(await response.json()), unauthorized: false, failed: false };
+    } catch {
+        return { items: [], unauthorized: false, failed: true };
+    }
 }
 
 function buildDecisions(model: DashboardModel, t: HomeCopy, dateLocale: string): DecisionItem[] {

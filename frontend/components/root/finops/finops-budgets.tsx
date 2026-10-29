@@ -35,10 +35,10 @@ import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { ACCOUNT_FILTER_ALL, buildFinopsQuery, parseFinopsUrlFilters } from '@/components/root/finops/finops-filter-utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
-import type { SidebarContextPayload } from '@/components/root/finops/overview/types';
 import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     createFinopsBudget,
     deleteFinopsBudget,
@@ -140,9 +140,10 @@ export function FinopsBudgets() {
     const urlFilters = useMemo(() => parseFinopsUrlFilters(searchParams), [searchParams]);
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
+    const currentRole = normalizeOrganizationRole(rawRole);
     const [sidebarAccountId, setSidebarAccountId] = useState<string | null>(null);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
     const [statuses, setStatuses] = useState<FinopsBudgetStatusItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -214,24 +215,6 @@ export function FinopsBudgets() {
         };
 
         void loadAccounts();
-    }, [organizationId]);
-
-    useEffect(() => {
-        if (!organizationId) return;
-
-        const loadRole = async () => {
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) return;
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const org = payload?.organizations?.find((o) => o?.id === organizationId);
-                setCurrentRole(normalizeOrganizationRole(org?.currentRole ?? null));
-            } catch {
-                // non-blocking
-            }
-        };
-
-        void loadRole();
     }, [organizationId]);
 
     // Prefer URL account; fallback to sidebar account and sync into URL.

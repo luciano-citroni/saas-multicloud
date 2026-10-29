@@ -3,6 +3,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from './helpers';
+import { finopsChartInitialDimension } from './finops-chart-theme';
 
 export type TagCostData = {
     tag: string;
@@ -69,7 +70,7 @@ export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isL
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
                         <BarChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="label" fontSize={12} interval={0} angle={-45} textAnchor="end" height={80} />

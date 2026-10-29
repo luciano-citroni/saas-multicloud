@@ -7,66 +7,56 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FormCloudAccountEdit } from '@/components/root/cloud-accounts/edit/form-cloud-account-edit';
 import { canManageCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
-
-type SidebarContextPayload = {
-    organizations?: Array<{
-        id?: string;
-        currentRole?: string | null;
-    }>;
-};
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 export default function EditCloudAccountPage() {
     const params = useParams<{ cloudAccountId: string }>();
     const cloudAccountId = params?.cloudAccountId;
     const [organizationId, setOrganizationId] = useState<string | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
     const router = useRouter();
     const tca = useTranslations('cloudAccounts');
+    const sidebarQuery = useSidebarContext({ enabled: Boolean(organizationId) });
 
     useEffect(() => {
-        const loadPermissions = async () => {
-            const orgId = window.localStorage.getItem('smc_active_organization_id');
+        const orgId = window.localStorage.getItem('smc_active_organization_id');
 
-            if (!orgId) {
-                toast.error(tca.noOrgSelectedEdit);
-                router.replace('/');
-                return;
-            }
+        if (!orgId) {
+            toast.error(tca.noOrgSelectedEdit);
+            router.replace('/');
+            return;
+        }
 
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) {
-                    setIsAuthorized(false);
-                    toast.error(tca.validatePermissionsError);
-                    router.replace('/');
-                    return;
-                }
+        setOrganizationId(orgId);
+    }, [router, tca.noOrgSelectedEdit]);
 
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const activeOrganization = payload?.organizations?.find((organization) => organization?.id === orgId);
-                const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
+    useEffect(() => {
+        if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading) {
+            return;
+        }
 
-                if (!canManageCloudAccounts(role)) {
-                    setIsAuthorized(false);
-                    toast.error(tca.noEditPermission);
-                    router.replace('/organizations');
-                    return;
-                }
+        if (sidebarQuery.isError || !sidebarQuery.data) {
+            toast.error(tca.validatePermissionsError);
+            router.replace('/');
+            return;
+        }
 
-                setOrganizationId(orgId);
-                setIsAuthorized(true);
-            } catch {
-                setIsAuthorized(false);
-                toast.error(tca.validatePermissionsError);
-                router.replace('/');
-            }
-        };
+        const activeOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+        const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
 
-        void loadPermissions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router]);
+        if (!canManageCloudAccounts(role)) {
+            toast.error(tca.noEditPermission);
+            router.replace('/organizations');
+        }
+    }, [organizationId, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, tca]);
 
-    if (!cloudAccountId || !organizationId || isAuthorized !== true) {
+    if (!cloudAccountId || !organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+        return null;
+    }
+
+    const activeOrganization = sidebarQuery.data.organizations.find((organization) => organization.id === organizationId);
+    const role = normalizeOrganizationRole(activeOrganization?.currentRole ?? null);
+
+    if (!canManageCloudAccounts(role)) {
         return null;
     }
 

@@ -12,6 +12,8 @@ import { Queue } from 'bullmq';
 
 import { CloudAccount, CloudProvider } from '../db/entites/cloud-account.entity';
 
+import { Organization } from '../db/entites/organization.entity';
+
 import type { CreateCloudAccountDto, ListCloudAccountsQueryDto, UpdateCloudAccountDto } from './dto';
 
 import * as crypto from 'crypto';
@@ -50,6 +52,9 @@ export class CloudService {
 
         private readonly dataSource: DataSource,
 
+        @InjectRepository(Organization)
+        private readonly organizationRepository: Repository<Organization>,
+
         @InjectRepository(AzureAssessmentJob)
         private readonly azureAssessmentJobRepository: Repository<AzureAssessmentJob>,
 
@@ -68,6 +73,21 @@ export class CloudService {
 
         private readonly cloudConnectionService: CloudConnectionService
     ) {}
+
+    private async assertOrganizationBelongsToTenant(tenantId: string, organizationId: string | null | undefined): Promise<void> {
+        if (organizationId == null) {
+            return;
+        }
+
+        const organization = await this.organizationRepository.findOne({
+            where: { id: organizationId, tenantId },
+            select: { id: true },
+        });
+
+        if (!organization) {
+            throw new BadRequestException(ErrorMessages.ORGANIZATIONS.NOT_FOUND);
+        }
+    }
 
     private normalizeAwsCredentials(credentials: Record<string, any>): Record<string, any> {
         const regionFromField = typeof credentials.region === 'string' ? credentials.region.trim().toLowerCase() : '';
@@ -388,8 +408,13 @@ export class CloudService {
             }
         } catch (err) {
             if (err instanceof ForbiddenException) throw err;
-            this.logger.warn(`Plan limit check skipped for tenant ${tenantId} (billing not ready): ${err instanceof Error ? err.message : String(err)}`);
+            this.logger.error(
+                `Plan limit check failed for tenant ${tenantId}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            throw new ForbiddenException(ErrorMessages.PLANS.PLAN_METADATA_NOT_AVAILABLE);
         }
+
+        await this.assertOrganizationBelongsToTenant(tenantId, dto.organizationId);
 
         // Validar o provider
 
@@ -440,14 +465,17 @@ export class CloudService {
         return result as Omit<CloudAccount, 'credentialsEncrypted'>;
     }
 
-    async getAccountForEdit(tenantId: string, id: string): Promise<Omit<CloudAccount, 'credentialsEncrypted'> & { credentials: Record<string, any> }> {
+    async getAccountForEdit(
+        tenantId: string,
+        id: string,
+    ): Promise<Omit<CloudAccount, 'credentialsEncrypted'> & { credentials: Record<string, unknown> }> {
         const account = await this.findByIdAndTenant(id, tenantId, true);
 
         if (!account) {
             throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
         }
 
-        const credentials = this.decryptCredentials(account.credentialsEncrypted);
+        const credentials = this.redactCredentialsForClient(this.decryptCredentials(account.credentialsEncrypted));
         const { credentialsEncrypted: _, ...result } = account;
         const syncMetadata = await this.getSyncMetadataForAccounts([id]);
 
@@ -470,7 +498,10 @@ export class CloudService {
         }
 
         if (dto.credentials !== undefined) {
-            const normalizedCredentials = existingAccount.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(dto.credentials) : dto.credentials;
+            const currentCredentials = this.decryptCredentials(existingAccount.credentialsEncrypted);
+            const mergedCredentials = this.mergeCredentialsPreservingSecrets(currentCredentials, dto.credentials);
+            const normalizedCredentials =
+                existingAccount.provider === CloudProvider.AWS ? this.normalizeAwsCredentials(mergedCredentials) : mergedCredentials;
 
             this.validateCredentialsForProvider(existingAccount.provider, normalizedCredentials);
             await this.cloudConnectionService.verify(existingAccount.provider, normalizedCredentials);
@@ -482,6 +513,7 @@ export class CloudService {
         }
 
         if (dto.organizationId !== undefined) {
+            await this.assertOrganizationBelongsToTenant(tenantId, dto.organizationId);
             existingAccount.organizationId = dto.organizationId;
         }
 
@@ -623,30 +655,32 @@ export class CloudService {
     }
 
     private async findLatestSyncFeedback(accountIds: string[]): Promise<Record<string, CloudAccountSyncFeedback>> {
-        const jobs = await this.syncJobRepository.find({
-            where: { cloudAccountId: In(accountIds) },
-            order: { createdAt: 'DESC' },
-            select: ['cloudAccountId', 'status', 'error'],
-        });
-
-        const latestByAccount = new Map<string, Pick<CloudSyncJob, 'status' | 'error'>>();
-
-        for (const job of jobs) {
-            if (!latestByAccount.has(job.cloudAccountId)) {
-                latestByAccount.set(job.cloudAccountId, { status: job.status, error: job.error });
-            }
+        if (accountIds.length === 0) {
+            return {};
         }
+
+        // One latest job per account (DISTINCT ON) instead of loading full history.
+        const jobs = await this.syncJobRepository
+            .createQueryBuilder('job')
+            .select('job.cloud_account_id', 'cloudAccountId')
+            .addSelect('job.status', 'status')
+            .addSelect('job.error', 'error')
+            .distinctOn(['job.cloud_account_id'])
+            .where('job.cloud_account_id IN (:...accountIds)', { accountIds })
+            .orderBy('job.cloud_account_id')
+            .addOrderBy('job.created_at', 'DESC')
+            .getRawMany<{ cloudAccountId: string; status: CloudSyncJob['status']; error: string | null }>();
 
         const result: Record<string, CloudAccountSyncFeedback> = {};
 
-        for (const [accountId, latest] of latestByAccount) {
+        for (const latest of jobs) {
             if (latest.status === 'failed' && latest.error) {
-                result[accountId] = { error: latest.error, warning: null };
+                result[latest.cloudAccountId] = { error: latest.error, warning: null };
                 continue;
             }
 
             if (latest.status === 'completed' && latest.error) {
-                result[accountId] = { error: null, warning: latest.error };
+                result[latest.cloudAccountId] = { error: null, warning: latest.error };
             }
         }
 
@@ -788,5 +822,65 @@ export class CloudService {
 
     async findByIdAndOrganization(id: string, organizationId: string, includeCredentials?: boolean): Promise<CloudAccount | null> {
         return this.findByIdAndTenant(id, organizationId, includeCredentials);
+    }
+
+    /** Throws NotFound when the cloud account is missing or outside the tenant. */
+    async assertBelongsToTenant(cloudAccountId: string, tenantId: string): Promise<CloudAccount> {
+        const account = await this.findByIdAndTenant(cloudAccountId, tenantId, false);
+        if (!account) {
+            throw new NotFoundException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+        }
+        return account;
+    }
+
+    private static readonly SECRET_CREDENTIAL_KEYS = [
+        'clientSecret',
+        'client_secret',
+        'privateKey',
+        'private_key',
+        'secretAccessKey',
+        'secret_access_key',
+        'password',
+        'secret',
+    ] as const;
+
+    /** Strip secret values from credentials returned to the browser; expose presence flags only. */
+    private redactCredentialsForClient(credentials: Record<string, any>): Record<string, unknown> {
+        const redacted: Record<string, unknown> = { ...credentials };
+
+        for (const key of CloudService.SECRET_CREDENTIAL_KEYS) {
+            if (redacted[key] != null && String(redacted[key]).length > 0) {
+                delete redacted[key];
+                if (key === 'clientSecret' || key === 'client_secret') {
+                    redacted.hasClientSecret = true;
+                }
+                if (key === 'privateKey' || key === 'private_key') {
+                    redacted.hasPrivateKey = true;
+                }
+            }
+        }
+
+        return redacted;
+    }
+
+    /** Keep previously stored secrets when the client omits or clears them on update. */
+    private mergeCredentialsPreservingSecrets(
+        existing: Record<string, any>,
+        incoming: Record<string, any>,
+    ): Record<string, any> {
+        const merged: Record<string, any> = { ...existing, ...incoming };
+
+        for (const key of CloudService.SECRET_CREDENTIAL_KEYS) {
+            const next = incoming[key];
+            const isBlank = next == null || (typeof next === 'string' && next.trim().length === 0);
+            if (isBlank && existing[key] != null) {
+                merged[key] = existing[key];
+            }
+        }
+
+        delete merged.hasClientSecret;
+        delete merged.hasPrivateKey;
+
+        return merged;
     }
 }

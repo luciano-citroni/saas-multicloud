@@ -45,7 +45,7 @@ export interface ActiveSessionDto {
 }
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const REFRESH_REUSE_GRACE_MS = 16 * 60 * 1000;
+const REFRESH_REUSE_GRACE_MS = 2 * 60 * 1000;
 const MAX_ACTIVE_SESSIONS = 3;
 
 const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
@@ -256,11 +256,24 @@ export class AuthService {
     }
 
     async updateMe(userId: string, payload: { name?: string; email?: string }) {
-        await this.usersService.update(userId, payload);
+        if (payload.email !== undefined) {
+            const current = await this.usersService.findEntityById(userId);
+            if (payload.email.trim().toLowerCase() !== current.email.toLowerCase()) {
+                throw new BadRequestException(ErrorMessages.AUTH.EMAIL_CHANGE_NOT_ALLOWED);
+            }
+        }
+
+        const { email: _ignoredEmail, ...safePayload } = payload;
+        await this.usersService.update(userId, safePayload);
         return this.getAuthUserPayload(userId);
     }
 
-    async updateMyPassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+    async updateMyPassword(
+        userId: string,
+        currentPassword: string | undefined,
+        newPassword: string,
+        currentSessionId?: string,
+    ) {
         const user = await this.usersService.findEntityById(userId);
 
         if (user.password) {
@@ -276,6 +289,18 @@ export class AuthService {
         }
 
         await this.usersService.updatePassword(userId, newPassword);
+
+        // Invalidate every other session so a stolen refresh token cannot survive a password change.
+        if (currentSessionId) {
+            await this.sessionRepository
+                .createQueryBuilder()
+                .delete()
+                .where('user_id = :userId', { userId })
+                .andWhere('id != :currentSessionId', { currentSessionId })
+                .execute();
+        } else {
+            await this.sessionRepository.delete({ userId });
+        }
 
         return { success: true };
     }
@@ -316,7 +341,16 @@ export class AuthService {
         };
     }
 
-    private async resolveGoogleUser(googleUser: { googleId: string; email: string; name: string }) {
+    private async resolveGoogleUser(googleUser: {
+        googleId: string;
+        email: string;
+        name: string;
+        emailVerified?: boolean;
+    }) {
+        if (googleUser.emailVerified === false) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.GOOGLE_EMAIL_NOT_VERIFIED);
+        }
+
         const normalizedEmail = googleUser.email.toLowerCase();
 
         let user = await this.usersService.findByGoogleId(googleUser.googleId);
@@ -325,22 +359,21 @@ export class AuthService {
             const existingByEmail = await this.usersService.findByEmail(normalizedEmail);
 
             if (existingByEmail) {
-                await this.usersService.linkGoogleAccount(existingByEmail.id, googleUser.googleId);
-
-                user = { ...existingByEmail, googleId: googleUser.googleId } as any;
-            } else {
-                user = await this.usersService.createWithGoogle({
-                    email: normalizedEmail,
-
-                    name: googleUser.name,
-
-                    googleId: googleUser.googleId,
-                });
-
-                this.billingService.initializeSubscription(user).catch((err: unknown) => {
-                    this.logger.error(`Failed to initialize subscription for Google user ${user?.id}`, err);
-                });
+                // Do not silently link Google to an existing password account (account-takeover vector).
+                throw new ConflictException(ErrorMessages.AUTH.GOOGLE_LINK_REQUIRED);
             }
+
+            user = await this.usersService.createWithGoogle({
+                email: normalizedEmail,
+
+                name: googleUser.name,
+
+                googleId: googleUser.googleId,
+            });
+
+            this.billingService.initializeSubscription(user).catch((err: unknown) => {
+                this.logger.error(`Failed to initialize subscription for Google user ${user?.id}`, err);
+            });
         }
 
         if (!user!.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
@@ -458,7 +491,9 @@ export class AuthService {
     }
 
     private getRefreshTokenKey(): Buffer {
-        return crypto.createHash('sha256').update(this.configService.getOrThrow<string>('JWT_SECRET')).digest();
+        const dedicated = this.configService.get<string>('REFRESH_TOKEN_ENCRYPTION_KEY')?.trim();
+        const material = dedicated && dedicated.length > 0 ? dedicated : this.configService.getOrThrow<string>('JWT_SECRET');
+        return crypto.createHash('sha256').update(material).digest();
     }
 
     private sealRefreshToken(value: string): string {

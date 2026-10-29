@@ -13,8 +13,11 @@ import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { OrgRole } from '../../rbac/roles.enum';
 
+import { PlanModuleGuard, RequirePlanModule } from '../../common/guards/plan-module.guard';
+import { SystemModule } from '../../common/modules/system-modules';
+
 import { GovernanceService } from '../services/governance.service';
-import type { GovernanceScoreResult } from '../services/governance.service';
+import type { GovernanceScoreResult, OrganizationGovernanceScore } from '../services/governance.service';
 
 import {
     GovernanceScanResponseDto,
@@ -36,7 +39,8 @@ import {
     description: 'UUID da organização ativa (contexto de tenant)',
     required: true,
 })
-@UseGuards(TenantGuard, RolesGuard)
+@RequirePlanModule(SystemModule.GOVERNANCE)
+@UseGuards(TenantGuard, RolesGuard, PlanModuleGuard)
 @Controller('governance')
 export class GovernanceController {
     constructor(private readonly governanceService: GovernanceService) {}
@@ -179,6 +183,16 @@ export class GovernanceController {
     // =========================================================================
     // Score
     // =========================================================================
+
+    @Get('scores')
+    @ApiOperation({
+        summary: 'Scores de governança mais recentes por conta',
+        description: 'Retorna o último score concluído de cada cloud account da organização (batch para o dashboard).',
+    })
+    @ApiResponse({ status: 200, description: 'Lista de scores por cloud account', type: [GovernanceScoreDto] })
+    async listLatestScores(@CurrentOrganization() org: Tenant): Promise<OrganizationGovernanceScore[]> {
+        return this.governanceService.listLatestScoresForOrganization(org.id);
+    }
 
     @Get('accounts/:cloudAccountId/score')
     @ApiOperation({

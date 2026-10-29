@@ -4,7 +4,7 @@ import { ACCESS_TOKEN_COOKIE, ACCESS_TOKEN_MAX_AGE_SECONDS, REFRESH_TOKEN_COOKIE
 
 const isProduction = process.env.NODE_ENV === 'production';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 30_000;
-const REFRESH_REPLAY_MS = 16 * 60 * 1000;
+const REFRESH_REPLAY_MS = 2 * 60 * 1000;
 const REFRESH_RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
 type RefreshReplayEntry = {

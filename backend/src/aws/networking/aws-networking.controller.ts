@@ -1,8 +1,11 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { ApiPaginationQuery } from '../../common/swagger/pagination-query.swagger';
+import { parsePaginationQuery } from '../../common/pagination/parse-pagination-query';
 
 import { AwsNetworkingService } from './aws-networking.service';
 
@@ -23,7 +26,7 @@ import { VpcResponseDto, SubnetResponseDto, VpcWithSubnetsResponseDto, VpcSyncRe
 
     required: true,
 })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/networking')
 export class AwsNetworkingController {
     constructor(private readonly service: AwsNetworkingService) {}
@@ -52,8 +55,13 @@ export class AwsNetworkingController {
     @ApiResponse({ status: 400, description: 'CloudAccount não encontrada' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
     @ApiResponse({ status: 403, description: 'Sem acesso a esta organização' })
-    listVpcs(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
-        return this.service.listVpcsFromDatabase(cloudAccountId);
+    listVpcs(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.service.listVpcsFromDatabase(cloudAccountId, parsePaginationQuery(page, limit));
     }
 
     @Get('accounts/:cloudAccountId/vpcs/:vpcId')

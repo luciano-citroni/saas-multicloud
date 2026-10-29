@@ -6,6 +6,12 @@ import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpVpcNetwork } from '../../db/entites/gcp-vpc-network.entity';
 import { GcpSubnetwork } from '../../db/entites/gcp-subnetwork.entity';
 import { GcpFirewallRule } from '../../db/entites/gcp-firewall-rule.entity';
+import {
+    buildPaginationMeta,
+    normalizePagination,
+    type PaginatedResult,
+    type PaginationInput,
+} from '../../common/pagination/paginate';
 
 @Injectable()
 export class GcpNetworkingService {
@@ -26,8 +32,18 @@ export class GcpNetworkingService {
 
     // ── VPC Networks ──────────────────────────────────────────────────────────
 
-    async listNetworksFromDatabase(cloudAccountId: string): Promise<GcpVpcNetwork[]> {
-        return this.networkRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listNetworksFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpVpcNetwork>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.networkRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncNetworksFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpVpcNetwork[]> {
@@ -78,8 +94,18 @@ export class GcpNetworkingService {
 
     // ── Subnetworks ───────────────────────────────────────────────────────────
 
-    async listSubnetworksFromDatabase(cloudAccountId: string): Promise<GcpSubnetwork[]> {
-        return this.subnetRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listSubnetworksFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpSubnetwork>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.subnetRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncSubnetworksFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpSubnetwork[]> {
@@ -135,8 +161,18 @@ export class GcpNetworkingService {
 
     // ── Firewall Rules ────────────────────────────────────────────────────────
 
-    async listFirewallRulesFromDatabase(cloudAccountId: string): Promise<GcpFirewallRule[]> {
-        return this.firewallRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listFirewallRulesFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpFirewallRule>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.firewallRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncFirewallRulesFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpFirewallRule[]> {

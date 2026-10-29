@@ -40,12 +40,12 @@ import type {
     OrgFinopsOptimize,
     OrgFinopsOverview,
     OrgOverviewAccount,
-    SidebarContextPayload,
     SyncRun,
 } from '@/components/root/finops/overview/types';
 import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     acceptFinopsConsent,
     fetchFinopsBudgetStatuses,
@@ -76,7 +76,8 @@ export function FinopsOverview() {
     const [sidebarAccountId, setSidebarAccountId] = useState<string | null>(null);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [loadingCloudAccounts, setLoadingCloudAccounts] = useState(false);
-    const [currentRole, setCurrentRole] = useState<OrganizationRole | null>(null);
+    const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
+    const currentRole = normalizeOrganizationRole(rawRole);
 
     const [overview, setOverview] = useState<OrgFinopsOverview | null>(null);
     const [optimize, setOptimize] = useState<OrgFinopsOptimize | null>(null);
@@ -161,24 +162,6 @@ export function FinopsOverview() {
         };
 
         void loadCloudAccounts();
-    }, [organizationId]);
-
-    useEffect(() => {
-        if (!organizationId) return;
-
-        const loadRole = async () => {
-            try {
-                const response = await fetch('/api/sidebar/context', { cache: 'no-store' });
-                if (!response.ok) return;
-                const payload = (await response.json().catch(() => null)) as SidebarContextPayload | null;
-                const org = payload?.organizations?.find((o) => o?.id === organizationId);
-                setCurrentRole(normalizeOrganizationRole(org?.currentRole ?? null));
-            } catch {
-                // non-blocking
-            }
-        };
-
-        void loadRole();
     }, [organizationId]);
 
     const selectedAccount = useMemo(

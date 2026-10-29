@@ -78,6 +78,8 @@ import { AwsWafModule } from '../waf/aws-waf.module';
 import { AwsGuardDutyModule } from '../guardduty/aws-guardduty.module';
 import { AwsConnectorModule } from '../aws-connector.module';
 import { TenantModule } from '../../tenant/tenant.module';
+import { RbacModule } from '../../rbac/rbac.module';
+import { CloudModule } from '../../cloud/cloud.module';
 import { BillingModule } from '../../billing/billing.module';
 
 @Module({
@@ -151,6 +153,8 @@ import { BillingModule } from '../../billing/billing.module';
         AwsGuardDutyModule,
         AwsConnectorModule,
         TenantModule,
+        RbacModule,
+        CloudModule,
         BillingModule,
     ],
     controllers: [AwsAssessmentController],
@@ -163,5 +167,6 @@ import { BillingModule } from '../../billing/billing.module';
         AwsAssessmentArchitectureService,
         AwsAssessmentExcelService,
     ],
+    exports: [AwsAssessmentService, AwsAssessmentReportService],
 })
 export class AwsAssessmentModule {}

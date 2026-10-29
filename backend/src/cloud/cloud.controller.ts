@@ -39,13 +39,13 @@ export class CloudController {
      * Acessível por MEMBER, ADMIN ou OWNER para criar uma nova conta de cloud.
      */
     @Post('accounts')
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.ADMIN)
     @ApiBody({ type: CreateCloudAccountRequestDto })
     @ApiOperation({ summary: 'Criar uma nova conta de cloud' })
     @ApiResponse({ status: 201, description: 'Conta de cloud criada com sucesso', type: CloudAccountResponseDto })
     @ApiResponse({ status: 400, description: 'Dados inválidos ou falha ao validar a conexão com o provedor', type: ValidationErrorResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado – apenas MEMBER, ADMIN ou OWNER' })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     async createCloudAccount(@CurrentOrganization() org: Tenant, @Body(new ZodValidationPipe(createCloudAccountSchema)) dto: CreateCloudAccountDto) {
         return this.cloudService.createCloudAccount(org.id, dto);
     }
@@ -64,18 +64,23 @@ export class CloudController {
     }
 
     @Get('accounts/:id')
-    @ApiOperation({ summary: 'Obtém uma conta de cloud por ID (inclui credenciais para edição)' })
-    @ApiResponse({ status: 200, description: 'Conta de cloud encontrada' })
+    @Roles(OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Obtém uma conta de cloud por ID para edição (credenciais secretas mascaradas)',
+    })
+    @ApiResponse({ status: 200, description: 'Conta de cloud encontrada (sem secrets em plaintext)' })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
     async getAccountById(@CurrentOrganization() org: Tenant, @Param(new ZodValidationPipe(cloudAccountIdParamSchema)) params: CloudAccountIdParam) {
         return this.cloudService.getAccountForEdit(org.id, params.id);
     }
 
     @Patch('accounts/:id')
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.ADMIN)
     @ApiOperation({ summary: 'Atualiza uma conta de cloud por ID' })
     @ApiResponse({ status: 200, description: 'Conta de cloud atualizada com sucesso', type: CloudAccountResponseDto })
     @ApiResponse({ status: 400, description: 'Dados inválidos ou falha ao validar a conexão com o provedor', type: ValidationErrorResponseDto })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
     async updateCloudAccount(
         @CurrentOrganization() org: Tenant,
@@ -86,10 +91,11 @@ export class CloudController {
     }
 
     @Delete('accounts/:id')
-    @Roles(OrgRole.MEMBER)
+    @Roles(OrgRole.ADMIN)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Exclui uma conta de cloud por ID' })
     @ApiResponse({ status: 200, description: 'Conta de cloud excluida com sucesso', type: DeleteCloudAccountResponseDto })
+    @ApiResponse({ status: 403, description: 'Acesso negado – apenas ADMIN ou OWNER' })
     @ApiResponse({ status: 404, description: 'Conta de cloud não encontrada' })
     async deleteCloudAccount(@CurrentOrganization() org: Tenant, @Param(new ZodValidationPipe(cloudAccountIdParamSchema)) params: CloudAccountIdParam) {
         return this.cloudService.deleteCloudAccount(org.id, params.id);

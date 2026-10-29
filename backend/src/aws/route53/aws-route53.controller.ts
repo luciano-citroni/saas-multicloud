@@ -1,4 +1,6 @@
-﻿import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
+import { RolesGuard } from '../../rbac/roles.guard';
+import { CloudAccountAccessGuard } from '../../cloud/cloud-account-access.guard';
+import { Controller, Get, Post, Param, ParseUUIDPipe, UseGuards, HttpCode } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -17,7 +19,7 @@ import { Route53HostedZoneResponseDto, Route53HostedZoneSyncResponseDto, Route53
 @ApiTags('AWS Route53')
 @ApiBearerAuth('access-token')
 @ApiHeader({ name: 'x-organization-id', description: 'UUID da organização ativa (contexto de tenant)', required: true })
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, CloudAccountAccessGuard, RolesGuard)
 @Controller('aws/route53')
 export class AwsRoute53Controller {
     constructor(private readonly service: AwsRoute53Service) {}

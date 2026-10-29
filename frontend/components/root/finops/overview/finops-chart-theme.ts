@@ -46,6 +46,13 @@ export const finopsChartTooltipStyles: {
     },
 };
 
+/**
+ * Dimensão do primeiro frame do ResponsiveContainer.
+ * O default do Recharts 3 é -1×-1 e dispara o aviso de width/height no console
+ * antes do ResizeObserver medir o container.
+ */
+export const finopsChartInitialDimension = { width: 640, height: 288 };
+
 /** Classes para eixos/grid/tooltip do Recharts seguirem o tema (padrão shadcn ChartContainer). */
 export const finopsChartSurfaceClassName =
     '[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground ' +

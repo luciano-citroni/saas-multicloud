@@ -35,9 +35,54 @@ export class OrgsService {
         return this.orgRepository
             .createQueryBuilder('organization')
             .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
-            .where('organization.tenant_id = :tenantId', { tenantId })
-            .orderBy('organization.created_at', 'ASC')
+            .where('organization.tenantId = :tenantId', { tenantId })
+            .orderBy('organization.createdAt', 'ASC')
             .getMany();
+    }
+
+    async findAllPaginated(
+        tenantId: string,
+        userId: string,
+        page: number,
+        limit: number
+    ): Promise<{
+        items: Organization[];
+        pagination: {
+            page: number;
+            limit: number;
+            totalItems: number;
+            totalPages: number;
+            hasNextPage: boolean;
+            hasPreviousPage: boolean;
+        };
+    }> {
+        const safePage = Math.max(1, page);
+        const safeLimit = Math.min(100, Math.max(1, limit));
+
+        const qb = this.orgRepository
+            .createQueryBuilder('organization')
+            .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
+            .where('organization.tenantId = :tenantId', { tenantId })
+            .orderBy('organization.createdAt', 'ASC');
+
+        const totalItems = await qb.getCount();
+        const items = await qb
+            .skip((safePage - 1) * safeLimit)
+            .take(safeLimit)
+            .getMany();
+        const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
+
+        return {
+            items,
+            pagination: {
+                page: safePage,
+                limit: safeLimit,
+                totalItems,
+                totalPages,
+                hasNextPage: safePage < totalPages,
+                hasPreviousPage: safePage > 1,
+            },
+        };
     }
 
     async findOne(id: string, tenantId: string, userId: string): Promise<Organization> {
@@ -45,7 +90,7 @@ export class OrgsService {
             .createQueryBuilder('organization')
             .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
             .where('organization.id = :id', { id })
-            .andWhere('organization.tenant_id = :tenantId', { tenantId })
+            .andWhere('organization.tenantId = :tenantId', { tenantId })
             .getOne();
 
         if (!org) throw new NotFoundException(ErrorMessages.ORGANIZATIONS.NOT_FOUND);

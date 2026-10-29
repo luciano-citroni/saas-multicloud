@@ -4,6 +4,12 @@ import { Repository } from 'typeorm';
 
 import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpServiceAccount } from '../../db/entites/gcp-service-account.entity';
+import {
+    buildPaginationMeta,
+    normalizePagination,
+    type PaginatedResult,
+    type PaginationInput,
+} from '../../common/pagination/paginate';
 
 @Injectable()
 export class GcpIamService {
@@ -16,8 +22,18 @@ export class GcpIamService {
         private readonly saRepo: Repository<GcpServiceAccount>
     ) {}
 
-    async listServiceAccountsFromDatabase(cloudAccountId: string): Promise<GcpServiceAccount[]> {
-        return this.saRepo.find({ where: { cloudAccountId }, order: { email: 'ASC' } });
+    async listServiceAccountsFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpServiceAccount>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.saRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { email: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncServiceAccountsFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpServiceAccount[]> {

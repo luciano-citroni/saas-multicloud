@@ -4,6 +4,12 @@ import { Repository } from 'typeorm';
 
 import { GcpConnectorService } from '../gcp-connector.service';
 import { GcpVmInstance } from '../../db/entites/gcp-vm-instance.entity';
+import {
+    buildPaginationMeta,
+    normalizePagination,
+    type PaginatedResult,
+    type PaginationInput,
+} from '../../common/pagination/paginate';
 
 @Injectable()
 export class GcpComputeService {
@@ -16,8 +22,19 @@ export class GcpComputeService {
         private readonly vmRepo: Repository<GcpVmInstance>
     ) {}
 
-    async listInstancesFromDatabase(cloudAccountId: string): Promise<GcpVmInstance[]> {
-        return this.vmRepo.find({ where: { cloudAccountId }, order: { name: 'ASC' } });
+    async listInstancesFromDatabase(
+        cloudAccountId: string,
+        pagination: PaginationInput = {}
+    ): Promise<PaginatedResult<GcpVmInstance>> {
+        const { page, limit } = normalizePagination(pagination);
+        const [items, totalItems] = await this.vmRepo.findAndCount({
+            where: { cloudAccountId },
+            order: { name: 'ASC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+
+        return { items, pagination: buildPaginationMeta(totalItems, page, limit) };
     }
 
     async syncInstancesFromGcp(cloudAccountId: string, organizationId: string): Promise<GcpVmInstance[]> {

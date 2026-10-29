@@ -1,5 +1,6 @@
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
 import { ModuleAccessGuard } from '@/components/root/module-access-guard';
+import { AiChatSheet } from '@/components/root/ai-chat/ai-chat-sheet';
 import { SiteHeader } from '@/components/sidebar/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
@@ -27,6 +28,7 @@ export default function AuthenticatedLayout({
                     </div>
                 </div>
             </SidebarInset>
+            <AiChatSheet />
         </SidebarProvider>
     );
 }
