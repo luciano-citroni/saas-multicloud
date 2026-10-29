@@ -314,22 +314,22 @@ export class OrganizationService {
         };
     }
 
-    async getUserCrossOrgAccess(targetUserId: string, requesterUserId: string): Promise<Array<{ id: string; name: string; memberRole: string | null }>> {
-        const requesterMemberships = await this.memberRepository.find({
-            where: { userId: requesterUserId },
-            relations: ['tenant'],
+    async getUserCrossOrgAccess(
+        targetUserId: string,
+        requesterUserId: string,
+        tenantId: string
+    ): Promise<Array<{ id: string; name: string; memberRole: string | null }>> {
+        const requesterMembership = await this.memberRepository.findOne({
+            where: { userId: requesterUserId, tenantId },
         });
 
-        const managedTenants = requesterMemberships.filter((m) => (ROLE_HIERARCHY[m.role as OrgRole] ?? 0) >= ROLE_HIERARCHY[OrgRole.ADMIN]);
-
-        const managedTenantIds = managedTenants.map((membership) => membership.tenantId);
-
-        if (managedTenantIds.length === 0) {
-            return [];
+        if (!requesterMembership || (ROLE_HIERARCHY[requesterMembership.role as OrgRole] ?? 0) < ROLE_HIERARCHY[OrgRole.ADMIN]) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
 
+        // Somente organizações (mid-level) do tenant atual — nunca tenants.
         const organizations = await this.organizationRepository.find({
-            where: { tenantId: In(managedTenantIds) },
+            where: { tenantId },
             order: { createdAt: 'ASC' },
         });
 

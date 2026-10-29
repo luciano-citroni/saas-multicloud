@@ -146,13 +146,18 @@ export class MembersController {
     }
 
     @Get(':userId/orgs')
-    @SkipTenant()
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Listar organizações acessíveis por um usuário (escopo cross-org)' })
-    @ApiResponse({ status: 200, description: 'Lista de orgs que o solicitante gerencia + role do alvo em cada uma', type: [OrgAccessItemResponseDto] })
+    @Roles(OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Listar organizações do tenant atual e o acesso do usuário em cada uma' })
+    @ApiResponse({ status: 200, description: 'Lista de organizações do tenant + role do alvo em cada uma', type: [OrgAccessItemResponseDto] })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    getUserOrgAccess(@CurrentUser() user: JwtPayload, @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam) {
-        return this.organizationService.getUserCrossOrgAccess(params.userId, user.sub);
+    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    getUserOrgAccess(
+        @CurrentUser() user: JwtPayload,
+        @CurrentOrganization() tenant: Tenant,
+        @Param(new ZodValidationPipe(memberUserIdParamSchema)) params: MemberUserIdParam
+    ) {
+        return this.organizationService.getUserCrossOrgAccess(params.userId, user.sub, tenant.id);
     }
 
     @Post(':userId/add-to-org')

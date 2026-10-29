@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canManageMembers, type OrganizationRole } from '@/lib/organization-rbac';
 
@@ -145,8 +145,8 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
         }
     });
 
-    const handleDelete = async () => {
-        if (!deleteOrg) return;
+    const handleDelete = async (): Promise<boolean> => {
+        if (!deleteOrg) return true;
         setIsDeleting(true);
         try {
             const response = await fetch(`/api/orgs/${encodeURIComponent(deleteOrg.id)}?organizationId=${encodeURIComponent(tenantId)}`, {
@@ -155,13 +155,15 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
             const payload = await response.json().catch(() => null);
             if (!response.ok) {
                 toast.error(extractErrorMessage(payload));
-                return;
+                return false;
             }
             toast.success('Grupo excluído com sucesso!');
             setDeleteOrg(null);
             await loadOrgs();
+            return true;
         } catch {
             toast.error('Erro ao excluir grupo.');
+            return false;
         } finally {
             setIsDeleting(false);
         }
@@ -344,23 +346,22 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirm */}
-            <AlertDialog open={!!deleteOrg} onOpenChange={(open) => { if (!open) setDeleteOrg(null); }}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir grupo?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. O grupo <strong>{deleteOrg?.name}</strong> será removido permanentemente.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                            {isDeleting ? 'Excluindo...' : 'Excluir'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDeleteDialog
+                open={!!deleteOrg}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteOrg(null);
+                }}
+                title="Excluir grupo?"
+                description={
+                    <>
+                        Esta ação não pode ser desfeita. O grupo <strong>{deleteOrg?.name}</strong> será removido permanentemente.
+                    </>
+                }
+                resourceName={deleteOrg?.name ?? ''}
+                confirmLabel={isDeleting ? 'Excluindo...' : 'Excluir'}
+                isConfirming={isDeleting}
+                onConfirm={handleDelete}
+            />
         </div>
     );
 }

@@ -60,9 +60,9 @@ export function TenantSettingsPage() {
         void loadOrganizations();
     }, [loadOrganizations]);
 
-    const onDelete = async (): Promise<void> => {
+    const onDelete = async (): Promise<boolean> => {
         if (!deletingTenant) {
-            return;
+            return true;
         }
 
         setIsDeleting(true);
@@ -73,7 +73,7 @@ export function TenantSettingsPage() {
 
             if (!response.ok) {
                 toast.error(extractErrorMessage(payload));
-                return;
+                return false;
             }
 
             if (window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY) === deletingTenant.id) {
@@ -84,8 +84,10 @@ export function TenantSettingsPage() {
             toast.success(t.deleteSuccess);
             setDeletingTenant(null);
             await loadOrganizations();
+            return true;
         } catch {
             toast.error(t.deleteError);
+            return false;
         } finally {
             setIsDeleting(false);
         }

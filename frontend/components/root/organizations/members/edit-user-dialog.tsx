@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, Check, Plus, Trash2 } from 'lucide-react';
+import { Check, Cloud, Layers, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { type OrganizationRole } from '@/lib/organization-rbac';
+import { cn } from '@/lib/utils';
 
 type OrgAccessItem = { id: string; name: string; memberRole: string | null };
 
@@ -71,8 +72,18 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                 toast.error(t.loadOrgAccessError);
                 return;
             }
-            const data = await res.json().catch(() => []);
-            setOrgAccess(Array.isArray(data) ? data : []);
+            const data = await res.json().catch(() => null);
+            const items = Array.isArray(data)
+                ? data
+                : data && typeof data === 'object' && Array.isArray((data as { items?: unknown }).items)
+                  ? (data as { items: OrgAccessItem[] }).items
+                  : [];
+            setOrgAccess(
+                items.filter(
+                    (item): item is OrgAccessItem =>
+                        typeof item?.id === 'string' && typeof item?.name === 'string' && (item.memberRole === null || typeof item.memberRole === 'string')
+                )
+            );
         } catch {
             toast.error(t.loadOrgAccessError);
         } finally {
@@ -175,7 +186,7 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>{t.editUser}</DialogTitle>
                     <DialogDescription>
@@ -186,7 +197,15 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                 <div className="flex flex-col gap-5 pt-1">
                     {/* ── Cargo na org atual ─────────────────────────── */}
                     <div className="flex flex-col gap-3">
-                        <p className="text-sm font-medium">{t.roleInOrg}</p>
+                        <div className="flex items-center gap-2">
+                            <div className="flex size-7 items-center justify-center rounded-md border bg-muted/40">
+                                <Layers className="size-3.5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium">{t.roleInOrg}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t.orgBadge}</p>
+                            </div>
+                        </div>
                         {canChangeRole ? (
                             <Form {...form}>
                                 <form onSubmit={onSaveRole} className="flex items-end gap-2">
@@ -230,9 +249,23 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
 
                     {/* ── Acesso cross-org ───────────────────────────── */}
                     <div className="flex flex-col gap-3">
-                        <div>
-                            <p className="text-sm font-medium">{t.orgAccessTitle}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{t.orgAccessDesc}</p>
+                        <div className="space-y-2">
+                            <div>
+                                <p className="text-sm font-medium">{t.orgAccessTitle}</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{t.orgAccessDesc}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 font-medium text-foreground">
+                                    <Layers className="size-3" aria-hidden="true" />
+                                    {t.orgBadge}
+                                </span>
+                                <span aria-hidden="true">→</span>
+                                <span className="inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5">
+                                    <Cloud className="size-3" aria-hidden="true" />
+                                    {t.cloudAccountsIncluded}
+                                </span>
+                                <span className="text-muted-foreground/80">· {t.orgAccessScopeHint}</span>
+                            </div>
                         </div>
 
                         {loadingOrgs ? (
@@ -242,13 +275,34 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                         ) : (
                             <div className="flex flex-col gap-2">
                                 {orgAccess.map((org) => (
-                                    <div key={org.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                                        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <span className="flex-1 text-sm font-medium truncate">{org.name}</span>
+                                    <div
+                                        key={org.id}
+                                        className={cn(
+                                            'flex flex-col gap-2 rounded-md border px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3',
+                                            org.memberRole ? 'border-primary/20 bg-primary/5' : 'bg-background'
+                                        )}
+                                    >
+                                        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                                            <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-background">
+                                                <Layers className="size-3.5" aria-hidden="true" />
+                                            </div>
+                                            <div className="min-w-0 space-y-0.5">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className="truncate text-sm font-medium">{org.name}</span>
+                                                    <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                        {t.orgBadge}
+                                                    </span>
+                                                </div>
+                                                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                    <Cloud className="size-3 shrink-0" aria-hidden="true" />
+                                                    <span className="truncate">{t.cloudAccountsIncluded}</span>
+                                                </p>
+                                            </div>
+                                        </div>
 
                                         {org.memberRole ? (
-                                            <div className="flex items-center gap-1.5">
-                                                <Check className="h-3.5 w-3.5 text-green-500" />
+                                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                                                <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-500" aria-hidden="true" />
                                                 <Badge variant={ROLE_VARIANT[org.memberRole] ?? 'outline'} className="shrink-0">
                                                     {roleLabel(org.memberRole)}
                                                 </Badge>
@@ -267,7 +321,7 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-1.5 shrink-0">
+                                            <div className="flex items-center gap-1.5 self-end sm:shrink-0 sm:self-auto">
                                                 <Select
                                                     value={pendingRole[org.id] ?? ''}
                                                     onValueChange={(v) => setPendingRole((prev) => ({ ...prev, [org.id]: v }))}
@@ -284,7 +338,7 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    className="h-7 px-2 text-xs gap-1"
+                                                    className="h-7 gap-1 px-2 text-xs"
                                                     disabled={!pendingRole[org.id] || addingToOrg === org.id}
                                                     isLoading={addingToOrg === org.id}
                                                     onClick={() => handleAddToOrg(org.id)}

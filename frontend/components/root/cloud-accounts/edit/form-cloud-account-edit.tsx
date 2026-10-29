@@ -754,6 +754,7 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                     )}
 
                     <CloudAccountEditActions
+                        resourceName={cloudAccount?.alias ?? ''}
                         isActive={cloudAccount?.isActive !== false}
                         isSaving={isLoading}
                         isStatusLoading={isStatusLoading}

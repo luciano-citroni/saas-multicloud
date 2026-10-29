@@ -33,13 +33,17 @@ function buildUnauthorizedResponse() {
 }
 
 export async function GET(_: Request, { params }: RouteContext) {
-    const { userId } = await params;
+    const { organizationId, userId } = await params;
+    if (!organizationId) return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
     if (!userId) return NextResponse.json({ message: 'userId é obrigatório' }, { status: 400 });
 
     const resolved = await resolveAccessToken();
     if (!resolved.accessToken) return buildUnauthorizedResponse();
 
-    const headers = { Authorization: `Bearer ${resolved.accessToken}` };
+    const headers = {
+        Authorization: `Bearer ${resolved.accessToken}`,
+        'x-organization-id': organizationId,
+    };
 
     let response = await backendFetch(`/api/organization/members/${encodeURIComponent(userId)}/orgs`, { headers });
     let rotatedTokens = resolved.rotatedTokens;
@@ -49,7 +53,10 @@ export async function GET(_: Request, { params }: RouteContext) {
         if (!refreshResult) return buildUnauthorizedResponse();
         rotatedTokens = refreshResult;
         response = await backendFetch(`/api/organization/members/${encodeURIComponent(userId)}/orgs`, {
-            headers: { Authorization: `Bearer ${refreshResult.accessToken}` },
+            headers: {
+                Authorization: `Bearer ${refreshResult.accessToken}`,
+                'x-organization-id': organizationId,
+            },
         });
     }
 

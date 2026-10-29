@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { Power, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmCloudAccountActionDialog } from '@/components/root/cloud-accounts/edit/confirm-cloud-account-action-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 
 type CloudAccountEditActionsProps = {
+    resourceName: string;
     isActive: boolean;
     isSaving: boolean;
     isStatusLoading: boolean;
@@ -14,6 +17,7 @@ type CloudAccountEditActionsProps = {
 };
 
 export function CloudAccountEditActions({
+    resourceName,
     isActive,
     isSaving,
     isStatusLoading,
@@ -21,6 +25,7 @@ export function CloudAccountEditActions({
     onConfirmToggleStatus,
     onConfirmDelete,
 }: CloudAccountEditActionsProps) {
+    const [deleteOpen, setDeleteOpen] = useState(false);
     const statusActionLabel = isActive ? 'Desativar conta' : 'Ativar conta';
     const statusDialogTitle = isActive ? 'Desativar conta cloud' : 'Ativar conta cloud';
     const statusDialogDescription = isActive
@@ -44,18 +49,25 @@ export function CloudAccountEditActions({
                     triggerClassName="w-full sm:w-auto"
                 />
 
-                <ConfirmCloudAccountActionDialog
+                <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isSaving || isStatusLoading}
+                    onClick={() => setDeleteOpen(true)}
+                    className="w-full gap-1 sm:w-auto"
+                >
+                    <Trash2 className="size-4" />
+                    Excluir conta
+                </Button>
+                <ConfirmDeleteDialog
+                    open={deleteOpen}
+                    onOpenChange={setDeleteOpen}
                     title="Excluir conta cloud"
                     description="Esta ação remove a Conta Cloud permanentemente. Após a confirmação não pode ser desfeita."
+                    resourceName={resourceName}
                     confirmLabel="Excluir conta"
-                    triggerLabel="Excluir conta"
-                    triggerVariant="destructive"
-                    triggerDisabled={isSaving || isStatusLoading}
-                    confirmVariant="destructive"
                     isConfirming={isDeleting}
                     onConfirm={onConfirmDelete}
-                    icon={<Trash2 className="size-4" />}
-                    triggerClassName="w-full sm:w-auto"
                 />
             </div>
 

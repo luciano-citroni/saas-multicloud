@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { UserPlus } from 'lucide-react';
+import { Cloud, Layers, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { ErrorMessages, extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 type Props = {
     organizationId: string;
@@ -27,11 +28,13 @@ type OrganizationOption = {
 };
 
 function normalizeOrganizations(payload: unknown): OrganizationOption[] {
-    if (!Array.isArray(payload)) {
-        return [];
-    }
+    const items = Array.isArray(payload)
+        ? payload
+        : payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)
+          ? (payload as { items: unknown[] }).items
+          : [];
 
-    return payload.filter(
+    return items.filter(
         (item): item is OrganizationOption =>
             typeof item === 'object' &&
             item !== null &&
@@ -142,7 +145,7 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                     {t.inviteButton}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{t.inviteTitle}</DialogTitle>
                     <DialogDescription>{t.inviteDesc}</DialogDescription>
@@ -190,19 +193,48 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>{t.inviteOrganizationsLabel}</FormLabel>
-                                    <div className="rounded-md border p-3">
+                                    <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
+                                        <div className="flex items-start gap-2.5">
+                                            <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-background">
+                                                <Layers className="size-3.5 text-foreground" aria-hidden="true" />
+                                            </div>
+                                            <div className="min-w-0 space-y-1">
+                                                <p className="text-xs font-medium tracking-wide text-foreground">{t.inviteAccessScopeTitle}</p>
+                                                <p className="text-xs leading-relaxed text-muted-foreground">{t.inviteOrganizationsHint}</p>
+                                                <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
+                                                    <span className="inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 font-medium text-foreground">
+                                                        <Layers className="size-3" aria-hidden="true" />
+                                                        {t.inviteOrgBadge}
+                                                    </span>
+                                                    <span aria-hidden="true">→</span>
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-dashed bg-background/60 px-1.5 py-0.5">
+                                                        <Cloud className="size-3" aria-hidden="true" />
+                                                        {t.inviteCloudAccountsNote}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-md border">
                                         {loadingOrganizations ? (
-                                            <p className="text-sm text-muted-foreground">{tc.loading}</p>
+                                            <p className="p-3 text-sm text-muted-foreground">{tc.loading}</p>
                                         ) : organizations.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">{t.inviteNoOrganizations}</p>
+                                            <p className="p-3 text-sm text-muted-foreground">{t.inviteNoOrganizations}</p>
                                         ) : (
-                                            <div className="space-y-2">
+                                            <div className="divide-y">
                                                 {organizations.map((org) => {
                                                     const checked = field.value.includes(org.id);
 
                                                     return (
-                                                        <label key={org.id} className="flex items-center gap-2 text-sm">
+                                                        <label
+                                                            key={org.id}
+                                                            className={cn(
+                                                                'flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors duration-150',
+                                                                checked ? 'bg-primary/5' : 'hover:bg-muted/40'
+                                                            )}
+                                                        >
                                                             <Checkbox
+                                                                className="mt-1"
                                                                 checked={checked}
                                                                 onCheckedChange={(nextChecked) => {
                                                                     if (nextChecked) {
@@ -213,14 +245,29 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                                                                     field.onChange(field.value.filter((selectedId) => selectedId !== org.id));
                                                                 }}
                                                             />
-                                                            <span>{org.name}</span>
+                                                            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                                                                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-background">
+                                                                    <Layers className="size-3.5" aria-hidden="true" />
+                                                                </div>
+                                                                <div className="min-w-0 space-y-0.5">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="truncate text-sm font-medium">{org.name}</span>
+                                                                        <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                                            {t.inviteOrgBadge}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                        <Cloud className="size-3 shrink-0" aria-hidden="true" />
+                                                                        <span className="truncate">{t.inviteCloudAccountsNote}</span>
+                                                                    </p>
+                                                                </div>
+                                                            </div>
                                                         </label>
                                                     );
                                                 })}
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground">{t.inviteOrganizationsHint}</p>
                                     <FormMessage />
                                 </FormItem>
                             )}

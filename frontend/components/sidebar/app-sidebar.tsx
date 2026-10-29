@@ -387,14 +387,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         const tenant = [
             { title: tn.newTenant, url: '/tenant/new', icon: Plus },
-            { title: tn.plans, url: '/billing', icon: DollarSign },
+            { title: tn.tenants, url: '/tenant', icon: Layers },
             ...(canManage
                 ? [
                       { title: tn.groups, url: '/tenant/organizations', icon: Layers },
                       { title: tn.users, url: '/tenant/users', icon: Users },
                   ]
                 : []),
-            { title: tn.tenants, url: '/tenant', icon: Layers },
+            { title: tn.plans, url: '/billing', icon: DollarSign },
         ];
 
         const modules = [

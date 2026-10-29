@@ -25,6 +25,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -134,8 +135,8 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
         void loadInvites();
     }, [loadMembers, loadInvites]);
 
-    const handleRemove = async () => {
-        if (!memberToRemove) return;
+    const handleRemove = async (): Promise<boolean> => {
+        if (!memberToRemove) return true;
         setRemovingId(memberToRemove.userId);
         try {
             const res = await fetch(
@@ -143,14 +144,19 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                 { method: 'DELETE' },
             );
             const body = await res.json().catch(() => null);
-            if (!res.ok) { toast.error(extractErrorMessage(body)); return; }
+            if (!res.ok) {
+                toast.error(extractErrorMessage(body));
+                return false;
+            }
             toast.success(t.removeMemberSuccess);
             void loadMembers();
+            setMemberToRemove(null);
+            return true;
         } catch {
             toast.error(t.removeMemberError);
+            return false;
         } finally {
             setRemovingId(null);
-            setMemberToRemove(null);
         }
     };
 
@@ -487,21 +493,22 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                 />
             )}
 
-            <AlertDialog open={!!memberToRemove} onOpenChange={(o) => { if (!o) setMemberToRemove(null); }}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t.removeMemberTitle}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {t.removeMemberDesc}{' '}
-                            {memberToRemove && <span className="font-medium">{memberToRemove.user.name}</span>}?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>{tc.cancel}</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRemove}>{tc.delete}</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDeleteDialog
+                open={!!memberToRemove}
+                onOpenChange={(open) => {
+                    if (!open) setMemberToRemove(null);
+                }}
+                title={t.removeMemberTitle}
+                description={
+                    <>
+                        {t.removeMemberDesc}{' '}
+                        {memberToRemove && <span className="font-medium">{memberToRemove.user.name}</span>}?
+                    </>
+                }
+                resourceName={memberToRemove?.user.name ?? ''}
+                isConfirming={removingId === memberToRemove?.userId}
+                onConfirm={handleRemove}
+            />
 
             <AlertDialog open={!!inviteToCancel} onOpenChange={(o) => { if (!o) setInviteToCancel(null); }}>
                 <AlertDialogContent>

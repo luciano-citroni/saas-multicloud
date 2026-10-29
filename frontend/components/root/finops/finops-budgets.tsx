@@ -18,16 +18,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -342,21 +333,23 @@ export function FinopsBudgets() {
         }
     };
 
-    const onDelete = async () => {
-        if (!organizationId || !selectedAccountId || !deleteTarget) return;
+    const onDelete = async (): Promise<boolean> => {
+        if (!organizationId || !selectedAccountId || !deleteTarget) return true;
         setDeleting(true);
         try {
             const response = await deleteFinopsBudget(organizationId, selectedAccountId, deleteTarget.budget.id);
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => null);
                 toast.error(extractErrorMessage(body, 'pt'));
-                return;
+                return false;
             }
             toast.success('Orçamento removido.');
             setDeleteTarget(null);
             void loadStatuses(organizationId, selectedAccountId, true);
+            return true;
         } catch {
             toast.error('Não foi possível remover o orçamento.');
+            return false;
         } finally {
             setDeleting(false);
         }
@@ -724,22 +717,18 @@ export function FinopsBudgets() {
                 </DialogContent>
             </Dialog>
 
-            <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Remover orçamento?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            O orçamento “{deleteTarget?.budget.name}” será excluído permanentemente.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={onDelete} disabled={deleting}>
-                            {deleting ? 'Removendo…' : 'Remover'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDeleteDialog
+                open={Boolean(deleteTarget)}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTarget(null);
+                }}
+                title="Remover orçamento?"
+                description={`O orçamento “${deleteTarget?.budget.name ?? ''}” será excluído permanentemente.`}
+                resourceName={deleteTarget?.budget.name ?? ''}
+                confirmLabel="Remover"
+                isConfirming={deleting}
+                onConfirm={onDelete}
+            />
         </div>
     );
 }

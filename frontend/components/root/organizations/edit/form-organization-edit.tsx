@@ -233,6 +233,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
                 />
 
                 <OrganizationEditActions
+                    resourceName={form.watch('name')}
                     canDelete={currentRole === 'OWNER'}
                     canLeave={currentRole !== 'OWNER'}
                     isSaving={isLoading}

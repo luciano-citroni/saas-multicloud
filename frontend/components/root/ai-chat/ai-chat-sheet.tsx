@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { History, Loader2, MessageSquare, Plus } from 'lucide-react';
+import { History, MessageSquare, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     cancelAiChatGeneration,
@@ -15,16 +15,7 @@ import {
     type AiChatMessage,
     type AiChatSource,
 } from '@/app/actions/ai-chat';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -128,7 +119,6 @@ async function parseSseStream(
 
 export function AiChatSheet() {
     const t = useTranslations('aiChat');
-    const tc = useTranslations('common');
     const { locale } = useLocale();
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<ChatTab>('chat');
@@ -261,9 +251,9 @@ export function AiChatSheet() {
         setDeleteTarget(target);
     }
 
-    async function confirmDeleteConversation() {
+    async function confirmDeleteConversation(): Promise<boolean> {
         if (!organizationId || !deleteTarget) {
-            return;
+            return true;
         }
 
         const conversationId = deleteTarget.id;
@@ -273,7 +263,7 @@ export function AiChatSheet() {
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => ({}));
                 toast.error(extractErrorMessage(body, locale));
-                return;
+                return false;
             }
             setConversations((prev) => prev.filter((item) => item.id !== conversationId));
             if (activeConversationIdRef.current === conversationId) {
@@ -283,6 +273,7 @@ export function AiChatSheet() {
             }
             setDeleteTarget(null);
             window.setTimeout(restoreBodyPointerEvents, 0);
+            return true;
         } finally {
             setDeleting(false);
         }
@@ -554,7 +545,7 @@ export function AiChatSheet() {
                 </SheetContent>
             </Sheet>
 
-            <AlertDialog
+            <ConfirmDeleteDialog
                 open={Boolean(deleteTarget)}
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen && !deleting) {
@@ -562,43 +553,29 @@ export function AiChatSheet() {
                         window.setTimeout(restoreBodyPointerEvents, 0);
                     }
                 }}
-            >
-                <AlertDialogContent
-                    onCloseAutoFocus={(event) => {
+                title={t.deleteConfirmTitle}
+                description={
+                    deleteTarget ? (
+                        <>
+                            <span className="text-foreground font-medium">&ldquo;{deleteTarget.title}&rdquo;</span>
+                            {' '}
+                            {t.deleteConfirmDescription}
+                        </>
+                    ) : (
+                        t.deleteConfirmDescription
+                    )
+                }
+                resourceName={deleteTarget?.title ?? ''}
+                confirmLabel={t.deleteConfirmAction}
+                isConfirming={deleting}
+                onConfirm={confirmDeleteConversation}
+                contentProps={{
+                    onCloseAutoFocus: (event) => {
                         event.preventDefault();
                         restoreBodyPointerEvents();
-                    }}
-                >
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t.deleteConfirmTitle}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {deleteTarget ? (
-                                <>
-                                    <span className="text-foreground font-medium">&ldquo;{deleteTarget.title}&rdquo;</span>
-                                    {' '}
-                                    {t.deleteConfirmDescription}
-                                </>
-                            ) : (
-                                t.deleteConfirmDescription
-                            )}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>{tc.cancel}</AlertDialogCancel>
-                        <AlertDialogAction
-                            variant="destructive"
-                            disabled={deleting}
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void confirmDeleteConversation();
-                            }}
-                        >
-                            {deleting ? <Loader2 className="size-4 animate-spin" /> : null}
-                            {t.deleteConfirmAction}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                    },
+                }}
+            />
         </>
     );
 }

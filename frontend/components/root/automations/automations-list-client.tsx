@@ -7,16 +7,7 @@ import { toast } from 'sonner';
 import { Loader2, Plus, Play, Copy, Trash2, Power, PowerOff, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
@@ -116,10 +107,10 @@ export function AutomationsListClient() {
         await load();
     }
 
-    async function confirmDelete() {
-        if (!deleteTarget) return;
+    async function confirmDelete(): Promise<boolean> {
+        if (!deleteTarget) return true;
         const orgId = getOrgId();
-        if (!orgId) return;
+        if (!orgId) return true;
 
         setDeleting(true);
         try {
@@ -127,13 +118,15 @@ export function AutomationsListClient() {
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => ({}));
                 toast.error(extractErrorMessage(body as never, 'pt'));
-                return;
+                return false;
             }
             toast.success('Automação excluída');
             setDeleteTarget(null);
             await load();
+            return true;
         } catch {
             toast.error('Falha ao excluir automação');
+            return false;
         } finally {
             setDeleting(false);
         }
@@ -262,30 +255,22 @@ export function AutomationsListClient() {
                 </Table>
             </div>
 
-            <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir automação?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            A automação <span className="font-medium text-foreground">{deleteTarget?.name}</span> será
-                            removida permanentemente. Esta ação não pode ser desfeita.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            disabled={deleting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void confirmDelete();
-                            }}
-                        >
-                            {deleting ? 'Excluindo...' : 'Excluir'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDeleteDialog
+                open={Boolean(deleteTarget)}
+                onOpenChange={(open) => {
+                    if (!open && !deleting) setDeleteTarget(null);
+                }}
+                title="Excluir automação?"
+                description={
+                    <>
+                        A automação <span className="font-medium text-foreground">{deleteTarget?.name}</span> será
+                        removida permanentemente. Esta ação não pode ser desfeita.
+                    </>
+                }
+                resourceName={deleteTarget?.name ?? ''}
+                isConfirming={deleting}
+                onConfirm={confirmDelete}
+            />
         </div>
     );
 }

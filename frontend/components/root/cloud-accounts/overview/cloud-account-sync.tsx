@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 import { CloudAccountTable } from './cloud-account-table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/lib/i18n';
-import { ConfirmCloudAccountActionDialog } from '@/components/root/cloud-accounts/edit/confirm-cloud-account-action-dialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 
 type ApiErrorPayload = {
     message?: string | string[];
@@ -545,19 +545,17 @@ export function CloudAccountSync() {
     return (
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
-                <ConfirmCloudAccountActionDialog
-                    title="Excluir conta cloud"
-                    description="Esta ação remove a Conta Cloud permanentemente. Após a confirmação não pode ser desfeita."
-                    confirmLabel="Excluir conta"
-                    triggerLabel="Excluir conta"
+                <ConfirmDeleteDialog
                     open={Boolean(pendingDeleteAccountId)}
                     onOpenChange={(nextOpen) => {
                         if (!nextOpen) {
                             setPendingDeleteAccountId(null);
                         }
                     }}
-                    hideTrigger
-                    confirmVariant="destructive"
+                    title="Excluir conta cloud"
+                    description="Esta ação remove a Conta Cloud permanentemente. Após a confirmação não pode ser desfeita."
+                    resourceName={accounts.find((account) => account.id === pendingDeleteAccountId)?.alias ?? ''}
+                    confirmLabel="Excluir conta"
                     isConfirming={deletingAccountId !== null}
                     onConfirm={handleConfirmDeleteAccount}
                 />

@@ -23,7 +23,7 @@ export class OpenAiProvider implements AiProvider {
     constructor(private readonly configService: ConfigService) {
         const apiKey = this.configService.get<string>('OPENAI_API_KEY')?.trim();
         const baseURL = this.configService.get<string>('OPENAI_BASE_URL')?.trim() || undefined;
-        this.model = this.configService.get<string>('OPENAI_MODEL')?.trim() || 'gpt-4o';
+        this.model = this.configService.get<string>('OPENAI_MODEL')?.trim() || 'gpt-6-luna';
         this.timeoutMs = Number(this.configService.get<string>('AI_CHAT_TIMEOUT_MS') ?? 60_000);
         this.defaultMaxTokens = Number(this.configService.get<string>('AI_CHAT_MAX_TOKENS') ?? 2048);
         this.client = apiKey ? new OpenAI({ apiKey, baseURL, timeout: this.timeoutMs }) : null;
