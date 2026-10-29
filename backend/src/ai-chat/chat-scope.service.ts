@@ -23,8 +23,16 @@ const IN_SCOPE_HINTS: RegExp[] = [
     /\b(conta cloud|cloud account|organiza[cç][aã]o|tenant|m[oó]dulo|saas|como (uso|utilizo|configuro))\b/i,
 ];
 
+/** Phatic greetings — answer without tools or page links. */
+const GREETING_PATTERN =
+    /^(ol[áa]|oi+|hey+|hi+|hello|bom dia|boa tarde|boa noite|e a[ií]|tudo bem|tudo bom|salve)(\s+tudo bem)?[\s!.?🤔👋]*$/i;
+
+const GREETING_REPLY =
+    'Olá! Posso ajudar com custos (FinOps), inventário cloud, assessment, governança e automações da sua organização. Em que posso ajudar?';
+
 export type ScopeDecision =
     | { allowed: true; reason: 'in_scope' | 'ambiguous' }
+    | { allowed: true; reason: 'greeting'; message: string }
     | { allowed: false; reason: 'off_topic' | 'security'; message: string };
 
 @Injectable()
@@ -37,6 +45,10 @@ export class ChatScopeService {
                 reason: 'off_topic',
                 message: ErrorMessages.AI_CHAT.OUT_OF_SCOPE,
             };
+        }
+
+        if (GREETING_PATTERN.test(text)) {
+            return { allowed: true, reason: 'greeting', message: GREETING_REPLY };
         }
 
         if (SECURITY_BYPASS_PATTERNS.some((pattern) => pattern.test(text))) {

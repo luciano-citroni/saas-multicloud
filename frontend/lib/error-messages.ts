@@ -402,6 +402,37 @@ export const ErrorMessages = {
         },
     },
 
+    NOTIFICATIONS: {
+        GROUP_NOT_FOUND: {
+            en: 'Notification group not found.',
+            pt: 'Grupo de notificação não encontrado.',
+        },
+        GROUP_ALREADY_EXISTS: {
+            en: 'A notification group with this name already exists.',
+            pt: 'Já existe um grupo de notificação com este nome.',
+        },
+        EMAIL_NOT_FOUND: {
+            en: 'Notification email not found.',
+            pt: 'E-mail de notificação não encontrado.',
+        },
+        EMAIL_ALREADY_EXISTS: {
+            en: 'This email is already registered in the group.',
+            pt: 'Este e-mail já está cadastrado neste grupo.',
+        },
+        WHATSAPP_NOT_IMPLEMENTED: {
+            en: 'WhatsApp notifications are not implemented yet.',
+            pt: 'Notificações por WhatsApp ainda não foram implementadas.',
+        },
+        GROUP_HAS_NO_ACTIVE_EMAILS: {
+            en: 'This notification group has no active emails to test.',
+            pt: 'Este grupo não tem e-mails ativos para testar.',
+        },
+        TEST_SEND_FAILED: {
+            en: 'Could not send the test notification email.',
+            pt: 'Não foi possível enviar o e-mail de teste.',
+        },
+    },
+
     // General (mapeado por HTTP status code)
     GENERAL: {
         UNEXPECTED_ERROR: {

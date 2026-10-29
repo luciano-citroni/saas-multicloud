@@ -12,6 +12,7 @@ const routeNames: Record<string, string> = {
     new: 'Nova',
     billing: 'Planos e Regras',
     settings: 'Configurações',
+    notifications: 'Notificações',
     'cloud-accounts': 'Contas Cloud',
     edit: 'Editar',
     assessment: 'Assessment',

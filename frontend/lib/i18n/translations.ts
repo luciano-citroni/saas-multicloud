@@ -279,6 +279,7 @@ const pt = {
         newCloudAccount: 'Nova conta cloud',
         groups: 'Organizações',
         newTenant: 'Novo Tenant',
+        notifications: 'Notificações',
     },
     auth: {
         signInTitle: 'Entrar na sua conta',
@@ -1014,6 +1015,7 @@ const en: TranslationMap<typeof pt> = {
         newCloudAccount: 'New cloud account',
         groups: 'Organizations',
         newTenant: 'New Tenant',
+        notifications: 'Notifications',
     },
     auth: {
         signInTitle: 'Sign in to your account',

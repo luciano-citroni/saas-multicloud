@@ -324,49 +324,107 @@ export class CreateBudgetRequestDto {
     @ApiProperty({ example: 'Budget Mensal EC2' })
     name!: string;
 
-    @ApiProperty({ example: 500.00 })
+    @ApiProperty({ example: 500.0 })
     amount!: number;
 
     @ApiPropertyOptional({ example: 'USD' })
     currency?: string;
 
-    @ApiPropertyOptional({ example: 'monthly', description: 'Apenas monthly suportado' })
-    period?: 'monthly';
+    @ApiPropertyOptional({ example: 'monthly', enum: ['daily', 'monthly'] })
+    period?: 'daily' | 'monthly';
 
-    @ApiPropertyOptional({ example: 'Amazon EC2', description: 'Filtrar por serviço específico. Null = todos os serviços.' })
-    service?: string;
+    @ApiPropertyOptional({
+        example: 'organization',
+        enum: ['organization', 'cloud_account'],
+        description: 'organization = tenant inteiro; cloud_account exige cloudAccountId',
+    })
+    scope?: 'organization' | 'cloud_account';
+
+    @ApiPropertyOptional({ format: 'uuid', nullable: true })
+    cloudAccountId?: string | null;
+
+    @ApiPropertyOptional({ example: 'Amazon EC2', description: 'Filtrar por serviço. Null = todos.' })
+    service?: string | null;
+
+    @ApiPropertyOptional({ example: 'i-0123456789abcdef0', description: 'Obrigatório quando alertType=resource' })
+    resourceId?: string | null;
 
     @ApiPropertyOptional({
         example: [80, 100],
-        description: 'Percentuais de alerta (ex: [80, 100] = alertar em 80% e 100% do budget)',
+        description: 'Percentuais de alerta (tipos percentage/resource)',
     })
     alertThresholds?: number[];
+
+    @ApiPropertyOptional({ example: 'daily', enum: ['daily', 'monthly'] })
+    alertFrequency?: 'daily' | 'monthly';
+
+    @ApiPropertyOptional({
+        example: 'amount',
+        enum: ['percentage', 'amount', 'resource'],
+        description: 'percentage = % do orçamento; amount = valor absoluto; resource = recurso específico',
+    })
+    alertType?: 'percentage' | 'amount' | 'resource';
+
+    @ApiPropertyOptional({ example: 50, description: 'Valor absoluto do alerta quando alertType=amount' })
+    alertAmount?: number | null;
+
+    @ApiPropertyOptional({
+        example: ['email'],
+        description: 'Canais de alerta. WhatsApp pode ser cadastrado, mas o envio ainda não é implementado.',
+        isArray: true,
+        enum: ['email', 'whatsapp'],
+    })
+    alertChannels?: Array<'email' | 'whatsapp'>;
+
+    @ApiPropertyOptional({ example: ['finops@empresa.com'], isArray: true, type: String })
+    alertEmails?: string[];
 }
 
 export class BudgetDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
 
-    @ApiProperty({ format: 'uuid' })
-    cloudAccountId!: string;
+    @ApiPropertyOptional({ format: 'uuid', nullable: true })
+    cloudAccountId!: string | null;
+
+    @ApiProperty({ example: 'organization', enum: ['organization', 'cloud_account'] })
+    scope!: string;
 
     @ApiProperty()
     name!: string;
 
-    @ApiProperty({ example: 500.00 })
+    @ApiProperty({ example: 500.0 })
     amount!: number;
 
     @ApiProperty({ example: 'USD' })
     currency!: string;
 
-    @ApiProperty({ example: 'monthly' })
+    @ApiProperty({ example: 'monthly', enum: ['daily', 'monthly'] })
     period!: string;
 
     @ApiPropertyOptional()
     service!: string | null;
 
+    @ApiPropertyOptional({ nullable: true })
+    resourceId!: string | null;
+
     @ApiProperty({ example: [80, 100] })
     alertThresholds!: number[];
+
+    @ApiProperty({ example: 'monthly', enum: ['daily', 'monthly'] })
+    alertFrequency!: string;
+
+    @ApiProperty({ example: 'percentage', enum: ['percentage', 'amount', 'resource'] })
+    alertType!: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    alertAmount!: number | null;
+
+    @ApiProperty({ example: ['email'], isArray: true })
+    alertChannels!: string[];
+
+    @ApiProperty({ example: ['finops@empresa.com'], isArray: true })
+    alertEmails!: string[];
 
     @ApiProperty()
     isActive!: boolean;

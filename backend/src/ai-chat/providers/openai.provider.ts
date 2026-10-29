@@ -33,6 +33,19 @@ export class OpenAiProvider implements AiProvider {
         return this.client !== null;
     }
 
+    /** GPT-5+ / GPT-6 / o-series prefer max_completion_tokens over max_tokens. */
+    private usesMaxCompletionTokens(model: string): boolean {
+        return /^(gpt-5|gpt-6|o\d)/i.test(model);
+    }
+
+    /**
+     * GPT-6 Sol/Luna support Chat Completions tool calling only with reasoning_effort=none.
+     * @see https://developers.openai.com/api/docs/models/gpt-6-luna
+     */
+    private requiresReasoningNoneForTools(model: string): boolean {
+        return /^(gpt-6-luna|gpt-6-sol|gpt-5\.?\d*-?(luna|sol)?)/i.test(model);
+    }
+
     async complete(request: AiChatCompletionRequest): Promise<AiChatCompletionResult> {
         if (!this.client) {
             throw new ServiceUnavailableException(ErrorMessages.AI_CHAT.PROVIDER_NOT_CONFIGURED);
@@ -57,20 +70,40 @@ export class OpenAiProvider implements AiProvider {
                 return message;
             }) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
+            // GPT-6 Luna/Sol on Chat Completions only support function calling with
+            // reasoning_effort=none; temperature is unsupported unless effort is none.
+            // Prefer max_completion_tokens for GPT-5+/GPT-6; keep max_tokens for gpt-4o.
+            const maxTokens = request.maxTokens ?? this.defaultMaxTokens;
+            const tools = request.tools?.map((tool) => ({
+                type: 'function' as const,
+                function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                },
+            }));
+            const isModernModel = this.usesMaxCompletionTokens(this.model);
+            // Chat Completions + tools on Luna/Sol only works with reasoning_effort=none.
+            // temperature is rejected when effort is not none (default is medium).
+            const needsReasoningNoneForTools =
+                Boolean(tools?.length) && this.requiresReasoningNoneForTools(this.model);
+
             const response = await this.client.chat.completions.create(
                 {
                     model: this.model,
                     messages,
-                    tools: request.tools?.map((tool) => ({
-                        type: 'function' as const,
-                        function: {
-                            name: tool.name,
-                            description: tool.description,
-                            parameters: tool.parameters,
-                        },
-                    })),
-                    max_tokens: request.maxTokens ?? this.defaultMaxTokens,
-                    temperature: 0.2,
+                    tools,
+                    ...(isModernModel
+                        ? {
+                              max_completion_tokens: maxTokens,
+                              ...(needsReasoningNoneForTools
+                                  ? { reasoning_effort: 'none' as const }
+                                  : {}),
+                          }
+                        : {
+                              max_tokens: maxTokens,
+                              temperature: 0.2,
+                          }),
                 },
                 { signal: request.signal },
             );

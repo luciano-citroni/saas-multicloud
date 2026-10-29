@@ -91,6 +91,39 @@ describe('AiChatService', () => {
         expect(auditService.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'scope_rejected' }));
     });
 
+    it('answers greetings without tools, provider, or page source links', async () => {
+        scopeService.evaluate.mockReturnValue({
+            allowed: true,
+            reason: 'greeting',
+            message: 'Olá! Em que posso ajudar?',
+        });
+
+        const events = await collect(
+            service.streamMessage('conv-1', 'org-1', 'user-1', { content: 'Olá' }),
+        );
+
+        expect(openAiProvider.complete).not.toHaveBeenCalled();
+        expect(toolService.executeTool).not.toHaveBeenCalled();
+        expect(toolService.resolveEnabledModules).not.toHaveBeenCalled();
+        expect(events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    event: 'token',
+                    data: { content: 'Olá! Em que posso ajudar?' },
+                }),
+                expect.objectContaining({ event: 'done' }),
+            ]),
+        );
+        expect(events.some((event) => (event as { event?: string }).event === 'sources')).toBe(false);
+        expect(historyService.addMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                role: 'assistant',
+                content: 'Olá! Em que posso ajudar?',
+                sources: [],
+            }),
+        );
+    });
+
     it('returns controlled error when provider is not configured', async () => {
         scopeService.evaluate.mockReturnValue({ allowed: true, reason: 'in_scope' });
         openAiProvider.isConfigured.mockReturnValue(false);

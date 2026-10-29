@@ -11,7 +11,7 @@ import { ChatHistoryService } from './chat-history.service';
 import { ChatScopeService } from './chat-scope.service';
 import { ChatToolService } from './chat-tool.service';
 import type { CreateConversationDto, SendMessageDto } from './dto';
-import { AI_CHAT_SYSTEM_PROMPT_V2 } from './prompts/system-prompt';
+import { AI_CHAT_SYSTEM_PROMPT_V3 } from './prompts/system-prompt';
 import type { AiChatProviderMessage } from './providers/ai-provider.interface';
 import { OpenAiProvider } from './providers/openai.provider';
 
@@ -148,6 +148,19 @@ export class AiChatService {
                 return;
             }
 
+            // Greetings: reply without tools/provider so we never attach module page links.
+            if (scope.reason === 'greeting') {
+                const assistant = await this.historyService.addMessage({
+                    conversationId: conversation.id,
+                    role: 'assistant',
+                    content: scope.message,
+                    sources: [],
+                });
+                yield { event: 'token', data: { content: scope.message } };
+                yield { event: 'done', data: { messageId: assistant.id, conversationId: conversation.id } };
+                return;
+            }
+
             if (!this.openAiProvider.isConfigured()) {
                 throw new ServiceUnavailableException(ErrorMessages.AI_CHAT.PROVIDER_NOT_CONFIGURED);
             }
@@ -163,7 +176,7 @@ export class AiChatService {
             );
 
             const messages: AiChatProviderMessage[] = [
-                { role: 'system', content: AI_CHAT_SYSTEM_PROMPT_V2 },
+                { role: 'system', content: AI_CHAT_SYSTEM_PROMPT_V3 },
                 ...history
                     .filter((message) => message.role === 'user' || message.role === 'assistant')
                     .map((message) => ({

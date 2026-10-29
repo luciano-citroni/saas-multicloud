@@ -785,7 +785,8 @@ export class ChatToolService {
             },
             {
                 name: 'get_saas_documentation',
-                description: 'Retrieve approved SaaS product documentation about modules and how to use the platform.',
+                description:
+                    'Retrieve approved SaaS product documentation when the user asks how a module works or how to use the platform. Do not call this for greetings or small talk.',
                 requiredModules: [],
                 parameters: {
                     type: 'object',

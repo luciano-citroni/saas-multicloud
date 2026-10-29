@@ -168,9 +168,17 @@ export type FinopsBudgetPayload = {
     name: string;
     amount: number;
     currency?: string;
-    period?: 'monthly';
-    service?: string;
+    period?: 'daily' | 'monthly';
+    scope?: 'organization' | 'cloud_account';
+    cloudAccountId?: string | null;
+    service?: string | null;
+    resourceId?: string | null;
     alertThresholds?: number[];
+    alertFrequency?: 'daily' | 'monthly';
+    alertType?: 'percentage' | 'amount' | 'resource';
+    alertAmount?: number | null;
+    alertChannels?: Array<'email' | 'whatsapp'>;
+    alertEmails?: string[];
 };
 
 export async function fetchFinopsBudgets(organizationId: string, cloudAccountId: string) {
@@ -180,8 +188,24 @@ export async function fetchFinopsBudgets(organizationId: string, cloudAccountId:
     );
 }
 
+export async function fetchOrganizationBudgetStatuses(organizationId: string) {
+    return fetch(
+        `/api/finops/budgets/organization/status?organizationId=${encodeURIComponent(organizationId)}`,
+        { cache: 'no-store' }
+    );
+}
+
 export async function createFinopsBudget(organizationId: string, cloudAccountId: string, payload: FinopsBudgetPayload) {
     return fetch(`/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/budgets?organizationId=${encodeURIComponent(organizationId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+}
+
+/** Cria budget de organização ou conta via endpoint unificado. */
+export async function createFinopsBudgetUnified(organizationId: string, payload: FinopsBudgetPayload) {
+    return fetch(`/api/finops/budgets?organizationId=${encodeURIComponent(organizationId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -204,9 +228,31 @@ export async function updateFinopsBudget(
     );
 }
 
+export async function updateFinopsBudgetUnified(
+    organizationId: string,
+    budgetId: string,
+    payload: Partial<FinopsBudgetPayload>
+) {
+    return fetch(
+        `/api/finops/budgets/${encodeURIComponent(budgetId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+}
+
 export async function deleteFinopsBudget(organizationId: string, cloudAccountId: string, budgetId: string) {
     return fetch(
         `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/budgets/${encodeURIComponent(budgetId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' }
+    );
+}
+
+export async function deleteFinopsBudgetUnified(organizationId: string, budgetId: string) {
+    return fetch(
+        `/api/finops/budgets/${encodeURIComponent(budgetId)}?organizationId=${encodeURIComponent(organizationId)}`,
         { method: 'DELETE' }
     );
 }

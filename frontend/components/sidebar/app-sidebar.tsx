@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Cloud, GitBranch, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
+import { Bell, Cloud, GitBranch, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
@@ -392,6 +392,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 ? [
                       { title: tn.groups, url: '/tenant/organizations', icon: Layers },
                       { title: tn.users, url: '/tenant/users', icon: Users },
+                      { title: tn.notifications, url: '/tenant/notifications', icon: Bell },
                   ]
                 : []),
             { title: tn.plans, url: '/billing', icon: DollarSign },

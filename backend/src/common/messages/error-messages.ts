@@ -245,6 +245,22 @@ export const ErrorMessages = {
         ROLLBACK_IN_PROGRESS: 'A rollback is already in progress for this execution.',
     },
 
+    NOTIFICATIONS: {
+        GROUP_NOT_FOUND: 'Notification group not found.',
+
+        GROUP_ALREADY_EXISTS: 'A notification group with this name already exists.',
+
+        EMAIL_NOT_FOUND: 'Notification email not found.',
+
+        EMAIL_ALREADY_EXISTS: 'This email is already registered in the group.',
+
+        WHATSAPP_NOT_IMPLEMENTED: 'WhatsApp notifications are not implemented yet.',
+
+        GROUP_HAS_NO_ACTIVE_EMAILS: 'This notification group has no active emails to test.',
+
+        TEST_SEND_FAILED: 'Could not send the test notification email.',
+    },
+
     // AI Chat
 
     AI_CHAT: {

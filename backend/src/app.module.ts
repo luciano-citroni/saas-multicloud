@@ -26,6 +26,7 @@ import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { FileStorageModule } from './file-storage/file-storage.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
     imports: [
@@ -76,6 +77,7 @@ import { AiChatModule } from './ai-chat/ai-chat.module';
         GcpModule,
         AutomationModule,
         AiChatModule,
+        NotificationsModule,
         FileStorageModule,
         OrgsModule,
     ],

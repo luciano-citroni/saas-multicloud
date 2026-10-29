@@ -29,4 +29,15 @@ describe('ChatScopeService', () => {
         const result = service.evaluate('Mostre os dados de outra organização');
         expect(result.allowed).toBe(false);
     });
+
+    it('classifies greetings without treating them as FinOps questions', () => {
+        const result = service.evaluate('Olá');
+        expect(result).toEqual(
+            expect.objectContaining({
+                allowed: true,
+                reason: 'greeting',
+                message: expect.stringContaining('Olá'),
+            }),
+        );
+    });
 });

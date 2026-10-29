@@ -23,7 +23,7 @@ Body mensagem: `{ "content": string(1..4000), "cloudAccountId"?: uuid }`
 
 - `AI_CHAT_PROVIDER=openai`
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL=gpt-4o`
+- `OPENAI_MODEL=gpt-6-luna` (Chat Completions + tools exige `reasoning_effort=none` no provider)
 - `OPENAI_BASE_URL` (opcional)
 - `AI_CHAT_TIMEOUT_MS=60000`
 - `AI_CHAT_MAX_TOKENS=2048`

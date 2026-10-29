@@ -80,14 +80,41 @@ const marginSchema = z.object({
     currency: z.string().length(3).optional(),
 });
 
-const budgetSchema = z.object({
+const budgetBaseSchema = z.object({
     name: z.string().min(1).max(255),
     amount: z.number().positive(),
     currency: z.string().length(3).optional(),
-    period: z.enum(['monthly']).optional(),
-    service: z.string().max(255).optional(),
+    period: z.enum(['daily', 'monthly']).optional(),
+    scope: z.enum(['organization', 'cloud_account']).optional(),
+    cloudAccountId: z.string().uuid().nullable().optional(),
+    service: z.string().max(255).nullable().optional(),
+    resourceId: z.string().max(512).nullable().optional(),
     alertThresholds: z.array(z.number().min(1).max(200)).optional(),
+    alertFrequency: z.enum(['daily', 'monthly']).optional(),
+    alertType: z.enum(['percentage', 'amount', 'resource']).optional(),
+    alertAmount: z.number().positive().nullable().optional(),
+    alertChannels: z.array(z.enum(['email', 'whatsapp'])).optional(),
+    alertEmails: z.array(z.string().email()).optional(),
 });
+
+const budgetSchema = budgetBaseSchema.superRefine((data, ctx) => {
+    if (data.alertType === 'resource' && !data.resourceId?.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'resourceId é obrigatório para alertas por recurso',
+            path: ['resourceId'],
+        });
+    }
+    if (data.alertType === 'amount' && (data.alertAmount == null || data.alertAmount <= 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'alertAmount é obrigatório para alertas por valor',
+            path: ['alertAmount'],
+        });
+    }
+});
+
+const budgetUpdateSchema = budgetBaseSchema.partial();
 
 // ─── Controller ───────────────────────────────────────────────────────────────
 
@@ -467,10 +494,64 @@ export class FinopsController {
     // Budgets
     // =========================================================================
 
+    @Post('budgets')
+    @HttpCode(201)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Criar budget (organização ou conta)',
+        description:
+            'scope=organization cria orçamento do tenant inteiro. scope=cloud_account exige cloudAccountId. Canal WhatsApp pode ser cadastrado, mas o envio ainda não é implementado.',
+    })
+    @ApiBody({ type: CreateBudgetRequestDto })
+    @ApiResponse({ status: 201, type: BudgetDto })
+    @ApiResponse({ status: 400, description: 'Dados inválidos' })
+    async createOrgBudget(
+        @Body(new ZodValidationPipe(budgetSchema)) body: z.infer<typeof budgetSchema>,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<BudgetDto> {
+        return this.budgetService.create(org.id, body);
+    }
+
+    @Put('budgets/:budgetId')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Atualizar budget (organização ou conta)' })
+    @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
+    @ApiBody({ type: CreateBudgetRequestDto })
+    @ApiResponse({ status: 200, type: BudgetDto })
+    @ApiResponse({ status: 404, description: 'Budget não encontrado' })
+    async updateOrgBudget(
+        @Param('budgetId', ParseUUIDPipe) budgetId: string,
+        @Body(new ZodValidationPipe(budgetUpdateSchema)) body: z.infer<typeof budgetUpdateSchema>,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<BudgetDto> {
+        return this.budgetService.update(budgetId, org.id, body);
+    }
+
+    @Delete('budgets/:budgetId')
+    @HttpCode(204)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Remover budget (organização ou conta)' })
+    @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 204, description: 'Budget removido com sucesso' })
+    @ApiResponse({ status: 404, description: 'Budget não encontrado' })
+    async removeOrgBudget(
+        @Param('budgetId', ParseUUIDPipe) budgetId: string,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<void> {
+        return this.budgetService.remove(budgetId, org.id);
+    }
+
+    @Get('budgets/organization/status')
+    @ApiOperation({ summary: 'Status dos budgets do tenant (scope=organization)' })
+    @ApiResponse({ status: 200, type: [BudgetStatusDto] })
+    async listOrganizationOnlyBudgetStatuses(@CurrentOrganization() org: Tenant): Promise<BudgetStatusDto[]> {
+        return this.budgetService.listOrganizationBudgetStatuses(org.id);
+    }
+
     @Post('accounts/:cloudAccountId/budgets')
     @HttpCode(201)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
-    @ApiOperation({ summary: 'Criar budget de custos' })
+    @ApiOperation({ summary: 'Criar budget de custos da conta cloud' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiBody({ type: CreateBudgetRequestDto })
     @ApiResponse({ status: 201, type: BudgetDto })
@@ -480,7 +561,7 @@ export class FinopsController {
         @Body(new ZodValidationPipe(budgetSchema)) body: z.infer<typeof budgetSchema>,
         @CurrentOrganization() org: Tenant
     ): Promise<BudgetDto> {
-        return this.budgetService.create(cloudAccountId, org.id, body);
+        return this.budgetService.createForAccount(cloudAccountId, org.id, body);
     }
 
     @Get('accounts/:cloudAccountId/budgets')
@@ -531,7 +612,7 @@ export class FinopsController {
         @Param('budgetId', ParseUUIDPipe) budgetId: string,
         @CurrentOrganization() org: Tenant
     ): Promise<BudgetStatusDto> {
-        return this.budgetService.getBudgetStatus(budgetId, cloudAccountId, org.id);
+        return this.budgetService.getBudgetStatus(budgetId, org.id, cloudAccountId);
     }
 
     @Put('accounts/:cloudAccountId/budgets/:budgetId')
@@ -545,10 +626,10 @@ export class FinopsController {
     async updateBudget(
         @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
         @Param('budgetId', ParseUUIDPipe) budgetId: string,
-        @Body(new ZodValidationPipe(budgetSchema.partial())) body: Partial<z.infer<typeof budgetSchema>>,
+        @Body(new ZodValidationPipe(budgetUpdateSchema)) body: z.infer<typeof budgetUpdateSchema>,
         @CurrentOrganization() org: Tenant
     ): Promise<BudgetDto> {
-        return this.budgetService.update(budgetId, cloudAccountId, org.id, body);
+        return this.budgetService.update(budgetId, org.id, body, cloudAccountId);
     }
 
     @Delete('accounts/:cloudAccountId/budgets/:budgetId')
@@ -564,7 +645,7 @@ export class FinopsController {
         @Param('budgetId', ParseUUIDPipe) budgetId: string,
         @CurrentOrganization() org: Tenant
     ): Promise<void> {
-        return this.budgetService.remove(budgetId, cloudAccountId, org.id);
+        return this.budgetService.remove(budgetId, org.id, cloudAccountId);
     }
 
     // =========================================================================
