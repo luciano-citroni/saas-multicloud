@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,9 +29,11 @@ import { ActiveSessionsCard } from '@/components/root/settings/active-sessions-c
 import { isCurrentUser, isRemoveSessionResult } from '@/components/root/settings/settings-utils';
 import { useTranslations } from '@/lib/i18n';
 import { useLocale } from '@/components/providers/locale-provider';
+import { queryKeys } from '@/lib/queries/keys';
 
 export function AccountSecuritySettings() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const ts = useTranslations('settings');
     const tp = useTranslations('profile');
     const tpw = useTranslations('password');
@@ -38,6 +41,8 @@ export function AccountSecuritySettings() {
     const { locale } = useLocale();
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [hasPassword, setHasPassword] = useState(true);
+    const [emailVerified, setEmailVerified] = useState(true);
+    const [isResendingVerification, setIsResendingVerification] = useState(false);
     const [sessions, setSessions] = useState<ActiveSession[]>([]);
     const [removingSessionId, setRemovingSessionId] = useState<string | null>(null);
 
@@ -89,6 +94,7 @@ export function AccountSecuritySettings() {
 
             if (isCurrentUser(userBody)) {
                 setHasPassword(userBody.hasPassword !== false);
+                setEmailVerified(userBody.emailVerified === true);
 
                 profileForm.reset({
                     name: userBody.name ?? '',
@@ -121,6 +127,10 @@ export function AccountSecuritySettings() {
                 return;
             }
 
+            if (isCurrentUser(body)) {
+                setEmailVerified(body.emailVerified === true);
+            }
+
             profileForm.reset({
                 name: isCurrentUser(body) ? body.name : values.name,
                 email: isCurrentUser(body) ? body.email : values.email,
@@ -132,6 +142,35 @@ export function AccountSecuritySettings() {
             toast.error(tp.saveError);
         }
     });
+
+    const handleResendVerification = async () => {
+        setIsResendingVerification(true);
+
+        try {
+            const response = await fetch('/api/auth/email/resend', {
+                method: 'POST',
+            });
+            const body = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                toast.error(extractErrorMessage(body));
+                return;
+            }
+
+            if (body?.alreadyVerified) {
+                setEmailVerified(true);
+                await queryClient.invalidateQueries({ queryKey: queryKeys.sidebarContext });
+                toast.success(tp.resendVerificationAlready);
+                return;
+            }
+
+            toast.success(tp.resendVerificationSuccess);
+        } catch {
+            toast.error(tp.resendVerificationError);
+        } finally {
+            setIsResendingVerification(false);
+        }
+    };
 
     const onSubmitPassword = passwordForm.handleSubmit(async (values) => {
         if (hasPassword && !values.currentPassword?.trim()) {
@@ -203,7 +242,14 @@ export function AccountSecuritySettings() {
 
     return (
         <div className="grid w-full gap-4">
-            <ProfileSettingsForm form={profileForm} isLoading={isInitialLoading} onSubmit={onSubmitProfile} />
+            <ProfileSettingsForm
+                form={profileForm}
+                isLoading={isInitialLoading}
+                emailVerified={emailVerified}
+                isResendingVerification={isResendingVerification}
+                onSubmit={onSubmitProfile}
+                onResendVerification={handleResendVerification}
+            />
 
             <PasswordSettingsForm form={passwordForm} hasPassword={hasPassword} onSubmit={onSubmitPassword} />
 

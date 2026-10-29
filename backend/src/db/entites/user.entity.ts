@@ -30,6 +30,9 @@ export class User {
     @Column({ type: 'boolean', default: true, name: 'is_active' })
     isActive!: boolean;
 
+    @Column({ type: 'boolean', default: false, name: 'email_verified' })
+    emailVerified!: boolean;
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 

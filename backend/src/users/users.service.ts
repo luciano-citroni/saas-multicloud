@@ -84,6 +84,7 @@ export class UsersService {
             email: dto.email.toLowerCase(),
             password: hashedPassword,
             isActive: true,
+            emailVerified: false,
         });
         const savedUser = await this.userRepository.save(user);
         return this.sanitizeUser(savedUser);
@@ -185,8 +186,13 @@ export class UsersService {
             googleId: dto.googleId,
             password: null,
             isActive: true,
+            emailVerified: false,
         });
         return this.userRepository.save(user);
+    }
+
+    async markEmailVerified(userId: string): Promise<void> {
+        await this.userRepository.update({ id: userId }, { emailVerified: true });
     }
 
     async linkGoogleAccount(userId: string, googleId: string): Promise<void> {

@@ -95,6 +95,7 @@ const budgetBaseSchema = z.object({
     alertAmount: z.number().positive().nullable().optional(),
     alertChannels: z.array(z.enum(['email', 'whatsapp'])).optional(),
     alertEmails: z.array(z.string().email()).optional(),
+    alertNotificationGroupIds: z.array(z.string().uuid()).optional(),
 });
 
 const budgetSchema = budgetBaseSchema.superRefine((data, ctx) => {

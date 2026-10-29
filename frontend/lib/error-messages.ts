@@ -41,6 +41,18 @@ export const ErrorMessages = {
             en: 'An account with this email already exists. Sign in with your password first; Google linking is not automatic.',
             pt: 'Já existe uma conta com este e-mail. Entre com a senha primeiro; o vínculo com Google não é automático.',
         },
+        EMAIL_ALREADY_VERIFIED: {
+            en: 'This email is already verified',
+            pt: 'Este e-mail já está confirmado',
+        },
+        INVALID_OR_EXPIRED_EMAIL_TOKEN: {
+            en: 'Email verification token is invalid or expired',
+            pt: 'O link de confirmação de e-mail é inválido ou expirou',
+        },
+        EMAIL_VERIFICATION_RESEND_COOLDOWN: {
+            en: 'Please wait before requesting another verification email',
+            pt: 'Aguarde um momento antes de solicitar outro e-mail de confirmação',
+        },
     },
 
     // Users
@@ -419,17 +431,68 @@ export const ErrorMessages = {
             en: 'This email is already registered in the group.',
             pt: 'Este e-mail já está cadastrado neste grupo.',
         },
-        WHATSAPP_NOT_IMPLEMENTED: {
-            en: 'WhatsApp notifications are not implemented yet.',
-            pt: 'Notificações por WhatsApp ainda não foram implementadas.',
+        WHATSAPP_TARGET_NOT_FOUND: {
+            en: 'WhatsApp notification target not found.',
+            pt: 'Destino WhatsApp não encontrado.',
+        },
+        WHATSAPP_TARGET_ALREADY_EXISTS: {
+            en: 'This WhatsApp target is already registered in the group.',
+            pt: 'Este destino WhatsApp já está cadastrado neste grupo.',
+        },
+        INVALID_WHATSAPP_TARGET: {
+            en: 'Invalid WhatsApp phone number or group id.',
+            pt: 'Número de WhatsApp ou ID de grupo inválido.',
+        },
+        CHANNEL_MISMATCH: {
+            en: 'This operation is not valid for the notification group channel.',
+            pt: 'Esta operação não é válida para o canal deste grupo.',
+        },
+        EVOLUTION_NOT_CONFIGURED: {
+            en: 'WhatsApp (Evolution API) is not configured on the server.',
+            pt: 'WhatsApp (Evolution API) não está configurado no servidor.',
         },
         GROUP_HAS_NO_ACTIVE_EMAILS: {
             en: 'This notification group has no active emails to test.',
             pt: 'Este grupo não tem e-mails ativos para testar.',
         },
+        GROUP_HAS_NO_ACTIVE_WHATSAPP_TARGETS: {
+            en: 'This notification group has no active WhatsApp targets to test.',
+            pt: 'Este grupo não tem destinos WhatsApp ativos para testar.',
+        },
         TEST_SEND_FAILED: {
             en: 'Could not send the test notification email.',
             pt: 'Não foi possível enviar o e-mail de teste.',
+        },
+        WHATSAPP_TEST_SEND_FAILED: {
+            en: 'Could not send the WhatsApp test message.',
+            pt: 'Não foi possível enviar a mensagem de teste no WhatsApp.',
+        },
+        INVALID_WHATSAPP_INVITE: {
+            en: 'Invalid WhatsApp group invite link or code.',
+            pt: 'Link ou código de convite do grupo WhatsApp inválido.',
+        },
+        WHATSAPP_JOIN_GROUP_FAILED: {
+            en: 'Could not join the WhatsApp group via Evolution API.',
+            pt: 'Não foi possível entrar no grupo WhatsApp pela Evolution API.',
+        },
+    },
+
+    FINOPS: {
+        BUDGET_NOT_FOUND: {
+            en: 'FinOps budget not found.',
+            pt: 'Orçamento FinOps não encontrado.',
+        },
+        INVALID_NOTIFICATION_GROUPS: {
+            en: 'One or more notification groups are invalid for this organization or channel.',
+            pt: 'Um ou mais grupos de notificação são inválidos para esta organização ou canal.',
+        },
+        EMAIL_NOTIFICATION_GROUP_REQUIRED: {
+            en: 'Select at least one email notification group when email alerts are enabled.',
+            pt: 'Selecione ao menos um grupo de e-mail quando o alerta por e-mail estiver ativo.',
+        },
+        WHATSAPP_NOTIFICATION_GROUP_REQUIRED: {
+            en: 'Select at least one WhatsApp notification group when WhatsApp alerts are enabled.',
+            pt: 'Selecione ao menos um grupo de WhatsApp quando o alerta por WhatsApp estiver ativo.',
         },
     },
 
@@ -480,6 +543,7 @@ export type ErrorKey =
     | `CLOUD_ACCOUNTS.${keyof typeof ErrorMessages.CLOUD_ACCOUNTS}`
     | `DATABASE.${keyof typeof ErrorMessages.DATABASE}`
     | `VALIDATION.${keyof typeof ErrorMessages.VALIDATION}`
+    | `FINOPS.${keyof typeof ErrorMessages.FINOPS}`
     | `GENERAL.${keyof typeof ErrorMessages.GENERAL}`;
 
 /**

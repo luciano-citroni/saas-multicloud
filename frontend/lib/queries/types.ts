@@ -12,6 +12,7 @@ export type SidebarContextUser = {
     id: string;
     name: string;
     email: string;
+    emailVerified: boolean;
 };
 
 export type SidebarContextPayload = {

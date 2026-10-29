@@ -4,6 +4,7 @@ export type CurrentUser = {
     email: string;
     isActive: boolean;
     hasPassword: boolean;
+    emailVerified: boolean;
 };
 
 export type ActiveSession = {

@@ -14,6 +14,8 @@ type BackendUser = {
     id?: string;
     name?: string;
     email?: string;
+    emailVerified?: boolean;
+    email_verified?: boolean;
 };
 
 type BackendOrganization = {
@@ -103,6 +105,8 @@ function normalizePayload(userBody: BackendUser | null, organizationsBody: Backe
         id: userBody?.id ?? '',
         name: userBody?.name ?? 'Usuário',
         email: userBody?.email ?? 'email@teste.com',
+        emailVerified:
+            userBody?.emailVerified === true || userBody?.email_verified === true,
     };
 
     const organizations = Array.isArray(organizationsBody)

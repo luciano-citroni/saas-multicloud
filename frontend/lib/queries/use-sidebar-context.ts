@@ -26,6 +26,7 @@ export async function fetchSidebarContext(): Promise<SidebarContextPayload> {
             id: payload?.user?.id ?? '',
             name: payload?.user?.name ?? 'Usuário',
             email: payload?.user?.email ?? '',
+            emailVerified: payload?.user?.emailVerified === true,
         },
         organizations: Array.isArray(payload?.organizations) ? payload.organizations : [],
     };

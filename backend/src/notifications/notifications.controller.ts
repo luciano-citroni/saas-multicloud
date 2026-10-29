@@ -34,23 +34,34 @@ import { parsePaginationQuery } from '../common/pagination/parse-pagination-quer
 import {
     createNotificationEmailSchema,
     createNotificationGroupSchema,
+    createNotificationWhatsappTargetSchema,
+    joinWhatsappGroupInviteSchema,
     notificationChannelSchema,
     updateNotificationEmailSchema,
     updateNotificationGroupSchema,
+    updateNotificationWhatsappTargetSchema,
     type CreateNotificationEmailDto,
     type CreateNotificationGroupDto,
+    type CreateNotificationWhatsappTargetDto,
+    type JoinWhatsappGroupInviteDto,
     type UpdateNotificationEmailDto,
     type UpdateNotificationGroupDto,
+    type UpdateNotificationWhatsappTargetDto,
 } from './dto';
 import {
     CreateNotificationEmailRequestDto,
     CreateNotificationGroupRequestDto,
+    CreateNotificationWhatsappTargetRequestDto,
+    JoinWhatsappGroupInviteRequestDto,
     NotificationEmailResponseDto,
     NotificationGroupResponseDto,
     NotificationTestEmailResponseDto,
     NotificationTestGroupResponseDto,
+    NotificationTestWhatsappTargetResponseDto,
+    NotificationWhatsappTargetResponseDto,
     UpdateNotificationEmailRequestDto,
     UpdateNotificationGroupRequestDto,
+    UpdateNotificationWhatsappTargetRequestDto,
 } from './swagger.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -115,7 +126,7 @@ export class NotificationsController {
     @Delete('groups/:id')
     @HttpCode(204)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
-    @ApiOperation({ summary: 'Remover grupo de notificação (e seus e-mails)' })
+    @ApiOperation({ summary: 'Remover grupo de notificação' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 204, description: 'Removed' })
     async removeGroup(
@@ -140,19 +151,54 @@ export class NotificationsController {
         return this.notificationsService.createEmail(groupId, org.id, dto);
     }
 
+    @Post('groups/:groupId/whatsapp-targets')
+    @HttpCode(201)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Adicionar destino WhatsApp a um grupo' })
+    @ApiParam({ name: 'groupId', type: 'string', format: 'uuid' })
+    @ApiBody({ type: CreateNotificationWhatsappTargetRequestDto })
+    @ApiResponse({ status: 201, type: NotificationWhatsappTargetResponseDto })
+    createWhatsappTarget(
+        @CurrentOrganization() org: Tenant,
+        @Param('groupId', ParseUUIDPipe) groupId: string,
+        @Body(new ZodValidationPipe(createNotificationWhatsappTargetSchema))
+        dto: CreateNotificationWhatsappTargetDto,
+    ): Promise<NotificationWhatsappTargetResponseDto> {
+        return this.notificationsService.createWhatsappTarget(groupId, org.id, dto);
+    }
+
+    @Post('groups/:groupId/whatsapp-targets/join-invite')
+    @HttpCode(201)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Entrar em grupo WhatsApp via link de convite e salvar o JID automaticamente',
+    })
+    @ApiParam({ name: 'groupId', type: 'string', format: 'uuid' })
+    @ApiBody({ type: JoinWhatsappGroupInviteRequestDto })
+    @ApiResponse({ status: 201, type: NotificationWhatsappTargetResponseDto })
+    @ApiResponse({ status: 400, description: 'Invite inválido ou canal incompatível' })
+    @ApiResponse({ status: 503, description: 'Evolution não configurada ou falha ao entrar' })
+    joinWhatsappGroupByInvite(
+        @CurrentOrganization() org: Tenant,
+        @Param('groupId', ParseUUIDPipe) groupId: string,
+        @Body(new ZodValidationPipe(joinWhatsappGroupInviteSchema)) dto: JoinWhatsappGroupInviteDto,
+    ): Promise<NotificationWhatsappTargetResponseDto> {
+        return this.notificationsService.joinWhatsappGroupByInvite(groupId, org.id, dto);
+    }
+
     @Post('groups/:id/test')
     @HttpCode(200)
     @Roles(OrgRole.OWNER, OrgRole.ADMIN)
-    @ApiOperation({ summary: 'Enviar e-mail de teste para todos os destinatários ativos do grupo' })
+    @ApiOperation({ summary: 'Enviar teste para todos os destinatários ativos do grupo' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: NotificationTestGroupResponseDto })
-    @ApiResponse({ status: 400, description: 'Group has no active emails' })
+    @ApiResponse({ status: 400, description: 'Group has no active recipients' })
     @ApiResponse({ status: 503, description: 'Send failed' })
     sendGroupTest(
         @CurrentOrganization() org: Tenant,
         @Param('id', ParseUUIDPipe) id: string,
     ): Promise<NotificationTestGroupResponseDto> {
-        return this.notificationsService.sendTestGroupEmails(id, org.id);
+        return this.notificationsService.sendTestGroup(id, org.id);
     }
 
     @Put('emails/:id')
@@ -193,5 +239,47 @@ export class NotificationsController {
         @Param('id', ParseUUIDPipe) id: string,
     ): Promise<NotificationTestEmailResponseDto> {
         return this.notificationsService.sendTestEmail(id, org.id);
+    }
+
+    @Put('whatsapp-targets/:id')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Editar destino WhatsApp' })
+    @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+    @ApiBody({ type: UpdateNotificationWhatsappTargetRequestDto })
+    @ApiResponse({ status: 200, type: NotificationWhatsappTargetResponseDto })
+    updateWhatsappTarget(
+        @CurrentOrganization() org: Tenant,
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body(new ZodValidationPipe(updateNotificationWhatsappTargetSchema))
+        dto: UpdateNotificationWhatsappTargetDto,
+    ): Promise<NotificationWhatsappTargetResponseDto> {
+        return this.notificationsService.updateWhatsappTarget(id, org.id, dto);
+    }
+
+    @Delete('whatsapp-targets/:id')
+    @HttpCode(204)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Remover destino WhatsApp' })
+    @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 204, description: 'Removed' })
+    async removeWhatsappTarget(
+        @CurrentOrganization() org: Tenant,
+        @Param('id', ParseUUIDPipe) id: string,
+    ): Promise<void> {
+        await this.notificationsService.removeWhatsappTarget(id, org.id);
+    }
+
+    @Post('whatsapp-targets/:id/test')
+    @HttpCode(200)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Enviar mensagem de teste WhatsApp' })
+    @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+    @ApiResponse({ status: 200, type: NotificationTestWhatsappTargetResponseDto })
+    @ApiResponse({ status: 503, description: 'Send failed or Evolution not configured' })
+    sendWhatsappTest(
+        @CurrentOrganization() org: Tenant,
+        @Param('id', ParseUUIDPipe) id: string,
+    ): Promise<NotificationTestWhatsappTargetResponseDto> {
+        return this.notificationsService.sendTestWhatsappTarget(id, org.id);
     }
 }

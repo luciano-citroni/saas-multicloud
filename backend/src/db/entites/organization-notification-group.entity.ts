@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 
 import { OrganizationNotificationEmail } from './organization-notification-email.entity';
+import { OrganizationNotificationWhatsappTarget } from './organization-notification-whatsapp-target.entity';
 
 export type NotificationChannel = 'email' | 'whatsapp';
 
@@ -46,4 +47,9 @@ export class OrganizationNotificationGroup {
         cascade: true,
     })
     emails!: Relation<OrganizationNotificationEmail>[];
+
+    @OneToMany(() => OrganizationNotificationWhatsappTarget, (target) => target.group, {
+        cascade: true,
+    })
+    whatsappTargets!: Relation<OrganizationNotificationWhatsappTarget>[];
 }

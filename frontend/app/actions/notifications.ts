@@ -13,6 +13,13 @@ export type NotificationEmailPayload = {
     isActive?: boolean;
 };
 
+export type NotificationWhatsappTargetPayload = {
+    targetType: 'phone' | 'group';
+    target: string;
+    label?: string | null;
+    isActive?: boolean;
+};
+
 export async function fetchNotificationGroups(
     organizationId: string,
     channel: NotificationChannel = 'email',
@@ -104,6 +111,71 @@ export async function sendNotificationTestEmail(organizationId: string, id: stri
 export async function sendNotificationGroupTestEmail(organizationId: string, groupId: string) {
     return fetch(
         `/api/notifications/groups/${encodeURIComponent(groupId)}/test?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'POST' }
+    );
+}
+
+export async function createNotificationWhatsappTarget(
+    organizationId: string,
+    groupId: string,
+    payload: NotificationWhatsappTargetPayload
+) {
+    return fetch(
+        `/api/notifications/groups/${encodeURIComponent(groupId)}/whatsapp-targets?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+}
+
+export type JoinWhatsappGroupInvitePayload = {
+    inviteLink: string;
+    label?: string | null;
+    isActive?: boolean;
+};
+
+export async function joinWhatsappGroupByInvite(
+    organizationId: string,
+    groupId: string,
+    payload: JoinWhatsappGroupInvitePayload
+) {
+    return fetch(
+        `/api/notifications/groups/${encodeURIComponent(groupId)}/whatsapp-targets/join-invite?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+}
+
+export async function updateNotificationWhatsappTarget(
+    organizationId: string,
+    id: string,
+    payload: Partial<NotificationWhatsappTargetPayload>
+) {
+    return fetch(
+        `/api/notifications/whatsapp-targets/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+}
+
+export async function deleteNotificationWhatsappTarget(organizationId: string, id: string) {
+    return fetch(
+        `/api/notifications/whatsapp-targets/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' }
+    );
+}
+
+export async function sendNotificationWhatsappTargetTest(organizationId: string, id: string) {
+    return fetch(
+        `/api/notifications/whatsapp-targets/${encodeURIComponent(id)}/test?organizationId=${encodeURIComponent(organizationId)}`,
         { method: 'POST' }
     );
 }

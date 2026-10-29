@@ -13,6 +13,8 @@ import type {
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { ErrorMessages } from '../../common/messages/error-messages';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { MailerService } from '../../mailer/mailer.service';
 import { findCloudAccountForTenant } from '../utils/find-cloud-account';
 
 export interface CreateBudgetDto {
@@ -30,6 +32,7 @@ export interface CreateBudgetDto {
     alertAmount?: number | null;
     alertChannels?: FinopsBudgetAlertChannel[];
     alertEmails?: string[];
+    alertNotificationGroupIds?: string[];
 }
 
 export interface BudgetStatus {
@@ -58,6 +61,9 @@ export class FinopsBudgetService {
 
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepo: Repository<CloudAccount>,
+
+        private readonly notificationsService: NotificationsService,
+        private readonly mailerService: MailerService,
     ) {}
 
     // =========================================================================
@@ -66,6 +72,11 @@ export class FinopsBudgetService {
 
     async create(organizationId: string, dto: CreateBudgetDto): Promise<FinopsBudget> {
         const normalized = this.normalizeCreateDto(dto);
+        const alertNotificationGroupIds = await this.validateAndNormalizeNotificationGroups(
+            organizationId,
+            normalized.alertChannels,
+            dto.alertNotificationGroupIds ?? [],
+        );
 
         if (normalized.scope === 'cloud_account') {
             if (!normalized.cloudAccountId) {
@@ -90,6 +101,7 @@ export class FinopsBudgetService {
             alertAmount: normalized.alertAmount,
             alertChannels: normalized.alertChannels,
             alertEmails: normalized.alertEmails,
+            alertNotificationGroupIds,
             isActive: true,
         });
 
@@ -177,6 +189,22 @@ export class FinopsBudgetService {
             }
         }
 
+        const alertsTouched =
+            dto.alertChannels !== undefined || dto.alertNotificationGroupIds !== undefined;
+
+        const nextChannels =
+            dto.alertChannels !== undefined
+                ? this.normalizeChannels(dto.alertChannels)
+                : budget.alertChannels;
+
+        const nextGroupIds = alertsTouched
+            ? await this.validateAndNormalizeNotificationGroups(
+                  organizationId,
+                  nextChannels,
+                  dto.alertNotificationGroupIds ?? budget.alertNotificationGroupIds ?? [],
+              )
+            : (budget.alertNotificationGroupIds ?? []);
+
         Object.assign(budget, {
             name: dto.name ?? budget.name,
             amount: dto.amount ?? budget.amount,
@@ -188,13 +216,10 @@ export class FinopsBudgetService {
             alertFrequency: dto.alertFrequency ?? budget.alertFrequency,
             alertType: dto.alertType ?? budget.alertType,
             alertAmount: dto.alertAmount !== undefined ? dto.alertAmount : budget.alertAmount,
-            alertChannels: dto.alertChannels ?? budget.alertChannels,
-            alertEmails: dto.alertEmails ?? budget.alertEmails,
+            alertChannels: nextChannels,
+            alertEmails: dto.alertEmails !== undefined ? dto.alertEmails : budget.alertEmails,
+            alertNotificationGroupIds: nextGroupIds,
         });
-
-        if (budget.alertChannels.includes('whatsapp')) {
-            this.logger.log(`Budget ${budget.id}: canal WhatsApp cadastrado (envio ainda não implementado)`);
-        }
 
         return this.budgetRepo.save(budget);
     }
@@ -339,12 +364,13 @@ export class FinopsBudgetService {
             this.logger.warn(
                 `Budget "${budget.name}" (${budget.id}): gasto ${usagePercentage.toFixed(1)}% do limite. Alertas: ${triggeredAlerts.join(', ')}%`,
             );
-            // Entrega (e-mail/WhatsApp) não roda no GET de status — evita spam em poll da UI.
-            // O cadastro de canais fica persistido para o scheduler futuro.
-            this.logPendingNotifications(budget, {
+            // E-mail ainda não dispara no GET (evita spam no poll da UI).
+            // WhatsApp envia fire-and-forget para destinos ativos do tenant.
+            this.dispatchPendingNotifications(budget, {
                 currentSpend,
                 usagePercentage,
                 limitAmount,
+                triggeredAlerts,
             });
         }
 
@@ -358,27 +384,125 @@ export class FinopsBudgetService {
         };
     }
 
-    private logPendingNotifications(
+    private dispatchPendingNotifications(
         budget: FinopsBudget,
-        payload: { currentSpend: number; usagePercentage: number; limitAmount: number },
+        payload: {
+            currentSpend: number;
+            usagePercentage: number;
+            limitAmount: number;
+            triggeredAlerts: number[];
+        },
     ): void {
         const channels = budget.alertChannels ?? [];
+        const groupIds = budget.alertNotificationGroupIds ?? [];
 
-        if (channels.includes('whatsapp')) {
-            this.logger.debug(
-                `Budget ${budget.id}: canal WhatsApp cadastrado (envio ainda não implementado)`,
-            );
-        }
+        const text = [
+            `*SaaS MultiCloud* — alerta de orçamento`,
+            ``,
+            `Orçamento: *${budget.name}*`,
+            `Uso: *${payload.usagePercentage.toFixed(1)}%*`,
+            `Gasto: ${payload.currentSpend.toFixed(2)} ${budget.currency}`,
+            `Limite: ${payload.limitAmount.toFixed(2)} ${budget.currency}`,
+            `Limiares: ${payload.triggeredAlerts.map((t) => `${t}%`).join(', ') || '—'}`,
+        ].join('\n');
 
         if (channels.includes('email')) {
-            const emails = (budget.alertEmails ?? []).map((e) => e.trim()).filter(Boolean);
-            if (emails.length > 0) {
-                this.logger.debug(
-                    `Budget ${budget.id}: alerta e-mail cadastrado para ${emails.join(', ')} ` +
-                        `(${payload.usagePercentage.toFixed(1)}% de ${payload.limitAmount} ${budget.currency})`,
-                );
-            }
+            void this.dispatchEmailAlert(budget, payload, groupIds);
         }
+
+        if (channels.includes('whatsapp')) {
+            this.notificationsService
+                .sendWhatsappAlertToGroups(budget.organizationId, groupIds, text)
+                .then((result) => {
+                    this.logger.log(
+                        `Budget ${budget.id}: WhatsApp alert sent=${result.sent} failed=${result.failed}`,
+                    );
+                })
+                .catch((error: unknown) => {
+                    const message = error instanceof Error ? error.message : String(error);
+                    this.logger.error(`Budget ${budget.id}: WhatsApp alert dispatch failed: ${message}`);
+                });
+        }
+    }
+
+    private async dispatchEmailAlert(
+        budget: FinopsBudget,
+        payload: {
+            currentSpend: number;
+            usagePercentage: number;
+            limitAmount: number;
+            triggeredAlerts: number[];
+        },
+        groupIds: string[],
+    ): Promise<void> {
+        try {
+            let emails = await this.notificationsService.listActiveEmailsFromGroups(
+                budget.organizationId,
+                groupIds,
+            );
+
+            if (emails.length === 0) {
+                emails = (budget.alertEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
+            }
+
+            if (emails.length === 0) {
+                this.logger.debug(`Budget ${budget.id}: nenhum e-mail ativo para alerta`);
+                return;
+            }
+
+            await this.mailerService.sendFinopsBudgetAlert({
+                to: emails,
+                budgetName: budget.name,
+                usagePercentage: payload.usagePercentage,
+                currentSpend: payload.currentSpend,
+                limitAmount: payload.limitAmount,
+                currency: budget.currency,
+                triggeredAlerts: payload.triggeredAlerts,
+                scope: budget.scope,
+            });
+
+            this.logger.log(`Budget ${budget.id}: e-mail alert sent to ${emails.join(', ')}`);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Budget ${budget.id}: e-mail alert dispatch failed: ${message}`);
+        }
+    }
+
+    private async validateAndNormalizeNotificationGroups(
+        organizationId: string,
+        channels: FinopsBudgetAlertChannel[],
+        groupIds: string[],
+    ): Promise<string[]> {
+        const uniqueIds = [...new Set(groupIds.filter(Boolean))];
+        const groups = await this.notificationsService.findGroupsByIds(organizationId, uniqueIds);
+
+        if (groups.length !== uniqueIds.length) {
+            throw new BadRequestException(ErrorMessages.FINOPS.INVALID_NOTIFICATION_GROUPS);
+        }
+
+        const emailGroupIds = groups.filter((group) => group.channel === 'email').map((group) => group.id);
+        const whatsappGroupIds = groups
+            .filter((group) => group.channel === 'whatsapp')
+            .map((group) => group.id);
+
+        if (groups.some((group) => group.channel !== 'email' && group.channel !== 'whatsapp')) {
+            throw new BadRequestException(ErrorMessages.FINOPS.INVALID_NOTIFICATION_GROUPS);
+        }
+
+        if (channels.includes('email') && emailGroupIds.length === 0) {
+            throw new BadRequestException(ErrorMessages.FINOPS.EMAIL_NOTIFICATION_GROUP_REQUIRED);
+        }
+
+        if (channels.includes('whatsapp') && whatsappGroupIds.length === 0) {
+            throw new BadRequestException(ErrorMessages.FINOPS.WHATSAPP_NOTIFICATION_GROUP_REQUIRED);
+        }
+
+        // Drop groups whose channel is not enabled on the budget.
+        const allowed: string[] = [];
+        if (channels.includes('email')) allowed.push(...emailGroupIds);
+        if (channels.includes('whatsapp')) allowed.push(...whatsappGroupIds);
+
+        return [...new Set(allowed)];
     }
 
     private normalizeCreateDto(dto: CreateBudgetDto) {
@@ -394,10 +518,6 @@ export class FinopsBudgetService {
 
         if (alertType === 'amount' && (dto.alertAmount == null || dto.alertAmount <= 0)) {
             throw new BadRequestException('alertAmount deve ser maior que zero para alertas por valor');
-        }
-
-        if (alertChannels.includes('whatsapp')) {
-            this.logger.log('Canal WhatsApp cadastrado no budget (envio ainda não implementado)');
         }
 
         return {

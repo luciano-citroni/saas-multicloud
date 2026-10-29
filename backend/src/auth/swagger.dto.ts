@@ -205,4 +205,29 @@ export class AuthUserResponseDto {
         description: 'Indica se a conta já possui senha definida',
     })
     hasPassword: boolean;
+
+    @ApiProperty({
+        example: false,
+        description: 'Indica se o e-mail do usuário foi confirmado',
+    })
+    emailVerified: boolean;
+}
+
+export class VerifyEmailRequestDto {
+    @ApiProperty({
+        example: 'qk1V5rS0nM2xZ8pL4dJ9fH6wC3bT7yN1uA5eR0iK8gP2sD6',
+        description: 'Token opaco enviado no e-mail de confirmação',
+    })
+    token: string;
+}
+
+export class EmailVerificationActionResponseDto {
+    @ApiProperty({ example: true })
+    success: boolean;
+
+    @ApiPropertyOptional({
+        example: true,
+        description: 'Presente quando o e-mail já estava confirmado (resend/verify idempotente)',
+    })
+    alreadyVerified?: boolean;
 }

@@ -11,15 +11,17 @@ import { GoogleAuthGuard } from './google-auth.guard';
 import { GoogleStrategy } from './google.strategy';
 import { UserSession } from '../db/entites/user-session.entity';
 import { GoogleAuthCode } from '../db/entites/google-auth-code.entity';
+import { EmailVerificationToken } from '../db/entites/email-verification-token.entity';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { OrganizationModule } from '../organization/organization.module';
 import { BillingModule } from '../billing/billing.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
     imports: [
         PassportModule,
-        TypeOrmModule.forFeature([UserSession, GoogleAuthCode]),
+        TypeOrmModule.forFeature([UserSession, GoogleAuthCode, EmailVerificationToken]),
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
@@ -32,6 +34,7 @@ import { BillingModule } from '../billing/billing.module';
         }),
         UsersModule,
         TenantModule,
+        MailerModule,
         forwardRef(() => OrganizationModule),
         forwardRef(() => BillingModule),
     ],

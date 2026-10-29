@@ -54,8 +54,11 @@ export function parseFinopsUrlFilters(searchParams: URLSearchParams): FinopsUrlF
     const providerParam = searchParams.get('provider');
     const serviceParam = searchParams.get('service');
 
+    // "organization" is the budgets-only org-scope sentinel — never a cloud account UUID.
     const accountId =
-        !accountParam || accountParam === ACCOUNT_FILTER_ALL ? null : accountParam;
+        !accountParam || accountParam === ACCOUNT_FILTER_ALL || accountParam === 'organization'
+            ? null
+            : accountParam;
 
     const provider =
         !providerParam || providerParam === PROVIDER_FILTER_ALL

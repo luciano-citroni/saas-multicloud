@@ -24,6 +24,11 @@ export const googleExchangeSchema = z.object({
 });
 export type GoogleExchangeDto = z.infer<typeof googleExchangeSchema>;
 
+export const verifyEmailSchema = z.object({
+    token: z.string().min(1),
+});
+export type VerifyEmailDto = z.infer<typeof verifyEmailSchema>;
+
 export const registerWithInviteSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),

@@ -1,11 +1,22 @@
-import { ConflictException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, Inject, forwardRef, Logger } from '@nestjs/common';
+import {
+    ConflictException,
+    Injectable,
+    UnauthorizedException,
+    BadRequestException,
+    NotFoundException,
+    Inject,
+    forwardRef,
+    Logger,
+    HttpException,
+    HttpStatus,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { JwtService } from '@nestjs/jwt';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository, QueryFailedError, LessThan, In } from 'typeorm';
+import { Repository, QueryFailedError, LessThan, In, IsNull } from 'typeorm';
 
 import * as bcrypt from 'bcrypt';
 
@@ -14,6 +25,8 @@ import * as crypto from 'crypto';
 import { UserSession } from '../db/entites/user-session.entity';
 
 import { GoogleAuthCode } from '../db/entites/google-auth-code.entity';
+
+import { EmailVerificationToken } from '../db/entites/email-verification-token.entity';
 
 import { UsersService } from '../users/users.service';
 
@@ -24,6 +37,8 @@ import { ErrorMessages } from '../common/messages/error-messages';
 import { OrganizationService } from '../organization/organization.service';
 
 import { BillingService } from '../billing/billing.service';
+
+import { MailerService } from '../mailer/mailer.service';
 
 export interface JwtPayload {
     sub: string;
@@ -49,6 +64,8 @@ const REFRESH_REUSE_GRACE_MS = 2 * 60 * 1000;
 const MAX_ACTIVE_SESSIONS = 3;
 
 const GOOGLE_AUTH_CODE_TTL_MS = 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -61,11 +78,16 @@ export class AuthService {
         @InjectRepository(GoogleAuthCode)
         private readonly googleAuthCodeRepository: Repository<GoogleAuthCode>,
 
+        @InjectRepository(EmailVerificationToken)
+        private readonly emailVerificationTokenRepository: Repository<EmailVerificationToken>,
+
         private readonly jwtService: JwtService,
 
         private readonly configService: ConfigService,
 
         private readonly usersService: UsersService,
+
+        private readonly mailerService: MailerService,
 
         @Inject(forwardRef(() => OrganizationService))
         private readonly organizationService: OrganizationService,
@@ -92,7 +114,17 @@ export class AuthService {
                 this.logger.error(`Failed to initialize subscription for user ${user.id}`, err);
             });
 
-            return { id: user.id, email: user.email, name: user.name, isActive: user.isActive };
+            this.issueEmailVerification(user.id).catch((err: unknown) => {
+                this.logger.error(`Failed to send email verification for user ${user.id}`, err);
+            });
+
+            return {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                isActive: user.isActive,
+                emailVerified: false,
+            };
         } catch (error) {
             if (error instanceof QueryFailedError) {
                 const dbError = error as QueryFailedError & { detail?: string };
@@ -140,8 +172,18 @@ export class AuthService {
                 this.logger.warn(`Failed to accept invite for user ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
             }
 
+            this.issueEmailVerification(user.id).catch((err: unknown) => {
+                this.logger.error(`Failed to send email verification for user ${user.id}`, err);
+            });
+
             return {
-                user: { id: user.id, email: user.email, name: user.name, isActive: user.isActive },
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    isActive: user.isActive,
+                    emailVerified: false,
+                },
                 ...(await this.issueTokens(user.id)),
             };
         } catch (error) {
@@ -209,7 +251,12 @@ export class AuthService {
         return { success: true };
     }
 
-    async createGoogleAuthCode(googleUser: { googleId: string; email: string; name: string }) {
+    async createGoogleAuthCode(googleUser: {
+        googleId: string;
+        email: string;
+        name: string;
+        emailVerified?: boolean;
+    }) {
         const user = await this.resolveGoogleUser(googleUser);
 
         return { code: await this.issueGoogleAuthCode(user.id) };
@@ -266,6 +313,55 @@ export class AuthService {
         const { email: _ignoredEmail, ...safePayload } = payload;
         await this.usersService.update(userId, safePayload);
         return this.getAuthUserPayload(userId);
+    }
+
+    async verifyEmail(token: string): Promise<{ success: true; alreadyVerified?: boolean }> {
+        const tokenHash = this.hashToken(token);
+        const record = await this.emailVerificationTokenRepository.findOne({
+            where: { tokenHash },
+        });
+
+        if (!record || record.usedAt || record.expiresAt < new Date()) {
+            throw new BadRequestException(ErrorMessages.AUTH.INVALID_OR_EXPIRED_EMAIL_TOKEN);
+        }
+
+        const user = await this.usersService.findEntityById(record.userId);
+
+        record.usedAt = new Date();
+        await this.emailVerificationTokenRepository.save(record);
+
+        if (user.emailVerified) {
+            return { success: true, alreadyVerified: true };
+        }
+
+        await this.usersService.markEmailVerified(user.id);
+        return { success: true };
+    }
+
+    async resendEmailVerification(userId: string): Promise<{ success: true; alreadyVerified?: boolean }> {
+        const user = await this.usersService.findEntityById(userId);
+
+        if (user.emailVerified) {
+            return { success: true, alreadyVerified: true };
+        }
+
+        const latestToken = await this.emailVerificationTokenRepository.findOne({
+            where: { userId },
+            order: { createdAt: 'DESC' },
+        });
+
+        if (latestToken) {
+            const elapsed = Date.now() - latestToken.createdAt.getTime();
+            if (elapsed < EMAIL_VERIFICATION_RESEND_COOLDOWN_MS) {
+                throw new HttpException(
+                    ErrorMessages.AUTH.EMAIL_VERIFICATION_RESEND_COOLDOWN,
+                    HttpStatus.TOO_MANY_REQUESTS,
+                );
+            }
+        }
+
+        await this.issueEmailVerification(userId);
+        return { success: true };
     }
 
     async updateMyPassword(
@@ -374,11 +470,47 @@ export class AuthService {
             this.billingService.initializeSubscription(user).catch((err: unknown) => {
                 this.logger.error(`Failed to initialize subscription for Google user ${user?.id}`, err);
             });
+
+            this.issueEmailVerification(user.id).catch((err: unknown) => {
+                this.logger.error(`Failed to send email verification for Google user ${user?.id}`, err);
+            });
         }
 
         if (!user!.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
 
         return user!;
+    }
+
+    private async issueEmailVerification(userId: string): Promise<void> {
+        const user = await this.usersService.findEntityById(userId);
+
+        if (user.emailVerified) {
+            return;
+        }
+
+        await this.emailVerificationTokenRepository.delete({
+            userId,
+            usedAt: IsNull(),
+        });
+
+        await this.emailVerificationTokenRepository.delete({
+            expiresAt: LessThan(new Date()),
+        });
+
+        const token = this.generateOpaqueToken();
+
+        await this.emailVerificationTokenRepository.save({
+            tokenHash: this.hashToken(token),
+            userId,
+            expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+            usedAt: null,
+        });
+
+        await this.mailerService.sendEmailVerification({
+            to: user.email,
+            name: user.name,
+            token,
+        });
     }
 
     private async issueTokens(userId: string): Promise<AuthTokens> {
@@ -527,6 +659,7 @@ export class AuthService {
             name: user.name,
             isActive: user.isActive,
             hasPassword: Boolean(user.password),
+            emailVerified: Boolean(user.emailVerified),
         };
     }
 

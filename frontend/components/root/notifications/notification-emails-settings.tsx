@@ -51,6 +51,7 @@ import {
     updateNotificationEmail,
     updateNotificationGroup,
 } from '@/app/actions/notifications';
+import { NotificationWhatsappSettings } from '@/components/root/notifications/notification-whatsapp-settings';
 
 export type NotificationEmailItem = {
     id: string;
@@ -763,21 +764,7 @@ export function NotificationEmailsSettings() {
                 </TabsContent>
 
                 <TabsContent value="whatsapp" className="mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <MessageCircle className="size-4" />
-                                WhatsApp
-                            </CardTitle>
-                            <CardDescription>
-                                O canal WhatsApp ainda não está implementado. Em breve você poderá cadastrar grupos e
-                                números aqui.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Badge variant="outline">Em breve</Badge>
-                        </CardContent>
-                    </Card>
+                    <NotificationWhatsappSettings organizationId={organizationId} canManage={canManage} />
                 </TabsContent>
             </Tabs>
 

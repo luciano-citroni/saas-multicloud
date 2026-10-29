@@ -55,7 +55,13 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
         >
             {LINKS.map((link) => {
                 const active = link.match(pathname);
-                const href = query ? `${link.href}?${query}` : link.href;
+                const linkParams = new URLSearchParams(preserved);
+                // Sentinel de escopo org só faz sentido na listagem de orçamentos.
+                if (link.href !== '/finops/budgets' && linkParams.get('account') === 'organization') {
+                    linkParams.delete('account');
+                }
+                const linkQuery = linkParams.toString();
+                const href = linkQuery ? `${link.href}?${linkQuery}` : link.href;
                 const Icon = link.icon;
 
                 return (

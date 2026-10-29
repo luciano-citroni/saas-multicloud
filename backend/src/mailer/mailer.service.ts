@@ -77,6 +77,44 @@ export class MailerService {
         });
     }
 
+    async sendEmailVerification(params: {
+        to: string;
+        name: string;
+        token: string;
+    }): Promise<void> {
+        const verifyUrl = `${this.frontendUrl}/auth/verify-email?token=${encodeURIComponent(params.token)}`;
+
+        const bodyHtml = `
+            <p style="margin:0 0 12px;">
+              Olá <strong>${escapeHtml(params.name)}</strong>, confirme seu e-mail para continuar usando o ${EMAIL_BRAND.name} com segurança.
+            </p>
+            <p style="margin:0 0 12px;color:${EMAIL_BRAND.muted};">
+              Clique no botão abaixo para validar o endereço <strong>${escapeHtml(params.to)}</strong>. O link expira em 24 horas.
+            </p>
+            ${emailMetricsCard(
+                [
+                    emailMetricRow('E-mail', params.to),
+                    emailMetricRow('Validade', '24 horas'),
+                ].join(''),
+            )}
+        `;
+
+        await this.transporter.sendMail({
+            from: this.fromAddress,
+            to: params.to,
+            subject: `Confirme seu e-mail · ${EMAIL_BRAND.name}`,
+            html: renderEmailLayout({
+                title: 'Confirme seu e-mail',
+                preheader: 'Valide seu endereço de e-mail para ativar a conta.',
+                bodyHtml,
+                frontendUrl: this.frontendUrl,
+                cta: { label: 'Confirmar e-mail', href: verifyUrl },
+                footerNote:
+                    'Se você não criou uma conta no SaaS MultiCloud, ignore este e-mail.',
+            }),
+        });
+    }
+
     async sendNotificationTestEmail(params: {
         to: string;
         label?: string | null;

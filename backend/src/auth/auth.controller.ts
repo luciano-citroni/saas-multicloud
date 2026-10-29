@@ -22,9 +22,19 @@ import {
     registerWithInviteSchema,
     updateMeSchema,
     updateMyPasswordSchema,
+    verifyEmailSchema,
 } from './dto';
 
-import type { GoogleExchangeDto, LoginDto, RefreshTokenDto, RegisterDto, RegisterWithInviteDto, UpdateMeDto, UpdateMyPasswordDto } from './dto';
+import type {
+    GoogleExchangeDto,
+    LoginDto,
+    RefreshTokenDto,
+    RegisterDto,
+    RegisterWithInviteDto,
+    UpdateMeDto,
+    UpdateMyPasswordDto,
+    VerifyEmailDto,
+} from './dto';
 
 import { CurrentUser, Public, AllowMissingOrganization } from './decorators';
 
@@ -44,6 +54,8 @@ import {
     UpdateMyPasswordRequestDto,
     ActiveSessionResponseDto,
     RemoveSessionResponseDto,
+    VerifyEmailRequestDto,
+    EmailVerificationActionResponseDto,
 } from './swagger.dto';
 
 import type { GoogleProfile } from './google.strategy';
@@ -277,6 +289,35 @@ export class AuthController {
     })
     getMe(@CurrentUser() user: JwtPayload) {
         return this.authService.getMe(user.sub);
+    }
+
+    @Public()
+    @Post('email/verify')
+    @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 30, ttl: 60_000 } })
+    @ApiOperation({ summary: 'Confirmar e-mail com token enviado por e-mail' })
+    @ApiBody({ type: VerifyEmailRequestDto })
+    @ApiResponse({ status: 200, description: 'E-mail confirmado', type: EmailVerificationActionResponseDto })
+    @ApiResponse({ status: 400, description: 'Token inválido ou expirado' })
+    verifyEmail(
+        @Body(new ZodValidationPipe(verifyEmailSchema))
+        body: VerifyEmailDto
+    ) {
+        return this.authService.verifyEmail(body.token);
+    }
+
+    @Post('email/resend')
+    @HttpCode(HttpStatus.OK)
+    @AllowMissingOrganization()
+    @UseGuards(TenantGuard)
+    @Throttle({ default: { limit: 5, ttl: 60_000 } })
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Reenviar e-mail de confirmação' })
+    @ApiResponse({ status: 200, description: 'E-mail reenviado (ou já confirmado)', type: EmailVerificationActionResponseDto })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 429, description: 'Cooldown de reenvio ativo' })
+    resendEmailVerification(@CurrentUser() user: JwtPayload) {
+        return this.authService.resendEmailVerification(user.sub);
     }
 
     @Patch('me')

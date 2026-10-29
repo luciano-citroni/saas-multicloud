@@ -47,6 +47,48 @@ export class UpdateNotificationEmailRequestDto {
     isActive?: boolean;
 }
 
+export class CreateNotificationWhatsappTargetRequestDto {
+    @ApiProperty({ example: 'phone', enum: ['phone', 'group'] })
+    targetType!: 'phone' | 'group';
+
+    @ApiProperty({ example: '5511999999999', description: 'Phone E.164 digits or group JID (...@g.us)' })
+    target!: string;
+
+    @ApiPropertyOptional({ example: 'On-call', nullable: true })
+    label?: string | null;
+
+    @ApiPropertyOptional({ example: true })
+    isActive?: boolean;
+}
+
+export class UpdateNotificationWhatsappTargetRequestDto {
+    @ApiPropertyOptional({ example: 'phone', enum: ['phone', 'group'] })
+    targetType?: 'phone' | 'group';
+
+    @ApiPropertyOptional({ example: '5511888888888' })
+    target?: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    label?: string | null;
+
+    @ApiPropertyOptional({ example: true })
+    isActive?: boolean;
+}
+
+export class JoinWhatsappGroupInviteRequestDto {
+    @ApiProperty({
+        example: 'https://chat.whatsapp.com/L3aExanF53C2zIpFzU6B73',
+        description: 'Link ou código de convite do grupo WhatsApp',
+    })
+    inviteLink!: string;
+
+    @ApiPropertyOptional({ example: 'Time FinOps', nullable: true })
+    label?: string | null;
+
+    @ApiPropertyOptional({ example: true })
+    isActive?: boolean;
+}
+
 export class NotificationEmailResponseDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
@@ -59,6 +101,35 @@ export class NotificationEmailResponseDto {
 
     @ApiProperty({ example: 'finops@empresa.com' })
     email!: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    label!: string | null;
+
+    @ApiProperty()
+    isActive!: boolean;
+
+    @ApiProperty()
+    createdAt!: Date;
+
+    @ApiProperty()
+    updatedAt!: Date;
+}
+
+export class NotificationWhatsappTargetResponseDto {
+    @ApiProperty({ format: 'uuid' })
+    id!: string;
+
+    @ApiProperty({ format: 'uuid' })
+    organizationId!: string;
+
+    @ApiProperty({ format: 'uuid' })
+    groupId!: string;
+
+    @ApiProperty({ example: 'phone', enum: ['phone', 'group'] })
+    targetType!: string;
+
+    @ApiProperty({ example: '5511999999999' })
+    target!: string;
 
     @ApiPropertyOptional({ nullable: true })
     label!: string | null;
@@ -95,6 +166,9 @@ export class NotificationGroupResponseDto {
     @ApiProperty({ type: [NotificationEmailResponseDto] })
     emails!: NotificationEmailResponseDto[];
 
+    @ApiPropertyOptional({ type: [NotificationWhatsappTargetResponseDto] })
+    whatsappTargets?: NotificationWhatsappTargetResponseDto[];
+
     @ApiProperty()
     createdAt!: Date;
 
@@ -110,6 +184,17 @@ export class NotificationTestEmailResponseDto {
     email!: string;
 }
 
+export class NotificationTestWhatsappTargetResponseDto {
+    @ApiProperty({ example: true })
+    sent!: boolean;
+
+    @ApiProperty({ example: '5511999999999' })
+    target!: string;
+
+    @ApiProperty({ example: 'phone' })
+    targetType!: string;
+}
+
 export class NotificationTestGroupResponseDto {
     @ApiProperty({ example: 3 })
     sent!: number;
@@ -117,6 +202,9 @@ export class NotificationTestGroupResponseDto {
     @ApiProperty({ example: 0 })
     failed!: number;
 
-    @ApiProperty({ example: ['finops@empresa.com', 'ops@empresa.com'], isArray: true, type: String })
-    emails!: string[];
+    @ApiPropertyOptional({ example: ['finops@empresa.com'], isArray: true, type: String })
+    emails?: string[];
+
+    @ApiPropertyOptional({ example: ['5511999999999'], isArray: true, type: String })
+    targets?: string[];
 }

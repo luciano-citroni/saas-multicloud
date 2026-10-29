@@ -179,6 +179,7 @@ export type FinopsBudgetPayload = {
     alertAmount?: number | null;
     alertChannels?: Array<'email' | 'whatsapp'>;
     alertEmails?: string[];
+    alertNotificationGroupIds?: string[];
 };
 
 export async function fetchFinopsBudgets(organizationId: string, cloudAccountId: string) {

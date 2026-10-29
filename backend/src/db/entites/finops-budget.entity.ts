@@ -72,13 +72,17 @@ export class FinopsBudget {
     @Column({ type: 'decimal', precision: 18, scale: 2, name: 'alert_amount', nullable: true })
     alertAmount!: number | null;
 
-    /** Canais cadastrados. WhatsApp é aceito no cadastro, mas o envio ainda não é implementado. */
+    /** Canais cadastrados. Destinos vêm dos grupos em Tenant → Notificações. */
     @Column({ type: 'jsonb', name: 'alert_channels', default: '["email"]' })
     alertChannels!: FinopsBudgetAlertChannel[];
 
-    /** Destinatários de e-mail quando o canal email está ativo. */
+    /** Destinatários de e-mail legados (fallback quando não há grupos selecionados). */
     @Column({ type: 'jsonb', name: 'alert_emails', default: '[]' })
     alertEmails!: string[];
+
+    /** IDs de grupos de notificação (e-mail e/ou WhatsApp) selecionados no budget. */
+    @Column({ type: 'jsonb', name: 'alert_notification_group_ids', default: '[]' })
+    alertNotificationGroupIds!: string[];
 
     @Column({ type: 'boolean', name: 'is_active', default: true })
     isActive!: boolean;

@@ -1,6 +1,7 @@
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
 import { ModuleAccessGuard } from '@/components/root/module-access-guard';
 import { AiChatSheet } from '@/components/root/ai-chat/ai-chat-sheet';
+import { EmailVerificationBanner } from '@/components/root/email-verification-banner';
 import { SiteHeader } from '@/components/sidebar/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
@@ -22,6 +23,7 @@ export default function AuthenticatedLayout({
             <AppSidebar variant="inset" />
             <SidebarInset>
                 <SiteHeader />
+                <EmailVerificationBanner />
                 <div className="flex flex-1 flex-col">
                     <div className="@container/main flex flex-1 flex-col gap-2">
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">{children}</div>

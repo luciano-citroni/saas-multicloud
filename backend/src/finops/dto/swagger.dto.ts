@@ -369,15 +369,29 @@ export class CreateBudgetRequestDto {
     alertAmount?: number | null;
 
     @ApiPropertyOptional({
-        example: ['email'],
-        description: 'Canais de alerta. WhatsApp pode ser cadastrado, mas o envio ainda não é implementado.',
+        example: ['email', 'whatsapp'],
+        description: 'Canais de alerta. Destinos vêm dos grupos de notificação selecionados.',
         isArray: true,
         enum: ['email', 'whatsapp'],
     })
     alertChannels?: Array<'email' | 'whatsapp'>;
 
-    @ApiPropertyOptional({ example: ['finops@empresa.com'], isArray: true, type: String })
+    @ApiPropertyOptional({
+        example: ['finops@empresa.com'],
+        isArray: true,
+        type: String,
+        description: 'E-mails legados (fallback). Preferir alertNotificationGroupIds.',
+    })
     alertEmails?: string[];
+
+    @ApiPropertyOptional({
+        example: ['123e4567-e89b-12d3-a456-426614174000'],
+        isArray: true,
+        type: String,
+        format: 'uuid',
+        description: 'IDs de grupos de notificação (e-mail e/ou WhatsApp) do tenant',
+    })
+    alertNotificationGroupIds?: string[];
 }
 
 export class BudgetDto {
@@ -425,6 +439,13 @@ export class BudgetDto {
 
     @ApiProperty({ example: ['finops@empresa.com'], isArray: true })
     alertEmails!: string[];
+
+    @ApiProperty({
+        example: ['123e4567-e89b-12d3-a456-426614174000'],
+        isArray: true,
+        type: String,
+    })
+    alertNotificationGroupIds!: string[];
 
     @ApiProperty()
     isActive!: boolean;

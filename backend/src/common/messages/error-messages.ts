@@ -30,6 +30,12 @@ export const ErrorMessages = {
 
         GOOGLE_LINK_REQUIRED:
             'An account with this email already exists. Sign in with your password first; Google linking is not automatic.',
+
+        EMAIL_ALREADY_VERIFIED: 'This email is already verified',
+
+        INVALID_OR_EXPIRED_EMAIL_TOKEN: 'Email verification token is invalid or expired',
+
+        EMAIL_VERIFICATION_RESEND_COOLDOWN: 'Please wait before requesting another verification email',
     },
 
     // Users
@@ -170,6 +176,13 @@ export const ErrorMessages = {
 
         BUDGET_NOT_FOUND: 'FinOps budget not found.',
 
+        INVALID_NOTIFICATION_GROUPS: 'One or more notification groups are invalid for this organization or channel.',
+
+        EMAIL_NOTIFICATION_GROUP_REQUIRED: 'Select at least one email notification group when email alerts are enabled.',
+
+        WHATSAPP_NOTIFICATION_GROUP_REQUIRED:
+            'Select at least one WhatsApp notification group when WhatsApp alerts are enabled.',
+
         RECOMMENDATION_NOT_FOUND: 'FinOps recommendation not found.',
 
         ANOMALY_NOT_FOUND: 'FinOps anomaly not found.',
@@ -254,11 +267,27 @@ export const ErrorMessages = {
 
         EMAIL_ALREADY_EXISTS: 'This email is already registered in the group.',
 
-        WHATSAPP_NOT_IMPLEMENTED: 'WhatsApp notifications are not implemented yet.',
+        WHATSAPP_TARGET_NOT_FOUND: 'WhatsApp notification target not found.',
+
+        WHATSAPP_TARGET_ALREADY_EXISTS: 'This WhatsApp target is already registered in the group.',
+
+        INVALID_WHATSAPP_TARGET: 'Invalid WhatsApp phone number or group id.',
+
+        CHANNEL_MISMATCH: 'This operation is not valid for the notification group channel.',
+
+        EVOLUTION_NOT_CONFIGURED: 'WhatsApp (Evolution API) is not configured on the server.',
 
         GROUP_HAS_NO_ACTIVE_EMAILS: 'This notification group has no active emails to test.',
 
+        GROUP_HAS_NO_ACTIVE_WHATSAPP_TARGETS: 'This notification group has no active WhatsApp targets to test.',
+
         TEST_SEND_FAILED: 'Could not send the test notification email.',
+
+        WHATSAPP_TEST_SEND_FAILED: 'Could not send the WhatsApp test message.',
+
+        INVALID_WHATSAPP_INVITE: 'Invalid WhatsApp group invite link or code.',
+
+        WHATSAPP_JOIN_GROUP_FAILED: 'Could not join the WhatsApp group via Evolution API.',
     },
 
     // AI Chat

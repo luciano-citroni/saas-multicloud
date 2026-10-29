@@ -10,6 +10,11 @@ export function proxy(request: NextRequest) {
     const hasSession = Boolean(request.cookies.get(ACCESS_TOKEN_COOKIE)?.value || request.cookies.get(REFRESH_TOKEN_COOKIE)?.value);
 
     if (pathname.startsWith(authPrefix)) {
+        // Allow email confirmation while authenticated (link from inbox).
+        if (pathname.startsWith('/auth/verify-email')) {
+            return NextResponse.next();
+        }
+
         if (hasSession) {
             return NextResponse.redirect(new URL('/', request.url));
         }
