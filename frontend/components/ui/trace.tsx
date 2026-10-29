@@ -76,10 +76,13 @@ function TraceCollapsible({
     className,
     value,
     children,
-    ...props
-}: Omit<React.ComponentProps<'div'>, 'defaultValue'> & { value: string }) {
+}: {
+    className?: string;
+    value: string;
+    children?: React.ReactNode;
+}) {
     return (
-        <Accordion type="multiple" defaultValue={[value]} className={cn('w-full', className)} {...props}>
+        <Accordion type="multiple" defaultValue={[value]} className={cn('w-full', className)}>
             <AccordionItem value={value} className="border-none">
                 {children}
             </AccordionItem>
