@@ -66,7 +66,7 @@ function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroup
 
     return items
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-        .map((item) => ({
+        .map((item): NotificationGroupOption => ({
             id: String(item.id ?? ''),
             name: String(item.name ?? 'Grupo'),
             channel: item.channel === 'whatsapp' ? 'whatsapp' : 'email',
