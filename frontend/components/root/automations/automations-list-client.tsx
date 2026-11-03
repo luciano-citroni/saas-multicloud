@@ -1,16 +1,36 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2, Plus, Play, Copy, Trash2, Power, PowerOff, History } from 'lucide-react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    Copy,
+    History,
+    Loader2,
+    Play,
+    Plus,
+    Power,
+    PowerOff,
+    Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import {
     fetchAutomations,
@@ -24,31 +44,102 @@ import { cn } from '@/lib/utils';
 import { executionStatusClass, workflowStatusClass } from './status-styles';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
+
+type PaginationMeta = {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+};
+
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
 }
 
+function normalizePagination(payload: unknown): PaginationMeta | null {
+    if (!payload || typeof payload !== 'object') return null;
+    const pagination = (payload as { pagination?: Record<string, unknown> }).pagination;
+    if (!pagination) return null;
+
+    const page = Number(pagination.page);
+    const limit = Number(pagination.limit);
+    const totalItems = Number(pagination.totalItems);
+    const totalPages = Number(pagination.totalPages);
+
+    if (![page, limit, totalItems, totalPages].every((value) => Number.isFinite(value))) {
+        return null;
+    }
+
+    return {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: Boolean(pagination.hasNextPage),
+        hasPreviousPage: Boolean(pagination.hasPreviousPage),
+    };
+}
+
 export function AutomationsListClient() {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
+    const pageParam = Number.parseInt(searchParams.get('page') ?? '1', 10);
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+    const limitParam = Number.parseInt(searchParams.get('limit') ?? String(DEFAULT_PAGE_SIZE), 10);
+    const pageSize = PAGE_SIZE_OPTIONS.includes(limitParam as (typeof PAGE_SIZE_OPTIONS)[number])
+        ? limitParam
+        : DEFAULT_PAGE_SIZE;
+
     const [automations, setAutomations] = useState<AutomationWorkflow[]>([]);
+    const [pagination, setPagination] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
     const [orgId, setOrgId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(orgId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(orgId);
     const role = normalizeOrganizationRole(rawRole);
     const [deleteTarget, setDeleteTarget] = useState<AutomationWorkflow | null>(null);
     const [deleting, setDeleting] = useState(false);
 
+    const syncUrlState = useCallback(
+        (next: Partial<{ page: number | null; limit: number | null }>) => {
+            const params = new URLSearchParams(searchParams.toString());
+            if (next.page !== undefined) {
+                if (!next.page || next.page <= 1) params.delete('page');
+                else params.set('page', String(next.page));
+            }
+            if (next.limit !== undefined) {
+                if (!next.limit || next.limit === DEFAULT_PAGE_SIZE) params.delete('limit');
+                else params.set('limit', String(next.limit));
+            }
+            const query = params.toString();
+            router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+        },
+        [pathname, router, searchParams],
+    );
+
     const load = useCallback(async () => {
-        const orgId = getOrgId();
-        if (!orgId) {
+        const currentOrgId = getOrgId();
+        if (!currentOrgId) {
+            setAutomations([]);
+            setPagination(null);
             setLoading(false);
             return;
         }
 
         setLoading(true);
         try {
-            const response = await fetchAutomations(orgId);
+            const response = await fetchAutomations(currentOrgId, {
+                page,
+                limit: pageSize,
+                midOrgId: midOrgId ?? getActiveMidOrgId(currentOrgId),
+            });
             const body = await response.json();
             if (!response.ok) {
                 toast.error(extractErrorMessage(body as never, 'pt'));
@@ -56,23 +147,54 @@ export function AutomationsListClient() {
             }
             const items = (body as { items?: AutomationWorkflow[] }).items ?? (body as AutomationWorkflow[]);
             setAutomations(Array.isArray(items) ? items : []);
+            setPagination(normalizePagination(body));
         } catch {
             toast.error('Falha ao carregar automações');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [midOrgId, page, pageSize]);
 
     useEffect(() => {
         setOrgId(getOrgId());
+        const handle = () => setOrgId(getOrgId());
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
+        window.addEventListener('storage', handle);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener('storage', handle);
+        };
+    }, []);
+
+    useEffect(() => {
         void load();
     }, [load]);
 
+    useEffect(() => {
+        if (!pagination) return;
+        if (pagination.totalPages > 0 && page > pagination.totalPages) {
+            syncUrlState({ page: pagination.totalPages });
+        }
+    }, [page, pagination, syncUrlState]);
+
     const canAdmin = hasRequiredOrganizationRole(role, 'ADMIN');
 
+    const totalPages = Math.max(1, pagination?.totalPages ?? 1);
+    const safePage = Math.min(page, totalPages);
+    const hasPreviousPage = safePage > 1;
+    const hasNextPage = pagination?.hasNextPage ?? safePage < totalPages;
+    const totalItems = pagination?.totalItems ?? automations.length;
+
+    const pageSummary = useMemo(() => {
+        if (totalItems === 0) return '0 automação(ões)';
+        return `Página ${safePage} de ${totalPages} · ${totalItems} automação(ões)`;
+    }, [safePage, totalItems, totalPages]);
+
     async function handleAction(action: string, id: string) {
-        const orgId = getOrgId();
-        if (!orgId) return;
+        const currentOrgId = getOrgId();
+        if (!currentOrgId) return;
 
         const handlers: Record<string, () => Promise<Response>> = {
             execute: async () => {
@@ -89,9 +211,9 @@ export function AutomationsListClient() {
                 router.push(`${basePath}?${query}`);
                 return new Response(null, { status: 499 });
             },
-            duplicate: () => duplicateAutomation(id, orgId),
-            activate: () => activateAutomation(id, orgId),
-            deactivate: () => deactivateAutomation(id, orgId),
+            duplicate: () => duplicateAutomation(id, currentOrgId),
+            activate: () => activateAutomation(id, currentOrgId),
+            deactivate: () => deactivateAutomation(id, currentOrgId),
         };
 
         const response = await handlers[action]();
@@ -113,12 +235,12 @@ export function AutomationsListClient() {
 
     async function confirmDelete(): Promise<boolean> {
         if (!deleteTarget) return true;
-        const orgId = getOrgId();
-        if (!orgId) return true;
+        const currentOrgId = getOrgId();
+        if (!currentOrgId) return true;
 
         setDeleting(true);
         try {
-            const response = await deleteAutomation(deleteTarget.id, orgId);
+            const response = await deleteAutomation(deleteTarget.id, currentOrgId);
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => ({}));
                 toast.error(extractErrorMessage(body as never, 'pt'));
@@ -136,7 +258,7 @@ export function AutomationsListClient() {
         }
     }
 
-    if (loading) {
+    if (loading && automations.length === 0) {
         return (
             <div className="flex items-center justify-center p-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -198,16 +320,22 @@ export function AutomationsListClient() {
                                             <div className="max-w-[260px] space-y-1.5">
                                                 <Link
                                                     href={`/automations/${automation.id}/executions/${automation.lastExecution.id}`}
-                                                    className="block space-y-1 rounded-md p-1 -m-1 hover:bg-muted/60"
+                                                    className="-m-1 block space-y-1 rounded-md p-1 hover:bg-muted/60"
                                                 >
-                                                    <Badge className={cn('text-[10px]', executionStatusClass(automation.lastExecution.status))}>
+                                                    <Badge
+                                                        className={cn(
+                                                            'text-[10px]',
+                                                            executionStatusClass(automation.lastExecution.status),
+                                                        )}
+                                                    >
                                                         {automation.lastExecution.status}
                                                     </Badge>
-                                                    {automation.lastExecution.status === 'FAILED' && automation.lastExecution.errorMessage && (
-                                                        <p className="line-clamp-2 text-[11px] text-destructive">
-                                                            {automation.lastExecution.errorMessage}
-                                                        </p>
-                                                    )}
+                                                    {automation.lastExecution.status === 'FAILED' &&
+                                                        automation.lastExecution.errorMessage && (
+                                                            <p className="line-clamp-2 text-[11px] text-destructive">
+                                                                {automation.lastExecution.errorMessage}
+                                                            </p>
+                                                        )}
                                                 </Link>
                                             </div>
                                         ) : (
@@ -228,27 +356,47 @@ export function AutomationsListClient() {
                                             {canAdmin &&
                                                 automation.version > 0 &&
                                                 automation.status !== 'INACTIVE' && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('execute', automation.id)}>
-                                                    <Play className="h-4 w-4" />
-                                                </Button>
-                                            )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleAction('execute', automation.id)}
+                                                    >
+                                                        <Play className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             {canAdmin && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('duplicate', automation.id)}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleAction('duplicate', automation.id)}
+                                                >
                                                     <Copy className="h-4 w-4" />
                                                 </Button>
                                             )}
                                             {canAdmin && automation.status === 'INACTIVE' && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('activate', automation.id)}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleAction('activate', automation.id)}
+                                                >
                                                     <Power className="h-4 w-4" />
                                                 </Button>
                                             )}
                                             {canAdmin && automation.status === 'ACTIVE' && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('deactivate', automation.id)}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleAction('deactivate', automation.id)}
+                                                >
                                                     <PowerOff className="h-4 w-4" />
                                                 </Button>
                                             )}
                                             {canAdmin && (
-                                                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(automation)}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => setDeleteTarget(automation)}
+                                                >
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                             )}
@@ -260,6 +408,72 @@ export function AutomationsListClient() {
                     </TableBody>
                 </Table>
             </div>
+
+            {totalItems > 0 ? (
+                <div className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                        <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                        <Select
+                            value={`${pageSize}`}
+                            onValueChange={(value) => {
+                                syncUrlState({ limit: Number(value), page: null });
+                            }}
+                        >
+                            <SelectTrigger className="h-8 min-w-22">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {PAGE_SIZE_OPTIONS.map((size) => (
+                                    <SelectItem key={size} value={`${size}`}>
+                                        {size}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                        <span className="text-sm font-medium">{pageSummary}</span>
+                        <div className="flex items-center gap-1 self-start sm:self-auto">
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => syncUrlState({ page: null })}
+                                disabled={!hasPreviousPage}
+                            >
+                                <ChevronsLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => syncUrlState({ page: Math.max(1, safePage - 1) })}
+                                disabled={!hasPreviousPage}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => syncUrlState({ page: safePage + 1 })}
+                                disabled={!hasNextPage}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => syncUrlState({ page: totalPages })}
+                                disabled={!hasNextPage}
+                            >
+                                <ChevronsRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             <ConfirmDeleteDialog
                 open={Boolean(deleteTarget)}

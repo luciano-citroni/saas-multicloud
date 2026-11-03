@@ -13,6 +13,7 @@ import {
     ACTIVE_ORG_STORAGE_KEY,
     getActiveMidOrgStorageKey,
     notifyActiveCloudAccountChanged,
+    notifyActiveMidOrgChanged,
     notifyActiveOrganizationChanged,
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
@@ -131,49 +132,50 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }
     }, [sidebarQuery.error, sidebarQuery.isError, tn.loadSidebarError]);
 
-    const applyCloudAccounts = React.useCallback(
-        (organizationId: string, allCloudAccounts: SidebarCloudAccount[], activeMidOrganizationId?: string) => {
-            const cloudAccountsList = activeMidOrganizationId
-                ? allCloudAccounts.filter((cloudAccount) => cloudAccount.organizationId === activeMidOrganizationId)
-                : allCloudAccounts;
+    const applyCloudAccounts = React.useCallback((organizationId: string, cloudAccountsList: SidebarCloudAccount[]) => {
+        setCloudAccounts(cloudAccountsList);
 
-            setCloudAccounts(cloudAccountsList);
+        const cloudStorageKey = getCloudStorageKey(organizationId);
+        const storedCloudAccountId = window.localStorage.getItem(cloudStorageKey) ?? window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
 
-            const cloudStorageKey = getCloudStorageKey(organizationId);
-            const storedCloudAccountId = window.localStorage.getItem(cloudStorageKey) ?? window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY);
+        const validStoredCloudAccountId =
+            storedCloudAccountId && cloudAccountsList.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
+                ? storedCloudAccountId
+                : cloudAccountsList[0]?.id;
 
-            const validStoredCloudAccountId =
-                storedCloudAccountId && cloudAccountsList.some((cloudAccount) => cloudAccount.id === storedCloudAccountId)
-                    ? storedCloudAccountId
-                    : cloudAccountsList[0]?.id;
-
-            if (!validStoredCloudAccountId) {
-                setActiveCloudAccountId(undefined);
-                window.localStorage.removeItem(cloudStorageKey);
-                window.localStorage.removeItem(ACTIVE_CLOUD_GLOBAL_KEY);
-                notifyActiveCloudAccountChanged();
-                return;
-            }
-
-            window.localStorage.setItem(cloudStorageKey, validStoredCloudAccountId);
-            window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, validStoredCloudAccountId);
-            setActiveCloudAccountId(validStoredCloudAccountId);
+        if (!validStoredCloudAccountId) {
+            setActiveCloudAccountId(undefined);
+            window.localStorage.removeItem(cloudStorageKey);
+            window.localStorage.removeItem(ACTIVE_CLOUD_GLOBAL_KEY);
             notifyActiveCloudAccountChanged();
-        },
-        []
-    );
+            return;
+        }
+
+        window.localStorage.setItem(cloudStorageKey, validStoredCloudAccountId);
+        window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, validStoredCloudAccountId);
+        setActiveCloudAccountId(validStoredCloudAccountId);
+        notifyActiveCloudAccountChanged();
+    }, []);
+
+    const fetchCloudAccountsForMidOrg = React.useCallback(async (organizationId: string, midOrgId?: string) => {
+        const searchParams = new URLSearchParams({ organizationId });
+        if (midOrgId) {
+            searchParams.set('midOrgId', midOrgId);
+        }
+
+        return fetch(`/api/cloud/accounts?${searchParams.toString()}`, { cache: 'no-store' });
+    }, []);
 
     const loadOrgShell = React.useCallback(
         async (organizationId: string) => {
             setOrgShellLoading(true);
 
             try {
-                const [midOrgsResponse, accountsResponse] = await Promise.all([
-                    fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' }),
-                    fetch(`/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' }),
-                ]);
+                const midOrgsResponse = await fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, {
+                    cache: 'no-store',
+                });
 
-                if (accountsResponse.status === 401 || midOrgsResponse.status === 401) {
+                if (midOrgsResponse.status === 401) {
                     router.replace('/auth/sign-in');
                     router.refresh();
                     return;
@@ -197,9 +199,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         window.localStorage.setItem(key, selectedMidOrgId);
                         setActiveMidOrgId(selectedMidOrgId);
                     }
+                    notifyActiveMidOrgChanged();
                 } else {
                     setMidOrgs([]);
                     setActiveMidOrgId(undefined);
+                    notifyActiveMidOrgChanged();
+                }
+
+                const accountsResponse = await fetchCloudAccountsForMidOrg(organizationId, selectedMidOrgId);
+
+                if (accountsResponse.status === 401) {
+                    router.replace('/auth/sign-in');
+                    router.refresh();
+                    return;
                 }
 
                 if (!accountsResponse.ok) {
@@ -210,7 +222,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 const accountsPayload = (await accountsResponse.json()) as SidebarCloudAccount[] | SidebarCloudAccountsResponse;
-                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(accountsPayload), selectedMidOrgId);
+                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(accountsPayload));
             } catch {
                 setMidOrgs([]);
                 setActiveMidOrgId(undefined);
@@ -221,15 +233,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 setOrgShellLoading(false);
             }
         },
-        [applyCloudAccounts, router, tn.loadCloudError]
+        [applyCloudAccounts, fetchCloudAccountsForMidOrg, router, tn.loadCloudError]
     );
 
     const loadCloudAccounts = React.useCallback(
         async (organizationId: string, activeMidOrganizationId?: string) => {
             try {
-                const response = await fetch(`/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`, {
-                    cache: 'no-store',
-                });
+                const response = await fetchCloudAccountsForMidOrg(organizationId, activeMidOrganizationId);
 
                 if (response.status === 401) {
                     router.replace('/auth/sign-in');
@@ -245,7 +255,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 const payload = (await response.json()) as SidebarCloudAccount[] | SidebarCloudAccountsResponse;
-                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(payload), activeMidOrganizationId);
+                applyCloudAccounts(organizationId, normalizeCloudAccountsPayload(payload));
             } catch {
                 setCloudAccounts([]);
                 setActiveCloudAccountId(undefined);
@@ -254,7 +264,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 toast.error(tn.loadCloudError);
             }
         },
-        [applyCloudAccounts, router, tn.loadCloudError]
+        [applyCloudAccounts, fetchCloudAccountsForMidOrg, router, tn.loadCloudError]
     );
 
     React.useEffect(() => {
@@ -340,6 +350,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             const key = getActiveMidOrgStorageKey(activeOrganizationId);
             window.localStorage.setItem(key, org.id);
             setActiveMidOrgId(org.id);
+            notifyActiveMidOrgChanged();
             void loadCloudAccounts(activeOrganizationId, org.id);
         },
         [activeOrganizationId, loadCloudAccounts]

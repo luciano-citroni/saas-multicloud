@@ -73,6 +73,7 @@ export async function GET(request: Request) {
     const requestUrl = new URL(request.url);
     const { searchParams } = requestUrl;
     const organizationId = searchParams.get('organizationId');
+    const midOrgId = searchParams.get('midOrgId');
     const name = searchParams.get('name');
     const isActive = searchParams.get('isActive');
     const page = searchParams.get('page');
@@ -89,6 +90,10 @@ export async function GET(request: Request) {
     }
 
     const backendSearchParams = new URLSearchParams();
+
+    if (midOrgId) {
+        backendSearchParams.set('organizationId', midOrgId);
+    }
 
     if (name) {
         backendSearchParams.set('name', name);

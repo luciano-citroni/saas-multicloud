@@ -99,6 +99,8 @@ type FetchOrganizationCloudAccountsOptions = {
     limit?: number;
     name?: string;
     isActive?: boolean;
+    /** Mid-organization (Organização) filter */
+    midOrgId?: string | null;
 };
 
 export async function fetchOrganizationCloudAccounts(organizationId: string, options: FetchOrganizationCloudAccountsOptions = {}) {
@@ -120,6 +122,10 @@ export async function fetchOrganizationCloudAccounts(organizationId: string, opt
 
     if (typeof options.limit === 'number') {
         searchParams.set('limit', String(options.limit));
+    }
+
+    if (options.midOrgId) {
+        searchParams.set('midOrgId', options.midOrgId);
     }
 
     const url = `/api/cloud/accounts?${searchParams.toString()}`;

@@ -57,6 +57,7 @@ export class CloudController {
     @ApiPaginationQuery()
     @ApiQuery({ name: 'name', required: false, description: 'Filtro por alias da conta cloud (busca parcial)' })
     @ApiQuery({ name: 'isActive', required: false, enum: ['true', 'false'], description: 'Filtra por status ativo/inativo' })
+    @ApiQuery({ name: 'organizationId', required: false, description: 'Filtro por Organização (mid-org) — cloud_accounts.organization_id' })
     @ApiOperation({ summary: 'Lista contas de cloud da organização ativa' })
     @ApiResponse({ status: 200, description: 'Lista de contas de cloud', type: CloudAccountResponseDto, isArray: true })
     async listAccounts(@CurrentOrganization() org: Tenant, @Query(new ZodValidationPipe(listCloudAccountsQuerySchema)) query: ListCloudAccountsQueryDto) {

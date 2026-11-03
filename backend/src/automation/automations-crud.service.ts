@@ -104,20 +104,21 @@ export class AutomationsCrudService {
         return listActions(provider);
     }
 
-    async list(tenantId: string): Promise<Array<Automation & { lastExecution: AutomationExecution | null }>> {
+    async list(
+        tenantId: string,
+        midOrgId?: string,
+    ): Promise<Array<Automation & { lastExecution: AutomationExecution | null }>> {
         const automations = await this.automationRepository.find({
             where: { tenantId },
             order: { updatedAt: 'DESC' },
         });
         if (automations.length === 0) return [];
 
-        const recentExecutions = await this.executionRepository.find({
-            where: {
-                organizationId: tenantId,
-                automationId: In(automations.map((item) => item.id)),
-            },
-            order: { createdAt: 'DESC' },
-        });
+        const recentExecutions = await this.findExecutionsForAutomations(
+            tenantId,
+            automations.map((item) => item.id),
+            midOrgId,
+        );
 
         const latestByAutomation = new Map<string, AutomationExecution>();
         for (const execution of recentExecutions) {
@@ -470,13 +471,40 @@ export class AutomationsCrudService {
         return this.findById(id, tenantId);
     }
 
-    async listExecutions(automationId: string, tenantId: string): Promise<AutomationExecution[]> {
+    async listExecutions(
+        automationId: string,
+        tenantId: string,
+        midOrgId?: string,
+    ): Promise<AutomationExecution[]> {
         await this.findById(automationId, tenantId);
+        return this.findExecutionsForAutomations(tenantId, [automationId], midOrgId);
+    }
 
-        return this.executionRepository.find({
-            where: { automationId, organizationId: tenantId },
-            order: { createdAt: 'DESC' },
-        });
+    /**
+     * Execution history scoped to the tenant. When midOrgId is set, only executions
+     * whose cloud account belongs to that Organização are returned.
+     */
+    private async findExecutionsForAutomations(
+        tenantId: string,
+        automationIds: string[],
+        midOrgId?: string,
+    ): Promise<AutomationExecution[]> {
+        if (automationIds.length === 0) return [];
+
+        const query = this.executionRepository
+            .createQueryBuilder('execution')
+            .where('execution.organization_id = :tenantId', { tenantId })
+            .andWhere('execution.automation_id IN (:...automationIds)', { automationIds })
+            .orderBy('execution.created_at', 'DESC');
+
+        if (midOrgId) {
+            query
+                .innerJoin('execution.cloudAccount', 'cloudAccount')
+                .andWhere('cloudAccount.organization_id = :midOrgId', { midOrgId })
+                .andWhere('cloudAccount.tenant_id = :tenantId', { tenantId });
+        }
+
+        return query.getMany();
     }
 
     async getExecution(

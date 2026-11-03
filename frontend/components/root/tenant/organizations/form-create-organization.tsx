@@ -18,6 +18,7 @@ import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 import {
     ACTIVE_ORG_STORAGE_KEY,
     getActiveMidOrgStorageKey,
+    notifyActiveMidOrgChanged,
     notifySidebarContextUpdated,
 } from '@/lib/sidebar-context';
 
@@ -103,6 +104,7 @@ export function FormCreateOrganization() {
 
             if (createdId) {
                 window.localStorage.setItem(getActiveMidOrgStorageKey(activeTenant.id), createdId);
+                notifyActiveMidOrgChanged();
             }
 
             notifySidebarContextUpdated();

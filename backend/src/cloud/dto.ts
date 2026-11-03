@@ -163,6 +163,8 @@ export const cloudAccountIdParamSchema = z.object({
 export const listCloudAccountsQuerySchema = z.object({
     name: z.string().trim().max(100).optional(),
     isActive: z.enum(['true', 'false']).optional(),
+    /** Mid-organization (sub-org) filter — maps to cloud_accounts.organization_id */
+    organizationId: z.string().uuid().optional(),
 });
 
 export type CreateCloudAccountDto = z.infer<typeof createCloudAccountSchema>;

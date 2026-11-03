@@ -5,6 +5,7 @@ import {
     fetchOrganizationCloudAccounts,
     type OrganizationCloudAccount,
 } from '@/app/actions/organization';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { queryKeys } from '@/lib/queries/keys';
 
 function unwrapAccounts(payload: unknown): OrganizationCloudAccount[] {
@@ -19,8 +20,15 @@ function unwrapAccounts(payload: unknown): OrganizationCloudAccount[] {
     return [];
 }
 
-async function fetchCloudAccounts(organizationId: string): Promise<OrganizationCloudAccount[]> {
-    const response = await fetchOrganizationCloudAccounts(organizationId, { page: 1, limit: 100 });
+async function fetchCloudAccounts(
+    organizationId: string,
+    midOrgId: string | null,
+): Promise<OrganizationCloudAccount[]> {
+    const response = await fetchOrganizationCloudAccounts(organizationId, {
+        page: 1,
+        limit: 100,
+        midOrgId,
+    });
 
     if (response.status === 401) {
         const error = new Error('UNAUTHORIZED') as Error & { status: number };
@@ -37,10 +45,16 @@ async function fetchCloudAccounts(organizationId: string): Promise<OrganizationC
     return unwrapAccounts(await response.json());
 }
 
-export function useCloudAccounts(organizationId: string | null | undefined, options?: { enabled?: boolean }) {
+export function useCloudAccounts(
+    organizationId: string | null | undefined,
+    options?: { enabled?: boolean; midOrgId?: string | null },
+) {
+    const activeMidOrgId = useActiveMidOrgId(organizationId);
+    const midOrgId = options?.midOrgId !== undefined ? options.midOrgId : activeMidOrgId;
+
     return useQuery({
-        queryKey: queryKeys.cloudAccounts(organizationId ?? ''),
-        queryFn: () => fetchCloudAccounts(organizationId as string),
+        queryKey: queryKeys.cloudAccounts(organizationId ?? '', midOrgId),
+        queryFn: () => fetchCloudAccounts(organizationId as string, midOrgId),
         enabled: Boolean(organizationId) && options?.enabled !== false,
     });
 }

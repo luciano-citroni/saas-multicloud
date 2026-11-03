@@ -35,8 +35,14 @@ import {
     pickHighestRiskBudget,
     type FinopsBudgetStatusItem,
 } from '@/components/root/finops/finops-budget-types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
@@ -152,6 +158,7 @@ export function FinopsBudgets() {
         : DEFAULT_PAGE_SIZE;
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
     const [sidebarAccountId, setSidebarAccountId] = useState<string | null>(null);
@@ -222,9 +229,11 @@ export function FinopsBudgets() {
             setSidebarAccountId(window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY));
         };
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
         window.addEventListener('storage', handle);
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
             window.removeEventListener('storage', handle);
         };
     }, []);
@@ -235,7 +244,9 @@ export function FinopsBudgets() {
         const loadAccountsAndGroups = async () => {
             try {
                 const [accountsResponse, emailResponse, whatsappResponse] = await Promise.all([
-                    fetchOrganizationCloudAccounts(organizationId),
+                    fetchOrganizationCloudAccounts(organizationId, {
+                        midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+                    }),
                     fetchNotificationGroups(organizationId, 'email', { limit: 100 }),
                     fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100 }),
                 ]);
@@ -266,7 +277,7 @@ export function FinopsBudgets() {
         };
 
         void loadAccountsAndGroups();
-    }, [organizationId]);
+    }, [organizationId, midOrgId]);
 
     useEffect(() => {
         if (scopeFilter) return;

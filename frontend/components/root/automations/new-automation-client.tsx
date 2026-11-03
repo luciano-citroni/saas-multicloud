@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import { ACTIVE_ORG_STORAGE_KEY, getActiveMidOrgId } from '@/lib/sidebar-context';
 import { createAutomation, type AutomationCloudProvider } from '@/app/actions/automations';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 
@@ -52,12 +52,12 @@ export function NewAutomationClient() {
         const orgId = getOrgId();
         const cloudAccountId = getCloudAccountId();
         if (!orgId || !cloudAccountId) return;
-        void fetchOrganizationCloudAccounts(orgId)
+        void fetchOrganizationCloudAccounts(orgId, { midOrgId: getActiveMidOrgId(orgId) })
             .then(async (response) => {
                 if (!response.ok) return;
                 const payload = await response.json();
                 const items = Array.isArray(payload) ? payload : (payload as { items?: OrganizationCloudAccount[] }).items ?? [];
-                const active = items.find((item) => item.id === cloudAccountId) ?? null;
+                const active = items.find((item) => item.id === cloudAccountId) ?? items[0] ?? null;
                 setCloudAccount(active);
             })
             .catch(() => undefined);
@@ -65,7 +65,7 @@ export function NewAutomationClient() {
 
     async function onSubmit(data: FormValues) {
         const orgId = getOrgId();
-        const cloudAccountId = getCloudAccountId();
+        const cloudAccountId = cloudAccount?.id ?? getCloudAccountId();
 
         if (!orgId) {
             toast.error('Selecione uma organização');

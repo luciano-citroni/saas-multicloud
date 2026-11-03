@@ -25,7 +25,9 @@ import {
     ACTIVE_ORG_STORAGE_KEY,
     ACTIVE_ORG_CHANGED_EVENT,
     ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
+    ACTIVE_MID_ORG_CHANGED_EVENT,
     SIDEBAR_CONTEXT_UPDATED_EVENT,
+    getActiveMidOrgId,
 } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
@@ -229,12 +231,14 @@ export function GovernanceOverview() {
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleContextChange);
         window.addEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleContextChange);
         window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
         window.addEventListener('storage', handleContextChange);
 
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleContextChange);
             window.removeEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleContextChange);
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, handleContextChange);
             window.removeEventListener('storage', handleContextChange);
@@ -396,7 +400,9 @@ export function GovernanceOverview() {
         setScanning(true);
 
         try {
-            const validationResponse = await fetchOrganizationCloudAccounts(organizationId);
+            const validationResponse = await fetchOrganizationCloudAccounts(organizationId, {
+                midOrgId: getActiveMidOrgId(organizationId),
+            });
 
             if (validationResponse.status === 401) {
                 toast.error(tc.sessionExpired);

@@ -16,6 +16,13 @@ export const automationEdgeInputSchema = z.object({
     targetNodeId: z.string().uuid(),
 });
 
+export const listAutomationsQuerySchema = z.object({
+    /** Mid-organization (Organização) — filters via cloud_accounts.organization_id */
+    midOrgId: z.string().uuid().optional(),
+});
+
+export type ListAutomationsQueryDto = z.infer<typeof listAutomationsQuerySchema>;
+
 export const createAutomationSchema = z.object({
     name: z.string().min(1).max(255),
     description: z.string().max(2000).optional().nullable(),

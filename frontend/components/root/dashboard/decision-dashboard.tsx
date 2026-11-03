@@ -44,7 +44,13 @@ import {
 } from '@/components/root/dashboard/model';
 import { useTranslations } from '@/lib/i18n';
 import { hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
-import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+    SIDEBAR_CONTEXT_UPDATED_EVENT,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/queries/keys';
 import { fetchSidebarContext } from '@/lib/queries/use-sidebar-context';
@@ -133,7 +139,11 @@ export function DecisionDashboard() {
                     queryFn: fetchSidebarContext,
                 }),
                 fetchSubscription(organizationId),
-                fetchOrganizationCloudAccounts(organizationId, { page: 1, limit: 100 }),
+                fetchOrganizationCloudAccounts(organizationId, {
+                    page: 1,
+                    limit: 100,
+                    midOrgId: getActiveMidOrgId(organizationId),
+                }),
                 fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}&page=1&limit=1`, { cache: 'no-store' }),
                 fetch(`/api/organization/${encodeURIComponent(organizationId)}/members?page=1&limit=1`, { cache: 'no-store' }),
             ]);
@@ -223,16 +233,24 @@ export function DecisionDashboard() {
         };
 
         const onStorage = (event: StorageEvent) => {
-            if (event.key && event.key !== ACTIVE_ORG_STORAGE_KEY) return;
+            if (
+                event.key &&
+                event.key !== ACTIVE_ORG_STORAGE_KEY &&
+                !event.key.includes('smc_active_mid_org_id')
+            ) {
+                return;
+            }
             void load();
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, onContext);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, onContext);
         window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, onContext);
         window.addEventListener('storage', onStorage);
 
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, onContext);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, onContext);
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, onContext);
             window.removeEventListener('storage', onStorage);
         };

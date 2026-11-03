@@ -133,8 +133,21 @@ function orgQuery(organizationId: string) {
     return `organizationId=${encodeURIComponent(organizationId)}`;
 }
 
-export async function fetchAutomations(organizationId: string): Promise<Response> {
-    return fetch(`/api/automations?${orgQuery(organizationId)}`, { cache: 'no-store' });
+export async function fetchAutomations(
+    organizationId: string,
+    options: { page?: number; limit?: number; midOrgId?: string | null } = {},
+): Promise<Response> {
+    const searchParams = new URLSearchParams({ organizationId });
+    if (typeof options.page === 'number') {
+        searchParams.set('page', String(options.page));
+    }
+    if (typeof options.limit === 'number') {
+        searchParams.set('limit', String(options.limit));
+    }
+    if (options.midOrgId) {
+        searchParams.set('midOrgId', options.midOrgId);
+    }
+    return fetch(`/api/automations?${searchParams.toString()}`, { cache: 'no-store' });
 }
 
 export async function fetchAutomation(automationId: string, organizationId: string): Promise<Response> {
@@ -378,10 +391,25 @@ export async function duplicateAutomation(automationId: string, organizationId: 
     });
 }
 
-export async function fetchAutomationExecutions(automationId: string, organizationId: string): Promise<Response> {
-    return fetch(`/api/automations/${encodeURIComponent(automationId)}/executions?${orgQuery(organizationId)}`, {
-        cache: 'no-store',
-    });
+export async function fetchAutomationExecutions(
+    automationId: string,
+    organizationId: string,
+    options: { midOrgId?: string | null; page?: number; limit?: number } = {},
+): Promise<Response> {
+    const searchParams = new URLSearchParams({ organizationId });
+    if (options.midOrgId) {
+        searchParams.set('midOrgId', options.midOrgId);
+    }
+    if (typeof options.page === 'number') {
+        searchParams.set('page', String(options.page));
+    }
+    if (typeof options.limit === 'number') {
+        searchParams.set('limit', String(options.limit));
+    }
+    return fetch(
+        `/api/automations/${encodeURIComponent(automationId)}/executions?${searchParams.toString()}`,
+        { cache: 'no-store' },
+    );
 }
 
 export async function fetchAutomationExecution(

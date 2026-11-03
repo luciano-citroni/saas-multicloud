@@ -42,8 +42,14 @@ import type {
     OrgOverviewAccount,
     SyncRun,
 } from '@/components/root/finops/overview/types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
@@ -75,6 +81,7 @@ export function FinopsOverview() {
     const urlFilters = useMemo(() => parseFinopsUrlFilters(searchParams), [searchParams]);
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const [sidebarAccountId, setSidebarAccountId] = useState<string | null>(null);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [loadingCloudAccounts, setLoadingCloudAccounts] = useState(false);
@@ -130,10 +137,12 @@ export function FinopsOverview() {
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleContextChange);
         window.addEventListener('storage', handleContextChange);
 
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handleContextChange);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleContextChange);
             window.removeEventListener('storage', handleContextChange);
         };
     }, []);
@@ -144,7 +153,9 @@ export function FinopsOverview() {
         const loadCloudAccounts = async () => {
             setLoadingCloudAccounts(true);
             try {
-                const response = await fetchOrganizationCloudAccounts(organizationId);
+                const response = await fetchOrganizationCloudAccounts(organizationId, {
+                    midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+                });
                 if (!response.ok) {
                     setCloudAccounts([]);
                     return;
@@ -164,7 +175,7 @@ export function FinopsOverview() {
         };
 
         void loadCloudAccounts();
-    }, [organizationId]);
+    }, [organizationId, midOrgId]);
 
     const selectedAccount = useMemo(
         () => (selectedAccountId ? (cloudAccounts.find((account) => account.id === selectedAccountId) ?? null) : null),

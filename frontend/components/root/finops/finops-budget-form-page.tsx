@@ -13,8 +13,14 @@ import {
     type NotificationGroupOption,
 } from '@/components/root/finops/finops-budget-form';
 import type { FinopsBudgetStatusItem } from '@/components/root/finops/finops-budget-types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
@@ -101,6 +107,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
     const accountHint = searchParams.get('account');
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
     const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
@@ -124,9 +131,11 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
         setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
         const handle = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
         window.addEventListener('storage', handle);
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
             window.removeEventListener('storage', handle);
         };
     }, []);
@@ -198,7 +207,9 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
 
             try {
                 const [accountsResponse, groups] = await Promise.all([
-                    fetchOrganizationCloudAccounts(organizationId),
+                    fetchOrganizationCloudAccounts(organizationId, {
+                        midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+                    }),
                     loadNotificationGroups(organizationId),
                 ]);
 
@@ -264,6 +275,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
         };
     }, [
         organizationId,
+        midOrgId,
         mode,
         budgetId,
         accountHint,

@@ -581,8 +581,16 @@ export class CloudService {
 
      */
 
-    async findByOrganization(tenantId: string, filters?: Pick<ListCloudAccountsQueryDto, 'name' | 'isActive'>): Promise<CloudAccountWithSyncStatus[]> {
+    async findByOrganization(
+        tenantId: string,
+        filters?: Pick<ListCloudAccountsQueryDto, 'name' | 'isActive' | 'organizationId'>,
+    ): Promise<CloudAccountWithSyncStatus[]> {
         const queryBuilder = this.cloudAccountRepository.createQueryBuilder('cloudAccount').where('cloudAccount.tenant_id = :tenantId', { tenantId });
+
+        if (filters?.organizationId) {
+            await this.assertOrganizationBelongsToTenant(tenantId, filters.organizationId);
+            queryBuilder.andWhere('cloudAccount.organization_id = :organizationId', { organizationId: filters.organizationId });
+        }
 
         if (filters?.name) {
             queryBuilder.andWhere('cloudAccount.alias ILIKE :name', { name: `%${filters.name}%` });

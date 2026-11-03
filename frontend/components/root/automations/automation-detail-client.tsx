@@ -18,7 +18,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { WorkflowAutomationBuilder, type TemplateOption } from './workflow-automation-builder';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
@@ -113,6 +119,7 @@ export function AutomationDetailClient({
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [orgId, setOrgId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(orgId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(orgId);
     const role = normalizeOrganizationRole(rawRole);
     const [plan, setPlan] = useState<Record<string, unknown> | null>(null);
@@ -172,7 +179,9 @@ export function AutomationDetailClient({
 
             const [actionsRes, execRes, templateRes] = await Promise.all([
                 fetchActionCatalog(currentOrgId, auto.cloudProvider),
-                fetchAutomationExecutions(automationId, currentOrgId),
+                fetchAutomationExecutions(automationId, currentOrgId, {
+                    midOrgId: midOrgId ?? getActiveMidOrgId(currentOrgId),
+                }),
                 fetchAutomationTemplates(currentOrgId),
             ]);
             const actionsBody = await actionsRes.json();
@@ -205,10 +214,22 @@ export function AutomationDetailClient({
             setLoading(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- detailsForm.reset is stable enough for initial load
-    }, [automationId, loadPublished, mode, router]);
+    }, [automationId, loadPublished, midOrgId, mode, router]);
 
     useEffect(() => {
         setOrgId(getOrgId());
+        const handle = () => setOrgId(getOrgId());
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
+        window.addEventListener('storage', handle);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener('storage', handle);
+        };
+    }, []);
+
+    useEffect(() => {
         void load();
     }, [load]);
 
@@ -285,7 +306,11 @@ export function AutomationDetailClient({
     ): Promise<{ accounts: OrganizationCloudAccount[]; selectedId: string }> {
         setLoadingAccounts(true);
         try {
-            const response = await fetchOrganizationCloudAccounts(currentOrgId, { isActive: true, limit: 100 });
+            const response = await fetchOrganizationCloudAccounts(currentOrgId, {
+                isActive: true,
+                limit: 100,
+                midOrgId: getActiveMidOrgId(currentOrgId),
+            });
             const body = await response.json();
             if (!response.ok) {
                 toast.error(extractErrorMessage(body as never, 'pt'));

@@ -8,6 +8,7 @@ import {
     Param,
     Post,
     Put,
+    Query,
     UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,6 +16,7 @@ import {
     ApiBody,
     ApiHeader,
     ApiOperation,
+    ApiQuery,
     ApiResponse,
     ApiTags,
 } from '@nestjs/swagger';
@@ -35,6 +37,7 @@ import {
     createAutomationSchema,
     executeAutomationSchema,
     grantMissingPermissionsSchema,
+    listAutomationsQuerySchema,
     planAutomationSchema,
     rollbackAutomationSchema,
     updateAutomationSchema,
@@ -42,6 +45,7 @@ import {
     type CreateAutomationDto,
     type ExecuteAutomationDto,
     type GrantMissingPermissionsDto,
+    type ListAutomationsQueryDto,
     type PlanAutomationDto,
     type RollbackAutomationDto,
     type UpdateAutomationDto,
@@ -62,10 +66,18 @@ export class AutomationsController {
 
     @Get()
     @ApiPaginationQuery()
+    @ApiQuery({
+        name: 'midOrgId',
+        required: false,
+        description: 'Escopo do lastExecution para a Organização (mid-org). A lista de automações continua do tenant inteiro.',
+    })
     @ApiOperation({ summary: 'Listar automações da organização' })
     @ApiResponse({ status: 200, description: 'Lista de automações' })
-    list(@CurrentOrganization() org: Tenant) {
-        return this.automationsService.list(org.id);
+    list(
+        @CurrentOrganization() org: Tenant,
+        @Query(new ZodValidationPipe(listAutomationsQuerySchema)) query: ListAutomationsQueryDto,
+    ) {
+        return this.automationsService.list(org.id, query.midOrgId);
     }
 
     @Post()
@@ -273,12 +285,14 @@ export class AutomationsController {
 
     @Get(':id/executions')
     @ApiPaginationQuery()
+    @ApiQuery({ name: 'midOrgId', required: false, description: 'Filtro de histórico por Organização (mid-org)' })
     @ApiOperation({ summary: 'Listar execuções de uma automação' })
     listExecutions(
         @CurrentOrganization() org: Tenant,
         @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+        @Query(new ZodValidationPipe(listAutomationsQuerySchema)) query: ListAutomationsQueryDto,
     ) {
-        return this.automationsService.listExecutions(params.id, org.id);
+        return this.automationsService.listExecutions(params.id, org.id, query.midOrgId);
     }
 
     @Get(':id/executions/:executionId')

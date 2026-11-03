@@ -39,8 +39,14 @@ import {
 } from '@/components/root/finops/overview/finops-chart-theme';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { DashboardPeriod, OrgFinopsOverview } from '@/components/root/finops/overview/types';
-import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { fetchFinopsOrgOverview } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { useTranslations } from '@/lib/i18n';
@@ -66,6 +72,7 @@ export function FinopsMulticloud() {
     const urlFilters = useMemo(() => parseFinopsUrlFilters(searchParams), [searchParams]);
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const [sidebarAccountId, setSidebarAccountId] = useState<string | null>(null);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [overview, setOverview] = useState<OrgFinopsOverview | null>(null);
@@ -92,9 +99,11 @@ export function FinopsMulticloud() {
             setSidebarAccountId(window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY));
         };
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
         window.addEventListener('storage', handle);
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handle);
             window.removeEventListener('storage', handle);
         };
     }, []);
@@ -103,7 +112,9 @@ export function FinopsMulticloud() {
         if (!organizationId) return;
         const load = async () => {
             try {
-                const response = await fetchOrganizationCloudAccounts(organizationId);
+                const response = await fetchOrganizationCloudAccounts(organizationId, {
+                    midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+                });
                 if (!response.ok) {
                     setCloudAccounts([]);
                     return;
@@ -120,7 +131,7 @@ export function FinopsMulticloud() {
             }
         };
         void load();
-    }, [organizationId]);
+    }, [organizationId, midOrgId]);
 
     const loadOverview = useCallback(
         async (orgId: string, silent = false) => {
