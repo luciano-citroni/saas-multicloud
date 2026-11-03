@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import {
@@ -41,6 +42,7 @@ type ProvisionedResource = {
     stackId: string | null;
     region: string;
     status: string;
+    errorMessage?: string | null;
 };
 
 type FlowNode = {
@@ -56,13 +58,62 @@ type FlowEdge = {
     targetNodeId: string;
 };
 
+type FlowVariable = {
+    type: string;
+    default?: unknown;
+    required?: boolean;
+    description?: string;
+    sensitive?: boolean;
+};
+
 type ExecutionWithResources = AutomationWorkflowExecution & {
     resources?: ProvisionedResource[];
     flowDefinition?: {
         nodes?: FlowNode[];
         edges?: FlowEdge[];
+        variables?: Record<string, FlowVariable>;
+        usedParameters?: Record<string, unknown> | null;
     };
 };
+
+function formatEnvValue(value: unknown): string {
+    if (value == null) return '—';
+    if (typeof value === 'string') return value;
+    return JSON.stringify(value);
+}
+
+function buildEnvEntries(
+    variables: Record<string, FlowVariable>,
+    usedParameters: Record<string, unknown> | null | undefined,
+): Array<{ name: string; value: string; description?: string; sensitive: boolean }> {
+    const used = usedParameters ?? {};
+    const names = new Set([...Object.keys(variables), ...Object.keys(used)]);
+    if (names.size === 0) return [];
+
+    return Array.from(names)
+        .sort((a, b) => a.localeCompare(b))
+        .map((name) => {
+            const definition = variables[name];
+            const sensitive = definition?.sensitive === true || definition?.type === 'sensitive';
+            const hasUsedValue = Object.prototype.hasOwnProperty.call(used, name);
+            let raw: unknown;
+            if (hasUsedValue) {
+                raw = used[name];
+            } else if (sensitive) {
+                raw = '[REDACTED]';
+            } else if (definition && 'default' in definition) {
+                raw = definition.default;
+            } else {
+                raw = undefined;
+            }
+            return {
+                name,
+                value: formatEnvValue(raw),
+                description: definition?.description?.trim() || undefined,
+                sensitive,
+            };
+        });
+}
 
 function formatDuration(ms: number | null | undefined): string {
     if (ms == null || !Number.isFinite(ms)) return '—';
@@ -80,11 +131,21 @@ function stepDuration(node: AutomationExecutionNode): string {
 }
 
 function StepIcon({ status }: { status: string }) {
-    if (status === 'SUCCESS') return <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />;
+    if (status === 'SUCCESS' || status === 'PROVISIONED') {
+        return <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />;
+    }
     if (status === 'FAILED') return <XCircle className="h-5 w-5 text-destructive" />;
-    if (status === 'SKIPPED' || status === 'CANCELLED') return <SkipForward className="h-5 w-5 text-amber-600 dark:text-amber-400" />;
-    if (status === 'RUNNING') return <PlayCircle className="h-5 w-5 animate-pulse text-primary" />;
+    if (status === 'SKIPPED' || status === 'CANCELLED' || status === 'ROLLED_BACK') {
+        return <SkipForward className="h-5 w-5 text-amber-600 dark:text-amber-400" />;
+    }
+    if (status === 'RUNNING' || status === 'ROLLING_BACK') {
+        return <PlayCircle className="h-5 w-5 animate-pulse text-primary" />;
+    }
     return <Circle className="h-5 w-5 text-muted-foreground" />;
+}
+
+function resourceIdentity(resource: ProvisionedResource): string {
+    return resource.awsResourceId ?? resource.stackId ?? resource.id;
 }
 
 function orderFlowSteps(flowNodes: FlowNode[], edges: FlowEdge[], executionNodes: AutomationExecutionNode[]): FlowNode[] {
@@ -144,10 +205,20 @@ export function AutomationExecutionDetailClient({
 }) {
     const [execution, setExecution] = useState<ExecutionWithResources | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [rollingBack, setRollingBack] = useState(false);
+    const [rollbackOpen, setRollbackOpen] = useState(false);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
+
+    const shouldPoll =
+        !execution ||
+        execution.status === 'PENDING' ||
+        execution.status === 'RUNNING' ||
+        execution.status === 'ROLLING_BACK';
 
     useEffect(() => {
+        if (!shouldPoll) return;
         const orgId = getOrgId();
         if (!orgId) return;
         let timer = 0;
@@ -165,7 +236,7 @@ export function AutomationExecutionDetailClient({
             const next = body as ExecutionWithResources;
             setExecution(next);
             setLoading(false);
-            if (next.status === 'PENDING' || next.status === 'RUNNING') {
+            if (next.status === 'PENDING' || next.status === 'RUNNING' || next.status === 'ROLLING_BACK') {
                 timer = window.setTimeout(() => void poll(), 3000);
             }
         }
@@ -175,7 +246,7 @@ export function AutomationExecutionDetailClient({
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [automationId, executionId]);
+    }, [automationId, executionId, shouldPoll]);
 
     const executionNodes = execution?.executionNodes ?? [];
     const flowNodes = execution?.flowDefinition?.nodes ?? [];
@@ -192,18 +263,42 @@ export function AutomationExecutionDetailClient({
     }, [flowNodes, flowEdges, executionNodes]);
 
     const progress = useMemo(() => {
+        if (execution?.status === 'ROLLING_BACK' || execution?.status === 'ROLLED_BACK') {
+            const resources = execution.resources ?? [];
+            const total = resources.length || 1;
+            const done = resources.filter(
+                (resource) => resource.status === 'ROLLED_BACK' || resource.status === 'FAILED',
+            ).length;
+            return Math.round((done / total) * 100);
+        }
         const total = steps.length || 1;
         const done = steps.filter((step) => {
             const status = step.executionNode?.status;
             return status === 'SUCCESS' || status === 'FAILED' || status === 'SKIPPED' || status === 'CANCELLED';
         }).length;
         return Math.round((done / total) * 100);
-    }, [steps]);
+    }, [steps, execution]);
 
-    async function handleRollback() {
+    async function refreshExecution() {
         const orgId = getOrgId();
-        if (!orgId || !execution) return;
-        if (!window.confirm('Isso remove os recursos provisionados por esta execução. Continuar?')) return;
+        if (!orgId) return;
+        setRefreshing(true);
+        try {
+            const response = await fetchAutomationExecution(automationId, executionId, orgId);
+            const body = await response.json();
+            if (!response.ok) {
+                toast.error(extractErrorMessage(body as never, 'pt'));
+                return;
+            }
+            setExecution(body as ExecutionWithResources);
+        } finally {
+            setRefreshing(false);
+        }
+    }
+
+    async function confirmRollback() {
+        const orgId = getOrgId();
+        if (!orgId || !execution) return false;
         setRollingBack(true);
         try {
             const response = await rollbackAutomationExecution(automationId, executionId, orgId);
@@ -212,10 +307,11 @@ export function AutomationExecutionDetailClient({
                 toast.error(extractErrorMessage(body as never, 'pt'));
                 const refreshed = await fetchAutomationExecution(automationId, executionId, orgId);
                 if (refreshed.ok) setExecution((await refreshed.json()) as ExecutionWithResources);
-                return;
+                return false;
             }
             setExecution(body as ExecutionWithResources);
-            toast.success('Rollback concluído');
+            toast.success('Rollback enfileirado');
+            return true;
         } finally {
             setRollingBack(false);
         }
@@ -230,11 +326,27 @@ export function AutomationExecutionDetailClient({
     }
 
     const resources = execution.resources ?? [];
+    const isRollingBack = execution.status === 'ROLLING_BACK';
+    const rollbackTargets = resources.filter(
+        (resource) =>
+            resource.status === 'PROVISIONED' ||
+            (isRollingBack && resource.status === 'ROLLING_BACK'),
+    );
     const canRollback =
-        (execution.status === 'SUCCESS' || execution.status === 'COMPLETED') &&
-        resources.some((resource) => resource.status === 'PROVISIONED');
-    const usedParameterEntries = Object.entries(execution.usedParameters ?? {});
+        (execution.status === 'SUCCESS' ||
+            execution.status === 'COMPLETED' ||
+            execution.status === 'ROLLING_BACK') &&
+        rollbackTargets.length > 0;
+    const showResourceLiveView = isRollingBack || execution.status === 'ROLLED_BACK' || resources.length > 0;
+    const envEntries = buildEnvEntries(
+        execution.flowDefinition?.variables ?? {},
+        execution.usedParameters ?? execution.flowDefinition?.usedParameters,
+    );
     const replayHref = rerunHref(automationId, executionId);
+    const progressLabel =
+        isRollingBack || execution.status === 'ROLLED_BACK'
+            ? `${progress}% · ${resources.length} recursos`
+            : `${progress}% · ${steps.length} etapas`;
 
     return (
         <div className="space-y-6 p-4 md:p-6">
@@ -249,6 +361,16 @@ export function AutomationExecutionDetailClient({
                     <p className="font-mono text-xs text-muted-foreground">{execution.id}</p>
                 </div>
                 <Badge className={cn(executionStatusClass(execution.status))}>{execution.status}</Badge>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => void refreshExecution()}
+                    disabled={refreshing}
+                    aria-label="Atualizar execução"
+                    title="Atualizar"
+                >
+                    <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+                </Button>
                 {execution.status === 'FAILED' && (
                     <Button asChild>
                         <Link href={replayHref}>
@@ -258,14 +380,65 @@ export function AutomationExecutionDetailClient({
                     </Button>
                 )}
                 {canRollback && (
-                    <Button variant="destructive" onClick={handleRollback} isLoading={rollingBack} loadingText="Revertendo...">
+                    <Button variant="destructive" onClick={() => setRollbackOpen(true)} disabled={rollingBack}>
                         <RotateCcw className="mr-2 h-4 w-4" />
-                        Rollback
+                        {isRollingBack ? 'Retentar rollback' : 'Rollback'}
                     </Button>
+                )}
+                {isRollingBack && (
+                    <Badge className={cn(executionStatusClass('ROLLING_BACK'))}>Excluindo recursos…</Badge>
                 )}
             </div>
 
-            <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-4">
+            <ConfirmDeleteDialog
+                open={rollbackOpen}
+                onOpenChange={setRollbackOpen}
+                title="Confirmar rollback"
+                confirmLabel={`Excluir ${rollbackTargets.length} recurso${rollbackTargets.length === 1 ? '' : 's'}`}
+                isConfirming={rollingBack}
+                onConfirm={confirmRollback}
+                contentProps={{ className: 'sm:max-w-lg' }}
+                description="Somente os recursos criados por esta execução serão excluídos na conta cloud. Revise a lista abaixo antes de confirmar."
+            >
+                <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border p-3">
+                    {rollbackTargets.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhum recurso provisionado para excluir.</p>
+                    ) : (
+                        rollbackTargets.map((resource) => (
+                            <div key={resource.id} className="rounded-md border bg-muted/20 px-3 py-2">
+                                <p className="text-sm font-medium text-foreground">{resource.resourceType}</p>
+                                <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                    {resourceIdentity(resource)}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">{resource.region}</p>
+                            </div>
+                        ))
+                    )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    {rollbackTargets.length} recurso{rollbackTargets.length === 1 ? '' : 's'} · ação irreversível
+                </p>
+            </ConfirmDeleteDialog>
+
+            <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                    <p className="text-[11px] text-muted-foreground">Executado por</p>
+                    <p className="truncate text-sm font-medium">
+                        {execution.triggeredByName ?? execution.triggeredByEmail ?? '—'}
+                    </p>
+                    {execution.triggeredByName && execution.triggeredByEmail && (
+                        <p className="truncate text-[11px] text-muted-foreground">{execution.triggeredByEmail}</p>
+                    )}
+                </div>
+                <div>
+                    <p className="text-[11px] text-muted-foreground">Conta cloud</p>
+                    <p className="truncate text-sm font-medium">{execution.cloudAccountAlias ?? '—'}</p>
+                    {execution.cloudAccountProvider && (
+                        <p className="truncate text-[11px] uppercase text-muted-foreground">
+                            {execution.cloudAccountProvider}
+                        </p>
+                    )}
+                </div>
                 <div>
                     <p className="text-[11px] text-muted-foreground">Versão</p>
                     <p className="text-sm font-medium">v{execution.automationVersion ?? '?'}</p>
@@ -282,11 +455,9 @@ export function AutomationExecutionDetailClient({
                 </div>
                 <div>
                     <p className="text-[11px] text-muted-foreground">Progresso</p>
-                    <p className="text-sm font-medium">
-                        {progress}% · {steps.length} etapas
-                    </p>
+                    <p className="text-sm font-medium">{progressLabel}</p>
                 </div>
-                <div className="sm:col-span-4">
+                <div className="sm:col-span-3 lg:col-span-6">
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <div
                             className={cn(
@@ -359,22 +530,28 @@ export function AutomationExecutionDetailClient({
                 </div>
             )}
 
-            {usedParameterEntries.length > 0 && (
+            {envEntries.length > 0 && (
                 <div className="space-y-3 rounded-xl border p-4">
                     <div>
-                        <h2 className="font-semibold">Variáveis usadas</h2>
+                        <h2 className="font-semibold">Variáveis (envs)</h2>
                         <p className="text-xs text-muted-foreground">
-                            Valores enviados nesta execução
+                            {execution.usedParameters
+                                ? 'Valores enviados nesta execução'
+                                : 'Variáveis do fluxo nesta versão'}
                             {execution.canReplayParameters ? ' · disponíveis para reexecução' : ''}
                         </p>
                     </div>
                     <dl className="grid gap-2 sm:grid-cols-2">
-                        {usedParameterEntries.map(([name, value]) => (
-                            <div key={name} className="rounded-lg border bg-muted/20 px-3 py-2">
-                                <dt className="font-mono text-[11px] text-muted-foreground">{name}</dt>
-                                <dd className="mt-0.5 break-all font-mono text-xs">
-                                    {typeof value === 'string' ? value : JSON.stringify(value)}
-                                </dd>
+                        {envEntries.map((env) => (
+                            <div key={env.name} className="rounded-lg border bg-muted/20 px-3 py-2">
+                                <dt className="font-mono text-[11px] text-muted-foreground">
+                                    {env.name}
+                                    {env.sensitive ? ' · sensível' : ''}
+                                </dt>
+                                {env.description && (
+                                    <p className="mt-0.5 text-[11px] text-muted-foreground">{env.description}</p>
+                                )}
+                                <dd className="mt-0.5 break-all font-mono text-xs">{env.value}</dd>
                             </div>
                         ))}
                     </dl>
@@ -484,25 +661,153 @@ export function AutomationExecutionDetailClient({
                 )}
             </div>
 
-            {resources.length > 0 && (
+            {showResourceLiveView && (
                 <div className="space-y-3 rounded-xl border p-4">
-                    <h2 className="font-semibold">Recursos provisionados</h2>
-                    <ul className="space-y-2">
-                        {resources.map((resource) => (
-                            <li
-                                key={resource.id}
-                                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-                            >
-                                <div className="min-w-0">
-                                    <p className="font-medium">{resource.resourceType}</p>
-                                    <p className="truncate font-mono text-[11px] text-muted-foreground">
-                                        {resource.awsResourceId ?? resource.stackId ?? '—'} · {resource.region}
-                                    </p>
-                                </div>
-                                <Badge className={cn('text-[10px]', provisionedStatusClass(resource.status))}>{resource.status}</Badge>
-                            </li>
-                        ))}
-                    </ul>
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 className="font-semibold">
+                                {isRollingBack ? 'Rollback em andamento' : 'Recursos provisionados'}
+                            </h2>
+                            <p className="text-xs text-muted-foreground">
+                                {isRollingBack
+                                    ? 'Acompanhe a exclusão de cada recurso criado por esta execução'
+                                    : 'Somente recursos desta execução'}
+                            </p>
+                        </div>
+                        {isRollingBack && (
+                            <p className="text-xs text-muted-foreground">Atualiza a cada 3s</p>
+                        )}
+                    </div>
+
+                    {resources.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhum recurso registrado nesta execução.</p>
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <ol className="flex min-w-max items-stretch gap-0">
+                                    {resources.map((resource, position) => (
+                                        <li key={resource.id} className="flex items-center">
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    'w-44 rounded-lg border px-3 py-2 text-left transition-colors hover:bg-muted/50',
+                                                    resource.status === 'FAILED' && 'border-destructive/40 bg-destructive/5',
+                                                    resource.status === 'ROLLED_BACK' &&
+                                                        'border-amber-500/30 bg-amber-500/5',
+                                                    resource.status === 'ROLLING_BACK' &&
+                                                        'border-primary/40 bg-primary/5',
+                                                    resource.status === 'PROVISIONED' &&
+                                                        'border-emerald-500/30 bg-emerald-500/5',
+                                                )}
+                                                onClick={() =>
+                                                    setExpandedResources((current) => ({
+                                                        ...current,
+                                                        [resource.id]: true,
+                                                    }))
+                                                }
+                                            >
+                                                <div className="mb-1 flex items-center gap-2">
+                                                    <StepIcon status={resource.status} />
+                                                    <span className="text-[10px] font-semibold text-muted-foreground">
+                                                        {position + 1}/{resources.length}
+                                                    </span>
+                                                </div>
+                                                <p className="truncate text-xs font-semibold">{resource.resourceType}</p>
+                                                <p className="truncate font-mono text-[10px] text-muted-foreground">
+                                                    {resourceIdentity(resource)}
+                                                </p>
+                                                <Badge className={cn('mt-1 text-[9px]', provisionedStatusClass(resource.status))}>
+                                                    {resource.status}
+                                                </Badge>
+                                            </button>
+                                            {position < resources.length - 1 && (
+                                                <span className="mx-1 h-px w-6 shrink-0 bg-border" aria-hidden />
+                                            )}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </div>
+
+                            <ol className="space-y-0">
+                                {resources.map((resource, position) => {
+                                    const isOpen =
+                                        expandedResources[resource.id] ??
+                                        (resource.status === 'FAILED' || resource.status === 'ROLLING_BACK');
+                                    const hasDetails = Boolean(resource.errorMessage || resource.stackId || resource.awsResourceId);
+                                    return (
+                                        <li key={`detail-${resource.id}`} className="relative flex gap-3 pb-4 last:pb-0">
+                                            {position < resources.length - 1 && (
+                                                <span className="absolute top-7 bottom-0 left-[13px] w-px bg-border" />
+                                            )}
+                                            <span className="relative z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background">
+                                                <StepIcon status={resource.status} />
+                                            </span>
+                                            <div className="min-w-0 flex-1 rounded-lg border bg-card/50">
+                                                <button
+                                                    type="button"
+                                                    className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left"
+                                                    onClick={() =>
+                                                        setExpandedResources((current) => ({
+                                                            ...current,
+                                                            [resource.id]: !isOpen,
+                                                        }))
+                                                    }
+                                                    disabled={!hasDetails}
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="text-[10px] font-semibold text-muted-foreground">
+                                                                Recurso {position + 1}
+                                                            </span>
+                                                            <Badge
+                                                                className={cn('text-[10px]', provisionedStatusClass(resource.status))}
+                                                            >
+                                                                {resource.status}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="truncate text-sm font-semibold">{resource.resourceType}</p>
+                                                        <p className="truncate font-mono text-[10px] text-muted-foreground">
+                                                            {resourceIdentity(resource)} · {resource.region}
+                                                        </p>
+                                                    </div>
+                                                    {hasDetails && (
+                                                        <ChevronDown
+                                                            className={cn(
+                                                                'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                                                                isOpen && 'rotate-180',
+                                                            )}
+                                                        />
+                                                    )}
+                                                </button>
+                                                {isOpen && (
+                                                    <div className="space-y-2 border-t px-3 py-3">
+                                                        {resource.errorMessage && (
+                                                            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                                                                {resource.errorMessage}
+                                                            </div>
+                                                        )}
+                                                        {resource.awsResourceId && (
+                                                            <p className="font-mono text-[11px] text-muted-foreground">
+                                                                awsResourceId: {resource.awsResourceId}
+                                                            </p>
+                                                        )}
+                                                        {resource.stackId && (
+                                                            <p className="font-mono text-[11px] text-muted-foreground">
+                                                                stackId: {resource.stackId}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            Região: {resource.region}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ol>
+                        </>
+                    )}
                 </div>
             )}
         </div>

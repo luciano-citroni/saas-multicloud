@@ -22,6 +22,7 @@ export function executionStatusClass(status: string): string {
         case 'CANCELLED':
             return WARNING;
         case 'RUNNING':
+        case 'ROLLING_BACK':
         case 'PENDING':
             return INFO;
         default:
@@ -50,6 +51,7 @@ export function provisionedStatusClass(status: string): string {
             return FAILURE;
         case 'ROLLED_BACK':
             return WARNING;
+        case 'ROLLING_BACK':
         case 'PENDING':
             return INFO;
         default:

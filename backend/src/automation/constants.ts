@@ -2,6 +2,7 @@ import { resolveWorkerConcurrency } from '../common/queues/worker-concurrency';
 
 export const AUTOMATION_EXECUTION_QUEUE = 'automation-execution';
 export const AUTOMATION_EXECUTION_JOB_NAME = 'run-automation-execution';
+export const AUTOMATION_ROLLBACK_JOB_NAME = 'rollback-automation-execution';
 export const AUTOMATION_EXECUTION_WORKER_CONCURRENCY = resolveWorkerConcurrency('AUTOMATION_EXECUTION_WORKER_CONCURRENCY', 2);
 
 export const AUTOMATION_ACTION_TYPES = {

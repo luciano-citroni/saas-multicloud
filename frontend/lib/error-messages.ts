@@ -353,6 +353,14 @@ export const ErrorMessages = {
             en: 'A rollback is already in progress for this execution.',
             pt: 'Já existe um rollback em andamento para esta execução.',
         },
+        PERMISSION_GRANT_FAILED: {
+            en: 'Could not update the IAM role with the missing automation permissions. Attach the suggested inline policy manually.',
+            pt: 'Não foi possível atualizar a role IAM com as permissões faltantes. Anexe a policy sugerida manualmente.',
+        },
+        PERMISSION_GRANT_NOTHING_MISSING: {
+            en: 'There are no missing IAM permissions to grant for this workflow.',
+            pt: 'Não há permissões IAM faltantes para conceder neste fluxo.',
+        },
     },
 
     // Plans / billing limits

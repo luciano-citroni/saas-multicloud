@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
     AutomationExecution,
     AutomationStatus,
@@ -19,6 +19,7 @@ import { WorkflowValidator } from './workflow-validator';
 import { AutomationNodeRunner, type PreparedChangeSet } from './automation-node-runner';
 import { ParameterCipher } from '../parameter-cipher';
 import { CloudFormationAutomationService } from '../cloudformation-automation.service';
+import { AwsAutomationProvider } from '../providers/aws/aws-automation-provider';
 import type { WorkflowSnapshot } from './workflow.types';
 
 const PARALLEL_LIMIT = 3;
@@ -53,6 +54,7 @@ export class WorkflowExecutor {
         private readonly nodeRunner: AutomationNodeRunner,
         private readonly cloudFormation: CloudFormationAutomationService,
         private readonly parameterCipher: ParameterCipher,
+        private readonly awsProvider: AwsAutomationProvider,
     ) {}
 
     async execute(params: ExecuteWorkflowParams): Promise<AutomationExecution> {
@@ -62,9 +64,6 @@ export class WorkflowExecutor {
         const parameters = (await this.readParameters(executionId)) ?? params.parameters;
         this.workflowValidator.validate(snapshot, cloudProvider);
         const batches = this.dependencyResolver.resolveBatches(snapshot);
-        execution.status = AutomationStatus.RUNNING;
-        execution.startedAt = new Date();
-        await this.executionRepository.save(execution);
 
         const nodeOutputs = new Map<string, Record<string, unknown>>();
         const skippedNodes = new Set<string>();
@@ -76,7 +75,23 @@ export class WorkflowExecutor {
         const startedAt = Date.now();
         const variables = this.resolveVariables(snapshot, parameters);
         const sensitiveKeys = sensitiveVariableNames(snapshot.variables);
-        const createdStacks: Array<{ region: string; stackName: string; stackId: string }> = [];
+
+        // Use update() — save() on an entity loaded without select:false columns nulls parametersEncrypted.
+        const displayParameters = parameters
+            ? (redactSensitive(parameters, sensitiveKeys) as Record<string, unknown>)
+            : null;
+        const flowDefinition = {
+            ...(execution.flowDefinition ?? {}),
+            ...(displayParameters ? { usedParameters: displayParameters } : {}),
+        };
+        execution.status = AutomationStatus.RUNNING;
+        execution.startedAt = new Date();
+        execution.flowDefinition = flowDefinition;
+        await this.executionRepository.update(executionId, {
+            status: AutomationStatus.RUNNING,
+            startedAt: execution.startedAt,
+            flowDefinition,
+        });
 
         try {
             for (const batch of batches) {
@@ -116,7 +131,6 @@ export class WorkflowExecutor {
                         execNode.finishedAt = new Date();
                         await this.executionNodeRepository.save(execNode);
                         nodeOutputs.set(nodeId, result.output);
-                        if (result.rollback) createdStacks.push(result.rollback);
 
                         if (result.inventorySyncStatus === 'FAILED') inventorySyncStatus = 'FAILED';
                         else if (result.inventorySyncStatus === 'SYNCED' && inventorySyncStatus !== 'FAILED') inventorySyncStatus = 'SYNCED';
@@ -175,18 +189,21 @@ export class WorkflowExecutor {
                         this.logger.error(`automation.node.failed executionId=${executionId} nodeId=${nodeId}`);
                     }
                 });
+
+                // Stop scheduling further batches once a node fails — avoid creating more resources to roll back.
+                if (executionFailed) break;
             }
 
-            if (executionFailed && createdStacks.length) {
-                const { deletedStackIds, errors: rollbackErrors } = await this.rollbackCreatedStacks(tenantId, cloudAccountId, createdStacks);
+            if (executionFailed) {
+                const rollbackErrors = await this.rollbackProvisionedResources(executionId, tenantId, cloudAccountId);
                 if (rollbackErrors.length) {
-                    failureError = [failureError, ...rollbackErrors].filter(Boolean).join(' ');
-                }
-                if (deletedStackIds.length) {
-                    await this.provisionedResourceRepository.update(
-                        { executionId, stackId: In(deletedStackIds) },
-                        { status: ProvisionedResourceStatus.FAILED },
-                    );
+                    failureError = [failureError, 'Falha ao reverter alguns recursos:', ...rollbackErrors]
+                        .filter(Boolean)
+                        .join(' ');
+                } else {
+                    failureError = [failureError, 'Recursos criados nesta execução foram revertidos automaticamente.']
+                        .filter(Boolean)
+                        .join(' ');
                 }
             }
 
@@ -195,27 +212,39 @@ export class WorkflowExecutor {
             execution.inventorySyncStatus = inventorySyncStatus;
             execution.finishedAt = new Date();
             execution.durationMs = Date.now() - startedAt;
-            await this.executionRepository.save(execution);
+            await this.executionRepository.update(executionId, {
+                status: execution.status,
+                errorMessage: execution.errorMessage,
+                inventorySyncStatus: execution.inventorySyncStatus,
+                finishedAt: execution.finishedAt,
+                durationMs: execution.durationMs,
+                // Clear secrets on success; keep encrypted params on failure for replay.
+                ...(execution.status === AutomationStatus.SUCCESS || execution.status === AutomationStatus.COMPLETED
+                    ? { parametersEncrypted: null }
+                    : {}),
+            });
             return this.executionRepository.findOneOrFail({ where: { id: executionId }, relations: ['executionNodes', 'resources'] });
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+            const rollbackErrors = await this.rollbackProvisionedResources(executionId, tenantId, cloudAccountId);
             execution.status = AutomationStatus.FAILED;
-            execution.errorMessage = errMsg;
+            execution.errorMessage = [errMsg, ...rollbackErrors].filter(Boolean).join(' ');
             execution.finishedAt = new Date();
             execution.durationMs = Date.now() - startedAt;
-            await this.executionRepository.save(execution);
+            await this.executionRepository.update(executionId, {
+                status: AutomationStatus.FAILED,
+                errorMessage: execution.errorMessage,
+                finishedAt: execution.finishedAt,
+                durationMs: execution.durationMs,
+            });
             throw error;
-        } finally {
-            // Mantém parâmetros criptografados em falha para permitir "Rodar novamente" com os mesmos valores.
-            if (execution.status === AutomationStatus.SUCCESS || execution.status === AutomationStatus.COMPLETED) {
-                await this.clearParameters(executionId);
-            }
         }
     }
 
     private snapshotFromFlow(flow: Record<string, unknown>): WorkflowSnapshot {
         const snapshot = { ...flow };
         delete snapshot.runtimeParameters;
+        delete snapshot.usedParameters;
         return snapshot as unknown as WorkflowSnapshot;
     }
 
@@ -231,28 +260,90 @@ export class WorkflowExecutor {
         return decoded as Record<string, unknown>;
     }
 
-    private async clearParameters(executionId: string): Promise<void> {
-        await this.executionRepository.update(executionId, { parametersEncrypted: null });
-    }
-
-    private async rollbackCreatedStacks(
+    private async rollbackProvisionedResources(
+        executionId: string,
         tenantId: string,
         cloudAccountId: string,
-        stacks: Array<{ region: string; stackName: string; stackId: string }>,
-    ): Promise<{ deletedStackIds: string[]; errors: string[] }> {
-        const deletedStackIds: string[] = [];
+    ): Promise<string[]> {
+        const resources = await this.provisionedResourceRepository.find({
+            where: { executionId, status: ProvisionedResourceStatus.PROVISIONED },
+            order: { createdAt: 'DESC' },
+        });
+        if (resources.length === 0) return [];
+
+        this.logger.log(
+            `automation.auto_rollback.start executionId=${executionId} resources=${resources.length}`,
+        );
+
         const errors: string[] = [];
-        for (const stack of stacks) {
+        const stacksDone = new Set<string>();
+        const providerContext = { cloudAccountId, tenantId };
+
+        for (const resource of resources) {
+            if (resource.executionId !== executionId) continue;
+
+            const claimed = await this.provisionedResourceRepository.update(
+                { id: resource.id, status: ProvisionedResourceStatus.PROVISIONED },
+                { status: ProvisionedResourceStatus.ROLLING_BACK, errorMessage: null },
+            );
+            if (!claimed.affected) continue;
+
             try {
-                await this.cloudFormation.deleteCreatedStack(cloudAccountId, tenantId, stack.region, stack.stackName);
-                deletedStackIds.push(stack.stackId);
+                if (resource.stackId) {
+                    if (stacksDone.has(resource.stackId)) {
+                        await this.provisionedResourceRepository.update(resource.id, {
+                            status: ProvisionedResourceStatus.ROLLED_BACK,
+                            errorMessage: null,
+                        });
+                        continue;
+                    }
+                    await this.cloudFormation.deleteCreatedStack(
+                        cloudAccountId,
+                        tenantId,
+                        resource.region,
+                        resource.stackId,
+                    );
+                    stacksDone.add(resource.stackId);
+                    await this.provisionedResourceRepository.update(
+                        { executionId, stackId: resource.stackId },
+                        { status: ProvisionedResourceStatus.ROLLED_BACK, errorMessage: null },
+                    );
+                    continue;
+                }
+
+                if (!resource.awsResourceId) {
+                    await this.provisionedResourceRepository.update(resource.id, {
+                        status: ProvisionedResourceStatus.ROLLED_BACK,
+                        errorMessage: null,
+                    });
+                    continue;
+                }
+
+                await this.awsProvider.destroyResource(
+                    resource.resourceType,
+                    resource.awsResourceId,
+                    resource.region,
+                    resource.config ?? {},
+                    providerContext,
+                );
+                await this.provisionedResourceRepository.update(resource.id, {
+                    status: ProvisionedResourceStatus.ROLLED_BACK,
+                    errorMessage: null,
+                });
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'rollback failed';
-                errors.push(`Rollback ${stack.stackName}: ${message}`);
-                this.logger.error(`automation.stack.rollback_failed stack=${stack.stackName}`);
+                errors.push(`${resource.resourceType} ${resource.awsResourceId ?? resource.stackId ?? ''}: ${message}`);
+                await this.provisionedResourceRepository.update(resource.id, {
+                    status: ProvisionedResourceStatus.PROVISIONED,
+                    errorMessage: message,
+                });
+                this.logger.error(
+                    `automation.auto_rollback.failed executionId=${executionId} resource=${resource.id}`,
+                );
             }
         }
-        return { deletedStackIds, errors };
+
+        return errors;
     }
 
     private resolveVariables(snapshot: WorkflowSnapshot, parameters?: Record<string, unknown>): Record<string, unknown> {

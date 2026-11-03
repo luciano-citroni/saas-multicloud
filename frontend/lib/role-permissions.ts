@@ -192,8 +192,9 @@ export const PERMISSIONS_POLICY = {
 };
 
 /**
- * Permissões adicionais para o módulo de Automação (S3 + CloudFront).
- * Deve estar alinhada com `backend/src/automation/action-definitions.ts`.
+ * Permissões adicionais para o módulo de Automação.
+ * Alinhada com `backend/src/automation/action-definitions.ts`
+ * (`requiredIamActions` + `ROLLBACK_IAM_ACTIONS` das actions implementadas).
  */
 export const AUTOMATION_PERMISSIONS_POLICY = {
     Version: '2012-10-17',
@@ -223,9 +224,178 @@ export const AUTOMATION_PERMISSIONS_POLICY = {
                 'cloudfront:GetDistributionConfig',
                 'cloudfront:UpdateDistribution',
                 'cloudfront:DeleteDistribution',
-                'cloudfront:TagResource',
             ],
+            Resource: '*',
+        },
+        {
+            Sid: 'EcsAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'ecs:CreateCluster',
+                'ecs:DescribeClusters',
+                'ecs:DeleteCluster',
+                'ecs:RegisterTaskDefinition',
+                'ecs:TagResource',
+                'ecs:DescribeServices',
+                'ecs:DescribeTaskDefinition',
+                'ecs:DescribeTasks',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'EcrAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'ecr:CreateRepository',
+                'ecr:DescribeRepositories',
+                'ecr:TagResource',
+                'ecr:DeleteRepository',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'ElbAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'elasticloadbalancing:CreateLoadBalancer',
+                'elasticloadbalancing:DescribeLoadBalancers',
+                'elasticloadbalancing:AddTags',
+                'elasticloadbalancing:DeleteLoadBalancer',
+                'elasticloadbalancing:DescribeTargetGroups',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'LambdaAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'lambda:CreateFunction',
+                'lambda:GetFunction',
+                'lambda:TagResource',
+                'lambda:DeleteFunction',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'IamAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'iam:CreateRole',
+                'iam:AttachRolePolicy',
+                'iam:GetRole',
+                'iam:TagRole',
+                'iam:ListAttachedRolePolicies',
+                'iam:ListRolePolicies',
+                'iam:GetRolePolicy',
+                'iam:PutRolePolicy',
+                'iam:DetachRolePolicy',
+                'iam:DeleteRole',
+                'iam:SimulatePrincipalPolicy',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'Ec2AutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'ec2:CreateSecurityGroup',
+                'ec2:DescribeSecurityGroups',
+                'ec2:DeleteSecurityGroup',
+                'ec2:CreateVpc',
+                'ec2:DescribeVpcs',
+                'ec2:DeleteVpc',
+                'ec2:CreateSubnet',
+                'ec2:DescribeSubnets',
+                'ec2:DeleteSubnet',
+                'ec2:ModifySubnetAttribute',
+                'ec2:CreateRouteTable',
+                'ec2:DescribeRouteTables',
+                'ec2:DeleteRouteTable',
+                'ec2:CreateNatGateway',
+                'ec2:DescribeNatGateways',
+                'ec2:DeleteNatGateway',
+                'ec2:AllocateAddress',
+                'ec2:ReleaseAddress',
+                'ec2:RunInstances',
+                'ec2:DescribeInstances',
+                'ec2:TerminateInstances',
+                'ec2:CreateTags',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'RdsAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'rds:CreateDBInstance',
+                'rds:DescribeDBInstances',
+                'rds:AddTagsToResource',
+                'rds:DeleteDBInstance',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'AmplifyAutomationAccess',
+            Effect: 'Allow',
+            Action: ['amplify:CreateApp', 'amplify:GetApp', 'amplify:TagResource', 'amplify:DeleteApp'],
+            Resource: '*',
+        },
+        {
+            Sid: 'ApiGatewayAutomationAccess',
+            Effect: 'Allow',
+            Action: ['apigateway:POST', 'apigateway:GET', 'apigateway:DELETE'],
+            Resource: '*',
+        },
+        {
+            Sid: 'CloudFormationAutomationAccess',
+            Effect: 'Allow',
+            Action: [
+                'cloudformation:ValidateTemplate',
+                'cloudformation:CreateChangeSet',
+                'cloudformation:DescribeChangeSet',
+                'cloudformation:ExecuteChangeSet',
+                'cloudformation:DescribeStacks',
+                'cloudformation:DescribeStackResources',
+                'cloudformation:DeleteChangeSet',
+                'cloudformation:DeleteStack',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'ExistingResourceLookupAccess',
+            Effect: 'Allow',
+            Action: [
+                'ec2:DescribeVpcs',
+                'ec2:DescribeSubnets',
+                'ec2:DescribeSecurityGroups',
+                'ecs:DescribeClusters',
+                'ecr:DescribeRepositories',
+                'elasticloadbalancing:DescribeLoadBalancers',
+                'iam:GetRole',
+                'secretsmanager:DescribeSecret',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'StsAutomationAccess',
+            Effect: 'Allow',
+            Action: ['sts:GetCallerIdentity'],
             Resource: '*',
         },
     ],
 };
+
+/** Resumo dos serviços cobertos pela policy de automação (UI de onboarding). */
+export const AUTOMATION_PERMISSIONS_SERVICE_SUMMARY: Array<{ service: string; actions: string }> = [
+    { service: 'S3', actions: 'CreateBucket, versioning, encryption, delete' },
+    { service: 'CloudFront', actions: 'CreateDistribution, Get/Update/Delete' },
+    { service: 'ECS / ECR', actions: 'Cluster, task definition, repository' },
+    { service: 'ELB / EC2 / VPC', actions: 'LB, SG, VPC, subnet, NAT, instance' },
+    {
+        service: 'Lambda / IAM',
+        actions: 'Function, role, SimulatePrincipalPolicy, PutRolePolicy, GetRolePolicy',
+    },
+    { service: 'RDS / Amplify / API GW', actions: 'Instance, app, REST API' },
+    { service: 'CloudFormation', actions: 'Change set, stack, describe, delete' },
+    { service: 'STS / Secrets', actions: 'GetCallerIdentity, DescribeSecret' },
+];

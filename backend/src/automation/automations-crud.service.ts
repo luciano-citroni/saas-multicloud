@@ -26,6 +26,7 @@ import {
     AutomationExecutionNodeStatus,
 } from '../db/entites/automation-execution-node.entity';
 import { ProvisionedResource, ProvisionedResourceStatus } from '../db/entites/provisioned-resource.entity';
+import { User } from '../db/entites/user.entity';
 import { CloudService } from '../cloud/cloud.service';
 import { ErrorMessages } from '../common/messages/error-messages';
 import { listActions } from './action-definitions';
@@ -40,7 +41,11 @@ import type { WorkflowSnapshot } from './workflow/workflow.types';
 import type {
     CreateAutomationDto,
     ExecuteAutomationDto,
+    GrantMissingPermissionsDto,
+    PlanAutomationDto,
+    RollbackAutomationDto,
     UpdateAutomationDto,
+    ValidatePermissionsDto,
 } from './automations.dto';
 import { AutomationPlanService } from './automation-plan.service';
 import { AutomationPermissionCheckService } from './automation-permission-check.service';
@@ -55,6 +60,7 @@ import type { PreparedChangeSet } from './workflow/automation-node-runner';
 @Injectable()
 export class AutomationsCrudService {
     private readonly logger = new Logger(AutomationsCrudService.name);
+    private readonly activeRollbacks = new Set<string>();
 
     constructor(
         @InjectRepository(Automation)
@@ -264,6 +270,32 @@ export class AutomationsCrudService {
         return this.findById(id, tenantId);
     }
 
+    async getPublished(id: string, tenantId: string) {
+        const automation = await this.findById(id, tenantId);
+        if (automation.version === 0) {
+            throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        }
+        const versionRecord = await this.versionRepository.findOne({
+            where: { automationId: automation.id, version: automation.version },
+        });
+        if (!versionRecord) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        const snapshot = versionRecord.snapshot as unknown as WorkflowSnapshot;
+        return {
+            automationId: automation.id,
+            version: versionRecord.version,
+            publishedAt: versionRecord.publishedAt,
+            publishedBy: versionRecord.publishedBy,
+            status: automation.status,
+            cloudAccountId: automation.cloudAccountId,
+            cloudProvider: automation.cloudProvider,
+            name: automation.name,
+            description: automation.description,
+            nodes: snapshot.nodes,
+            edges: snapshot.edges,
+            variables: snapshot.variables ?? {},
+        };
+    }
+
     async execute(id: string, tenantId: string, userId: string, dto: ExecuteAutomationDto): Promise<AutomationExecution> {
         await this.accessService.assertAutomationModuleEnabled(tenantId);
         if (dto.confirm !== true) {
@@ -272,9 +304,12 @@ export class AutomationsCrudService {
 
         const automation = await this.findById(id, tenantId);
         if (automation.version === 0) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
-        if (automation.status !== AutomationWorkflowStatus.ACTIVE) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_ACTIVE);
-        await this.assertCloudAccount(automation.cloudAccountId, tenantId);
-        this.assertRequiredVariables(automation.variables, dto.parameters);
+        if (automation.status === AutomationWorkflowStatus.INACTIVE) {
+            throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_ACTIVE);
+        }
+        const cloudAccountId = await this.resolveCloudAccountId(automation, tenantId, dto.cloudAccountId);
+        const snapshot = await this.snapshotForPublished(automation);
+        this.assertRequiredVariables(snapshot.variables as Record<string, unknown>, dto.parameters);
 
         const existingRequest = dto.clientRequestId
             ? await this.executionRepository.findOne({ where: { automationId: automation.id, clientRequestId: dto.clientRequestId } })
@@ -286,16 +321,18 @@ export class AutomationsCrudService {
         if (slot === 'reuse' && existingRequest) return existingRequest;
         if (slot === 'blocked') throw new ConflictException(ErrorMessages.AUTOMATION.EXECUTION_IN_PROGRESS);
 
-        const versionRecord = await this.versionRepository.findOne({ where: { automationId: automation.id, version: automation.version } });
-        if (!versionRecord) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
-        const snapshot = versionRecord.snapshot as unknown as WorkflowSnapshot;
-        const parameters = { ...this.variableDefaults(automation.variables), ...(dto.parameters ?? {}) };
+        const parameters = {
+            ...this.variableDefaults(snapshot.variables as Record<string, unknown>),
+            ...(dto.parameters ?? {}),
+        };
+        const sensitive = sensitiveVariableNames(snapshot.variables as Record<string, { type?: string; sensitive?: boolean }>);
+        const usedParameters = redactSensitive(parameters, sensitive) as Record<string, unknown>;
         const changeSets = ((automation.pendingPlan as { changeSets?: PreparedChangeSet[] } | null)?.changeSets ?? []);
 
         const execution = await this.executionRepository.save(
             this.executionRepository.create({
                 organizationId: tenantId,
-                cloudAccountId: automation.cloudAccountId,
+                cloudAccountId,
                 automationId: automation.id,
                 automationVersion: automation.version,
                 triggeredBy: userId,
@@ -303,7 +340,10 @@ export class AutomationsCrudService {
                 pricingModel: null,
                 totalEstimatedCost: 0,
                 status: AutomationStatus.PENDING,
-                flowDefinition: snapshot as unknown as Record<string, unknown>,
+                flowDefinition: {
+                    ...(snapshot as unknown as Record<string, unknown>),
+                    usedParameters,
+                },
             }),
         );
         await this.executionRepository.update(execution.id, { parametersEncrypted: this.parameterCipher.encrypt(parameters) });
@@ -323,7 +363,7 @@ export class AutomationsCrudService {
             {
                 executionId: execution.id,
                 tenantId,
-                cloudAccountId: automation.cloudAccountId,
+                cloudAccountId,
                 automationId: automation.id,
                 cloudProvider: automation.cloudProvider,
                 acknowledgeCapabilities: dto.acknowledgeCapabilities === true,
@@ -340,39 +380,75 @@ export class AutomationsCrudService {
 
     async validate(id: string, tenantId: string) {
         const automation = await this.findById(id, tenantId);
-        const snapshot = await this.snapshotForRead(automation, tenantId);
+        const snapshot =
+            automation.version > 0
+                ? await this.snapshotForPublished(automation)
+                : await this.snapshotForRead(automation, tenantId);
         this.workflowValidator.validate(snapshot, automation.cloudProvider);
         return { valid: true, version: automation.version, status: automation.status };
     }
 
-    async validatePermissions(id: string, tenantId: string) {
+    async validatePermissions(id: string, tenantId: string, dto: ValidatePermissionsDto = {}) {
         await this.accessService.assertAutomationModuleEnabled(tenantId);
         const automation = await this.findById(id, tenantId);
-        const snapshot = await this.snapshotForRead(automation, tenantId);
+        if (automation.version === 0) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        const cloudAccountId = await this.resolveCloudAccountId(automation, tenantId, dto.cloudAccountId);
+        const snapshot = await this.snapshotForPublished(automation);
         this.workflowValidator.validate(snapshot, automation.cloudProvider);
         return this.permissionCheck.check({
             tenantId,
-            cloudAccountId: automation.cloudAccountId,
+            cloudAccountId,
             nodes: snapshot.nodes,
         });
     }
 
-    async plan(id: string, tenantId: string) {
+    async grantMissingPermissions(id: string, tenantId: string, userId: string, dto: GrantMissingPermissionsDto) {
         await this.accessService.assertAutomationModuleEnabled(tenantId);
         const automation = await this.findById(id, tenantId);
+        if (automation.version === 0) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        const cloudAccountId = await this.resolveCloudAccountId(automation, tenantId, dto.cloudAccountId);
+        const snapshot = await this.snapshotForPublished(automation);
+        this.workflowValidator.validate(snapshot, automation.cloudProvider);
+        const result = await this.permissionCheck.grantMissing({
+            tenantId,
+            cloudAccountId,
+            nodes: snapshot.nodes,
+            actions: dto.actions,
+        });
+        await this.auditService.record({
+            tenantId,
+            actorId: userId,
+            action: 'automation.permissions_granted',
+            entityType: 'automation',
+            entityId: id,
+            metadata: {
+                cloudAccountId,
+                policyName: result.policyName,
+                actionsGranted: result.actionsGranted,
+                applied: result.applied,
+            },
+        });
+        return result;
+    }
+
+    async plan(id: string, tenantId: string, dto: PlanAutomationDto = {}) {
+        await this.accessService.assertAutomationModuleEnabled(tenantId);
+        const automation = await this.findById(id, tenantId);
+        if (automation.version === 0) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        const cloudAccountId = await this.resolveCloudAccountId(automation, tenantId, dto.cloudAccountId);
         await this.discardPendingPlan(automation, tenantId);
-        const snapshot = await this.snapshotForRead(automation, tenantId);
+        const snapshot = await this.snapshotForPublished(automation);
         this.workflowValidator.validate(snapshot, automation.cloudProvider);
         const plan = await this.planService.build({
             tenantId,
             automationId: automation.id,
-            cloudAccountId: automation.cloudAccountId,
+            cloudAccountId,
             snapshot,
             createChangeSets: true,
         });
         automation.pendingPlan = { createdAt: new Date().toISOString(), changeSets: plan.changeSets };
         await this.automationRepository.save(automation);
-        return { ...plan, limitations: plan.limitations };
+        return { ...plan, cloudAccountId, limitations: plan.limitations };
     }
 
     async cancelPlan(id: string, tenantId: string) {
@@ -407,7 +483,16 @@ export class AutomationsCrudService {
         automationId: string,
         executionId: string,
         tenantId: string,
-    ): Promise<AutomationExecution & { usedParameters?: Record<string, unknown> | null; canReplayParameters?: boolean }> {
+    ): Promise<
+        AutomationExecution & {
+            usedParameters?: Record<string, unknown> | null;
+            canReplayParameters?: boolean;
+            triggeredByName?: string | null;
+            triggeredByEmail?: string | null;
+            cloudAccountAlias?: string | null;
+            cloudAccountProvider?: string | null;
+        }
+    > {
         const automation = await this.findById(automationId, tenantId);
 
         const execution = await this.executionRepository.findOne({
@@ -420,14 +505,35 @@ export class AutomationsCrudService {
         }
 
         const parameters = await this.readExecutionParameters(executionId);
-        const sensitive = sensitiveVariableNames(automation.variables as Record<string, { type?: string; sensitive?: boolean }>);
+        const flowDefinition = (execution.flowDefinition ?? {}) as Record<string, unknown>;
+        const snapshotVariables =
+            (flowDefinition.variables as Record<string, { type?: string; sensitive?: boolean }> | undefined) ??
+            (automation.variables as Record<string, { type?: string; sensitive?: boolean }>);
+        const sensitive = sensitiveVariableNames(snapshotVariables);
+        const fromFlow = flowDefinition.usedParameters;
         const usedParameters = parameters
             ? (redactSensitive(parameters, sensitive) as Record<string, unknown>)
-            : null;
+            : fromFlow && typeof fromFlow === 'object' && !Array.isArray(fromFlow)
+              ? (fromFlow as Record<string, unknown>)
+              : null;
+
+        const [cloudAccount, triggeredByUser] = await Promise.all([
+            this.cloudService.findByIdAndTenant(execution.cloudAccountId, tenantId),
+            execution.triggeredBy
+                ? this.dataSource.getRepository(User).findOne({
+                      where: { id: execution.triggeredBy },
+                      select: ['id', 'name', 'email'],
+                  })
+                : Promise.resolve(null),
+        ]);
 
         return Object.assign(execution, {
             usedParameters,
             canReplayParameters: Boolean(parameters),
+            triggeredByName: triggeredByUser?.name ?? null,
+            triggeredByEmail: triggeredByUser?.email ?? null,
+            cloudAccountAlias: cloudAccount?.alias ?? null,
+            cloudAccountProvider: cloudAccount?.provider ?? null,
         });
     }
 
@@ -469,8 +575,13 @@ export class AutomationsCrudService {
         executionId: string,
         tenantId: string,
         userId: string,
+        dto: RollbackAutomationDto,
     ): Promise<AutomationExecution> {
         await this.accessService.assertAutomationModuleEnabled(tenantId);
+        if (dto.confirm !== true) {
+            throw new BadRequestException(ErrorMessages.AUTOMATION.CONFIRMATION_REQUIRED);
+        }
+
         const automation = await this.findById(automationId, tenantId);
         const execution = await this.getExecution(automationId, executionId, tenantId);
 
@@ -480,10 +591,121 @@ export class AutomationsCrudService {
         if (execution.status === AutomationStatus.ROLLED_BACK) {
             return execution;
         }
-        if (execution.status !== AutomationStatus.SUCCESS && execution.status !== AutomationStatus.COMPLETED) {
+        if (
+            execution.status !== AutomationStatus.SUCCESS &&
+            execution.status !== AutomationStatus.COMPLETED &&
+            execution.status !== AutomationStatus.ROLLING_BACK
+        ) {
             throw new BadRequestException(ErrorMessages.AUTOMATION.ROLLBACK_NOT_ALLOWED);
         }
 
+        // Strict scope: only resources created by THIS execution and still provisioned.
+        const resources = await this.provisionedResourceRepository.find({
+            where: {
+                executionId,
+                status: In([ProvisionedResourceStatus.PROVISIONED, ProvisionedResourceStatus.ROLLING_BACK]),
+            },
+            order: { createdAt: 'DESC' },
+        });
+
+        const pendingResources = resources.filter(
+            (resource) =>
+                resource.status === ProvisionedResourceStatus.PROVISIONED ||
+                resource.status === ProvisionedResourceStatus.ROLLING_BACK,
+        );
+
+        if (pendingResources.length === 0) {
+            await this.executionRepository.update(executionId, {
+                status: AutomationStatus.ROLLED_BACK,
+                errorMessage: null,
+            });
+            return this.getExecution(automationId, executionId, tenantId);
+        }
+
+        // Reset any stuck ROLLING_BACK resource rows so the worker can retry them.
+        await this.provisionedResourceRepository.update(
+            {
+                executionId,
+                status: ProvisionedResourceStatus.ROLLING_BACK,
+            },
+            { status: ProvisionedResourceStatus.PROVISIONED, errorMessage: null },
+        );
+
+        await this.executionRepository.update(executionId, {
+            status: AutomationStatus.ROLLING_BACK,
+            errorMessage: null,
+        });
+
+        const payload = {
+            executionId,
+            tenantId,
+            automationId: automation.id,
+            triggeredBy: userId,
+        };
+
+        // Process in-process so polling sees per-resource progress (queue worker was not picking up rollback jobs).
+        void this.processRollback(payload).catch((error) => {
+            this.logger.error(
+                `automation.rollback.unhandled executionId=${executionId} error=${
+                    error instanceof Error ? error.message : 'unknown'
+                }`,
+            );
+        });
+
+        await this.auditService.record({
+            tenantId,
+            actorId: userId,
+            action: 'automation.execution.rollback_queued',
+            entityType: 'automation_execution',
+            entityId: executionId,
+            metadata: { automationId: automation.id, resources: pendingResources.length },
+        });
+
+        return this.getExecution(automationId, executionId, tenantId);
+    }
+
+    async processRollback(payload: {
+        executionId: string;
+        tenantId: string;
+        automationId: string;
+        triggeredBy: string;
+    }): Promise<void> {
+        const { executionId, tenantId, automationId, triggeredBy } = payload;
+        if (this.activeRollbacks.has(executionId)) {
+            this.logger.warn(`automation.rollback.already_active executionId=${executionId}`);
+            return;
+        }
+        this.activeRollbacks.add(executionId);
+
+        try {
+            await this.runRollback(payload);
+        } finally {
+            this.activeRollbacks.delete(executionId);
+        }
+    }
+
+    private async runRollback(payload: {
+        executionId: string;
+        tenantId: string;
+        automationId: string;
+        triggeredBy: string;
+    }): Promise<void> {
+        const { executionId, tenantId, automationId, triggeredBy } = payload;
+        const execution = await this.executionRepository.findOne({
+            where: { id: executionId, automationId, organizationId: tenantId },
+        });
+        if (!execution) {
+            this.logger.warn(`automation.rollback.missing executionId=${executionId}`);
+            return;
+        }
+        if (execution.status !== AutomationStatus.ROLLING_BACK) {
+            this.logger.warn(`automation.rollback.skip status=${execution.status} executionId=${executionId}`);
+            return;
+        }
+
+        this.logger.log(`automation.rollback.start executionId=${executionId}`);
+
+        // Only destroy resources belonging to this execution that are still provisioned.
         const resources = await this.provisionedResourceRepository.find({
             where: {
                 executionId,
@@ -492,16 +714,42 @@ export class AutomationsCrudService {
             order: { createdAt: 'DESC' },
         });
 
+        if (resources.length === 0) {
+            const inFlight = await this.provisionedResourceRepository.count({
+                where: { executionId, status: ProvisionedResourceStatus.ROLLING_BACK },
+            });
+            if (inFlight > 0) {
+                this.logger.warn(`automation.rollback.wait_inflight executionId=${executionId} count=${inFlight}`);
+                return;
+            }
+            await this.executionRepository.update(executionId, {
+                status: AutomationStatus.ROLLED_BACK,
+                errorMessage: null,
+            });
+            return;
+        }
+
         const errors: string[] = [];
         const stacksDone = new Set<string>();
         const providerContext = { cloudAccountId: execution.cloudAccountId, tenantId };
 
         for (const resource of resources) {
+            // Re-check scope on every item: never touch a row from another execution.
+            if (resource.executionId !== executionId) continue;
+
+            const claimed = await this.provisionedResourceRepository.update(
+                { id: resource.id, status: ProvisionedResourceStatus.PROVISIONED },
+                { status: ProvisionedResourceStatus.ROLLING_BACK, errorMessage: null },
+            );
+            if (!claimed.affected) continue;
+
             try {
                 if (resource.stackId) {
                     if (stacksDone.has(resource.stackId)) {
-                        resource.status = ProvisionedResourceStatus.ROLLED_BACK;
-                        await this.provisionedResourceRepository.save(resource);
+                        await this.provisionedResourceRepository.update(resource.id, {
+                            status: ProvisionedResourceStatus.ROLLED_BACK,
+                            errorMessage: null,
+                        });
                         continue;
                     }
                     await this.cloudFormation.deleteCreatedStack(
@@ -513,14 +761,16 @@ export class AutomationsCrudService {
                     stacksDone.add(resource.stackId);
                     await this.provisionedResourceRepository.update(
                         { executionId, stackId: resource.stackId },
-                        { status: ProvisionedResourceStatus.ROLLED_BACK },
+                        { status: ProvisionedResourceStatus.ROLLED_BACK, errorMessage: null },
                     );
                     continue;
                 }
 
                 if (!resource.awsResourceId) {
-                    resource.status = ProvisionedResourceStatus.ROLLED_BACK;
-                    await this.provisionedResourceRepository.save(resource);
+                    await this.provisionedResourceRepository.update(resource.id, {
+                        status: ProvisionedResourceStatus.ROLLED_BACK,
+                        errorMessage: null,
+                    });
                     continue;
                 }
 
@@ -531,34 +781,41 @@ export class AutomationsCrudService {
                     resource.config ?? {},
                     providerContext,
                 );
-                resource.status = ProvisionedResourceStatus.ROLLED_BACK;
-                await this.provisionedResourceRepository.save(resource);
+                await this.provisionedResourceRepository.update(resource.id, {
+                    status: ProvisionedResourceStatus.ROLLED_BACK,
+                    errorMessage: null,
+                });
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'rollback failed';
                 errors.push(`${resource.resourceType} ${resource.awsResourceId ?? resource.stackId ?? ''}: ${message}`);
+                await this.provisionedResourceRepository.update(resource.id, {
+                    status: ProvisionedResourceStatus.PROVISIONED,
+                    errorMessage: message,
+                });
                 this.logger.error(`automation.rollback.failed executionId=${executionId} resource=${resource.id}`);
             }
         }
 
         if (errors.length) {
-            execution.errorMessage = [`Rollback parcial`, ...errors].join('; ');
-            await this.executionRepository.save(execution);
-            throw new BadRequestException(ErrorMessages.AUTOMATION.ROLLBACK_FAILED);
+            await this.executionRepository.update(executionId, {
+                status: AutomationStatus.SUCCESS,
+                errorMessage: [`Rollback parcial`, ...errors].join('; '),
+            });
+            return;
         }
 
-        execution.status = AutomationStatus.ROLLED_BACK;
-        execution.errorMessage = null;
-        await this.executionRepository.save(execution);
+        await this.executionRepository.update(executionId, {
+            status: AutomationStatus.ROLLED_BACK,
+            errorMessage: null,
+        });
         await this.auditService.record({
             tenantId,
-            actorId: userId,
+            actorId: triggeredBy,
             action: 'automation.execution.rolled_back',
             entityType: 'automation_execution',
             entityId: executionId,
-            metadata: { automationId: automation.id, resources: resources.length },
+            metadata: { automationId, resources: resources.length },
         });
-
-        return this.getExecution(automationId, executionId, tenantId);
     }
 
     async duplicate(id: string, tenantId: string, userId: string): Promise<Automation> {
@@ -648,6 +905,27 @@ export class AutomationsCrudService {
         if (!account) {
             throw new NotFoundException(ErrorMessages.AUTOMATION.CLOUD_ACCOUNT_NOT_FOUND);
         }
+    }
+
+    private async resolveCloudAccountId(
+        automation: Automation,
+        tenantId: string,
+        cloudAccountId?: string,
+    ): Promise<string> {
+        const resolved = cloudAccountId ?? automation.cloudAccountId;
+        await this.assertCloudAccount(resolved, tenantId);
+        return resolved;
+    }
+
+    private async snapshotForPublished(automation: Automation): Promise<WorkflowSnapshot> {
+        if (automation.version === 0) {
+            throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        }
+        const versionRecord = await this.versionRepository.findOne({
+            where: { automationId: automation.id, version: automation.version },
+        });
+        if (!versionRecord) throw new BadRequestException(ErrorMessages.AUTOMATION.NOT_PUBLISHED);
+        return versionRecord.snapshot as unknown as WorkflowSnapshot;
     }
 
     private variableDefaults(variables: Record<string, unknown> | undefined): Record<string, unknown> {

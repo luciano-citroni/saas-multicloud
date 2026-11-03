@@ -13,6 +13,7 @@ export enum ProvisionedResourceStatus {
     PENDING = 'PENDING',
     PROVISIONED = 'PROVISIONED',
     FAILED = 'FAILED',
+    ROLLING_BACK = 'ROLLING_BACK',
     ROLLED_BACK = 'ROLLED_BACK',
 }
 

@@ -21,6 +21,7 @@ export enum AutomationStatus {
     SUCCESS = 'SUCCESS',
     FAILED = 'FAILED',
     CANCELLED = 'CANCELLED',
+    ROLLING_BACK = 'ROLLING_BACK',
     ROLLED_BACK = 'ROLLED_BACK',
 }
 

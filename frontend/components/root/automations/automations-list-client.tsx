@@ -82,7 +82,11 @@ export function AutomationsListClient() {
                 const query = fromExecution
                     ? `execute=1&fromExecution=${encodeURIComponent(fromExecution)}`
                     : 'execute=1';
-                router.push(`/automations/${id}?${query}`);
+                const basePath =
+                    automation?.status === 'DRAFT' && automation.version > 0
+                        ? `/automations/${id}/published`
+                        : `/automations/${id}`;
+                router.push(`${basePath}?${query}`);
                 return new Response(null, { status: 499 });
             },
             duplicate: () => duplicateAutomation(id, orgId),
@@ -221,7 +225,9 @@ export function AutomationsListClient() {
                                                     <History className="h-4 w-4" />
                                                 </Link>
                                             </Button>
-                                            {canAdmin && automation.status === 'ACTIVE' && (
+                                            {canAdmin &&
+                                                automation.version > 0 &&
+                                                automation.status !== 'INACTIVE' && (
                                                 <Button variant="ghost" size="icon" onClick={() => handleAction('execute', automation.id)}>
                                                     <Play className="h-4 w-4" />
                                                 </Button>

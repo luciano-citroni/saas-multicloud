@@ -34,10 +34,18 @@ import {
     automationIdParamSchema,
     createAutomationSchema,
     executeAutomationSchema,
+    grantMissingPermissionsSchema,
+    planAutomationSchema,
+    rollbackAutomationSchema,
     updateAutomationSchema,
+    validatePermissionsSchema,
     type CreateAutomationDto,
     type ExecuteAutomationDto,
+    type GrantMissingPermissionsDto,
+    type PlanAutomationDto,
+    type RollbackAutomationDto,
     type UpdateAutomationDto,
+    type ValidatePermissionsDto,
 } from './automations.dto';
 
 @ApiTags('Automations')
@@ -83,6 +91,18 @@ export class AutomationsController {
         @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
     ) {
         return this.automationsService.findById(params.id, org.id);
+    }
+
+    @Get(':id/published')
+    @ApiOperation({ summary: 'Obter snapshot da última versão publicada (mesmo com rascunho em andamento)' })
+    @ApiResponse({ status: 200, description: 'Versão publicada' })
+    @ApiResponse({ status: 400, description: 'Automação ainda não publicada' })
+    @ApiResponse({ status: 404, description: 'Automação não encontrada' })
+    getPublished(
+        @CurrentOrganization() org: Tenant,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+    ) {
+        return this.automationsService.getPublished(params.id, org.id);
     }
 
     @Put(':id')
@@ -182,22 +202,52 @@ export class AutomationsController {
     @ApiOperation({
         summary: 'Simular permissões IAM de criação e exclusão (rollback) na role da conta',
     })
+    @ApiBody({ schema: { type: 'object', properties: { cloudAccountId: { type: 'string', format: 'uuid' } } } })
     @ApiResponse({ status: 200, description: 'Resultado da simulação IAM' })
     validatePermissions(
         @CurrentOrganization() org: Tenant,
         @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+        @Body(new ZodValidationPipe(validatePermissionsSchema)) dto: ValidatePermissionsDto,
     ) {
-        return this.automationsService.validatePermissions(params.id, org.id);
+        return this.automationsService.validatePermissions(params.id, org.id, dto);
+    }
+
+    @Post(':id/grant-missing-permissions')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @ApiOperation({
+        summary: 'Aplicar permissões IAM faltantes na role da conta (inline policy SaaSMultiCloudAutomationGap)',
+    })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            required: ['cloudAccountId'],
+            properties: {
+                cloudAccountId: { type: 'string', format: 'uuid' },
+                actions: { type: 'array', items: { type: 'string' } },
+            },
+        },
+    })
+    @ApiResponse({ status: 200, description: 'Permissões aplicadas ou detalhes para anexar manualmente' })
+    @ApiResponse({ status: 400, description: 'Falha ao atualizar a role / nada faltando' })
+    grantMissingPermissions(
+        @CurrentOrganization() org: Tenant,
+        @CurrentUser() user: JwtPayload,
+        @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+        @Body(new ZodValidationPipe(grantMissingPermissionsSchema)) dto: GrantMissingPermissionsDto,
+    ) {
+        return this.automationsService.grantMissingPermissions(params.id, org.id, user.sub, dto);
     }
 
     @Post(':id/plan')
     @Roles(OrgRole.ADMIN, OrgRole.OWNER)
-    @ApiOperation({ summary: 'Gerar plano e change sets quando os parâmetros já estão resolvidos' })
+    @ApiOperation({ summary: 'Gerar plano da versão publicada' })
+    @ApiBody({ schema: { type: 'object', properties: { cloudAccountId: { type: 'string', format: 'uuid' } } } })
     plan(
         @CurrentOrganization() org: Tenant,
         @Param(new ZodValidationPipe(automationIdParamSchema)) params: { id: string },
+        @Body(new ZodValidationPipe(planAutomationSchema)) dto: PlanAutomationDto,
     ) {
-        return this.automationsService.plan(params.id, org.id);
+        return this.automationsService.plan(params.id, org.id, dto);
     }
 
     @Post(':id/plan/cancel')
@@ -253,15 +303,24 @@ export class AutomationsController {
 
     @Post(':id/executions/:executionId/rollback')
     @Roles(OrgRole.ADMIN, OrgRole.OWNER)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Reverter recursos provisionados de uma execução finalizada com sucesso' })
-    @ApiResponse({ status: 200, description: 'Rollback concluído' })
-    @ApiResponse({ status: 400, description: 'Execução não elegível ou rollback parcial' })
+    @HttpCode(HttpStatus.ACCEPTED)
+    @ApiOperation({ summary: 'Enfileirar rollback dos recursos provisionados desta execução' })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            required: ['confirm'],
+            properties: { confirm: { type: 'boolean', enum: [true] } },
+        },
+    })
+    @ApiResponse({ status: 202, description: 'Rollback enfileirado' })
+    @ApiResponse({ status: 400, description: 'Execução não elegível' })
+    @ApiResponse({ status: 409, description: 'Rollback já em andamento' })
     rollbackExecution(
         @CurrentOrganization() org: Tenant,
         @CurrentUser() user: JwtPayload,
         @Param(new ZodValidationPipe(automationExecutionParamSchema)) params: { id: string; executionId: string },
+        @Body(new ZodValidationPipe(rollbackAutomationSchema)) dto: RollbackAutomationDto,
     ) {
-        return this.automationsService.rollbackExecution(params.id, params.executionId, org.id, user.sub);
+        return this.automationsService.rollbackExecution(params.id, params.executionId, org.id, user.sub, dto);
     }
 }

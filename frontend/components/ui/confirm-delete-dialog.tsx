@@ -34,12 +34,13 @@ type ConfirmDeleteDialogProps = {
     onOpenChange: (open: boolean) => void;
     title: string;
     description: ReactNode;
-    resourceName: string;
+    resourceName?: string;
     confirmLabel?: string;
     cancelLabel?: string;
     isConfirming?: boolean;
     onConfirm: () => void | boolean | Promise<void | boolean>;
     contentProps?: React.ComponentProps<typeof DialogContent>;
+    children?: ReactNode;
 };
 
 export function ConfirmDeleteDialog({
@@ -53,6 +54,7 @@ export function ConfirmDeleteDialog({
     isConfirming = false,
     onConfirm,
     contentProps,
+    children,
 }: ConfirmDeleteDialogProps) {
     const tc = useTranslations('common');
     const inputId = useId();
@@ -64,7 +66,10 @@ export function ConfirmDeleteDialog({
         }
     }, [open]);
 
-    const expectedConfirmation = resolveDeleteConfirmationText(resourceName, tc.deleteConfirmPlaceholder);
+    const expectedConfirmation = resolveDeleteConfirmationText(
+        resourceName ?? '',
+        tc.deleteConfirmPlaceholder,
+    );
     const canConfirm = matchesDeleteConfirmation(confirmationText, expectedConfirmation);
 
     const handleOpenChange = (nextOpen: boolean) => {
@@ -96,6 +101,8 @@ export function ConfirmDeleteDialog({
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
+
+                {children}
 
                 <div className="space-y-2">
                     <Label htmlFor={inputId}>{tc.deleteConfirmHint.replace('{name}', expectedConfirmation)}</Label>

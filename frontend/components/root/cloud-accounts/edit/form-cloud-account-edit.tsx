@@ -23,7 +23,12 @@ import {
 } from '@/app/actions/organization';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
-import { buildTrustPolicy, PERMISSIONS_POLICY } from '@/lib/role-permissions';
+import {
+    buildTrustPolicy,
+    PERMISSIONS_POLICY,
+    AUTOMATION_PERMISSIONS_POLICY,
+    AUTOMATION_PERMISSIONS_SERVICE_SUMMARY,
+} from '@/lib/role-permissions';
 import { CloudAccountEditActions } from '@/components/root/cloud-accounts/edit/cloud-account-edit-actions';
 import { CloudAccountSyncStatus } from '@/components/root/cloud-accounts/cloud-account-sync-status';
 import { useLocale } from '@/components/providers/locale-provider';
@@ -624,6 +629,40 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
                                         <PolicyBlock label={tca.trustPolicy} json={buildTrustPolicy(roleTutorialExternalId)} />
                                         <PolicyBlock label={tca.permissionsPolicy} json={PERMISSIONS_POLICY} />
+
+                                        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
+                                            <div>
+                                                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                                    Permissões de Automação (opcional)
+                                                </p>
+                                                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                                                    Adicione esta policy se a conta for usada no módulo de Automação. Cole como segunda
+                                                    inline policy na mesma role. Inclui{' '}
+                                                    <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">iam:PutRolePolicy</code> e{' '}
+                                                    <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">iam:GetRolePolicy</code>{' '}
+                                                    para aplicar permissões faltantes com um clique na execução.
+                                                </p>
+                                            </div>
+                                            <div className="rounded-md border border-amber-200 bg-white dark:border-amber-800 dark:bg-amber-950/10">
+                                                <div className="border-b border-amber-200 dark:border-amber-800 px-3 py-2">
+                                                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                                                        Serviços cobertos por esta policy:
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3 py-2.5">
+                                                    {AUTOMATION_PERMISSIONS_SERVICE_SUMMARY.map(({ service, actions }) => (
+                                                        <div key={service} className="flex flex-col py-0.5">
+                                                            <span className="text-xs font-semibold text-foreground">{service}</span>
+                                                            <span className="text-[10px] text-muted-foreground">{actions}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <PolicyBlock
+                                                label="Automation Permissions Policy — cole como 2ª inline policy (opcional)"
+                                                json={AUTOMATION_PERMISSIONS_POLICY}
+                                            />
+                                        </div>
 
                                         <p className="wrap-break-word text-xs text-muted-foreground">{tca.replacePlatformAccountId}</p>
 

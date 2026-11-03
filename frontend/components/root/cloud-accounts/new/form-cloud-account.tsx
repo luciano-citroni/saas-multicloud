@@ -18,7 +18,13 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
-import { buildTrustPolicy, getPlatformUserArn, PERMISSIONS_POLICY, AUTOMATION_PERMISSIONS_POLICY } from '@/lib/role-permissions';
+import {
+    buildTrustPolicy,
+    getPlatformUserArn,
+    PERMISSIONS_POLICY,
+    AUTOMATION_PERMISSIONS_POLICY,
+    AUTOMATION_PERMISSIONS_SERVICE_SUMMARY,
+} from '@/lib/role-permissions';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useLocale } from '@/components/providers/locale-provider';
 
@@ -504,8 +510,12 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                         Permissões de Automação (opcional)
                                                     </p>
                                                     <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                                                        Adicione esta policy <strong>somente se quiser usar o módulo de Automação</strong> para criar buckets
-                                                        S3 e distribuições CloudFront pela plataforma. Cole como uma segunda inline policy na mesma role.
+                                                        Adicione esta policy <strong>somente se quiser usar o módulo de Automação</strong> para
+                                                        provisionar recursos pelo catálogo atual da plataforma. Cole como uma segunda inline
+                                                        policy na mesma role. Inclui{' '}
+                                                        <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">iam:PutRolePolicy</code> e{' '}
+                                                        <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">iam:GetRolePolicy</code>{' '}
+                                                        para a plataforma aplicar permissões faltantes com um clique na execução.
                                                     </p>
                                                 </div>
                                             </div>
@@ -517,10 +527,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                     </p>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3 py-2.5">
-                                                    {[
-                                                        { service: 'S3', actions: 'CreateBucket, PutBucketVersioning, PutEncryptionConfiguration, PutBucketPublicAccessBlock' },
-                                                        { service: 'CloudFront', actions: 'CreateDistribution, GetDistribution' },
-                                                    ].map(({ service, actions }) => (
+                                                    {AUTOMATION_PERMISSIONS_SERVICE_SUMMARY.map(({ service, actions }) => (
                                                         <div key={service} className="flex flex-col py-0.5">
                                                             <span className="text-xs font-semibold text-foreground">{service}</span>
                                                             <span className="text-[10px] text-muted-foreground">{actions}</span>

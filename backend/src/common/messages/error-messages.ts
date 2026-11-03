@@ -256,6 +256,11 @@ export const ErrorMessages = {
         ROLLBACK_FAILED: 'Rollback could not remove one or more provisioned resources.',
 
         ROLLBACK_IN_PROGRESS: 'A rollback is already in progress for this execution.',
+
+        PERMISSION_GRANT_FAILED:
+            'Could not update the IAM role with the missing automation permissions. Attach the suggested inline policy manually.',
+
+        PERMISSION_GRANT_NOTHING_MISSING: 'There are no missing IAM permissions to grant for this workflow.',
     },
 
     NOTIFICATIONS: {

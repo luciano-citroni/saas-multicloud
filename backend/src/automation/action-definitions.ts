@@ -367,7 +367,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar ECS Cluster',
         category: 'Compute',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_ECS_CLUSTER_CREATE],
-        requiredIamActions: ['ecs:CreateCluster', 'ecs:DescribeClusters'],
+        requiredIamActions: ['ecs:CreateCluster', 'ecs:DescribeClusters', 'ecs:TagResource'],
         fields: [
             { key: 'clusterName', label: 'Nome do cluster', input: 'text', required: true, acceptsBinding: true },
             regionField('us-east-2'),
@@ -380,7 +380,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar Task Definition',
         category: 'Compute',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_ECS_TASK_DEFINITION_CREATE],
-        requiredIamActions: ['ecs:RegisterTaskDefinition'],
+        requiredIamActions: ['ecs:RegisterTaskDefinition', 'ecs:TagResource'],
         fields: [
             { key: 'family', label: 'Family', input: 'text', required: true, acceptsBinding: true },
             regionField('us-east-2'),
@@ -399,7 +399,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar ECR',
         category: 'Containers',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_ECR_REPOSITORY_CREATE],
-        requiredIamActions: ['ecr:CreateRepository', 'ecr:DescribeRepositories'],
+        requiredIamActions: ['ecr:CreateRepository', 'ecr:DescribeRepositories', 'ecr:TagResource'],
         fields: [
             { key: 'repositoryName', label: 'Nome do repositório', input: 'text', required: true, acceptsBinding: true },
             regionField('us-east-2'),
@@ -413,7 +413,11 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar Load Balancer',
         category: 'Networking',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_LOAD_BALANCER_CREATE],
-        requiredIamActions: ['elasticloadbalancing:CreateLoadBalancer', 'elasticloadbalancing:DescribeLoadBalancers'],
+        requiredIamActions: [
+            'elasticloadbalancing:CreateLoadBalancer',
+            'elasticloadbalancing:DescribeLoadBalancers',
+            'elasticloadbalancing:AddTags',
+        ],
         fields: [
             { key: 'name', label: 'Nome', input: 'text', required: true, acceptsBinding: true },
             regionField('us-east-2'),
@@ -438,7 +442,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar Lambda',
         category: 'Compute',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_LAMBDA_FUNCTION_CREATE],
-        requiredIamActions: ['lambda:CreateFunction', 'lambda:GetFunction'],
+        requiredIamActions: ['lambda:CreateFunction', 'lambda:GetFunction', 'lambda:TagResource'],
         fields: [
             { key: 'functionName', label: 'Nome da função', input: 'text', required: true, acceptsBinding: true },
             regionField(),
@@ -456,7 +460,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar IAM Role',
         category: 'Security',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_IAM_ROLE_CREATE],
-        requiredIamActions: ['iam:CreateRole', 'iam:AttachRolePolicy', 'iam:GetRole'],
+        requiredIamActions: ['iam:CreateRole', 'iam:AttachRolePolicy', 'iam:GetRole', 'iam:TagRole'],
         fields: [
             { key: 'roleName', label: 'Nome da role', input: 'text', required: true, acceptsBinding: true },
             { key: 'assumeService', label: 'Serviço (Principal)', input: 'text', defaultValue: 'ec2.amazonaws.com', acceptsBinding: true },
@@ -546,7 +550,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar RDS',
         category: 'Database',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_RDS_INSTANCE_CREATE],
-        requiredIamActions: ['rds:CreateDBInstance', 'rds:DescribeDBInstances'],
+        requiredIamActions: ['rds:CreateDBInstance', 'rds:DescribeDBInstances', 'rds:AddTagsToResource'],
         fields: [
             { key: 'dbInstanceIdentifier', label: 'Identificador', input: 'text', required: true, acceptsBinding: true },
             regionField(),
@@ -583,7 +587,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         name: 'Criar Amplify App',
         category: 'Frontend',
         outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE],
-        requiredIamActions: ['amplify:CreateApp', 'amplify:GetApp'],
+        requiredIamActions: ['amplify:CreateApp', 'amplify:GetApp', 'amplify:TagResource'],
         fields: [
             { key: 'name', label: 'Nome', input: 'text', required: true, acceptsBinding: true },
             regionField(),
@@ -649,7 +653,16 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         category: 'Referência',
         outputFields: [],
         dynamicOutputs: true,
-        requiredIamActions: ['ec2:Describe*', 'ecs:Describe*', 'ecr:Describe*', 'elasticloadbalancing:Describe*', 'iam:GetRole', 'secretsmanager:DescribeSecret'],
+        requiredIamActions: [
+            'ec2:DescribeVpcs',
+            'ec2:DescribeSubnets',
+            'ec2:DescribeSecurityGroups',
+            'ecs:DescribeClusters',
+            'ecr:DescribeRepositories',
+            'elasticloadbalancing:DescribeLoadBalancers',
+            'iam:GetRole',
+            'secretsmanager:DescribeSecret',
+        ],
         fields: [
             {
                 key: 'resourceType',
@@ -715,6 +728,11 @@ export function getActionDefinition(type: string): ActionDefinition | undefined 
     return ACTION_DEFINITIONS.find((def) => def.type === type);
 }
 
+/** IAM ActionNames for SimulatePrincipalPolicy must be concrete (no wildcards). */
+export function isConcreteIamAction(action: string): boolean {
+    return Boolean(action) && !action.includes('*');
+}
+
 export function collectWorkflowIamActions(nodes: Array<{ type: string }>): {
     create: string[];
     rollback: string[];
@@ -724,8 +742,13 @@ export function collectWorkflowIamActions(nodes: Array<{ type: string }>): {
     const rollback = new Set<string>();
     for (const node of nodes) {
         const definition = getActionDefinition(node.type);
-        for (const action of definition?.requiredIamActions ?? []) create.add(action);
-        for (const action of getRollbackIamActions(node.type)) rollback.add(action);
+        if (!definition) continue;
+        for (const action of definition.requiredIamActions) {
+            if (isConcreteIamAction(action)) create.add(action);
+        }
+        for (const action of getRollbackIamActions(node.type)) {
+            if (isConcreteIamAction(action)) rollback.add(action);
+        }
     }
     return {
         create: [...create],

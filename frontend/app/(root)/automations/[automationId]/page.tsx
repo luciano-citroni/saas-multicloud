@@ -4,5 +4,5 @@ type PageProps = { params: Promise<{ automationId: string }> };
 
 export default async function AutomationDetailPage({ params }: PageProps) {
     const { automationId } = await params;
-    return <AutomationDetailClient automationId={automationId} />;
+    return <AutomationDetailClient automationId={automationId} mode="draft" />;
 }

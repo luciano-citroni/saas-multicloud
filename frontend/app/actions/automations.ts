@@ -1,7 +1,15 @@
 export type AutomationWorkflowStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';
 export type AutomationCloudProvider = 'AWS' | 'GCP' | 'AZURE';
 export type ExecutionNodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'CANCELLED';
-export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'ROLLED_BACK';
+export type ExecutionStatus =
+    | 'PENDING'
+    | 'RUNNING'
+    | 'SUCCESS'
+    | 'FAILED'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'ROLLING_BACK'
+    | 'ROLLED_BACK';
 
 export interface AutomationNodeInput {
     id: string;
@@ -96,6 +104,10 @@ export interface AutomationWorkflowExecution {
     automationId: string | null;
     automationVersion: number | null;
     triggeredBy: string | null;
+    triggeredByName?: string | null;
+    triggeredByEmail?: string | null;
+    cloudAccountAlias?: string | null;
+    cloudAccountProvider?: string | null;
     status: ExecutionStatus;
     errorMessage: string | null;
     durationMs: number | null;
@@ -107,6 +119,11 @@ export interface AutomationWorkflowExecution {
     flowDefinition?: {
         nodes?: Array<{ id: string; type: string; name: string; config?: Record<string, unknown> }>;
         edges?: Array<{ id: string; sourceNodeId: string; targetNodeId: string }>;
+        variables?: Record<
+            string,
+            { type: string; default?: unknown; required?: boolean; description?: string; sensitive?: boolean }
+        >;
+        usedParameters?: Record<string, unknown> | null;
     };
     usedParameters?: Record<string, unknown> | null;
     canReplayParameters?: boolean;
@@ -122,6 +139,27 @@ export async function fetchAutomations(organizationId: string): Promise<Response
 
 export async function fetchAutomation(automationId: string, organizationId: string): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}?${orgQuery(organizationId)}`, {
+        cache: 'no-store',
+    });
+}
+
+export type PublishedAutomationSnapshot = {
+    automationId: string;
+    version: number;
+    publishedAt: string;
+    publishedBy: string | null;
+    status: AutomationWorkflowStatus;
+    cloudAccountId: string;
+    cloudProvider: AutomationCloudProvider;
+    name: string;
+    description: string | null;
+    nodes: AutomationNodeInput[];
+    edges: AutomationEdgeInput[];
+    variables: NonNullable<AutomationWorkflow['variables']>;
+};
+
+export async function fetchPublishedAutomation(automationId: string, organizationId: string): Promise<Response> {
+    return fetch(`/api/automations/${encodeURIComponent(automationId)}/published?${orgQuery(organizationId)}`, {
         cache: 'no-store',
     });
 }
@@ -189,7 +227,13 @@ export async function deactivateAutomation(automationId: string, organizationId:
 export async function executeAutomation(
     automationId: string,
     organizationId: string,
-    body: { confirm: true; clientRequestId?: string; acknowledgeCapabilities?: boolean; parameters?: Record<string, unknown> },
+    body: {
+        confirm: true;
+        clientRequestId?: string;
+        acknowledgeCapabilities?: boolean;
+        parameters?: Record<string, unknown>;
+        cloudAccountId?: string;
+    },
 ): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}/execute?${orgQuery(organizationId)}`, {
         method: 'POST',
@@ -223,21 +267,62 @@ export type AutomationPermissionCheck = {
     rollbackActions: string[];
     items: PermissionCheckItem[];
     missing: string[];
+    suggestedPolicy?: Record<string, unknown> | null;
+    canAttemptGrant?: boolean;
+};
+
+export type GrantMissingPermissionsResult = {
+    applied: boolean;
+    roleArn: string;
+    roleName: string;
+    policyName: string;
+    actionsGranted: string[];
+    suggestedPolicy: Record<string, unknown>;
+    check: AutomationPermissionCheck;
+    message: string;
 };
 
 export async function validateAutomationPermissions(
     automationId: string,
     organizationId: string,
+    body?: { cloudAccountId?: string },
 ): Promise<Response> {
     return fetch(
         `/api/automations/${encodeURIComponent(automationId)}/validate-permissions?${orgQuery(organizationId)}`,
-        { method: 'POST', cache: 'no-store' },
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body ?? {}),
+            cache: 'no-store',
+        },
     );
 }
 
-export async function planAutomation(automationId: string, organizationId: string): Promise<Response> {
+export async function grantMissingAutomationPermissions(
+    automationId: string,
+    organizationId: string,
+    body: { cloudAccountId: string; actions?: string[] },
+): Promise<Response> {
+    return fetch(
+        `/api/automations/${encodeURIComponent(automationId)}/grant-missing-permissions?${orgQuery(organizationId)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            cache: 'no-store',
+        },
+    );
+}
+
+export async function planAutomation(
+    automationId: string,
+    organizationId: string,
+    body?: { cloudAccountId?: string },
+): Promise<Response> {
     return fetch(`/api/automations/${encodeURIComponent(automationId)}/plan?${orgQuery(organizationId)}`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
         cache: 'no-store',
     });
 }
@@ -317,7 +402,12 @@ export async function rollbackAutomationExecution(
 ): Promise<Response> {
     return fetch(
         `/api/automations/${encodeURIComponent(automationId)}/executions/${encodeURIComponent(executionId)}/rollback?${orgQuery(organizationId)}`,
-        { method: 'POST', cache: 'no-store' },
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true }),
+            cache: 'no-store',
+        },
     );
 }
 

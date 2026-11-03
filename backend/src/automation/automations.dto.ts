@@ -46,6 +46,30 @@ export const executeAutomationSchema = z.object({
     clientRequestId: z.string().min(8).max(80).optional(),
     acknowledgeCapabilities: z.boolean().optional().default(false),
     parameters: z.record(z.string(), z.unknown()).optional(),
+    cloudAccountId: z.string().uuid().optional(),
+});
+
+export const rollbackAutomationSchema = z.object({
+    confirm: z.literal(true),
+});
+
+export const planAutomationSchema = z.preprocess(
+    (value) => value ?? {},
+    z.object({
+        cloudAccountId: z.string().uuid().optional(),
+    }),
+);
+
+export const validatePermissionsSchema = z.preprocess(
+    (value) => value ?? {},
+    z.object({
+        cloudAccountId: z.string().uuid().optional(),
+    }),
+);
+
+export const grantMissingPermissionsSchema = z.object({
+    cloudAccountId: z.string().uuid(),
+    actions: z.array(z.string().min(1).max(128)).max(200).optional(),
 });
 
 export const importTemplateSchema = z.object({
@@ -57,6 +81,10 @@ export const importTemplateSchema = z.object({
 export type CreateAutomationDto = z.infer<typeof createAutomationSchema>;
 export type UpdateAutomationDto = z.infer<typeof updateAutomationSchema>;
 export type ExecuteAutomationDto = z.infer<typeof executeAutomationSchema>;
+export type RollbackAutomationDto = z.infer<typeof rollbackAutomationSchema>;
+export type PlanAutomationDto = z.infer<typeof planAutomationSchema>;
+export type ValidatePermissionsDto = z.infer<typeof validatePermissionsSchema>;
+export type GrantMissingPermissionsDto = z.infer<typeof grantMissingPermissionsSchema>;
 export type ImportTemplateDto = z.infer<typeof importTemplateSchema>;
 
 // Re-export node output schema for frontend reference
