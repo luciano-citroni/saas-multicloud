@@ -11,7 +11,7 @@ import { ChatHistoryService } from './chat-history.service';
 import { ChatScopeService } from './chat-scope.service';
 import { ChatToolService } from './chat-tool.service';
 import type { CreateConversationDto, SendMessageDto } from './dto';
-import { AI_CHAT_SYSTEM_PROMPT_V3 } from './prompts/system-prompt';
+import { AI_CHAT_SYSTEM_PROMPT_V4 } from './prompts/system-prompt';
 import type { AiChatProviderMessage } from './providers/ai-provider.interface';
 import { OpenAiProvider } from './providers/openai.provider';
 
@@ -176,7 +176,7 @@ export class AiChatService {
             );
 
             const messages: AiChatProviderMessage[] = [
-                { role: 'system', content: AI_CHAT_SYSTEM_PROMPT_V3 },
+                { role: 'system', content: AI_CHAT_SYSTEM_PROMPT_V4 },
                 ...history
                     .filter((message) => message.role === 'user' || message.role === 'assistant')
                     .map((message) => ({

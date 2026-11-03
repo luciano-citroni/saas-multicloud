@@ -26,7 +26,15 @@ import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { buildFinopsQuery, parseFinopsUrlFilters } from '@/components/root/finops/finops-filter-utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { NotificationGroupOption } from '@/components/root/finops/finops-budget-form';
-import type { FinopsBudgetStatusItem } from '@/components/root/finops/finops-budget-types';
+import {
+    countBudgetsAtRisk,
+    formatBudgetSpendPeriodLabel,
+    getBudgetEffectiveLimit,
+    getBudgetRiskState,
+    hasNoSpendInBudgetPeriod,
+    pickHighestRiskBudget,
+    type FinopsBudgetStatusItem,
+} from '@/components/root/finops/finops-budget-types';
 import { ACTIVE_ORG_STORAGE_KEY, ACTIVE_ORG_CHANGED_EVENT } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
@@ -83,6 +91,10 @@ function usageTone(percentage: number, triggered: number[]): 'ok' | 'warn' | 'cr
 
 function periodLabel(period: string) {
     return period === 'daily' ? 'Diário' : 'Mensal';
+}
+
+function alertFrequencyLabel(frequency: string) {
+    return frequency === 'daily' ? 'até 2×/dia' : 'mensal';
 }
 
 function alertTypeLabel(type: string | undefined) {
@@ -401,10 +413,16 @@ export function FinopsBudgets() {
                     triggeredAlerts: [...item.triggeredAlerts].sort((a, b) => a - b),
                     currency: item.currency,
                     currentSpend: item.currentSpend,
-                    amount: item.budget.amount,
+                    amount: getBudgetEffectiveLimit(item.budget),
                 })),
         [visibleStatuses]
     );
+
+    const highestRiskBudget = useMemo(() => pickHighestRiskBudget(visibleStatuses), [visibleStatuses]);
+    const atRiskCount = useMemo(() => countBudgetsAtRisk(visibleStatuses), [visibleStatuses]);
+    const highestRiskState = getBudgetRiskState(highestRiskBudget);
+    const allBudgetsWithoutSpend =
+        visibleStatuses.length > 0 && visibleStatuses.every((item) => hasNoSpendInBudgetPeriod(item));
 
     const onDelete = async (): Promise<boolean> => {
         if (!organizationId || !deleteTarget) return true;
@@ -494,9 +512,9 @@ export function FinopsBudgets() {
                             <SelectValue placeholder="Avaliação" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Todas avaliações</SelectItem>
+                            <SelectItem value="all">Todas cadências</SelectItem>
+                            <SelectItem value="daily">Alerta 2×/dia</SelectItem>
                             <SelectItem value="monthly">Alerta mensal</SelectItem>
-                            <SelectItem value="daily">Alerta diário</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -550,6 +568,15 @@ export function FinopsBudgets() {
                 </div>
             )}
 
+            {allBudgetsWithoutSpend && (
+                <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    Nenhum custo encontrado no período dos orçamentos (mês/dia atual). A FinOps abre em{' '}
+                    <span className="font-medium text-foreground">mês passado</span> por padrão — mude para{' '}
+                    <span className="font-medium text-foreground">mês atual</span> ou sincronize o período corrente
+                    em FinOps para preencher a barra.
+                </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
                 <Card>
                     <CardHeader className="pb-2">
@@ -575,19 +602,46 @@ export function FinopsBudgets() {
                         <p className="text-xs text-muted-foreground">Com base nos limiares e canais cadastrados</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card
+                    className={cn(
+                        highestRiskState === 'near' && 'border-amber-500/50',
+                        highestRiskState === 'exceeded' && 'border-destructive/50'
+                    )}
+                >
                     <CardHeader className="pb-2">
-                        <CardDescription>Gasto vs limite (1º budget)</CardDescription>
-                        <CardTitle className="text-2xl">
-                            {visibleStatuses[0] ? `${visibleStatuses[0].usagePercentage.toFixed(0)}%` : '—'}
+                        <CardDescription>Maior risco</CardDescription>
+                        <CardTitle
+                            className={cn(
+                                'text-2xl',
+                                highestRiskState === 'near' && 'text-amber-600',
+                                highestRiskState === 'exceeded' && 'text-destructive'
+                            )}
+                        >
+                            {highestRiskBudget ? `${highestRiskBudget.usagePercentage.toFixed(0)}%` : '—'}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <p className="text-xs text-muted-foreground">
-                            {visibleStatuses[0]
-                                ? `${formatCurrency(visibleStatuses[0].currentSpend, visibleStatuses[0].currency)} de ${formatCurrency(visibleStatuses[0].budget.amount, visibleStatuses[0].currency)}`
-                                : 'Nenhum orçamento'}
-                        </p>
+                    <CardContent className="space-y-1">
+                        {highestRiskBudget ? (
+                            <>
+                                <p className="truncate text-xs font-medium" title={highestRiskBudget.budget.name}>
+                                    {highestRiskBudget.budget.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {formatCurrency(highestRiskBudget.currentSpend, highestRiskBudget.currency)} de{' '}
+                                    {formatCurrency(
+                                        getBudgetEffectiveLimit(highestRiskBudget.budget),
+                                        highestRiskBudget.currency
+                                    )}
+                                </p>
+                                {visibleStatuses.length > 1 ? (
+                                    <p className="text-xs text-muted-foreground">
+                                        {atRiskCount} de {visibleStatuses.length} em risco
+                                    </p>
+                                ) : null}
+                            </>
+                        ) : (
+                            <p className="text-xs text-muted-foreground">Nenhum orçamento</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -648,7 +702,7 @@ export function FinopsBudgets() {
                                             {' · '}
                                             {alertTypeLabel(item.budget.alertType)}
                                             {' · alerta '}
-                                            {periodLabel(item.budget.alertFrequency ?? item.budget.period).toLowerCase()}
+                                            {alertFrequencyLabel(item.budget.alertFrequency ?? item.budget.period)}
                                         </CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5">
@@ -696,7 +750,10 @@ export function FinopsBudgets() {
                                             </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {formatCurrency(item.currentSpend, item.currency)} de{' '}
-                                                {formatCurrency(Number(item.budget.amount), item.currency)}
+                                                {formatCurrency(getBudgetEffectiveLimit(item.budget), item.currency)}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatBudgetSpendPeriodLabel(item.budget.period)}
                                             </p>
                                         </div>
                                         <p className="text-sm text-muted-foreground">
@@ -711,6 +768,13 @@ export function FinopsBudgets() {
                                         percentage={item.usagePercentage}
                                         thresholds={item.budget.alertThresholds ?? []}
                                     />
+
+                                    {hasNoSpendInBudgetPeriod(item) ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            Sem custos sincronizados neste período — a barra preenche conforme o gasto
+                                            real, não o valor do limite.
+                                        </p>
+                                    ) : null}
 
                                     <div className="flex flex-wrap gap-1.5">
                                         {(item.budget.alertThresholds ?? []).map((threshold) => {

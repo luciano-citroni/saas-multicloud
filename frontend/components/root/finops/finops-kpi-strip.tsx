@@ -4,16 +4,16 @@ import Link from 'next/link';
 import { AlertTriangle, Lightbulb, PiggyBank, Target, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import {
+    countBudgetsAtRisk,
+    getBudgetEffectiveLimit,
+    getBudgetRiskState,
+    pickHighestRiskBudget,
+    type FinopsBudgetStatusItem,
+} from '@/components/root/finops/finops-budget-types';
 import { cn } from '@/lib/utils';
 
-export type FinopsBudgetStatusItem = {
-    budget: { id: string; name: string; amount: number };
-    currentSpend: number;
-    remainingAmount: number;
-    usagePercentage: number;
-    triggeredAlerts?: number[];
-    currency: string;
-};
+export type { FinopsBudgetStatusItem };
 
 type FinopsKpiStripProps = {
     cost: number;
@@ -24,7 +24,6 @@ type FinopsKpiStripProps = {
     openAnomalies: number;
     openRecommendations: number;
     budgetStatuses?: FinopsBudgetStatusItem[];
-    singleAccountMode?: boolean;
     budgetsHref?: string;
     isLoading?: boolean;
 };
@@ -38,7 +37,6 @@ export function FinopsKpiStrip({
     openAnomalies,
     openRecommendations,
     budgetStatuses = [],
-    singleAccountMode = false,
     budgetsHref = '/finops/budgets',
     isLoading = false,
 }: FinopsKpiStripProps) {
@@ -53,8 +51,20 @@ export function FinopsKpiStrip({
     }
 
     const growthPositive = momGrowth <= 0;
-    const primaryBudget = budgetStatuses[0] ?? null;
-    const hasBudgetAlert = Boolean(primaryBudget?.triggeredAlerts && primaryBudget.triggeredAlerts.length > 0);
+    const primaryBudget = pickHighestRiskBudget(budgetStatuses);
+    const riskState = getBudgetRiskState(primaryBudget);
+    const atRiskCount = countBudgetsAtRisk(budgetStatuses);
+    const totalBudgets = budgetStatuses.length;
+    const effectiveLimit = primaryBudget ? getBudgetEffectiveLimit(primaryBudget.budget) : 0;
+
+    const riskSubtitle =
+        riskState === 'empty'
+            ? 'Nenhum orçamento ativo'
+            : riskState === 'exceeded'
+              ? 'Limite excedido'
+              : riskState === 'near'
+                ? 'Próximo do limiar'
+                : 'Dentro do limite';
 
     return (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -134,7 +144,12 @@ export function FinopsKpiStrip({
                 </CardContent>
             </Card>
 
-            <Card className={cn(hasBudgetAlert && 'border-amber-500/50')}>
+            <Card
+                className={cn(
+                    riskState === 'near' && 'border-amber-500/50',
+                    riskState === 'exceeded' && 'border-destructive/50'
+                )}
+            >
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <Target className="size-3.5" />
@@ -143,25 +158,38 @@ export function FinopsKpiStrip({
                     <CardTitle
                         className={cn(
                             'text-xl sm:text-2xl',
-                            hasBudgetAlert && 'text-amber-600',
-                            primaryBudget && primaryBudget.usagePercentage >= 100 && 'text-destructive'
+                            riskState === 'near' && 'text-amber-600',
+                            riskState === 'exceeded' && 'text-destructive'
                         )}
                     >
-                        {singleAccountMode && primaryBudget ? `${primaryBudget.usagePercentage.toFixed(0)}%` : '—'}
+                        {primaryBudget ? `${primaryBudget.usagePercentage.toFixed(0)}%` : '—'}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                        {singleAccountMode && primaryBudget
-                            ? `${formatCurrency(primaryBudget.currentSpend, primaryBudget.currency)} de ${formatCurrency(primaryBudget.budget.amount, primaryBudget.currency)}`
-                            : singleAccountMode
-                              ? 'Nenhum orçamento ativo nesta conta'
-                              : 'Disponível ao filtrar uma conta'}
-                    </p>
-                    {hasBudgetAlert && (
+                    {primaryBudget ? (
+                        <>
+                            <p className="truncate text-xs font-medium text-foreground" title={primaryBudget.budget.name}>
+                                {primaryBudget.budget.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {formatCurrency(primaryBudget.currentSpend, primaryBudget.currency)} de{' '}
+                                {formatCurrency(effectiveLimit, primaryBudget.currency)}
+                            </p>
+                            {totalBudgets > 1 ? (
+                                <p className="text-xs text-muted-foreground">
+                                    {atRiskCount} de {totalBudgets} em risco
+                                </p>
+                            ) : (
+                                <p className="text-xs text-muted-foreground">{riskSubtitle}</p>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">{riskSubtitle}</p>
+                    )}
+                    {(riskState === 'near' || riskState === 'exceeded') && (
                         <p className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="size-3" />
-                            Limiar atingido
+                            {riskState === 'exceeded' ? 'Limite excedido' : 'Limiar atingido'}
                         </p>
                     )}
                     <Link href={budgetsHref} className="text-xs font-medium text-primary hover:underline">

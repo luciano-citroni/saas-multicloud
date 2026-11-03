@@ -74,12 +74,14 @@ function budgetToFormValues(
         scope: item.budget.scope === 'organization' ? 'organization' : 'cloud_account',
         cloudAccountId: item.budget.cloudAccountId ?? '',
         service: item.budget.service ?? '',
-        resourceId: item.budget.resourceId ?? '',
+        resourceId: '',
         alertFrequency: item.budget.alertFrequency === 'daily' ? 'daily' : 'monthly',
-        alertType: (['percentage', 'amount', 'resource'].includes(item.budget.alertType ?? '')
-            ? item.budget.alertType
-            : 'percentage') as BudgetFormData['alertType'],
-        alertAmount: item.budget.alertAmount != null ? Number(item.budget.alertAmount) : null,
+        // resource alerts are unsupported until cost ingestion stores resourceId.
+        alertType: item.budget.alertType === 'amount' ? 'amount' : 'percentage',
+        alertAmount:
+            item.budget.alertType === 'amount' && item.budget.alertAmount != null
+                ? Number(item.budget.alertAmount)
+                : null,
         alertThresholds: (item.budget.alertThresholds ?? [80, 100]).join(', '),
         alertChannelEmail: channels.includes('email'),
         alertChannelWhatsapp: channels.includes('whatsapp'),

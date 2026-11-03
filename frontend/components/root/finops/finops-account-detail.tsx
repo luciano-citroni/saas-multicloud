@@ -52,6 +52,7 @@ import {
     fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
+    fetchOrganizationBudgetStatuses,
     revokeFinopsConsent,
     startFinopsSync,
 } from '@/app/actions/finops';
@@ -243,19 +244,35 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
             return;
         }
 
+        const normalizeStatuses = (payload: unknown): FinopsBudgetStatusItem[] => {
+            if (Array.isArray(payload)) return payload as FinopsBudgetStatusItem[];
+            if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
+                return (payload as { items: FinopsBudgetStatusItem[] }).items;
+            }
+            return [];
+        };
+
+        const mergeById = (items: FinopsBudgetStatusItem[]) => {
+            const map = new Map<string, FinopsBudgetStatusItem>();
+            for (const item of items) map.set(item.budget.id, item);
+            return Array.from(map.values());
+        };
+
         const loadExtras = async () => {
             try {
-                const [budgetRes, syncRes] = await Promise.all([
+                const [accountBudgetRes, orgBudgetRes, syncRes] = await Promise.all([
                     fetchFinopsBudgetStatuses(organizationId, cloudAccountId),
+                    fetchOrganizationBudgetStatuses(organizationId),
                     fetchFinopsSyncRuns(organizationId, cloudAccountId),
                 ]);
 
-                if (budgetRes.ok) {
-                    const payload = (await budgetRes.json().catch(() => null)) as FinopsBudgetStatusItem[] | null;
-                    setBudgetStatuses(Array.isArray(payload) ? payload : []);
-                } else {
-                    setBudgetStatuses([]);
-                }
+                const accountItems = accountBudgetRes.ok
+                    ? normalizeStatuses(await accountBudgetRes.json().catch(() => null))
+                    : [];
+                const orgItems = orgBudgetRes.ok
+                    ? normalizeStatuses(await orgBudgetRes.json().catch(() => null))
+                    : [];
+                setBudgetStatuses(mergeById([...orgItems, ...accountItems]));
 
                 if (syncRes.ok) {
                     const payload = await syncRes.json().catch(() => null);
@@ -586,7 +603,6 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                 optimize?.totals.openRecommendations ?? overview?.recommendations.length ?? 0
                             }
                             budgetStatuses={budgetStatuses}
-                            singleAccountMode
                             budgetsHref={`/finops/budgets?account=${encodeURIComponent(cloudAccountId)}`}
                             isLoading={loadingInitial && !overview}
                         />

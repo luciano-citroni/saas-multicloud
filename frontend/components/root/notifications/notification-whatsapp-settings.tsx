@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -34,6 +33,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useTranslations } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -477,397 +477,393 @@ export function NotificationWhatsappSettings({
 
     return (
         <div className="space-y-4">
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
+            <div className="space-y-2 rounded-lg border px-4 py-3">
+                <div className="space-y-0.5">
+                    <p className="flex items-center gap-2 text-sm font-medium">
                         <BookOpen className="size-4" />
                         Como configurar o WhatsApp
-                    </CardTitle>
-                    <CardDescription>
-                        Tutorial rápido para cadastrar números ou grupos e validar o envio de alertas.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Accordion type="single" collapsible defaultValue="howto">
-                        <AccordionItem value="howto" className="border-none">
-                            <AccordionTrigger className="py-2 text-sm">Ver passos</AccordionTrigger>
-                            <AccordionContent className="space-y-3 text-sm text-muted-foreground">
-                                <ol className="list-decimal space-y-2 pl-4">
-                                    <li>
-                                        A plataforma já possui uma instância WhatsApp conectada via Evolution API.
-                                        Você não precisa escanear QR Code aqui.
-                                    </li>
-                                    <li>
-                                        Crie um <strong className="text-foreground">grupo de notificação</strong> neste
-                                        SaaS.
-                                    </li>
-                                    <li>
-                                        No WhatsApp, abra o grupo do time →{' '}
-                                        <strong className="text-foreground">Dados do grupo</strong> →{' '}
-                                        <strong className="text-foreground">Convidar via link</strong> e copie o link.
-                                    </li>
-                                    <li>
-                                        Clique em <strong className="text-foreground">Entrar com link</strong>, cole o
-                                        convite e confirme. O SaaS entra no grupo pela Evolution e{' '}
-                                        <strong className="text-foreground">salva o ID automaticamente</strong>.
-                                    </li>
-                                    <li>
-                                        Para alertas individuais, use <strong className="text-foreground">Adicionar destino</strong>{' '}
-                                        com telefone (DDI, ex.: <code className="text-xs">5511999999999</code>).
-                                    </li>
-                                    <li>
-                                        Use <strong className="text-foreground">Testar</strong> para validar. Em FinOps,
-                                        marque o canal WhatsApp — os alertas usam os destinos ativos desta página.
-                                    </li>
-                                </ol>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                </CardContent>
-            </Card>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        Como cadastrar números ou grupos e receber alertas no WhatsApp.
+                    </p>
+                </div>
+                <Accordion type="single" collapsible defaultValue="howto">
+                    <AccordionItem value="howto" className="border-none">
+                        <AccordionTrigger className="py-2 text-sm">Ver passos</AccordionTrigger>
+                        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+                            <ol className="list-decimal space-y-2 pl-4">
+                                <li>
+                                    O WhatsApp da plataforma já está conectado. Você{' '}
+                                    <strong className="text-foreground">não precisa</strong> escanear QR Code.
+                                </li>
+                                <li>
+                                    Crie um <strong className="text-foreground">grupo de notificação</strong> nesta
+                                    página (ex.: &quot;Alertas FinOps&quot;).
+                                </li>
+                                <li>
+                                    No app do WhatsApp, abra o grupo do time →{' '}
+                                    <strong className="text-foreground">Dados do grupo</strong> →{' '}
+                                    <strong className="text-foreground">Convidar via link</strong> e copie o link.
+                                </li>
+                                <li>
+                                    Volte aqui, clique em{' '}
+                                    <strong className="text-foreground">Entrar com link</strong>, cole o convite e
+                                    confirme. A plataforma entra no grupo e salva o destino automaticamente.
+                                </li>
+                                <li>
+                                    Para avisar uma pessoa específica, use{' '}
+                                    <strong className="text-foreground">Adicionar destino</strong> e informe o
+                                    telefone com DDI (ex.: <code className="text-xs">5511999999999</code>).
+                                </li>
+                                <li>
+                                    Clique em <strong className="text-foreground">Testar</strong> para confirmar o
+                                    envio. Depois, em FinOps, selecione o canal WhatsApp — os alertas vão para os
+                                    destinos ativos desta página.
+                                </li>
+                            </ol>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            </div>
 
-            <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">
-                    Cadastre números ou IDs de grupo WhatsApp para receber alertas do tenant.
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                        <MessageCircle className="size-4" />
+                        Grupos WhatsApp
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        Expanda um grupo para gerenciar destinos (telefone ou ID de grupo).
+                    </p>
+                </div>
                 {canManage && (
                     <Button size="sm" onClick={openCreateGroup}>
-                        <Plus className="size-3.5" />
+                        <Plus className="h-4 w-4" />
                         Novo grupo
                     </Button>
                 )}
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <MessageCircle className="size-4" />
-                        Grupos WhatsApp
-                    </CardTitle>
-                    <CardDescription>
-                        Expanda um grupo para gerenciar destinos (telefone ou ID de grupo).
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <p className="text-sm text-muted-foreground">Carregando…</p>
-                    ) : groups.length === 0 ? (
-                        <div className="space-y-3">
-                            <p className="text-sm text-muted-foreground">Nenhum grupo WhatsApp cadastrado.</p>
-                            {canManage && (
-                                <Button variant="outline" size="sm" onClick={openCreateGroup}>
-                                    <Plus className="size-3.5" />
-                                    Criar grupo
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="overflow-hidden rounded-lg border">
-                                <Table>
-                                    <TableHeader className="bg-muted/50">
-                                        <TableRow>
-                                            <TableHead className="w-10" />
-                                            <TableHead>Grupo</TableHead>
-                                            <TableHead>Destinos</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Ações</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {groups.map((group) => {
-                                            const isOpen = Boolean(expanded[group.id]);
-                                            const targets = group.whatsappTargets ?? [];
-                                            return (
-                                                <Fragment key={group.id}>
-                                                    <TableRow>
-                                                        <TableCell>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon-sm"
-                                                                onClick={() =>
-                                                                    setExpanded((prev) => ({
-                                                                        ...prev,
-                                                                        [group.id]: !prev[group.id],
-                                                                    }))
-                                                                }
-                                                            >
-                                                                {isOpen ? (
-                                                                    <ChevronDown className="size-3.5" />
-                                                                ) : (
-                                                                    <ChevronRight className="size-3.5" />
-                                                                )}
-                                                            </Button>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="space-y-0.5">
-                                                                <p className="font-medium">{group.name}</p>
-                                                                {group.description ? (
-                                                                    <p className="text-muted-foreground text-xs">
-                                                                        {group.description}
-                                                                    </p>
-                                                                ) : null}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>{targets.length}</TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={group.isActive ? 'default' : 'outline'}>
-                                                                {group.isActive ? 'Ativo' : 'Inativo'}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex justify-end gap-1">
+            {loading ? (
+                <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                </div>
+            ) : groups.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <MessageCircle className="h-10 w-10 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground">Nenhum grupo WhatsApp cadastrado.</p>
+                    {canManage && (
+                        <Button variant="outline" size="sm" onClick={openCreateGroup}>
+                            <Plus className="h-3 w-3" />
+                            Criar grupo
+                        </Button>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="overflow-hidden rounded-lg border">
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="w-10" />
+                                    <TableHead>Grupo</TableHead>
+                                    <TableHead>Destinos</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {groups.map((group) => {
+                                    const isOpen = Boolean(expanded[group.id]);
+                                    const targets = group.whatsappTargets ?? [];
+                                    return (
+                                        <Fragment key={group.id}>
+                                            <TableRow>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        onClick={() =>
+                                                            setExpanded((prev) => ({
+                                                                ...prev,
+                                                                [group.id]: !prev[group.id],
+                                                            }))
+                                                        }
+                                                    >
+                                                        {isOpen ? (
+                                                            <ChevronDown className="size-3.5" />
+                                                        ) : (
+                                                            <ChevronRight className="size-3.5" />
+                                                        )}
+                                                    </Button>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium">{group.name}</p>
+                                                        {group.description ? (
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {group.description}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>{targets.length}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={group.isActive ? 'default' : 'outline'}>
+                                                        {group.isActive ? 'Ativo' : 'Inativo'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end gap-1">
+                                                        {canManage && (
+                                                            <>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    isLoading={testingGroupId === group.id}
+                                                                    onClick={() => void onSendGroupTest(group)}
+                                                                    title="Testar grupo"
+                                                                >
+                                                                    <Send className="size-3.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    onClick={() => openEditGroup(group)}
+                                                                >
+                                                                    <Pencil className="size-3.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    onClick={() =>
+                                                                        setDeleteTarget({
+                                                                            kind: 'group',
+                                                                            item: group,
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <Trash2 className="size-3.5" />
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                            {isOpen ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="bg-muted/20 p-0">
+                                                        <div className="space-y-3 p-4">
+                                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                                <p className="text-sm font-medium">Destinos</p>
                                                                 {canManage && (
-                                                                    <>
+                                                                    <div className="flex flex-wrap gap-2">
                                                                         <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            isLoading={testingGroupId === group.id}
-                                                                            onClick={() => void onSendGroupTest(group)}
-                                                                            title="Testar grupo"
-                                                                        >
-                                                                            <Send className="size-3.5" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            onClick={() => openEditGroup(group)}
-                                                                        >
-                                                                            <Pencil className="size-3.5" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
+                                                                            size="sm"
                                                                             onClick={() =>
-                                                                                setDeleteTarget({
-                                                                                    kind: 'group',
-                                                                                    item: group,
-                                                                                })
+                                                                                openJoinInvite(group.id)
                                                                             }
                                                                         >
-                                                                            <Trash2 className="size-3.5" />
+                                                                            <MessageCircle className="size-3.5" />
+                                                                            Entrar com link
                                                                         </Button>
-                                                                    </>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() =>
+                                                                                openCreateTarget(group.id)
+                                                                            }
+                                                                        >
+                                                                            <Plus className="size-3.5" />
+                                                                            Adicionar destino
+                                                                        </Button>
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    {isOpen ? (
-                                                        <TableRow>
-                                                            <TableCell colSpan={5} className="bg-muted/20 p-0">
-                                                                <div className="space-y-3 p-4">
-                                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                                        <p className="text-sm font-medium">
-                                                                            Destinos
-                                                                        </p>
-                                                                        {canManage && (
-                                                                            <div className="flex flex-wrap gap-2">
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    onClick={() =>
-                                                                                        openJoinInvite(group.id)
-                                                                                    }
-                                                                                >
-                                                                                    <MessageCircle className="size-3.5" />
-                                                                                    Entrar com link
-                                                                                </Button>
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    variant="outline"
-                                                                                    onClick={() =>
-                                                                                        openCreateTarget(group.id)
-                                                                                    }
-                                                                                >
-                                                                                    <Plus className="size-3.5" />
-                                                                                    Adicionar destino
-                                                                                </Button>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    {targets.length === 0 ? (
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            Nenhum destino neste grupo.
-                                                                        </p>
-                                                                    ) : (
-                                                                        <div className="overflow-hidden rounded-md border">
-                                                                            <Table>
-                                                                                <TableHeader>
-                                                                                    <TableRow>
-                                                                                        <TableHead>Tipo</TableHead>
-                                                                                        <TableHead>Destino</TableHead>
-                                                                                        <TableHead>Label</TableHead>
-                                                                                        <TableHead>Status</TableHead>
-                                                                                        <TableHead className="text-right">
-                                                                                            Ações
-                                                                                        </TableHead>
-                                                                                    </TableRow>
-                                                                                </TableHeader>
-                                                                                <TableBody>
-                                                                                    {targets.map((target) => (
-                                                                                        <TableRow key={target.id}>
-                                                                                            <TableCell>
-                                                                                                <Badge variant="outline">
-                                                                                                    {target.targetType ===
-                                                                                                    'phone'
-                                                                                                        ? 'Telefone'
-                                                                                                        : 'Grupo'}
-                                                                                                </Badge>
-                                                                                            </TableCell>
-                                                                                            <TableCell className="font-mono text-xs">
-                                                                                                {target.target}
-                                                                                            </TableCell>
-                                                                                            <TableCell>
-                                                                                                {target.label ?? '—'}
-                                                                                            </TableCell>
-                                                                                            <TableCell>
-                                                                                                <Badge
-                                                                                                    variant={
-                                                                                                        target.isActive
-                                                                                                            ? 'default'
-                                                                                                            : 'outline'
+                                                            {targets.length === 0 ? (
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    Nenhum destino neste grupo.
+                                                                </p>
+                                                            ) : (
+                                                                <div className="overflow-hidden rounded-md border">
+                                                                    <Table>
+                                                                        <TableHeader>
+                                                                            <TableRow>
+                                                                                <TableHead>Tipo</TableHead>
+                                                                                <TableHead>Destino</TableHead>
+                                                                                <TableHead>Label</TableHead>
+                                                                                <TableHead>Status</TableHead>
+                                                                                <TableHead className="text-right">
+                                                                                    Ações
+                                                                                </TableHead>
+                                                                            </TableRow>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                            {targets.map((target) => (
+                                                                                <TableRow key={target.id}>
+                                                                                    <TableCell>
+                                                                                        <Badge variant="outline">
+                                                                                            {target.targetType ===
+                                                                                            'phone'
+                                                                                                ? 'Telefone'
+                                                                                                : 'Grupo'}
+                                                                                        </Badge>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="font-mono text-xs">
+                                                                                        {target.target}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {target.label ?? '—'}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <Badge
+                                                                                            variant={
+                                                                                                target.isActive
+                                                                                                    ? 'default'
+                                                                                                    : 'outline'
+                                                                                            }
+                                                                                        >
+                                                                                            {target.isActive
+                                                                                                ? 'Ativo'
+                                                                                                : 'Inativo'}
+                                                                                        </Badge>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-right">
+                                                                                        {canManage ? (
+                                                                                            <div className="flex justify-end gap-1">
+                                                                                                <Button
+                                                                                                    variant="ghost"
+                                                                                                    size="icon-sm"
+                                                                                                    isLoading={
+                                                                                                        testingId ===
+                                                                                                        target.id
+                                                                                                    }
+                                                                                                    onClick={() =>
+                                                                                                        void onSendTest(
+                                                                                                            target,
+                                                                                                        )
+                                                                                                    }
+                                                                                                    title="Testar"
+                                                                                                >
+                                                                                                    <Send className="size-3.5" />
+                                                                                                </Button>
+                                                                                                <Button
+                                                                                                    variant="ghost"
+                                                                                                    size="icon-sm"
+                                                                                                    onClick={() =>
+                                                                                                        openEditTarget(
+                                                                                                            target,
+                                                                                                        )
                                                                                                     }
                                                                                                 >
-                                                                                                    {target.isActive
-                                                                                                        ? 'Ativo'
-                                                                                                        : 'Inativo'}
-                                                                                                </Badge>
-                                                                                            </TableCell>
-                                                                                            <TableCell className="text-right">
-                                                                                                {canManage ? (
-                                                                                                    <div className="flex justify-end gap-1">
-                                                                                                        <Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon-sm"
-                                                                                                            isLoading={
-                                                                                                                testingId ===
-                                                                                                                target.id
-                                                                                                            }
-                                                                                                            onClick={() =>
-                                                                                                                void onSendTest(
-                                                                                                                    target,
-                                                                                                                )
-                                                                                                            }
-                                                                                                            title="Testar"
-                                                                                                        >
-                                                                                                            <Send className="size-3.5" />
-                                                                                                        </Button>
-                                                                                                        <Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon-sm"
-                                                                                                            onClick={() =>
-                                                                                                                openEditTarget(
-                                                                                                                    target,
-                                                                                                                )
-                                                                                                            }
-                                                                                                        >
-                                                                                                            <Pencil className="size-3.5" />
-                                                                                                        </Button>
-                                                                                                        <Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon-sm"
-                                                                                                            onClick={() =>
-                                                                                                                setDeleteTarget(
-                                                                                                                    {
-                                                                                                                        kind: 'target',
-                                                                                                                        item: target,
-                                                                                                                    },
-                                                                                                                )
-                                                                                                            }
-                                                                                                        >
-                                                                                                            <Trash2 className="size-3.5" />
-                                                                                                        </Button>
-                                                                                                    </div>
-                                                                                                ) : null}
-                                                                                            </TableCell>
-                                                                                        </TableRow>
-                                                                                    ))}
-                                                                                </TableBody>
-                                                                            </Table>
-                                                                        </div>
-                                                                    )}
+                                                                                                    <Pencil className="size-3.5" />
+                                                                                                </Button>
+                                                                                                <Button
+                                                                                                    variant="ghost"
+                                                                                                    size="icon-sm"
+                                                                                                    onClick={() =>
+                                                                                                        setDeleteTarget(
+                                                                                                            {
+                                                                                                                kind: 'target',
+                                                                                                                item: target,
+                                                                                                            },
+                                                                                                        )
+                                                                                                    }
+                                                                                                >
+                                                                                                    <Trash2 className="size-3.5" />
+                                                                                                </Button>
+                                                                                            </div>
+                                                                                        ) : null}
+                                                                                    </TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
                                                                 </div>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ) : null}
-                                                </Fragment>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : null}
+                                        </Fragment>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-                            {pagination ? (
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <span>Itens por página</span>
-                                        <Select
-                                            value={String(pageSize)}
-                                            onValueChange={(value) => {
-                                                setPageSize(Number(value));
-                                                setPage(1);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-8 w-[70px]">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[10, 25, 50].map((size) => (
-                                                    <SelectItem key={size} value={String(size)}>
-                                                        {size}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <span>
-                                            Página {pagination.page} de {Math.max(1, pagination.totalPages)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8"
-                                            onClick={() => setPage(1)}
-                                            disabled={!pagination.hasPreviousPage}
-                                        >
-                                            <ChevronsLeft className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8"
-                                            onClick={() => setPage((current) => Math.max(1, current - 1))}
-                                            disabled={!pagination.hasPreviousPage}
-                                        >
-                                            <ChevronLeft className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8"
-                                            onClick={() => setPage((current) => current + 1)}
-                                            disabled={!pagination.hasNextPage}
-                                        >
-                                            <ChevronRight className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8"
-                                            onClick={() =>
-                                                setPage(Math.max(1, pagination.totalPages ?? 1))
-                                            }
-                                            disabled={!pagination.hasNextPage}
-                                        >
-                                            <ChevronsRight className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                    {pagination ? (
+                        <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                                <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                <Select
+                                    value={String(pageSize)}
+                                    onValueChange={(value) => {
+                                        setPageSize(Number(value));
+                                        setPage(1);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 min-w-22">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {[10, 25, 50].map((size) => (
+                                            <SelectItem key={size} value={String(size)}>
+                                                {size}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                                <span className="text-sm font-medium">
+                                    Página {pagination.page} de {Math.max(1, pagination.totalPages)}
+                                </span>
+                                <div className="flex items-center gap-1 self-start sm:self-auto">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setPage(1)}
+                                        disabled={!pagination.hasPreviousPage}
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setPage((current) => Math.max(1, current - 1))}
+                                        disabled={!pagination.hasPreviousPage}
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setPage((current) => current + 1)}
+                                        disabled={!pagination.hasNextPage}
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setPage(Math.max(1, pagination.totalPages ?? 1))}
+                                        disabled={!pagination.hasNextPage}
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </Button>
                                 </div>
-                            ) : null}
+                            </div>
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    ) : null}
+                </div>
+            )}
 
             <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
                 <DialogContent>
@@ -1019,7 +1015,7 @@ export function NotificationWhatsappSettings({
                         <DialogTitle>{editingTarget ? 'Editar destino' : 'Novo destino WhatsApp'}</DialogTitle>
                         <DialogDescription>
                             Use telefone com DDI para alertas individuais. Para grupos, prefira{' '}
-                            <strong>Entrar com link</strong> (salva o ID automaticamente).
+                            <strong>Entrar com link</strong> — o destino é salvo automaticamente.
                         </DialogDescription>
                     </DialogHeader>
                     <Form {...targetForm}>

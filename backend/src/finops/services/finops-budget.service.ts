@@ -10,6 +10,7 @@ import type {
     FinopsBudgetPeriod,
     FinopsBudgetScope,
 } from '../../db/entites/finops-budget.entity';
+import { FinopsBudgetAlertEvent } from '../../db/entites/finops-budget-alert-event.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { ErrorMessages } from '../../common/messages/error-messages';
@@ -48,6 +49,13 @@ export interface OrgBudgetStatus extends BudgetStatus {
     cloudAccountAlias: string;
 }
 
+type AlertPayload = {
+    currentSpend: number;
+    usagePercentage: number;
+    limitAmount: number;
+    triggeredAlerts: number[];
+};
+
 @Injectable()
 export class FinopsBudgetService {
     private readonly logger = new Logger(FinopsBudgetService.name);
@@ -55,6 +63,9 @@ export class FinopsBudgetService {
     constructor(
         @InjectRepository(FinopsBudget)
         private readonly budgetRepo: Repository<FinopsBudget>,
+
+        @InjectRepository(FinopsBudgetAlertEvent)
+        private readonly alertEventRepo: Repository<FinopsBudgetAlertEvent>,
 
         @InjectRepository(FinopsCostRecord)
         private readonly costRecordRepo: Repository<FinopsCostRecord>,
@@ -175,14 +186,31 @@ export class FinopsBudgetService {
             ? await this.findOne(id, cloudAccountId, organizationId)
             : await this.findOneInOrganization(id, organizationId);
 
-        if (dto.alertType === 'resource' || (dto.resourceId !== undefined && budget.alertType === 'resource')) {
+        const nextAlertType: FinopsBudgetAlertType = dto.alertType ?? budget.alertType;
+        const nextScope: FinopsBudgetScope = dto.scope ?? budget.scope;
+
+        let nextCloudAccountId =
+            dto.cloudAccountId !== undefined ? dto.cloudAccountId : budget.cloudAccountId;
+
+        if (nextScope === 'organization') {
+            nextCloudAccountId = null;
+        } else {
+            const accountId = nextCloudAccountId?.trim() || null;
+            if (!accountId) {
+                throw new BadRequestException(ErrorMessages.CLOUD_ACCOUNTS.NOT_FOUND);
+            }
+            await this.requireCloudAccount(accountId, organizationId);
+            nextCloudAccountId = accountId;
+        }
+
+        if (nextAlertType === 'resource') {
             const resourceId = dto.resourceId !== undefined ? dto.resourceId : budget.resourceId;
             if (!resourceId?.trim()) {
                 throw new BadRequestException('resourceId é obrigatório para alertas por recurso');
             }
         }
 
-        if (dto.alertType === 'amount' || (dto.alertAmount !== undefined && budget.alertType === 'amount')) {
+        if (nextAlertType === 'amount') {
             const alertAmount = dto.alertAmount !== undefined ? dto.alertAmount : budget.alertAmount;
             if (alertAmount == null || Number(alertAmount) <= 0) {
                 throw new BadRequestException('alertAmount deve ser maior que zero para alertas por valor');
@@ -205,17 +233,33 @@ export class FinopsBudgetService {
               )
             : (budget.alertNotificationGroupIds ?? []);
 
+        let nextResourceId =
+            dto.resourceId !== undefined ? dto.resourceId || null : budget.resourceId;
+        let nextAlertAmount =
+            dto.alertAmount !== undefined ? dto.alertAmount : budget.alertAmount;
+
+        if (nextAlertType === 'percentage') {
+            nextResourceId = null;
+            nextAlertAmount = null;
+        } else if (nextAlertType === 'amount') {
+            nextResourceId = null;
+        } else if (nextAlertType === 'resource') {
+            nextAlertAmount = null;
+        }
+
         Object.assign(budget, {
             name: dto.name ?? budget.name,
             amount: dto.amount ?? budget.amount,
             currency: dto.currency ?? budget.currency,
             period: dto.period ?? budget.period,
+            scope: nextScope,
+            cloudAccountId: nextCloudAccountId,
             service: dto.service !== undefined ? dto.service || null : budget.service,
-            resourceId: dto.resourceId !== undefined ? dto.resourceId || null : budget.resourceId,
+            resourceId: nextResourceId,
             alertThresholds: dto.alertThresholds ?? budget.alertThresholds,
             alertFrequency: dto.alertFrequency ?? budget.alertFrequency,
-            alertType: dto.alertType ?? budget.alertType,
-            alertAmount: dto.alertAmount !== undefined ? dto.alertAmount : budget.alertAmount,
+            alertType: nextAlertType,
+            alertAmount: nextAlertAmount,
             alertChannels: nextChannels,
             alertEmails: dto.alertEmails !== undefined ? dto.alertEmails : budget.alertEmails,
             alertNotificationGroupIds: nextGroupIds,
@@ -324,19 +368,67 @@ export class FinopsBudgetService {
         return [...orgMapped, ...accountStatuses];
     }
 
+    /**
+     * Avalia budgets ativos e envia alertas pendentes (com dedupe por period_key).
+     * Usado pelo cron — nunca pelos endpoints GET de status.
+     */
+    async evaluateAndNotifyBudgets(organizationId?: string): Promise<{
+        evaluated: number;
+        notified: number;
+    }> {
+        const where = organizationId
+            ? { organizationId, isActive: true }
+            : { isActive: true };
+
+        const budgets = await this.budgetRepo.find({ where, order: { createdAt: 'ASC' } });
+        let notified = 0;
+
+        for (const budget of budgets) {
+            try {
+                const status = await this.computeStatus(budget);
+                if (status.triggeredAlerts.length === 0) continue;
+
+                const limitAmount =
+                    budget.alertType === 'amount' && budget.alertAmount != null
+                        ? Number(budget.alertAmount)
+                        : Number(budget.amount);
+
+                const sent = await this.dispatchPendingNotifications(budget, {
+                    currentSpend: status.currentSpend,
+                    usagePercentage: status.usagePercentage,
+                    limitAmount,
+                    triggeredAlerts: status.triggeredAlerts,
+                });
+                notified += sent;
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.logger.error(`Budget ${budget.id}: avaliação de alerta falhou: ${message}`);
+            }
+        }
+
+        this.logger.log(
+            `[Budget Alerts] evaluated=${budgets.length} notifications_queued=${notified}` +
+                (organizationId ? ` org=${organizationId}` : ''),
+        );
+
+        return { evaluated: budgets.length, notified };
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================
 
+    /**
+     * Calcula status apenas — sem enviar notificações (seguro para GET/poll da UI).
+     * Spend acumula pelo período do orçamento (`budget.period`), não pela cadência do alerta.
+     * `evaluationPeriod` sobrescreve só na visão da lista (filtro diário/mensal da UI).
+     */
     private async computeStatus(
         budget: FinopsBudget,
         evaluationPeriod?: FinopsBudgetPeriod,
     ): Promise<BudgetStatus> {
-        // Alerta mensal = acumulado do mês até agora; diário = só o dia.
-        // evaluationPeriod (visão da lista) sobrescreve; senão usa a frequência do alerta.
-        const spendPeriod: FinopsBudgetPeriod =
-            evaluationPeriod ?? budget.alertFrequency ?? budget.period;
-        const { from, toExclusive } = this.getCurrentPeriodDateRange(spendPeriod);
+        const spendPeriod: FinopsBudgetPeriod = evaluationPeriod ?? budget.period;
+        const { from, toExclusive } = this.getCurrentPeriodDateRangeUtc(spendPeriod);
         const currentSpend = await this.sumBudgetSpend(budget, from, toExclusive);
 
         const limitAmount =
@@ -355,20 +447,6 @@ export class FinopsBudgetService {
                   : [80, 100];
 
         const triggeredAlerts = thresholds.filter((threshold) => usagePercentage >= threshold);
-
-        if (triggeredAlerts.length > 0) {
-            this.logger.warn(
-                `Budget "${budget.name}" (${budget.id}): gasto ${usagePercentage.toFixed(1)}% do limite. Alertas: ${triggeredAlerts.join(', ')}%`,
-            );
-            // E-mail ainda não dispara no GET (evita spam no poll da UI).
-            // WhatsApp envia fire-and-forget para destinos ativos do tenant.
-            this.dispatchPendingNotifications(budget, {
-                currentSpend,
-                usagePercentage,
-                limitAmount,
-                triggeredAlerts,
-            });
-        }
 
         return {
             budget,
@@ -417,57 +495,142 @@ export class FinopsBudgetService {
         return sumByGranularity('monthly');
     }
 
-    private dispatchPendingNotifications(
+    /**
+     * Envia alertas apenas para limiares/canais ainda não registrados no período atual.
+     * Retorna quantos envios foram iniciados.
+     */
+    private async dispatchPendingNotifications(
         budget: FinopsBudget,
-        payload: {
-            currentSpend: number;
-            usagePercentage: number;
-            limitAmount: number;
-            triggeredAlerts: number[];
-        },
-    ): void {
+        payload: AlertPayload,
+    ): Promise<number> {
         const channels = budget.alertChannels ?? [];
         const groupIds = budget.alertNotificationGroupIds ?? [];
+        const periodKey = this.getAlertPeriodKey(budget.alertFrequency ?? 'monthly');
+        let sentCount = 0;
+
+        const pendingByChannel = new Map<FinopsBudgetAlertChannel, number[]>();
+
+        for (const channel of channels) {
+            const pendingThresholds: number[] = [];
+            for (const threshold of payload.triggeredAlerts) {
+                const alreadySent = await this.alertEventRepo.findOne({
+                    where: {
+                        budgetId: budget.id,
+                        threshold,
+                        periodKey,
+                        channel,
+                    },
+                    select: ['id'],
+                });
+                if (!alreadySent) {
+                    pendingThresholds.push(threshold);
+                }
+            }
+            if (pendingThresholds.length > 0) {
+                pendingByChannel.set(channel, pendingThresholds);
+            }
+        }
+
+        if (pendingByChannel.size === 0) {
+            return 0;
+        }
+
+        const allPendingThresholds = [
+            ...new Set([...pendingByChannel.values()].flat()),
+        ].sort((a, b) => a - b);
+
+        const notifyPayload: AlertPayload = {
+            ...payload,
+            triggeredAlerts: allPendingThresholds,
+        };
 
         const text = [
             `*SaaS MultiCloud* — alerta de orçamento`,
             ``,
             `Orçamento: *${budget.name}*`,
-            `Uso: *${payload.usagePercentage.toFixed(1)}%*`,
-            `Gasto: ${payload.currentSpend.toFixed(2)} ${budget.currency}`,
-            `Limite: ${payload.limitAmount.toFixed(2)} ${budget.currency}`,
-            `Limiares: ${payload.triggeredAlerts.map((t) => `${t}%`).join(', ') || '—'}`,
+            `Uso: *${notifyPayload.usagePercentage.toFixed(1)}%*`,
+            `Gasto: ${notifyPayload.currentSpend.toFixed(2)} ${budget.currency}`,
+            `Limite: ${notifyPayload.limitAmount.toFixed(2)} ${budget.currency}`,
+            `Limiares: ${notifyPayload.triggeredAlerts.map((t) => `${t}%`).join(', ') || '—'}`,
         ].join('\n');
 
-        if (channels.includes('email')) {
-            void this.dispatchEmailAlert(budget, payload, groupIds);
+        if (pendingByChannel.has('email')) {
+            const ok = await this.dispatchEmailAlert(budget, notifyPayload, groupIds);
+            if (ok) {
+                await this.recordAlertEvents(
+                    budget,
+                    periodKey,
+                    'email',
+                    pendingByChannel.get('email') ?? [],
+                );
+                sentCount += 1;
+            }
         }
 
-        if (channels.includes('whatsapp')) {
-            this.notificationsService
-                .sendWhatsappAlertToGroups(budget.organizationId, groupIds, text)
-                .then((result) => {
-                    this.logger.log(
-                        `Budget ${budget.id}: WhatsApp alert sent=${result.sent} failed=${result.failed}`,
+        if (pendingByChannel.has('whatsapp')) {
+            try {
+                const result = await this.notificationsService.sendWhatsappAlertToGroups(
+                    budget.organizationId,
+                    groupIds,
+                    text,
+                );
+                this.logger.log(
+                    `Budget ${budget.id}: WhatsApp alert sent=${result.sent} failed=${result.failed}`,
+                );
+                if (result.sent > 0) {
+                    await this.recordAlertEvents(
+                        budget,
+                        periodKey,
+                        'whatsapp',
+                        pendingByChannel.get('whatsapp') ?? [],
                     );
-                })
-                .catch((error: unknown) => {
-                    const message = error instanceof Error ? error.message : String(error);
-                    this.logger.error(`Budget ${budget.id}: WhatsApp alert dispatch failed: ${message}`);
-                });
+                    sentCount += 1;
+                }
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.logger.error(`Budget ${budget.id}: WhatsApp alert dispatch failed: ${message}`);
+            }
+        }
+
+        return sentCount;
+    }
+
+    private async recordAlertEvents(
+        budget: FinopsBudget,
+        periodKey: string,
+        channel: FinopsBudgetAlertChannel,
+        thresholds: number[],
+    ): Promise<void> {
+        const now = new Date();
+        for (const threshold of thresholds) {
+            try {
+                await this.alertEventRepo.save(
+                    this.alertEventRepo.create({
+                        budgetId: budget.id,
+                        organizationId: budget.organizationId,
+                        threshold,
+                        periodKey,
+                        channel,
+                        sentAt: now,
+                    }),
+                );
+            } catch (error: unknown) {
+                // Unique violation = already recorded by a concurrent run — safe to ignore.
+                const message = error instanceof Error ? error.message : String(error);
+                if (!message.toLowerCase().includes('unique') && !message.includes('UQ_finops_budget_alert')) {
+                    this.logger.warn(
+                        `Budget ${budget.id}: falha ao gravar alert event threshold=${threshold} channel=${channel}: ${message}`,
+                    );
+                }
+            }
         }
     }
 
     private async dispatchEmailAlert(
         budget: FinopsBudget,
-        payload: {
-            currentSpend: number;
-            usagePercentage: number;
-            limitAmount: number;
-            triggeredAlerts: number[];
-        },
+        payload: AlertPayload,
         groupIds: string[],
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             let emails = await this.notificationsService.listActiveEmailsFromGroups(
                 budget.organizationId,
@@ -480,7 +643,7 @@ export class FinopsBudgetService {
 
             if (emails.length === 0) {
                 this.logger.debug(`Budget ${budget.id}: nenhum e-mail ativo para alerta`);
-                return;
+                return false;
             }
 
             await this.mailerService.sendFinopsBudgetAlert({
@@ -495,9 +658,11 @@ export class FinopsBudgetService {
             });
 
             this.logger.log(`Budget ${budget.id}: e-mail alert sent to ${emails.join(', ')}`);
+            return true;
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             this.logger.error(`Budget ${budget.id}: e-mail alert dispatch failed: ${message}`);
+            return false;
         }
     }
 
@@ -530,7 +695,6 @@ export class FinopsBudgetService {
             throw new BadRequestException(ErrorMessages.FINOPS.WHATSAPP_NOTIFICATION_GROUP_REQUIRED);
         }
 
-        // Drop groups whose channel is not enabled on the budget.
         const allowed: string[] = [];
         if (channels.includes('email')) allowed.push(...emailGroupIds);
         if (channels.includes('whatsapp')) allowed.push(...whatsappGroupIds);
@@ -561,9 +725,9 @@ export class FinopsBudgetService {
             scope,
             cloudAccountId: scope === 'organization' ? null : (dto.cloudAccountId ?? null),
             service: dto.service?.trim() ? dto.service.trim() : null,
-            resourceId: dto.resourceId?.trim() ? dto.resourceId.trim() : null,
+            resourceId: alertType === 'resource' && dto.resourceId?.trim() ? dto.resourceId.trim() : null,
             alertThresholds: dto.alertThresholds ?? [80, 100],
-            alertFrequency: dto.alertFrequency ?? dto.period ?? 'monthly',
+            alertFrequency: dto.alertFrequency ?? 'daily',
             alertType,
             alertAmount: alertType === 'amount' ? dto.alertAmount ?? null : null,
             alertChannels,
@@ -587,25 +751,46 @@ export class FinopsBudgetService {
         return account;
     }
 
-    private formatDateOnly(date: Date): string {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    /** Intervalo half-open [from, toExclusive) no fuso local do servidor, igual ao overview. */
-    private getCurrentPeriodDateRange(period: FinopsBudgetPeriod): { from: string; toExclusive: string } {
+    /**
+     * Chave de dedupe alinhada a alertFrequency (UTC).
+     * daily → até 2×/dia (slot 0 = 00–11h UTC, slot 1 = 12–23h UTC).
+     * monthly → uma vez por mês civil.
+     */
+    private getAlertPeriodKey(frequency: FinopsBudgetAlertFrequency): string {
         const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
 
-        if (period === 'daily') {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            return { from: this.formatDateOnly(start), toExclusive: this.formatDateOnly(next) };
+        if (frequency === 'daily') {
+            const slot = now.getUTCHours() < 12 ? '0' : '1';
+            return `${year}-${month}-${day}-${slot}`;
         }
 
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        return { from: this.formatDateOnly(start), toExclusive: this.formatDateOnly(next) };
+        return `${year}-${month}`;
+    }
+
+    /** Intervalo half-open [from, toExclusive) em UTC, alinhado ao sync de custos. */
+    private getCurrentPeriodDateRangeUtc(period: FinopsBudgetPeriod): { from: string; toExclusive: string } {
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = now.getUTCMonth();
+        const day = now.getUTCDate();
+
+        if (period === 'daily') {
+            const from = new Date(Date.UTC(year, month, day));
+            const toExclusive = new Date(Date.UTC(year, month, day + 1));
+            return {
+                from: from.toISOString().slice(0, 10),
+                toExclusive: toExclusive.toISOString().slice(0, 10),
+            };
+        }
+
+        const from = new Date(Date.UTC(year, month, 1));
+        const toExclusive = new Date(Date.UTC(year, month + 1, 1));
+        return {
+            from: from.toISOString().slice(0, 10),
+            toExclusive: toExclusive.toISOString().slice(0, 10),
+        };
     }
 }

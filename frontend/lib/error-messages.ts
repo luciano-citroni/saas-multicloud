@@ -381,36 +381,36 @@ export const ErrorMessages = {
             pt: 'A mensagem excede o tamanho máximo permitido.',
         },
         PROVIDER_NOT_CONFIGURED: {
-            en: 'AI chat provider is not configured.',
-            pt: 'O provedor de IA do chat não está configurado.',
+            en: 'The assistant is not available right now.',
+            pt: 'O assistente não está disponível no momento.',
         },
         PROVIDER_UNAVAILABLE: {
-            en: 'AI chat provider is temporarily unavailable.',
-            pt: 'O provedor de IA do chat está temporariamente indisponível.',
+            en: 'The assistant is temporarily unavailable. Please try again shortly.',
+            pt: 'O assistente está temporariamente indisponível. Tente novamente em instantes.',
         },
         PROVIDER_TIMEOUT: {
-            en: 'AI chat provider timed out.',
-            pt: 'O provedor de IA do chat excedeu o tempo limite.',
+            en: 'The assistant took too long to respond. Please try again.',
+            pt: 'O assistente demorou demais para responder. Tente de novo.',
         },
         OUT_OF_SCOPE: {
-            en: 'I can help with your organization data, cloud costs, inventory, assessments, governance, automations, and SaaS features. I cannot answer questions outside that scope.',
-            pt: 'Posso ajudar com os dados da sua organização, custos cloud, inventário, assessments, governança, automações e funcionalidades do SaaS. Não consigo responder a perguntas fora desse escopo.',
+            en: 'I can only help with your organization data and this platform — costs, resources, compliance, analyses, and automations.',
+            pt: 'Só posso ajudar com os dados da sua organização e com esta plataforma — custos, recursos, conformidade, análises e automações.',
         },
         TOOL_LIMIT_EXCEEDED: {
-            en: 'Too many tool calls were requested for this interaction.',
-            pt: 'Foram solicitadas demasiadas chamadas de ferramentas nesta interação.',
+            en: 'This question asked for too much data at once. Try something more specific.',
+            pt: 'Esta pergunta pediu dados demais de uma vez. Tente algo mais específico.',
         },
         GENERATION_CANCELLED: {
-            en: 'Generation was cancelled.',
-            pt: 'A geração foi interrompida.',
+            en: 'The response was stopped.',
+            pt: 'A resposta foi interrompida.',
         },
         RATE_LIMITED: {
-            en: 'Too many AI chat requests. Please try again later.',
-            pt: 'Muitas requisições ao chat de IA. Tente novamente mais tarde.',
+            en: 'Too many questions in a short time. Please try again in a moment.',
+            pt: 'Muitas perguntas em pouco tempo. Tente novamente em instantes.',
         },
         NO_DATA: {
-            en: 'No data is available for this query in your organization.',
-            pt: 'Não há dados disponíveis para esta consulta na sua organização.',
+            en: 'No data is available for this question in your organization.',
+            pt: 'Não há dados disponíveis para essa pergunta na sua organização.',
         },
     },
 

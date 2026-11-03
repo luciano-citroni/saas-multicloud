@@ -15,12 +15,12 @@ const TOOL_LABELS: Record<string, string> = {
     compare_cloud_costs: 'Comparação de custos',
     get_saving_opportunities: 'Oportunidades de economia',
     get_cloud_resources_summary: 'Inventário de recursos',
-    get_assessment_jobs: 'Jobs de assessment',
+    get_assessment_jobs: 'Análises da conta',
     get_governance_score: 'Score de governança',
-    get_governance_findings: 'Findings de governança',
+    get_governance_findings: 'Problemas de conformidade',
     get_automations: 'Automações',
     get_automation_runs: 'Execuções de automação',
-    get_saas_documentation: 'Documentação do SaaS',
+    get_saas_documentation: 'Ajuda da plataforma',
 };
 
 export function AiChatResearching({ label }: { label: string }) {

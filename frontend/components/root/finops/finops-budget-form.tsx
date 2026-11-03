@@ -33,7 +33,8 @@ export const budgetFormSchema = z
         service: z.string().max(255).optional(),
         resourceId: z.string().max(512).optional(),
         alertFrequency: z.enum(['daily', 'monthly']),
-        alertType: z.enum(['percentage', 'amount', 'resource']),
+        /** resource oculto na UI até ingestão de resourceId nos custos. */
+        alertType: z.enum(['percentage', 'amount']),
         alertAmount: z.number().positive().optional().nullable(),
         alertThresholds: z.string().optional(),
         alertChannelEmail: z.boolean(),
@@ -44,9 +45,6 @@ export const budgetFormSchema = z
     .superRefine((data, ctx) => {
         if (data.scope === 'cloud_account' && !data.cloudAccountId) {
             ctx.addIssue({ code: 'custom', message: 'Selecione a conta cloud', path: ['cloudAccountId'] });
-        }
-        if (data.alertType === 'resource' && !data.resourceId?.trim()) {
-            ctx.addIssue({ code: 'custom', message: 'Informe o recurso', path: ['resourceId'] });
         }
         if (data.alertType === 'amount' && (data.alertAmount == null || data.alertAmount <= 0)) {
             ctx.addIssue({ code: 'custom', message: 'Informe o valor do alerta', path: ['alertAmount'] });
@@ -116,7 +114,7 @@ export function toFinopsBudgetPayload(data: BudgetFormData): FinopsBudgetPayload
         scope: data.scope,
         cloudAccountId: data.scope === 'organization' ? null : data.cloudAccountId || null,
         service: data.service?.trim() ? data.service.trim() : null,
-        resourceId: data.alertType === 'resource' && data.resourceId?.trim() ? data.resourceId.trim() : null,
+        resourceId: null,
         alertFrequency: data.alertFrequency,
         alertType: data.alertType,
         alertAmount: data.alertType === 'amount' ? (data.alertAmount ?? null) : null,
@@ -140,7 +138,7 @@ export function defaultBudgetFormValues(overrides?: Partial<BudgetFormData>): Bu
         cloudAccountId: '',
         service: '',
         resourceId: '',
-        alertFrequency: 'monthly',
+        alertFrequency: 'daily',
         alertType: 'percentage',
         alertAmount: null,
         alertThresholds: '80, 100',
@@ -331,16 +329,7 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Período do limite</FormLabel>
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={(value) => {
-                                                    field.onChange(value);
-                                                    form.setValue(
-                                                        'alertFrequency',
-                                                        value === 'daily' ? 'daily' : 'monthly'
-                                                    );
-                                                }}
-                                            >
+                                            <Select value={field.value} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
                                                         <SelectValue />
@@ -352,7 +341,7 @@ export function FinopsBudgetForm({
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-xs text-muted-foreground">
-                                                Define se o limite vale para o mês ou para o dia.
+                                                Janela de acumulação do gasto comparado ao limite.
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -455,30 +444,20 @@ export function FinopsBudgetForm({
                                     name="alertFrequency"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Avaliação do alerta</FormLabel>
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={(value) => {
-                                                    field.onChange(value);
-                                                    // Mantém o período do orçamento alinhado à janela do alerta.
-                                                    form.setValue(
-                                                        'period',
-                                                        value === 'daily' ? 'daily' : 'monthly'
-                                                    );
-                                                }}
-                                            >
+                                            <FormLabel>Cadência da notificação</FormLabel>
+                                            <Select value={field.value} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
+                                                    <SelectItem value="daily">Até 2× por dia</SelectItem>
                                                     <SelectItem value="monthly">Mensal</SelectItem>
-                                                    <SelectItem value="daily">Diário</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-xs text-muted-foreground">
-                                                Mensal: gasto acumulado no mês até agora. Diário: gasto só de hoje.
+                                                2× por dia: manhã e noite. Mensal: no máximo um envio por limiar no mês.
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -500,7 +479,6 @@ export function FinopsBudgetForm({
                                                 <SelectContent>
                                                     <SelectItem value="percentage">% do orçamento</SelectItem>
                                                     <SelectItem value="amount">Por valor</SelectItem>
-                                                    <SelectItem value="resource">Por recurso</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
@@ -536,24 +514,8 @@ export function FinopsBudgetForm({
                                                 />
                                             </FormControl>
                                             <p className="text-xs text-muted-foreground">
-                                                Dispara quando o gasto do período do alerta atingir este valor.
+                                                Dispara quando o gasto do período do limite atingir este valor.
                                             </p>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            ) : null}
-
-                            {watchedAlertType === 'resource' ? (
-                                <FormField
-                                    control={form.control}
-                                    name="resourceId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>ID do recurso</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Ex: i-0123… / vm-name" {...field} />
-                                            </FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}

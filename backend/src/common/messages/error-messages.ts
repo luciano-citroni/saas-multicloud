@@ -297,22 +297,22 @@ export const ErrorMessages = {
 
         MESSAGE_TOO_LONG: 'Message exceeds the maximum allowed length.',
 
-        PROVIDER_NOT_CONFIGURED: 'AI chat provider is not configured.',
+        PROVIDER_NOT_CONFIGURED: 'The assistant is not available right now.',
 
-        PROVIDER_UNAVAILABLE: 'AI chat provider is temporarily unavailable.',
+        PROVIDER_UNAVAILABLE: 'The assistant is temporarily unavailable. Please try again shortly.',
 
-        PROVIDER_TIMEOUT: 'AI chat provider timed out.',
+        PROVIDER_TIMEOUT: 'The assistant took too long to respond. Please try again.',
 
         OUT_OF_SCOPE:
-            'I can help with your organization data, cloud costs, inventory, assessments, governance, automations, and SaaS features. I cannot answer questions outside that scope.',
+            'I can only help with your organization data and this platform — costs, resources, compliance, analyses, and automations.',
 
-        TOOL_LIMIT_EXCEEDED: 'Too many tool calls were requested for this interaction.',
+        TOOL_LIMIT_EXCEEDED: 'This question asked for too much data at once. Try something more specific.',
 
-        GENERATION_CANCELLED: 'Generation was cancelled.',
+        GENERATION_CANCELLED: 'The response was stopped.',
 
-        RATE_LIMITED: 'Too many AI chat requests. Please try again later.',
+        RATE_LIMITED: 'Too many questions in a short time. Please try again in a moment.',
 
-        NO_DATA: 'No data is available for this query in your organization.',
+        NO_DATA: 'No data is available for this question in your organization.',
     },
 
     // General

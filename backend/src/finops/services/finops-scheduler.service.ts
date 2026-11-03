@@ -9,17 +9,20 @@ import { Repository } from 'typeorm';
 import { FinopsConsent } from '../../db/entites/finops-consent.entity';
 
 import { FinopsService } from './finops.service';
+import { FinopsBudgetService } from './finops-budget.service';
 
 /**
- * Agenda rotinas automáticas de sincronização de custos FinOps.
+ * Agenda rotinas automáticas de sincronização de custos FinOps e avaliação de orçamentos.
  *
  * - Sync diário: executa todo dia às 02:00, coleta dados do dia anterior.
- * - Fechamento mensal: executa no dia 6 de cada mês às 03:00,
+ * - Alertas de orçamento: 2× ao dia (11:00 e 23:00 UTC ≈ 08:00 e 20:00 BRT).
+ * - Fechamento mensal: executa no dia 6 de cada mês às 04:00,
  *   coleta dados completos do mês anterior para garantir o fechamento correto do billing.
  *
  * Idempotência: o processador usa upsert nos registros de custo, portanto re-runs
  * do mesmo período não duplicam dados. Além disso, FinopsService.startSync()
  * verifica jobs pendentes na fila antes de enfileirar um novo.
+ * Alertas usam finops_budget_alert_events para não reenviar o mesmo limiar no período.
  */
 @Injectable()
 export class FinopsSchedulerService {
@@ -30,6 +33,7 @@ export class FinopsSchedulerService {
         private readonly consentRepo: Repository<FinopsConsent>,
 
         private readonly finopsService: FinopsService,
+        private readonly finopsBudgetService: FinopsBudgetService,
     ) {}
 
     // =========================================================================
@@ -62,18 +66,42 @@ export class FinopsSchedulerService {
     }
 
     // =========================================================================
-    // Fechamento Mensal — dia 6 de cada mês às 03:00
+    // Alertas de orçamento — 2× ao dia (11:00 e 23:00 UTC)
     // =========================================================================
 
     /**
-     * Executa no dia 6 de cada mês às 03:00.
+     * Avalia orçamentos ativos e dispara e-mail/WhatsApp para limiares ainda não
+     * notificados na janela atual (até 2×/dia quando alertFrequency = daily).
+     * 11:00 UTC ≈ 08:00 BRT; 23:00 UTC ≈ 20:00 BRT.
+     */
+    @Cron('0 11,23 * * *')
+    async runBudgetAlertEvaluation(): Promise<void> {
+        this.logger.log('[FinOps Scheduler] Iniciando avaliação de alertas de orçamento...');
+
+        try {
+            const result = await this.finopsBudgetService.evaluateAndNotifyBudgets();
+            this.logger.log(
+                `[FinOps Scheduler] Alertas de orçamento: evaluated=${result.evaluated} notified=${result.notified}`,
+            );
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[FinOps Scheduler] Falha na avaliação de orçamentos: ${message}`);
+        }
+    }
+
+    // =========================================================================
+    // Fechamento Mensal — dia 6 de cada mês às 04:00
+    // =========================================================================
+
+    /**
+     * Executa no dia 6 de cada mês às 04:00.
      * Realiza um sync incremental completo do mês anterior para garantir o
      * fechamento correto do billing (provedores de nuvem podem ajustar valores
      * de custo retroativamente nos primeiros dias do mês).
      *
      * Exemplo: dia 6 de abril → sincroniza dados de 01/03 a 31/03.
      */
-    @Cron('0 3 6 * *')
+    @Cron('0 4 6 * *')
     async runMonthlyClosingSync(): Promise<void> {
         this.logger.log('[FinOps Scheduler] Iniciando fechamento mensal...');
 

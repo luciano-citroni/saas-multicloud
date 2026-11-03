@@ -54,6 +54,8 @@ import {
     fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
+    fetchOrganizationBudgetStatuses,
+    fetchOrganizationFinopsBudgetStatuses,
     revokeFinopsConsent,
     startFinopsSync,
 } from '@/app/actions/finops';
@@ -252,25 +254,52 @@ export function FinopsOverview() {
     }, [organizationId, tab, loadOptimize]);
 
     useEffect(() => {
-        if (!organizationId || !selectedAccountId) {
+        if (!organizationId) {
             setBudgetStatuses([]);
             setLastSyncAt(null);
             return;
         }
 
-        const loadAccountExtras = async () => {
+        const normalizeStatuses = (payload: unknown): FinopsBudgetStatusItem[] => {
+            if (Array.isArray(payload)) return payload as FinopsBudgetStatusItem[];
+            if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
+                return (payload as { items: FinopsBudgetStatusItem[] }).items;
+            }
+            return [];
+        };
+
+        const mergeById = (items: FinopsBudgetStatusItem[]) => {
+            const map = new Map<string, FinopsBudgetStatusItem>();
+            for (const item of items) map.set(item.budget.id, item);
+            return Array.from(map.values());
+        };
+
+        const loadBudgetExtras = async () => {
             try {
-                const [budgetRes, syncRes] = await Promise.all([
+                if (!selectedAccountId) {
+                    const budgetRes = await fetchOrganizationFinopsBudgetStatuses(organizationId, 50);
+                    if (budgetRes.ok) {
+                        setBudgetStatuses(normalizeStatuses(await budgetRes.json().catch(() => null)));
+                    } else {
+                        setBudgetStatuses([]);
+                    }
+                    setLastSyncAt(null);
+                    return;
+                }
+
+                const [accountBudgetRes, orgBudgetRes, syncRes] = await Promise.all([
                     fetchFinopsBudgetStatuses(organizationId, selectedAccountId),
+                    fetchOrganizationBudgetStatuses(organizationId),
                     fetchFinopsSyncRuns(organizationId, selectedAccountId),
                 ]);
 
-                if (budgetRes.ok) {
-                    const payload = (await budgetRes.json().catch(() => null)) as FinopsBudgetStatusItem[] | null;
-                    setBudgetStatuses(Array.isArray(payload) ? payload : []);
-                } else {
-                    setBudgetStatuses([]);
-                }
+                const accountItems = accountBudgetRes.ok
+                    ? normalizeStatuses(await accountBudgetRes.json().catch(() => null))
+                    : [];
+                const orgItems = orgBudgetRes.ok
+                    ? normalizeStatuses(await orgBudgetRes.json().catch(() => null))
+                    : [];
+                setBudgetStatuses(mergeById([...orgItems, ...accountItems]));
 
                 if (syncRes.ok) {
                     const payload = await syncRes.json().catch(() => null);
@@ -290,7 +319,7 @@ export function FinopsOverview() {
             }
         };
 
-        void loadAccountExtras();
+        void loadBudgetExtras();
     }, [organizationId, selectedAccountId]);
 
     const stopPolling = useCallback(() => {
@@ -681,18 +710,21 @@ export function FinopsOverview() {
                     </Card>
                 )}
 
-                {selectedAccountId &&
-                    budgetStatuses.some((item) => (item.triggeredAlerts?.length ?? 0) > 0) && (
-                        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-                            Um ou mais orçamentos desta conta atingiram limiares de alerta.{' '}
-                            <Link
-                                href={`/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`}
-                                className="font-medium underline underline-offset-2"
-                            >
-                                Ver orçamentos
-                            </Link>
-                        </div>
-                    )}
+                {budgetStatuses.some((item) => (item.triggeredAlerts?.length ?? 0) > 0) && (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+                        Um ou mais orçamentos atingiram limiares de alerta.{' '}
+                        <Link
+                            href={
+                                selectedAccountId
+                                    ? `/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`
+                                    : '/finops/budgets?account=organization'
+                            }
+                            className="font-medium underline underline-offset-2"
+                        >
+                            Ver orçamentos
+                        </Link>
+                    </div>
+                )}
 
                 <FinopsKpiStrip
                     cost={filteredTotals.cost}
@@ -703,11 +735,10 @@ export function FinopsOverview() {
                     openAnomalies={filteredTotals.openAnomalies}
                     openRecommendations={filteredTotals.openRecommendations}
                     budgetStatuses={budgetStatuses}
-                    singleAccountMode={selectedAccountId != null}
                     budgetsHref={
                         selectedAccountId
                             ? `/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`
-                            : '/finops/budgets'
+                            : '/finops/budgets?account=organization'
                     }
                     isLoading={loadingInitial && !overview}
                 />

@@ -30,6 +30,7 @@ import { GcpFinopsProvider } from './providers/gcp-finops.provider';
 import { FinopsConsent } from '../db/entites/finops-consent.entity';
 import { FinopsCostRecord } from '../db/entites/finops-cost-record.entity';
 import { FinopsBudget } from '../db/entites/finops-budget.entity';
+import { FinopsBudgetAlertEvent } from '../db/entites/finops-budget-alert-event.entity';
 import { FinopsJob } from '../db/entites/finops-job.entity';
 import { FinopsRecommendation } from '../db/entites/finops-recommendation.entity';
 
@@ -68,6 +69,7 @@ import { FINOPS_QUEUE } from './constants';
             FinopsConsent,
             FinopsCostRecord,
             FinopsBudget,
+            FinopsBudgetAlertEvent,
             FinopsJob,
             FinopsRecommendation,
             // FinOps enterprise entities

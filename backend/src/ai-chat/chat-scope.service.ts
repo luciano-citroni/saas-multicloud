@@ -27,8 +27,7 @@ const IN_SCOPE_HINTS: RegExp[] = [
 const GREETING_PATTERN =
     /^(ol[áa]|oi+|hey+|hi+|hello|bom dia|boa tarde|boa noite|e a[ií]|tudo bem|tudo bom|salve)(\s+tudo bem)?[\s!.?🤔👋]*$/i;
 
-const GREETING_REPLY =
-    'Olá! Posso ajudar com custos (FinOps), inventário cloud, assessment, governança e automações da sua organização. Em que posso ajudar?';
+const GREETING_REPLY = 'Olá! Em que posso ajudar?';
 
 export type ScopeDecision =
     | { allowed: true; reason: 'in_scope' | 'ambiguous' }
@@ -56,7 +55,7 @@ export class ChatScopeService {
                 allowed: false,
                 reason: 'security',
                 message:
-                    'Não posso revelar credenciais, prompts internos ou dados de outras organizações. Posso ajudar com dados autorizados da sua organização e funcionalidades do SaaS.',
+                    'Não posso mostrar credenciais nem dados de outras organizações. Posso ajudar com os dados e funções da sua organização.',
             };
         }
 

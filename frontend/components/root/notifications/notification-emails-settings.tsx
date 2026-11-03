@@ -11,6 +11,7 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    Layers,
     Mail,
     MessageCircle,
     Pencil,
@@ -20,7 +21,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -33,6 +33,7 @@ import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -407,366 +408,382 @@ export function NotificationEmailsSettings() {
 
     if (!organizationId) {
         return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Notificações</CardTitle>
-                    <CardDescription>Selecione um tenant na sidebar.</CardDescription>
-                </CardHeader>
-            </Card>
+            <div className="flex flex-col gap-4">
+                <div className="rounded-xl border">
+                    <div className="border-b px-4 py-3">
+                        <p className="text-sm font-medium">Notificações</p>
+                        <p className="text-xs text-muted-foreground">Selecione um tenant na sidebar.</p>
+                    </div>
+                </div>
+            </div>
         );
     }
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight">Notificações</h1>
-                <p className="text-sm text-muted-foreground">
-                    Configuração do tenant inteiro. Organize destinatários em grupos e envie testes.
-                </p>
-            </div>
+            <div className="rounded-xl border">
+                <div className="border-b px-4 py-3">
+                    <p className="text-sm font-medium">Notificações</p>
+                    <p className="text-xs text-muted-foreground">
+                        Configuração do tenant inteiro. Organize destinatários em grupos e envie testes.
+                    </p>
+                </div>
 
-            <Tabs defaultValue="email">
-                <TabsList>
-                    <TabsTrigger value="email" className="gap-1.5">
-                        <Mail className="size-3.5" />
-                        E-mail
-                    </TabsTrigger>
-                    <TabsTrigger value="whatsapp" className="gap-1.5">
-                        <MessageCircle className="size-3.5" />
-                        WhatsApp
-                    </TabsTrigger>
-                </TabsList>
+                <div className="flex flex-col gap-4 px-4 py-4">
+                    <Tabs defaultValue="email">
+                        <TabsList>
+                            <TabsTrigger value="email" className="gap-1.5">
+                                <Mail className="size-3.5" />
+                                E-mail
+                            </TabsTrigger>
+                            <TabsTrigger value="whatsapp" className="gap-1.5">
+                                <MessageCircle className="size-3.5" />
+                                WhatsApp
+                            </TabsTrigger>
+                        </TabsList>
 
-                <TabsContent value="email" className="mt-4 space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm text-muted-foreground">
-                            Crie grupos e adicione vários e-mails em cada um.
-                        </p>
-                        {canManage && (
-                            <Button size="sm" onClick={openCreateGroup}>
-                                <Plus className="size-3.5" />
-                                Novo grupo
-                            </Button>
-                        )}
-                    </div>
+                        <TabsContent value="email" className="mt-4 space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="space-y-0.5">
+                                    <p className="text-sm font-medium">Grupos de e-mail</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Expanda um grupo para gerenciar os e-mails. Você pode editar ou excluir
+                                        grupos e destinatários.
+                                    </p>
+                                </div>
+                                {canManage && (
+                                    <Button size="sm" onClick={openCreateGroup}>
+                                        <Plus className="h-4 w-4" />
+                                        Novo grupo
+                                    </Button>
+                                )}
+                            </div>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Grupos de e-mail</CardTitle>
-                            <CardDescription>
-                                Expanda um grupo para gerenciar os e-mails. Você pode editar ou excluir grupos e
-                                destinatários.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
                             {loading ? (
-                                <p className="text-sm text-muted-foreground">Carregando…</p>
-                            ) : groups.length === 0 ? (
                                 <div className="space-y-3">
+                                    {[1, 2, 3].map((i) => (
+                                        <Skeleton key={i} className="h-10 w-full" />
+                                    ))}
+                                </div>
+                            ) : groups.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                                    <Layers className="h-10 w-10 text-muted-foreground/50" />
                                     <p className="text-sm text-muted-foreground">Nenhum grupo cadastrado.</p>
                                     {canManage && (
                                         <Button variant="outline" size="sm" onClick={openCreateGroup}>
-                                            <Plus className="size-3.5" />
+                                            <Plus className="h-3 w-3" />
                                             Criar grupo
                                         </Button>
                                     )}
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                <div className="overflow-hidden rounded-lg border">
-                                    <Table>
-                                        <TableHeader className="bg-muted/50">
-                                            <TableRow>
-                                                <TableHead className="w-10" />
-                                                <TableHead>Grupo</TableHead>
-                                                <TableHead>E-mails</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">Ações</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {groups.map((group) => {
-                                                const isOpen = Boolean(expanded[group.id]);
-                                                return (
-                                                    <Fragment key={group.id}>
-                                                        <TableRow>
-                                                            <TableCell>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon-sm"
-                                                                    onClick={() =>
-                                                                        setExpanded((prev) => ({
-                                                                            ...prev,
-                                                                            [group.id]: !prev[group.id],
-                                                                        }))
-                                                                    }
-                                                                >
-                                                                    {isOpen ? (
-                                                                        <ChevronDown className="size-3.5" />
-                                                                    ) : (
-                                                                        <ChevronRight className="size-3.5" />
-                                                                    )}
-                                                                </Button>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <div className="space-y-0.5">
-                                                                    <p className="font-medium">{group.name}</p>
-                                                                    {group.description ? (
-                                                                        <p className="text-muted-foreground text-xs">
-                                                                            {group.description}
-                                                                        </p>
-                                                                    ) : null}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>{group.emails?.length ?? 0}</TableCell>
-                                                            <TableCell>
-                                                                {group.isActive ? (
-                                                                    <Badge variant="secondary">Ativo</Badge>
-                                                                ) : (
-                                                                    <Badge variant="outline">Inativo</Badge>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {canManage && (
-                                                                    <div className="flex justify-end gap-1">
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            isLoading={testingGroupId === group.id}
-                                                                            disabled={
-                                                                                testingGroupId !== null ||
-                                                                                testingId !== null ||
-                                                                                (group.emails?.filter((e) => e.isActive)
-                                                                                    .length ?? 0) === 0
-                                                                            }
-                                                                            onClick={() => void onSendGroupTest(group)}
-                                                                        >
-                                                                            <Send className="size-3.5" />
-                                                                            Testar grupo
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            onClick={() => openCreateEmail(group.id)}
-                                                                        >
-                                                                            <Plus className="size-3.5" />
-                                                                            E-mail
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            onClick={() => openEditGroup(group)}
-                                                                        >
-                                                                            <Pencil className="size-3.5" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            onClick={() =>
-                                                                                setDeleteTarget({
-                                                                                    kind: 'group',
-                                                                                    item: group,
-                                                                                })
-                                                                            }
-                                                                        >
-                                                                            <Trash2 className="size-3.5" />
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-
-                                                        {isOpen && (
-                                                            <TableRow className="bg-muted/20 hover:bg-muted/20">
-                                                                <TableCell colSpan={5} className="p-0">
-                                                                    <div className="border-t px-4 py-3">
-                                                                        {(group.emails?.length ?? 0) === 0 ? (
-                                                                            <p className="text-muted-foreground text-sm">
-                                                                                Nenhum e-mail neste grupo.
-                                                                            </p>
+                                    <div className="overflow-hidden rounded-lg border">
+                                        <Table>
+                                            <TableHeader className="bg-muted/50">
+                                                <TableRow>
+                                                    <TableHead className="w-10" />
+                                                    <TableHead>Grupo</TableHead>
+                                                    <TableHead>E-mails</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead className="text-right">Ações</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {groups.map((group) => {
+                                                    const isOpen = Boolean(expanded[group.id]);
+                                                    return (
+                                                        <Fragment key={group.id}>
+                                                            <TableRow>
+                                                                <TableCell>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon-sm"
+                                                                        onClick={() =>
+                                                                            setExpanded((prev) => ({
+                                                                                ...prev,
+                                                                                [group.id]: !prev[group.id],
+                                                                            }))
+                                                                        }
+                                                                    >
+                                                                        {isOpen ? (
+                                                                            <ChevronDown className="size-3.5" />
                                                                         ) : (
-                                                                            <Table>
-                                                                                <TableHeader>
-                                                                                    <TableRow>
-                                                                                        <TableHead>E-mail</TableHead>
-                                                                                        <TableHead>Rótulo</TableHead>
-                                                                                        <TableHead>Status</TableHead>
-                                                                                        <TableHead className="text-right">
-                                                                                            Ações
-                                                                                        </TableHead>
-                                                                                    </TableRow>
-                                                                                </TableHeader>
-                                                                                <TableBody>
-                                                                                    {group.emails.map((email) => (
-                                                                                        <TableRow key={email.id}>
-                                                                                            <TableCell className="font-medium">
-                                                                                                {email.email}
-                                                                                            </TableCell>
-                                                                                            <TableCell>
-                                                                                                {email.label || '—'}
-                                                                                            </TableCell>
-                                                                                            <TableCell>
-                                                                                                {email.isActive ? (
-                                                                                                    <Badge variant="secondary">
-                                                                                                        Ativo
-                                                                                                    </Badge>
-                                                                                                ) : (
-                                                                                                    <Badge variant="outline">
-                                                                                                        Inativo
-                                                                                                    </Badge>
-                                                                                                )}
-                                                                                            </TableCell>
-                                                                                            <TableCell className="text-right">
-                                                                                                {canManage && (
-                                                                                                    <div className="flex justify-end gap-1">
-                                                                                                        <Button
-                                                                                                            variant="outline"
-                                                                                                            size="sm"
-                                                                                                            isLoading={
-                                                                                                                testingId ===
-                                                                                                                email.id
-                                                                                                            }
-                                                                                                            disabled={
-                                                                                                                testingId !==
-                                                                                                                    null ||
-                                                                                                                testingGroupId !==
-                                                                                                                    null
-                                                                                                            }
-                                                                                                            onClick={() =>
-                                                                                                                void onSendTest(
-                                                                                                                    email
-                                                                                                                )
-                                                                                                            }
-                                                                                                        >
-                                                                                                            <Send className="size-3.5" />
-                                                                                                            Testar
-                                                                                                        </Button>
-                                                                                                        <Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon-sm"
-                                                                                                            onClick={() =>
-                                                                                                                openEditEmail(
-                                                                                                                    email
-                                                                                                                )
-                                                                                                            }
-                                                                                                        >
-                                                                                                            <Pencil className="size-3.5" />
-                                                                                                        </Button>
-                                                                                                        <Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon-sm"
-                                                                                                            onClick={() =>
-                                                                                                                setDeleteTarget(
-                                                                                                                    {
-                                                                                                                        kind: 'email',
-                                                                                                                        item: email,
-                                                                                                                    }
-                                                                                                                )
-                                                                                                            }
-                                                                                                        >
-                                                                                                            <Trash2 className="size-3.5" />
-                                                                                                        </Button>
-                                                                                                    </div>
-                                                                                                )}
-                                                                                            </TableCell>
-                                                                                        </TableRow>
-                                                                                    ))}
-                                                                                </TableBody>
-                                                                            </Table>
+                                                                            <ChevronRight className="size-3.5" />
                                                                         )}
+                                                                    </Button>
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <div className="space-y-0.5">
+                                                                        <p className="font-medium">{group.name}</p>
+                                                                        {group.description ? (
+                                                                            <p className="text-muted-foreground text-xs">
+                                                                                {group.description}
+                                                                            </p>
+                                                                        ) : null}
                                                                     </div>
                                                                 </TableCell>
+                                                                <TableCell>{group.emails?.length ?? 0}</TableCell>
+                                                                <TableCell>
+                                                                    {group.isActive ? (
+                                                                        <Badge variant="secondary">Ativo</Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline">Inativo</Badge>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {canManage && (
+                                                                        <div className="flex justify-end gap-1">
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                isLoading={
+                                                                                    testingGroupId === group.id
+                                                                                }
+                                                                                disabled={
+                                                                                    testingGroupId !== null ||
+                                                                                    testingId !== null ||
+                                                                                    (group.emails?.filter(
+                                                                                        (e) => e.isActive,
+                                                                                    ).length ?? 0) === 0
+                                                                                }
+                                                                                onClick={() =>
+                                                                                    void onSendGroupTest(group)
+                                                                                }
+                                                                            >
+                                                                                <Send className="size-3.5" />
+                                                                                Testar grupo
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() =>
+                                                                                    openCreateEmail(group.id)
+                                                                                }
+                                                                            >
+                                                                                <Plus className="size-3.5" />
+                                                                                E-mail
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon-sm"
+                                                                                onClick={() => openEditGroup(group)}
+                                                                            >
+                                                                                <Pencil className="size-3.5" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon-sm"
+                                                                                onClick={() =>
+                                                                                    setDeleteTarget({
+                                                                                        kind: 'group',
+                                                                                        item: group,
+                                                                                    })
+                                                                                }
+                                                                            >
+                                                                                <Trash2 className="size-3.5" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
+                                                                </TableCell>
                                                             </TableRow>
-                                                        )}
-                                                    </Fragment>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
 
-                                <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
-                                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                        <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
-                                        <Select
-                                            value={`${pageSize}`}
-                                            onValueChange={(value) => {
-                                                setPageSize(Number(value));
-                                                setPage(1);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-8 min-w-22">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[5, 10, 20, 30].map((size) => (
-                                                    <SelectItem key={size} value={`${size}`}>
-                                                        {size}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                                            {isOpen && (
+                                                                <TableRow className="bg-muted/20 hover:bg-muted/20">
+                                                                    <TableCell colSpan={5} className="p-0">
+                                                                        <div className="border-t px-4 py-3">
+                                                                            {(group.emails?.length ?? 0) === 0 ? (
+                                                                                <p className="text-muted-foreground text-sm">
+                                                                                    Nenhum e-mail neste grupo.
+                                                                                </p>
+                                                                            ) : (
+                                                                                <Table>
+                                                                                    <TableHeader>
+                                                                                        <TableRow>
+                                                                                            <TableHead>E-mail</TableHead>
+                                                                                            <TableHead>Rótulo</TableHead>
+                                                                                            <TableHead>Status</TableHead>
+                                                                                            <TableHead className="text-right">
+                                                                                                Ações
+                                                                                            </TableHead>
+                                                                                        </TableRow>
+                                                                                    </TableHeader>
+                                                                                    <TableBody>
+                                                                                        {group.emails.map((email) => (
+                                                                                            <TableRow key={email.id}>
+                                                                                                <TableCell className="font-medium">
+                                                                                                    {email.email}
+                                                                                                </TableCell>
+                                                                                                <TableCell>
+                                                                                                    {email.label || '—'}
+                                                                                                </TableCell>
+                                                                                                <TableCell>
+                                                                                                    {email.isActive ? (
+                                                                                                        <Badge variant="secondary">
+                                                                                                            Ativo
+                                                                                                        </Badge>
+                                                                                                    ) : (
+                                                                                                        <Badge variant="outline">
+                                                                                                            Inativo
+                                                                                                        </Badge>
+                                                                                                    )}
+                                                                                                </TableCell>
+                                                                                                <TableCell className="text-right">
+                                                                                                    {canManage && (
+                                                                                                        <div className="flex justify-end gap-1">
+                                                                                                            <Button
+                                                                                                                variant="outline"
+                                                                                                                size="sm"
+                                                                                                                isLoading={
+                                                                                                                    testingId ===
+                                                                                                                    email.id
+                                                                                                                }
+                                                                                                                disabled={
+                                                                                                                    testingId !==
+                                                                                                                        null ||
+                                                                                                                    testingGroupId !==
+                                                                                                                        null
+                                                                                                                }
+                                                                                                                onClick={() =>
+                                                                                                                    void onSendTest(
+                                                                                                                        email,
+                                                                                                                    )
+                                                                                                                }
+                                                                                                            >
+                                                                                                                <Send className="size-3.5" />
+                                                                                                                Testar
+                                                                                                            </Button>
+                                                                                                            <Button
+                                                                                                                variant="ghost"
+                                                                                                                size="icon-sm"
+                                                                                                                onClick={() =>
+                                                                                                                    openEditEmail(
+                                                                                                                        email,
+                                                                                                                    )
+                                                                                                                }
+                                                                                                            >
+                                                                                                                <Pencil className="size-3.5" />
+                                                                                                            </Button>
+                                                                                                            <Button
+                                                                                                                variant="ghost"
+                                                                                                                size="icon-sm"
+                                                                                                                onClick={() =>
+                                                                                                                    setDeleteTarget(
+                                                                                                                        {
+                                                                                                                            kind: 'email',
+                                                                                                                            item: email,
+                                                                                                                        },
+                                                                                                                    )
+                                                                                                                }
+                                                                                                            >
+                                                                                                                <Trash2 className="size-3.5" />
+                                                                                                            </Button>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </TableCell>
+                                                                                            </TableRow>
+                                                                                        ))}
+                                                                                    </TableBody>
+                                                                                </Table>
+                                                                            )}
+                                                                        </div>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            )}
+                                                        </Fragment>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
                                     </div>
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                                        <span className="text-sm font-medium">
-                                            Página {pagination?.page ?? page} de{' '}
-                                            {Math.max(1, pagination?.totalPages ?? 1)}
-                                            {typeof pagination?.totalItems === 'number'
-                                                ? ` · ${pagination.totalItems} grupo(s)`
-                                                : ''}
-                                        </span>
-                                        <div className="flex items-center gap-1 self-start sm:self-auto">
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => setPage(1)}
-                                                disabled={!pagination?.hasPreviousPage}
+
+                                    <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
+                                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                            <Select
+                                                value={`${pageSize}`}
+                                                onValueChange={(value) => {
+                                                    setPageSize(Number(value));
+                                                    setPage(1);
+                                                }}
                                             >
-                                                <ChevronsLeft className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                                                disabled={!pagination?.hasPreviousPage}
-                                            >
-                                                <ChevronLeft className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => setPage((current) => current + 1)}
-                                                disabled={!pagination?.hasNextPage}
-                                            >
-                                                <ChevronRight className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() =>
-                                                    setPage(Math.max(1, pagination?.totalPages ?? 1))
-                                                }
-                                                disabled={!pagination?.hasNextPage}
-                                            >
-                                                <ChevronsRight className="h-4 w-4" />
-                                            </Button>
+                                                <SelectTrigger className="h-8 min-w-22">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {[5, 10, 20, 30].map((size) => (
+                                                        <SelectItem key={size} value={`${size}`}>
+                                                            {size}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                                            <span className="text-sm font-medium">
+                                                Página {pagination?.page ?? page} de{' '}
+                                                {Math.max(1, pagination?.totalPages ?? 1)}
+                                                {typeof pagination?.totalItems === 'number'
+                                                    ? ` · ${pagination.totalItems} grupo(s)`
+                                                    : ''}
+                                            </span>
+                                            <div className="flex items-center gap-1 self-start sm:self-auto">
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() => setPage(1)}
+                                                    disabled={!pagination?.hasPreviousPage}
+                                                >
+                                                    <ChevronsLeft className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() =>
+                                                        setPage((current) => Math.max(1, current - 1))
+                                                    }
+                                                    disabled={!pagination?.hasPreviousPage}
+                                                >
+                                                    <ChevronLeft className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() => setPage((current) => current + 1)}
+                                                    disabled={!pagination?.hasNextPage}
+                                                >
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() =>
+                                                        setPage(Math.max(1, pagination?.totalPages ?? 1))
+                                                    }
+                                                    disabled={!pagination?.hasNextPage}
+                                                >
+                                                    <ChevronsRight className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                </div>
                             )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                        </TabsContent>
 
-                <TabsContent value="whatsapp" className="mt-4">
-                    <NotificationWhatsappSettings organizationId={organizationId} canManage={canManage} />
-                </TabsContent>
-            </Tabs>
+                        <TabsContent value="whatsapp" className="mt-4">
+                            <NotificationWhatsappSettings
+                                organizationId={organizationId}
+                                canManage={canManage}
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </div>
+            </div>
 
             <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
                 <DialogContent>

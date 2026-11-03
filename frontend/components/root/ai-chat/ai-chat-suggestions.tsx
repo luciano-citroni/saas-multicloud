@@ -19,14 +19,14 @@ const SUGGESTIONS = [
     {
         icon: ShieldCheck,
         key: 'governance',
-        pt: 'Quais findings de governança estão abertos?',
-        en: 'Which governance findings are open?',
+        pt: 'Quais problemas de conformidade estão abertos?',
+        en: 'Which compliance issues are still open?',
     },
     {
         icon: FileSearch,
         key: 'assessment',
-        pt: 'Como está o último assessment?',
-        en: 'How is the latest assessment?',
+        pt: 'Como ficou a última análise da conta?',
+        en: 'How did the latest account analysis go?',
     },
     {
         icon: Workflow,

@@ -61,8 +61,11 @@ export class FinopsBudget {
     @Column({ type: 'jsonb', name: 'alert_thresholds', default: '[]' })
     alertThresholds!: number[];
 
-    /** Frequência de avaliação/envio dos alertas. */
-    @Column({ type: 'varchar', length: 20, name: 'alert_frequency', default: 'monthly' })
+    /**
+     * Cadência de notificação.
+     * daily = até 2× por dia (manhã/noite UTC); monthly = uma vez por mês.
+     */
+    @Column({ type: 'varchar', length: 20, name: 'alert_frequency', default: 'daily' })
     alertFrequency!: FinopsBudgetAlertFrequency;
 
     @Column({ type: 'varchar', length: 20, name: 'alert_type', default: 'percentage' })

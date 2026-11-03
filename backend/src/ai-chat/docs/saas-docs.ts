@@ -17,60 +17,62 @@ export type SaasDocChunk = {
 export const SAAS_DOCS: SaasDocChunk[] = [
     {
         topic: 'overview',
-        title: 'Visão geral do SaaS',
-        content: `O SaaS MultiCloud (Bridge MultCloud) centraliza inventário, assessment, governança, FinOps e automações para contas AWS, Azure e GCP.
-Cada organização (tenant) isola seus dados. O usuário só enxerga a organização ativa e os recursos autorizados pelo seu papel (VIEWER, MEMBER, ADMIN, OWNER).
-Módulos do plano podem habilitar/desabilitar Assessment, Cloud Inventory, Governance, FinOps e Automation.`,
+        title: 'Visão geral da plataforma',
+        content: `A plataforma MultiCloud reúne em um só lugar custos, inventário de recursos, análises de conta, conformidade e automações para AWS, Azure e GCP.
+Você só vê os dados da organização ativa e o que o seu papel nela permite.
+O plano da organização define quais áreas ficam disponíveis: Análise de conta, Inventário, Governança, FinOps e Automações.`,
     },
     {
         topic: 'cloud_accounts',
-        title: 'Contas cloud',
-        content: `Em Contas Cloud você conecta provedores (AWS via AssumeRole + ExternalId, Azure via Service Principal, GCP via impersonação de Service Account).
-Após conectar, é possível sincronizar inventário (general sync) e usar os módulos habilitados no plano.
-Credenciais ficam criptografadas no backend e nunca são expostas na UI nem ao assistente.`,
+        title: 'Conectar contas cloud',
+        content: `Em Contas Cloud você conecta suas contas AWS, Azure ou GCP.
+Depois de conectar, sincronize os dados e use as áreas liberadas no plano da organização.
+As credenciais ficam protegidas e nunca aparecem na interface nem nas respostas do assistente.`,
     },
     {
         topic: 'onboarding',
-        title: 'Onboarding AWS',
-        content: `Para AWS: crie uma IAM Role na conta do cliente com trust policy permitindo o usuário IAM da plataforma e ExternalId.
-Anexe políticas de leitura (ex.: ReadOnlyAccess) para Assessment/Inventory e ce:GetCostAndUsage para FinOps.
-Cadastre o Role ARN, região e ExternalId na tela de Contas Cloud e valide a conexão.`,
+        title: 'Primeiros passos com AWS',
+        content: `Para conectar uma conta AWS:
+1. Abra Contas Cloud e escolha adicionar uma conta AWS.
+2. Siga o guia na tela para criar a role na AWS Console (as políticas prontas já aparecem lá).
+3. Informe o ARN da role e a região, e valide a conexão.
+4. Depois da validação, sincronize a conta para carregar inventário e custos.`,
     },
     {
         topic: 'finops',
-        title: 'Módulo FinOps',
-        content: `FinOps coleta custos (após consentimento), agrega por serviço/conta/período, detecta anomalias, gera forecast, recomendações e oportunidades de economia.
-Períodos comuns: last7days, last30days, last90days, currentmonth, lastmonth, ytd.
-Dashboards incluem overview da organização, custos por conta/provedor, budgets e histórico.
-O assistente consulta apenas dados já sincronizados — não chama APIs cloud diretamente.`,
+        title: 'FinOps (custos)',
+        content: `No FinOps você acompanha gastos cloud por serviço, conta e período.
+Há visão geral da organização, comparação entre períodos, alertas de anomalia, previsão de gastos e oportunidades de economia.
+Os períodos mais comuns são últimos 7, 30 ou 90 dias, mês atual, mês anterior e ano até agora.
+O assistente usa apenas os dados já sincronizados — não consulta a cloud em tempo real.`,
     },
     {
         topic: 'assessment',
-        title: 'Módulo Assessment',
-        content: `Assessment sincroniza recursos da conta cloud e gera visão de arquitetura, jobs de sync e relatórios.
-Use sync geral para atualizar inventário. Jobs mostram status, erros e progresso.
-Recomendações de custo aparecem no FinOps; achados de conformidade no Governance.`,
+        title: 'Análise da conta',
+        content: `A análise da conta sincroniza os recursos e gera uma visão da arquitetura, com status das sincronizações e relatórios.
+Use a sincronização geral para atualizar o inventário. Acompanhe o progresso, erros e o resultado de cada análise.
+Sugestões de economia aparecem no FinOps; problemas de conformidade, na Governança.`,
     },
     {
         topic: 'cloud_inventory',
-        title: 'Cloud Inventory',
-        content: `O inventário persiste recursos AWS/Azure/GCP sincronizados (compute, network, storage, databases, segurança, etc.).
-Consultas retornam contagens por tipo, provedor, conta e região quando disponíveis.
-Busca cross-account avançada por tag/nome pode ser limitada nesta versão.`,
+        title: 'Inventário de recursos',
+        content: `O inventário lista os recursos AWS, Azure e GCP já sincronizados — compute, rede, armazenamento, bancos de dados, segurança e outros.
+As consultas mostram quantidades por tipo, provedor, conta e região, quando disponíveis.
+Buscas avançadas por tag ou nome em várias contas ao mesmo tempo podem ser limitadas nesta versão.`,
     },
     {
         topic: 'governance',
-        title: 'Módulo Governance',
-        content: `Governance avalia políticas (CIS e frameworks) em recursos inventariados, gera score 0–100 e findings com severidade e recomendações.
-Atualmente há políticas AWS e GCP; Azure governance ainda não está disponível.
-Findings não conformes podem ser consultados a partir do último scan concluído.`,
+        title: 'Governança e conformidade',
+        content: `A Governança avalia seus recursos com base em políticas de conformidade (como CIS), gera um score de 0 a 100 e lista problemas com severidade e recomendações.
+Hoje há políticas para AWS e GCP; conformidade Azure ainda não está disponível.
+Os problemas vêm do último scan concluído.`,
     },
     {
         topic: 'automation',
-        title: 'Módulo Automations',
-        content: `Automações definem workflows (nós/arestas) para provisionamento e ações cloud, com execuções rastreadas e parâmetros sensíveis redigidos.
-Você pode listar automações, status (DRAFT/ACTIVE/INACTIVE) e histórico de runs (sucesso/falha/duração).
-Nesta versão o assistente é somente consultivo — não cria, altera nem executa automações.`,
+        title: 'Automações',
+        content: `Nas Automações você define fluxos de trabalho para ações na cloud, acompanha as execuções e vê o histórico (sucesso, falha e duração).
+Cada automação pode estar em rascunho, ativa ou inativa. Dados sensíveis dos parâmetros ficam ocultos.
+Nesta versão o assistente só consulta — não cria, altera nem executa automações.`,
     },
 ];
 
