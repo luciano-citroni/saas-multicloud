@@ -33,6 +33,8 @@ import { FinopsMonetizationService } from '../services/finops-monetization.servi
 import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detection.service';
 import { FinopsOptimizationService } from '../services/finops-optimization.service';
 import { FinopsOrgOverviewService } from '../services/finops-org-overview.service';
+import { FinopsResourceCostService } from '../services/finops-resource-cost.service';
+import { FinopsAnomalyAlertService } from '../services/finops-anomaly-alert.service';
 
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
 
@@ -45,6 +47,8 @@ import {
     CostSummaryDto,
     CostHistoryItemDto,
     CostByServiceItemDto,
+    CostByResourceItemDto,
+    AnomalyResourceContributorDto,
     FinopsScoreDto,
     FinopsRecommendationDto,
     SavingOpportunityDto,
@@ -55,6 +59,8 @@ import {
     CreateBudgetRequestDto,
     BudgetDto,
     BudgetStatusDto,
+    AnomalyAlertSettingsDto,
+    UpdateAnomalyAlertSettingsRequestDto,
 } from '../dto/swagger.dto';
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
@@ -117,6 +123,25 @@ const budgetSchema = budgetBaseSchema.superRefine((data, ctx) => {
 
 const budgetUpdateSchema = budgetBaseSchema.partial();
 
+const anomalyAlertSettingsSchema = z
+    .object({
+        enabled: z.boolean(),
+        alertChannels: z.array(z.enum(['email', 'whatsapp'])).optional(),
+        alertNotificationGroupIds: z.array(z.string().uuid()).optional(),
+        minSeverity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+    })
+    .superRefine((data, ctx) => {
+        if (!data.enabled) return;
+        const channels = data.alertChannels ?? [];
+        if (channels.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Selecione ao menos um canal de alerta',
+                path: ['alertChannels'],
+            });
+        }
+    });
+
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 @ApiTags('FinOps')
@@ -139,6 +164,8 @@ export class FinopsController {
         private readonly anomalyService: FinopsAnomalyDetectionService,
         private readonly optimizationService: FinopsOptimizationService,
         private readonly orgOverviewService: FinopsOrgOverviewService,
+        private readonly resourceCostService: FinopsResourceCostService,
+        private readonly anomalyAlertService: FinopsAnomalyAlertService,
 
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>
@@ -191,6 +218,145 @@ export class FinopsController {
         @CurrentOrganization() org: Tenant
     ) {
         return this.orgOverviewService.getOptimize(org.id, { status, days, cloudAccountId, page, limit });
+    }
+
+    @Get('anomalies')
+    @ApiOperation({
+        summary: 'Lista paginada de anomalias da organização',
+        description: 'Filtros por status, severidade, período, conta e provedor — página dedicada de anomalias.',
+    })
+    @ApiQuery({ name: 'status', required: false, enum: ['open', 'acknowledged', 'resolved', 'all'] })
+    @ApiQuery({ name: 'severity', required: false, enum: ['critical', 'high', 'medium', 'low', 'all'] })
+    @ApiQuery({
+        name: 'period',
+        required: false,
+        enum: ['currentmonth', 'lastmonth', 'last7days', 'last30days', 'last90days', 'last180days'],
+        description: 'Default: currentmonth',
+    })
+    @ApiQuery({ name: 'days', required: false, type: Number, description: 'Legado — use period' })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({
+        name: 'cloudAccountIds',
+        required: false,
+        type: String,
+        description: 'IDs das contas no escopo da mid-org (comma-separated)',
+    })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({
+        name: 'sort',
+        required: false,
+        enum: ['cost', 'severity', 'date'],
+        description: 'Default: severity (crítica → baixa)',
+    })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiResponse({ status: 200, description: 'Anomalias paginadas' })
+    async getOrgAnomalies(
+        @Query('status') status: string,
+        @Query('severity') severity: string,
+        @Query('period') period: string,
+        @Query('days') days: string,
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
+        @Query('provider') provider: string,
+        @Query('sort') sort: string,
+        @Query('page') page: string,
+        @Query('limit') limit: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.orgOverviewService.getAnomaliesList(org.id, {
+            status,
+            severity,
+            period,
+            days,
+            cloudAccountId,
+            cloudAccountIds,
+            provider,
+            sort,
+            page,
+            limit,
+        });
+    }
+
+    @Get('savings')
+    @ApiOperation({
+        summary: 'Lista paginada de economia potencial da organização',
+        description:
+            'Recomendações abertas com resourceId e potentialSaving — página dedicada de economia potencial.',
+    })
+    @ApiQuery({ name: 'status', required: false, enum: ['open', 'dismissed', 'resolved', 'all'] })
+    @ApiQuery({ name: 'priority', required: false, enum: ['high', 'medium', 'low', 'all'] })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({
+        name: 'cloudAccountIds',
+        required: false,
+        type: String,
+        description: 'IDs das contas no escopo da mid-org (comma-separated)',
+    })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'q', required: false, type: String, description: 'Busca por recurso ou descrição' })
+    @ApiQuery({
+        name: 'sort',
+        required: false,
+        enum: ['saving', 'priority', 'date'],
+        description: 'Default: saving (maior → menor)',
+    })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiResponse({ status: 200, description: 'Economia potencial paginada' })
+    async getOrgSavings(
+        @Query('status') status: string,
+        @Query('priority') priority: string,
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
+        @Query('provider') provider: string,
+        @Query('q') q: string,
+        @Query('sort') sort: string,
+        @Query('page') page: string,
+        @Query('limit') limit: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.orgOverviewService.getSavingsList(org.id, {
+            status,
+            priority,
+            cloudAccountId,
+            cloudAccountIds,
+            provider,
+            q,
+            sort,
+            page,
+            limit,
+        });
+    }
+
+    @Get('anomaly-alerts/settings')
+    @ApiOperation({
+        summary: 'Preferências de alerta diário de anomalias',
+        description:
+            'Retorna se o digest diário está ativo, canais, grupos de Notificações e severidade mínima.',
+    })
+    @ApiResponse({ status: 200, type: AnomalyAlertSettingsDto })
+    async getAnomalyAlertSettings(@CurrentOrganization() org: Tenant): Promise<AnomalyAlertSettingsDto> {
+        return this.anomalyAlertService.getSettings(org.id);
+    }
+
+    @Put('anomaly-alerts/settings')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({
+        summary: 'Atualizar alerta diário de anomalias',
+        description:
+            'Ativa/desativa o digest diário e escolhe grupos do módulo de Notificações (e-mail / WhatsApp).',
+    })
+    @ApiBody({ type: UpdateAnomalyAlertSettingsRequestDto })
+    @ApiResponse({ status: 200, type: AnomalyAlertSettingsDto })
+    @ApiResponse({ status: 400, description: 'Validação / grupos inválidos' })
+    @ApiResponse({ status: 403, description: 'Papel insuficiente' })
+    async upsertAnomalyAlertSettings(
+        @Body(new ZodValidationPipe(anomalyAlertSettingsSchema))
+        body: z.infer<typeof anomalyAlertSettingsSchema>,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<AnomalyAlertSettingsDto> {
+        return this.anomalyAlertService.upsertSettings(org.id, body);
     }
 
     // =========================================================================
@@ -380,6 +546,33 @@ export class FinopsController {
         const y = year ? parseInt(year, 10) : now.getFullYear();
         const m = month ? parseInt(month, 10) : now.getMonth() + 1;
         return this.analysisService.getCostByService(cloudAccountId, org.id, y, m);
+    }
+
+    @Get('accounts/:cloudAccountId/cost-by-resource')
+    @ApiOperation({
+        summary: 'Custo por recurso no mês',
+        description:
+            'Top recursos por custo no período, com comparação ao mês anterior e mudanças de configuração recentes.',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiQuery({ name: 'year', required: false })
+    @ApiQuery({ name: 'month', required: false })
+    @ApiQuery({ name: 'service', required: false })
+    @ApiQuery({ name: 'limit', required: false })
+    @ApiResponse({ status: 200, type: [CostByResourceItemDto] })
+    async getCostByResource(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @Query('year') year: string,
+        @Query('month') month: string,
+        @Query('service') service: string | undefined,
+        @Query('limit') limit: string | undefined,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<CostByResourceItemDto[]> {
+        const now = new Date();
+        const y = year ? parseInt(year, 10) : now.getFullYear();
+        const m = month ? parseInt(month, 10) : now.getMonth() + 1;
+        const lim = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 25;
+        return this.resourceCostService.getCostByResource(cloudAccountId, org.id, y, m, service, lim);
     }
 
     @Get('accounts/:cloudAccountId/score')
@@ -755,6 +948,25 @@ export class FinopsController {
         @CurrentOrganization() org: Tenant
     ) {
         return this.anomalyService.listAnomalies(org.id, cloudAccountId, status, days ? Number(days) : 30);
+    }
+
+    @Get('accounts/:cloudAccountId/anomalies/:anomalyId/contributors')
+    @ApiOperation({
+        summary: 'Recursos que mais contribuíram para uma anomalia',
+        description: 'Top resourceIds no dia da anomalia com delta vs média 7d e causas de inventário (ex.: resize EC2).',
+    })
+    @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
+    @ApiParam({ name: 'anomalyId', type: 'string', format: 'uuid' })
+    @ApiQuery({ name: 'limit', required: false })
+    @ApiResponse({ status: 200, type: [AnomalyResourceContributorDto] })
+    async getAnomalyContributors(
+        @Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @Param('anomalyId', ParseUUIDPipe) anomalyId: string,
+        @Query('limit') limit: string | undefined,
+        @CurrentOrganization() org: Tenant,
+    ): Promise<AnomalyResourceContributorDto[]> {
+        const lim = limit ? Math.min(50, Math.max(1, parseInt(limit, 10))) : 10;
+        return this.resourceCostService.getAnomalyContributors(cloudAccountId, org.id, anomalyId, lim);
     }
 
     @Patch('accounts/:cloudAccountId/anomalies/:anomalyId/acknowledge')

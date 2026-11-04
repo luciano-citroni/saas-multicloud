@@ -7,9 +7,11 @@ import { FinopsConsent } from '../../db/entites/finops-consent.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
 import { FinopsRecommendation } from '../../db/entites/finops-recommendation.entity';
+import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
 import { FinopsAnalysisService, type CostByServiceItem } from './finops-analysis.service';
 import { FinopsForecastService } from './finops-forecast.service';
 import { resolveFinopsPeriod, type ResolvedFinopsPeriod } from '../utils/resolve-finops-period';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export type OrgOverviewAccountRollup = {
     id: string;
@@ -19,6 +21,7 @@ export type OrgOverviewAccountRollup = {
     openAnomalies: number;
     openRecs: number;
     hasConsent: boolean;
+    lastSyncAt: string | null;
 };
 
 export type OrgCostTrendPoint = {
@@ -93,6 +96,45 @@ export type OrgOptimizeItem = {
     createdAt: string;
 };
 
+export type OrgAnomaliesListResult = {
+    items: OrgOverviewAnomaly[];
+    pagination: {
+        page: number;
+        limit: number;
+        totalItems: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+    };
+    totals: {
+        open: number;
+        acknowledged: number;
+        resolved: number;
+        critical: number;
+        high: number;
+    };
+};
+
+export type OrgSavingsListResult = {
+    items: OrgOverviewRecommendation[];
+    pagination: {
+        page: number;
+        limit: number;
+        totalItems: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+    };
+    totals: {
+        potentialSavings: number;
+        currency: string;
+        open: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+};
+
 export type OrgFinopsOptimize = {
     items: OrgOptimizeItem[];
     totals: {
@@ -122,6 +164,9 @@ export class FinopsOrgOverviewService {
 
         @InjectRepository(FinopsRecommendation)
         private readonly recommendationRepo: Repository<FinopsRecommendation>,
+
+        @InjectRepository(FinopsCostSyncRun)
+        private readonly syncRunRepo: Repository<FinopsCostSyncRun>,
 
         private readonly analysisService: FinopsAnalysisService,
         private readonly forecastService: FinopsForecastService
@@ -155,33 +200,45 @@ export class FinopsOrgOverviewService {
 
         const emptyMetrics = supportedIds.length === 0;
 
-        const [costByService, costTrend, momGrowth, forecasts, anomalies, recommendations, consents, accountCosts] =
-            await Promise.all([
-                emptyMetrics
-                    ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostByService']>>)
-                    : this.getOrgCostByService(organizationId, supportedIds, resolved.year, resolved.month),
-                emptyMetrics
-                    ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostTrend']>>)
-                    : this.getOrgCostTrend(organizationId, supportedIds, resolved.startDate, resolved.endDate),
-                emptyMetrics ? Promise.resolve(0) : this.getOrgMomGrowth(organizationId, supportedIds, resolved.year, resolved.month),
-                emptyMetrics
-                    ? Promise.resolve([] as Array<Awaited<ReturnType<FinopsForecastService['forecastCurrentMonth']>> | null>)
-                    : Promise.all(supportedAccounts.map((a) => this.forecastService.forecastCurrentMonth(organizationId, a.id).catch(() => null))),
-                emptyMetrics
-                    ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['listOrgAnomalies']>>)
-                    : this.listOrgAnomalies(organizationId, supportedIds, 'open', resolved.anomalyDays, 20),
-                emptyMetrics
-                    ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['listOrgRecommendations']>>)
-                    : this.listOrgRecommendations(organizationId, supportedIds, 'open', 20),
-                emptyMetrics
-                    ? Promise.resolve([])
-                    : this.consentRepo.find({
-                          where: { organizationId, cloudAccountId: In(supportedIds), accepted: true },
-                      }),
-                emptyMetrics
-                    ? Promise.resolve(new Map<string, number>())
-                    : this.getAccountCosts(organizationId, supportedIds, resolved.year, resolved.month),
-            ]);
+        const [
+            costByService,
+            costTrend,
+            momGrowth,
+            forecasts,
+            anomalies,
+            recommendations,
+            consents,
+            accountCosts,
+            lastSyncByAccount,
+        ] = await Promise.all([
+            emptyMetrics
+                ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostByService']>>)
+                : this.getOrgCostByService(organizationId, supportedIds, resolved.year, resolved.month),
+            emptyMetrics
+                ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostTrend']>>)
+                : this.getOrgCostTrend(organizationId, supportedIds, resolved.startDate, resolved.endDate),
+            emptyMetrics ? Promise.resolve(0) : this.getOrgMomGrowth(organizationId, supportedIds, resolved.year, resolved.month),
+            emptyMetrics
+                ? Promise.resolve([] as Array<Awaited<ReturnType<FinopsForecastService['forecastCurrentMonth']>> | null>)
+                : Promise.all(supportedAccounts.map((a) => this.forecastService.forecastCurrentMonth(organizationId, a.id).catch(() => null))),
+            emptyMetrics
+                ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['listOrgAnomalies']>>)
+                : this.listOrgAnomalies(organizationId, supportedIds, 'open', resolved.anomalyDays, 20),
+            emptyMetrics
+                ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['listOrgRecommendations']>>)
+                : this.listOrgRecommendations(organizationId, supportedIds, 'open', 20),
+            emptyMetrics
+                ? Promise.resolve([])
+                : this.consentRepo.find({
+                      where: { organizationId, cloudAccountId: In(supportedIds), accepted: true },
+                  }),
+            emptyMetrics
+                ? Promise.resolve(new Map<string, number>())
+                : this.getAccountCosts(organizationId, supportedIds, resolved.year, resolved.month),
+            accountIds.length === 0
+                ? Promise.resolve(new Map<string, string>())
+                : this.getLastSyncByAccount(organizationId, accountIds),
+        ]);
 
         const consentSet = new Set(consents.map((c) => c.cloudAccountId));
         const totalCost = costByService.reduce((sum, item) => sum + Number(item.currentMonthCost), 0);
@@ -210,6 +267,7 @@ export class FinopsOrgOverviewService {
             openAnomalies: anomalyCountByAccount.get(account.id) ?? 0,
             openRecs: recCountByAccount.get(account.id) ?? 0,
             hasConsent: consentSet.has(account.id),
+            lastSyncAt: lastSyncByAccount.get(account.id) ?? null,
         }));
 
         this.logger.log(
@@ -337,6 +395,37 @@ export class FinopsOrgOverviewService {
         return qb.getMany();
     }
 
+    /** Último sync FinOps concluído por conta (completed_at ou created_at). */
+    private async getLastSyncByAccount(
+        organizationId: string,
+        accountIds: string[],
+    ): Promise<Map<string, string>> {
+        if (accountIds.length === 0) return new Map();
+
+        const rows = await this.syncRunRepo
+            .createQueryBuilder('s')
+            .select('s.cloudAccountId', 'cloudAccountId')
+            .addSelect('MAX(COALESCE(s.completedAt, s.createdAt))', 'lastSyncAt')
+            .where('s.organizationId = :organizationId', { organizationId })
+            .andWhere('s.cloudAccountId IN (:...accountIds)', { accountIds })
+            .andWhere('s.status IN (:...statuses)', { statuses: ['completed', 'partial'] })
+            .groupBy('s.cloudAccountId')
+            .getRawMany<{ cloudAccountId: string; lastSyncAt: Date | string }>();
+
+        const map = new Map<string, string>();
+        for (const row of rows) {
+            if (!row.lastSyncAt) continue;
+            const iso =
+                row.lastSyncAt instanceof Date
+                    ? row.lastSyncAt.toISOString()
+                    : new Date(row.lastSyncAt).toISOString();
+            if (!Number.isNaN(Date.parse(iso))) {
+                map.set(row.cloudAccountId, iso);
+            }
+        }
+        return map;
+    }
+
     private isFinopsSupportedProvider(provider: string): boolean {
         return provider === CloudProvider.AWS || provider === CloudProvider.AZURE || provider === CloudProvider.GCP;
     }
@@ -387,7 +476,7 @@ export class FinopsOrgOverviewService {
     ): Promise<OrgCostTrendPoint[]> {
         const exclusiveEnd = this.addOneDay(endDate);
 
-        const rows = await this.costRecordRepo
+        const dailyQb = this.costRecordRepo
             .createQueryBuilder('r')
             .select('r.date', 'date')
             .addSelect('SUM(r.cost)', 'cost')
@@ -396,7 +485,10 @@ export class FinopsOrgOverviewService {
             .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
             .andWhere('r.granularity = :granularity', { granularity: 'daily' })
             .andWhere('r.date >= :startDate', { startDate })
-            .andWhere('r.date < :endDate', { endDate: exclusiveEnd })
+            .andWhere('r.date < :endDate', { endDate: exclusiveEnd });
+        andWhereServiceLevelCost(dailyQb, 'r');
+
+        const rows = await dailyQb
             .groupBy('r.date')
             .orderBy('r.date', 'ASC')
             .getRawMany<{ date: string | Date; cost: string; currency: string }>();
@@ -410,7 +502,7 @@ export class FinopsOrgOverviewService {
         }
 
         // Fallback: monthly granularity when daily is empty
-        const monthlyRows = await this.costRecordRepo
+        const monthlyQb = this.costRecordRepo
             .createQueryBuilder('r')
             .select('r.date', 'date')
             .addSelect('SUM(r.cost)', 'cost')
@@ -419,7 +511,10 @@ export class FinopsOrgOverviewService {
             .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
             .andWhere('r.granularity = :granularity', { granularity: 'monthly' })
             .andWhere('r.date >= :startDate', { startDate })
-            .andWhere('r.date < :endDate', { endDate: exclusiveEnd })
+            .andWhere('r.date < :endDate', { endDate: exclusiveEnd });
+        andWhereServiceLevelCost(monthlyQb, 'r');
+
+        const monthlyRows = await monthlyQb
             .groupBy('r.date')
             .orderBy('r.date', 'ASC')
             .getRawMany<{ date: string | Date; cost: string; currency: string }>();
@@ -452,30 +547,22 @@ export class FinopsOrgOverviewService {
     }
 
     private async sumCost(organizationId: string, accountIds: string[], from: string, to: string): Promise<number> {
-        const result = await this.costRecordRepo
-            .createQueryBuilder('r')
-            .select('SUM(r.cost)', 'total')
-            .where('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
-            .andWhere('r.date >= :from', { from })
-            .andWhere('r.date < :to', { to })
-            .andWhere('r.granularity = :granularity', { granularity: 'daily' })
-            .getRawOne<{ total: string }>();
+        const sumByGranularity = async (granularity: 'daily' | 'monthly'): Promise<number> => {
+            const qb = this.costRecordRepo
+                .createQueryBuilder('r')
+                .select('SUM(r.cost)', 'total')
+                .where('r.organizationId = :organizationId', { organizationId })
+                .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
+                .andWhere('r.date >= :from', { from })
+                .andWhere('r.date < :to', { to })
+                .andWhere('r.granularity = :granularity', { granularity });
+            andWhereServiceLevelCost(qb, 'r');
+            const result = await qb.getRawOne<{ total: string }>();
+            return Number(result?.total ?? 0);
+        };
 
-        const daily = Number(result?.total ?? 0);
-        if (daily > 0) return daily;
-
-        const monthly = await this.costRecordRepo
-            .createQueryBuilder('r')
-            .select('SUM(r.cost)', 'total')
-            .where('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
-            .andWhere('r.date >= :from', { from })
-            .andWhere('r.date < :to', { to })
-            .andWhere('r.granularity = :granularity', { granularity: 'monthly' })
-            .getRawOne<{ total: string }>();
-
-        return Number(monthly?.total ?? 0);
+        const [daily, monthly] = await Promise.all([sumByGranularity('daily'), sumByGranularity('monthly')]);
+        return Math.abs(daily) >= Math.abs(monthly) ? daily : monthly;
     }
 
     private async getAccountCosts(
@@ -490,42 +577,406 @@ export class FinopsOrgOverviewService {
         const nextYear = month === 12 ? year + 1 : year;
         const end = `${nextYear}-${pad(nextMonth)}-01`;
 
-        const rows = await this.costRecordRepo
-            .createQueryBuilder('r')
-            .select('r.cloudAccountId', 'cloudAccountId')
-            .addSelect('SUM(r.cost)', 'total')
-            .where('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
-            .andWhere('r.date >= :start', { start })
-            .andWhere('r.date < :end', { end })
-            .andWhere('r.granularity = :granularity', { granularity: 'daily' })
-            .groupBy('r.cloudAccountId')
-            .getRawMany<{ cloudAccountId: string; total: string }>();
+        const loadByGranularity = async (granularity: 'daily' | 'monthly') => {
+            const qb = this.costRecordRepo
+                .createQueryBuilder('r')
+                .select('r.cloudAccountId', 'cloudAccountId')
+                .addSelect('SUM(r.cost)', 'total')
+                .where('r.organizationId = :organizationId', { organizationId })
+                .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
+                .andWhere('r.date >= :start', { start })
+                .andWhere('r.date < :end', { end })
+                .andWhere('r.granularity = :granularity', { granularity });
+            andWhereServiceLevelCost(qb, 'r');
+            return qb.groupBy('r.cloudAccountId').getRawMany<{ cloudAccountId: string; total: string }>();
+        };
+
+        const [dailyRows, monthlyRows] = await Promise.all([loadByGranularity('daily'), loadByGranularity('monthly')]);
 
         const map = new Map<string, number>();
-        for (const row of rows) {
+        for (const row of dailyRows) {
             map.set(row.cloudAccountId, Number(row.total));
         }
-
-        if (map.size > 0) return map;
-
-        const monthlyRows = await this.costRecordRepo
-            .createQueryBuilder('r')
-            .select('r.cloudAccountId', 'cloudAccountId')
-            .addSelect('SUM(r.cost)', 'total')
-            .where('r.organizationId = :organizationId', { organizationId })
-            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
-            .andWhere('r.date >= :start', { start })
-            .andWhere('r.date < :end', { end })
-            .andWhere('r.granularity = :granularity', { granularity: 'monthly' })
-            .groupBy('r.cloudAccountId')
-            .getRawMany<{ cloudAccountId: string; total: string }>();
-
         for (const row of monthlyRows) {
-            map.set(row.cloudAccountId, Number(row.total));
+            const monthlyTotal = Number(row.total);
+            const dailyTotal = map.get(row.cloudAccountId);
+            if (dailyTotal == null || Math.abs(monthlyTotal) > Math.abs(dailyTotal)) {
+                map.set(row.cloudAccountId, monthlyTotal);
+            }
         }
 
         return map;
+    }
+
+    /**
+     * Lista paginada de anomalias da organização com filtros (página dedicada).
+     */
+    async getAnomaliesList(
+        organizationId: string,
+        options: {
+            status?: string;
+            severity?: string;
+            days?: string;
+            period?: string;
+            cloudAccountId?: string;
+            /** IDs da mid-org / filtro da sidebar — delimita o universo de contas. */
+            cloudAccountIds?: string;
+            provider?: string;
+            sort?: string;
+            page?: string;
+            limit?: string;
+        } = {},
+    ): Promise<OrgAnomaliesListResult> {
+        const page = Math.max(1, Number(options.page) || 1);
+        const limit = Math.min(100, Math.max(1, Number(options.limit) || 10));
+        const { since, until } = this.resolveAnomalyDateRange(options.period, options.days);
+        const severityFilter = (options.severity ?? 'all').trim().toLowerCase();
+        const sortKey = (options.sort ?? 'severity').trim().toLowerCase();
+
+        let accounts = await this.listFinopsAccounts(organizationId, options.cloudAccountId || undefined);
+        const scopedIds = (options.cloudAccountIds ?? '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+        if (scopedIds.length > 0 && !options.cloudAccountId) {
+            const allowed = new Set(scopedIds);
+            accounts = accounts.filter((a) => allowed.has(a.id));
+        }
+        const supported = accounts.filter((a) => {
+            const provider = a.provider?.toLowerCase();
+            if (provider !== 'aws' && provider !== 'azure' && provider !== 'gcp') return false;
+            if (options.provider && provider !== options.provider.toLowerCase()) return false;
+            return true;
+        });
+        const accountIds = supported.map((a) => a.id);
+
+        const emptyPagination = {
+            page,
+            limit,
+            totalItems: 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+        };
+
+        if (accountIds.length === 0) {
+            return {
+                items: [],
+                pagination: emptyPagination,
+                totals: { open: 0, acknowledged: 0, resolved: 0, critical: 0, high: 0 },
+            };
+        }
+
+        const baseQb = () => {
+            const qb = this.anomalyRepo
+                .createQueryBuilder('a')
+                .where('a.organizationId = :organizationId', { organizationId })
+                .andWhere('a.cloudAccountId IN (:...accountIds)', { accountIds })
+                .andWhere('a.anomalyDate >= :since', { since });
+
+            if (until) {
+                qb.andWhere('a.anomalyDate <= :until', { until });
+            }
+
+            if (options.status && options.status !== 'all') {
+                qb.andWhere('a.status = :status', { status: options.status });
+            }
+            if (severityFilter && severityFilter !== 'all') {
+                qb.andWhere('LOWER(a.severity) = :severity', { severity: severityFilter });
+            }
+            if (options.provider) {
+                qb.andWhere('LOWER(a.cloudProvider) = :provider', {
+                    provider: options.provider.toLowerCase(),
+                });
+            }
+            return qb;
+        };
+
+        const totalsQb = this.anomalyRepo
+            .createQueryBuilder('a')
+            .select('a.status', 'status')
+            .addSelect('a.severity', 'severity')
+            .addSelect('COUNT(*)', 'count')
+            .where('a.organizationId = :organizationId', { organizationId })
+            .andWhere('a.cloudAccountId IN (:...accountIds)', { accountIds })
+            .andWhere('a.anomalyDate >= :since', { since });
+        if (until) {
+            totalsQb.andWhere('a.anomalyDate <= :until', { until });
+        }
+        const totalsRaw = await totalsQb
+            .groupBy('a.status')
+            .addGroupBy('a.severity')
+            .getRawMany<{ status: string; severity: string; count: string }>();
+
+        const totals = { open: 0, acknowledged: 0, resolved: 0, critical: 0, high: 0 };
+        for (const row of totalsRaw) {
+            const count = Number(row.count) || 0;
+            if (row.status === 'open') totals.open += count;
+            if (row.status === 'acknowledged') totals.acknowledged += count;
+            if (row.status === 'resolved') totals.resolved += count;
+            if (row.severity === 'critical') totals.critical += count;
+            if (row.severity === 'high') totals.high += count;
+        }
+
+        const totalItems = await baseQb().getCount();
+        const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+        const safePage = Math.min(page, totalPages);
+        const offset = (safePage - 1) * limit;
+
+        const listQb = baseQb();
+        if (sortKey === 'cost') {
+            listQb
+                .orderBy('a.financialImpact', 'DESC')
+                .addOrderBy('a.actualCost', 'DESC')
+                .addOrderBy('a.anomalyDate', 'DESC');
+        } else if (sortKey === 'date') {
+            listQb.orderBy('a.anomalyDate', 'DESC').addOrderBy('a.financialImpact', 'DESC');
+        } else {
+            // Default: severidade (crítica → baixa)
+            listQb
+                .orderBy(
+                    `CASE LOWER(a.severity)
+                        WHEN 'critical' THEN 4
+                        WHEN 'high' THEN 3
+                        WHEN 'medium' THEN 2
+                        WHEN 'low' THEN 1
+                        ELSE 0
+                    END`,
+                    'DESC',
+                )
+                .addOrderBy('a.financialImpact', 'DESC')
+                .addOrderBy('a.anomalyDate', 'DESC');
+        }
+
+        const rows = await listQb.skip(offset).take(limit).getMany();
+
+        return {
+            items: rows.map((a) => this.mapAnomaly(a)),
+            pagination: {
+                page: safePage,
+                limit,
+                totalItems,
+                totalPages: totalItems === 0 ? 0 : totalPages,
+                hasNextPage: safePage < totalPages,
+                hasPreviousPage: safePage > 1,
+            },
+            totals,
+        };
+    }
+
+    async getSavingsList(
+        organizationId: string,
+        options: {
+            status?: string;
+            priority?: string;
+            cloudAccountId?: string;
+            cloudAccountIds?: string;
+            provider?: string;
+            q?: string;
+            sort?: string;
+            page?: string;
+            limit?: string;
+        } = {},
+    ): Promise<OrgSavingsListResult> {
+        const page = Math.max(1, Number(options.page) || 1);
+        const limit = Math.min(100, Math.max(1, Number(options.limit) || 10));
+        const priorityFilter = (options.priority ?? 'all').trim().toLowerCase();
+        const sortKey = (options.sort ?? 'saving').trim().toLowerCase();
+        const search = (options.q ?? '').trim().toLowerCase();
+        const statusFilter = (options.status ?? 'open').trim().toLowerCase();
+
+        let accounts = await this.listFinopsAccounts(organizationId, options.cloudAccountId || undefined);
+        const scopedIds = (options.cloudAccountIds ?? '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+        if (scopedIds.length > 0 && !options.cloudAccountId) {
+            const allowed = new Set(scopedIds);
+            accounts = accounts.filter((a) => allowed.has(a.id));
+        }
+        const supported = accounts.filter((a) => {
+            const provider = a.provider?.toLowerCase();
+            if (provider !== 'aws' && provider !== 'azure' && provider !== 'gcp') return false;
+            if (options.provider && provider !== options.provider.toLowerCase()) return false;
+            return true;
+        });
+        const accountIds = supported.map((a) => a.id);
+
+        const emptyPagination = {
+            page,
+            limit,
+            totalItems: 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+        };
+        const emptyTotals = {
+            potentialSavings: 0,
+            currency: 'USD',
+            open: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+        };
+
+        if (accountIds.length === 0) {
+            return { items: [], pagination: emptyPagination, totals: emptyTotals };
+        }
+
+        const applySearch = (qb: ReturnType<typeof this.recommendationRepo.createQueryBuilder>) => {
+            if (!search) return qb;
+            return qb.andWhere(
+                '(LOWER(r.resourceId) LIKE :q OR LOWER(r.resourceType) LIKE :q OR LOWER(r.description) LIKE :q OR LOWER(r.recommendation) LIKE :q)',
+                { q: `%${search}%` },
+            );
+        };
+
+        const baseQb = () => {
+            let qb = this.recommendationRepo
+                .createQueryBuilder('r')
+                .where('r.organizationId = :organizationId', { organizationId })
+                .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds });
+
+            if (statusFilter && statusFilter !== 'all') {
+                qb = qb.andWhere('r.status = :status', { status: statusFilter });
+            }
+            if (priorityFilter && priorityFilter !== 'all') {
+                qb = qb.andWhere('LOWER(r.priority) = :priority', { priority: priorityFilter });
+            }
+            if (options.provider) {
+                qb = qb.andWhere('LOWER(r.cloudProvider) = :provider', {
+                    provider: options.provider.toLowerCase(),
+                });
+            }
+            qb = applySearch(qb);
+            return qb;
+        };
+
+        const totalsRaw = await this.recommendationRepo
+            .createQueryBuilder('r')
+            .select('r.status', 'status')
+            .addSelect('r.priority', 'priority')
+            .addSelect('r.currency', 'currency')
+            .addSelect('COUNT(*)', 'count')
+            .addSelect('COALESCE(SUM(r.potentialSaving), 0)', 'potentialSavings')
+            .where('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
+            .groupBy('r.status')
+            .addGroupBy('r.priority')
+            .addGroupBy('r.currency')
+            .getRawMany<{
+                status: string;
+                priority: string;
+                currency: string;
+                count: string;
+                potentialSavings: string;
+            }>();
+
+        const totals = { ...emptyTotals };
+        let openSavings = 0;
+        for (const row of totalsRaw) {
+            const count = Number(row.count) || 0;
+            const saving = Number(row.potentialSavings) || 0;
+            if (row.currency) totals.currency = row.currency;
+            if (row.status !== 'open') continue;
+            totals.open += count;
+            openSavings += saving;
+            if (row.priority === 'high') totals.high += count;
+            if (row.priority === 'medium') totals.medium += count;
+            if (row.priority === 'low') totals.low += count;
+        }
+        totals.potentialSavings = openSavings;
+
+        const totalItems = await baseQb().getCount();
+        const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+        const safePage = Math.min(page, totalPages);
+        const offset = (safePage - 1) * limit;
+
+        const listQb = baseQb();
+        if (sortKey === 'priority') {
+            listQb
+                .orderBy(
+                    `CASE LOWER(r.priority)
+                        WHEN 'high' THEN 3
+                        WHEN 'medium' THEN 2
+                        WHEN 'low' THEN 1
+                        ELSE 0
+                    END`,
+                    'DESC',
+                )
+                .addOrderBy('r.potentialSaving', 'DESC', 'NULLS LAST')
+                .addOrderBy('r.createdAt', 'DESC');
+        } else if (sortKey === 'date') {
+            listQb.orderBy('r.createdAt', 'DESC').addOrderBy('r.potentialSaving', 'DESC', 'NULLS LAST');
+        } else {
+            listQb
+                .orderBy('r.potentialSaving', 'DESC', 'NULLS LAST')
+                .addOrderBy(
+                    `CASE LOWER(r.priority)
+                        WHEN 'high' THEN 3
+                        WHEN 'medium' THEN 2
+                        WHEN 'low' THEN 1
+                        ELSE 0
+                    END`,
+                    'DESC',
+                )
+                .addOrderBy('r.createdAt', 'DESC');
+        }
+
+        const rows = await listQb.skip(offset).take(limit).getMany();
+
+        return {
+            items: rows.map((r) => this.mapRecommendation(r)),
+            pagination: {
+                page: safePage,
+                limit,
+                totalItems,
+                totalPages: totalItems === 0 ? 0 : totalPages,
+                hasNextPage: safePage < totalPages,
+                hasPreviousPage: safePage > 1,
+            },
+            totals,
+        };
+    }
+
+    /** Default: últimos 7 dias (janela de detecção). Aceita period=… ou days=N (legado). */
+    private resolveAnomalyDateRange(
+        period?: string,
+        days?: string,
+    ): { since: Date; until: Date | null } {
+        const now = new Date();
+        const utcToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const key = (period ?? '').trim().toLowerCase();
+
+        if (key === 'lastmonth') {
+            const since = new Date(Date.UTC(utcToday.getUTCFullYear(), utcToday.getUTCMonth() - 1, 1));
+            const until = new Date(Date.UTC(utcToday.getUTCFullYear(), utcToday.getUTCMonth(), 0));
+            return { since, until };
+        }
+
+        if (key === 'currentmonth') {
+            const since = new Date(Date.UTC(utcToday.getUTCFullYear(), utcToday.getUTCMonth(), 1));
+            return { since, until: null };
+        }
+
+        if (key === 'last7days' || key === 'last30days' || key === 'last90days' || key === 'last180days') {
+            const n = key === 'last7days' ? 7 : key === 'last30days' ? 30 : key === 'last90days' ? 90 : 180;
+            const since = new Date(utcToday);
+            since.setUTCDate(since.getUTCDate() - n);
+            return { since, until: null };
+        }
+
+        // Default / legado sem period: janela de detecção (7 dias)
+        if (!key && !days) {
+            const since = new Date(utcToday);
+            since.setUTCDate(since.getUTCDate() - 7);
+            return { since, until: null };
+        }
+
+        const n = Math.min(365, Math.max(1, Number(days) || 7));
+        const since = new Date(utcToday);
+        since.setUTCDate(since.getUTCDate() - n);
+        return { since, until: null };
     }
 
     private async listOrgAnomalies(
@@ -545,7 +996,16 @@ export class FinopsOrgOverviewService {
             .andWhere('a.cloudAccountId IN (:...accountIds)', { accountIds })
             .andWhere('a.status IN (:...statuses)', { statuses })
             .andWhere('a.anomalyDate >= :since', { since })
-            .orderBy('a.severity', 'DESC')
+            .orderBy(
+                `CASE LOWER(a.severity)
+                    WHEN 'critical' THEN 4
+                    WHEN 'high' THEN 3
+                    WHEN 'medium' THEN 2
+                    WHEN 'low' THEN 1
+                    ELSE 0
+                END`,
+                'DESC',
+            )
             .addOrderBy('a.financialImpact', 'DESC');
 
         if (take) qb.take(take);

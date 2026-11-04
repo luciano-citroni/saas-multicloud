@@ -2,11 +2,23 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BarChart3, Cloud, FileText, LayoutDashboard, Target } from 'lucide-react';
+import { AlertTriangle, BarChart3, Cloud, FileText, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const LINKS = [
     { href: '/finops', label: 'Visão geral', icon: LayoutDashboard, match: (path: string) => path === '/finops' },
+    {
+        href: '/finops/anomalies',
+        label: 'Anomalias',
+        icon: AlertTriangle,
+        match: (path: string) => path.startsWith('/finops/anomalies'),
+    },
+    {
+        href: '/finops/savings',
+        label: 'Economia potencial',
+        icon: PiggyBank,
+        match: (path: string) => path.startsWith('/finops/savings'),
+    },
     {
         href: '/finops/multicloud',
         label: 'Multicloud',

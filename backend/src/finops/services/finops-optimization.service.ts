@@ -10,6 +10,7 @@ import { AzureVirtualMachine } from '../../db/entites/azure-virtual-machine.enti
 import { AzureDisk } from '../../db/entites/azure-disk.entity';
 import { GcpVmInstance } from '../../db/entites/gcp-vm-instance.entity';
 import { GcpSqlInstance } from '../../db/entites/gcp-sql-instance.entity';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export interface OptimizationInsight {
     cloudAccountId: string;
@@ -69,7 +70,7 @@ export class FinopsOptimizationService {
         const todayStr = now.toISOString().slice(0, 10);
 
         // Top 3 serviços mais caros (mês atual)
-        const topServices = await this.costRecordRepo
+        const topServicesQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.service', 'service')
             .addSelect('SUM(cr.cost)', 'totalCost')
@@ -78,7 +79,10 @@ export class FinopsOptimizationService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: currentMonthStartStr })
             .andWhere('cr.date <= :end', { end: todayStr })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(topServicesQb, 'cr');
+
+        const topServices = await topServicesQb
             .groupBy('cr.service')
             .addGroupBy('cr.currency')
             .orderBy('"totalCost"', 'DESC')
@@ -89,7 +93,7 @@ export class FinopsOptimizationService {
         const daysElapsed = now.getUTCDate();
         const daysInPrevMonth = previousMonthEnd.getUTCDate();
 
-        const prevServices = await this.costRecordRepo
+        const prevServicesQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.service', 'service')
             .addSelect('SUM(cr.cost)', 'totalCost')
@@ -97,9 +101,10 @@ export class FinopsOptimizationService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: previousMonthStartStr })
             .andWhere('cr.date <= :end', { end: previousMonthEndStr })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
-            .groupBy('cr.service')
-            .getRawMany<{ service: string; totalCost: string }>();
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(prevServicesQb, 'cr');
+
+        const prevServices = await prevServicesQb.groupBy('cr.service').getRawMany<{ service: string; totalCost: string }>();
 
         const prevMap = new Map<string, number>();
         for (const row of prevServices) {

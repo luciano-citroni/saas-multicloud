@@ -4,9 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY, SIDEBAR_CONTEXT_UPDATED_EVENT, notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    SIDEBAR_CONTEXT_UPDATED_EVENT,
+    getActiveMidOrgId,
+    notifySidebarContextUpdated,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { canManageCloudAccounts, canSyncCloudAccounts, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     deleteOrganizationCloudAccount,
@@ -122,6 +130,7 @@ export function CloudAccountSync() {
     const tca = useTranslations('cloudAccounts');
     const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const { organization, currentRole: rawRole, isLoading: resolvingRole } = useOrganizationFromSidebar(organizationId);
     const organizationRole = normalizeOrganizationRole(rawRole);
     const maxCloudAccounts = organization?.maxCloudAccounts ?? 0;
@@ -148,9 +157,11 @@ export function CloudAccountSync() {
                 nextRefreshing?: boolean;
                 background?: boolean;
                 silentErrors?: boolean;
+                midOrgId?: string | null;
             } = {}
         ) => {
             const { nextRefreshing = false, background = false, silentErrors = false } = options;
+            const activeMidOrgId = options.midOrgId !== undefined ? options.midOrgId : midOrgId ?? getActiveMidOrgId(orgId);
 
             if (nextRefreshing) {
                 setRefreshing(true);
@@ -159,7 +170,9 @@ export function CloudAccountSync() {
             }
 
             try {
-                const response = await fetchOrganizationCloudAccounts(orgId);
+                const response = await fetchOrganizationCloudAccounts(orgId, {
+                    midOrgId: activeMidOrgId,
+                });
                 const payload = (await response.json().catch(() => null)) as unknown;
 
                 if (!response.ok) {
@@ -196,7 +209,7 @@ export function CloudAccountSync() {
                 setRefreshing(false);
             }
         },
-        [tca]
+        [midOrgId, tca]
     );
 
     useEffect(() => {
@@ -320,11 +333,13 @@ export function CloudAccountSync() {
         };
 
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncActiveOrganization);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncActiveOrganization);
         window.addEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, syncActiveOrganization);
         window.addEventListener('storage', syncActiveOrganization);
 
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncActiveOrganization);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncActiveOrganization);
             window.removeEventListener(SIDEBAR_CONTEXT_UPDATED_EVENT, syncActiveOrganization);
             window.removeEventListener('storage', syncActiveOrganization);
         };
@@ -336,9 +351,12 @@ export function CloudAccountSync() {
 
     useEffect(() => {
         if (organizationId) {
-            void loadAccounts(organizationId, { nextRefreshing: true });
+            void loadAccounts(organizationId, {
+                nextRefreshing: true,
+                midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+            });
         }
-    }, [loadAccounts, organizationId]);
+    }, [loadAccounts, midOrgId, organizationId]);
 
     useEffect(() => {
         if (!organizationId || !hasSyncInProgress) {
@@ -346,13 +364,17 @@ export function CloudAccountSync() {
         }
 
         const intervalId = window.setInterval(() => {
-            void loadAccounts(organizationId, { background: true, silentErrors: true });
+            void loadAccounts(organizationId, {
+                background: true,
+                silentErrors: true,
+                midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+            });
         }, 10000);
 
         return () => {
             window.clearInterval(intervalId);
         };
-    }, [hasSyncInProgress, loadAccounts, organizationId]);
+    }, [hasSyncInProgress, loadAccounts, midOrgId, organizationId]);
 
     const canManageAccounts = canManageCloudAccounts(organizationRole);
     const canSyncAccounts = canSyncCloudAccounts(organizationRole);

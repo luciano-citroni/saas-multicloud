@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { Loader2, PlayCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -22,7 +21,6 @@ import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-
 import { FinopsConsentDialog } from '@/components/root/finops/overview/finops-consent-dialog';
 import { FinopsSyncDialog } from '@/components/root/finops/overview/finops-sync-dialog';
 import { FinopsSpendPanel } from '@/components/root/finops/overview/finops-spend-panel';
-import { FinopsOptimizePanel } from '@/components/root/finops/overview/finops-optimize-panel';
 import { FinopsAccountsStrip } from '@/components/root/finops/overview/finops-accounts-strip';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
@@ -31,13 +29,11 @@ import {
     ACCOUNT_FILTER_ALL,
     buildFinopsQuery,
     parseFinopsUrlFilters,
-    type FinopsTab,
 } from '@/components/root/finops/finops-filter-utils';
 import { formatDate } from '@/components/root/finops/overview/helpers';
 import type {
     DashboardPeriod,
     FinopsJob,
-    OrgFinopsOptimize,
     OrgFinopsOverview,
     OrgOverviewAccount,
     SyncRun,
@@ -57,7 +53,6 @@ import {
     fetchFinopsBudgetStatuses,
     fetchFinopsConsent,
     fetchFinopsJobStatus,
-    fetchFinopsOrgOptimize,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
     fetchOrganizationBudgetStatuses,
@@ -89,7 +84,6 @@ export function FinopsOverview() {
     const currentRole = normalizeOrganizationRole(rawRole);
 
     const [overview, setOverview] = useState<OrgFinopsOverview | null>(null);
-    const [optimize, setOptimize] = useState<OrgFinopsOptimize | null>(null);
     const [budgetStatuses, setBudgetStatuses] = useState<FinopsBudgetStatusItem[]>([]);
     const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
     const [loadingInitial, setLoadingInitial] = useState(true);
@@ -109,11 +103,9 @@ export function FinopsOverview() {
     const selectedAccountId = urlFilters.accountId;
     const providerFilter = urlFilters.provider;
     const serviceFilter = urlFilters.service;
-    const tab = urlFilters.tab;
 
     const syncUrlState = useCallback(
         (next: Partial<{
-            tab: FinopsTab;
             period: DashboardPeriod;
             account: string | null;
             provider: string | null;
@@ -227,30 +219,6 @@ export function FinopsOverview() {
         [period, router, selectedAccountId, tc.sessionExpired, tf.loadError]
     );
 
-    const loadOptimize = useCallback(
-        async (orgId: string) => {
-            try {
-                const response = await fetchFinopsOrgOptimize(orgId, {
-                    status: 'open',
-                    days: overview?.period.anomalyDays ?? 90,
-                    cloudAccountId: selectedAccountId ?? undefined,
-                    limit: 50,
-                });
-
-                if (!response.ok) {
-                    setOptimize(null);
-                    return;
-                }
-
-                const payload = (await response.json().catch(() => null)) as OrgFinopsOptimize | null;
-                setOptimize(payload);
-            } catch {
-                setOptimize(null);
-            }
-        },
-        [overview?.period.anomalyDays, selectedAccountId]
-    );
-
     useEffect(() => {
         if (!organizationId) {
             setLoadingInitial(false);
@@ -258,11 +226,6 @@ export function FinopsOverview() {
         }
         void loadOverview(organizationId);
     }, [organizationId, loadOverview]);
-
-    useEffect(() => {
-        if (!organizationId || tab !== 'optimize') return;
-        void loadOptimize(organizationId);
-    }, [organizationId, tab, loadOptimize]);
 
     useEffect(() => {
         if (!organizationId) {
@@ -358,7 +321,6 @@ export function FinopsOverview() {
                     if (job.status === 'completed') {
                         toast.success(tf.syncComplete);
                         void loadOverview(orgId, { silent: true });
-                        if (tab === 'optimize') void loadOptimize(orgId);
                     } else {
                         toast.error(job.error?.trim() ? job.error : tf.syncFailed);
                     }
@@ -367,7 +329,7 @@ export function FinopsOverview() {
                 // ignore polling errors
             }
         },
-        [loadOptimize, loadOverview, stopPolling, tab, tf.syncComplete, tf.syncFailed]
+        [loadOverview, stopPolling, tf.syncComplete, tf.syncFailed]
     );
 
     const handleStartSync = async (granularity: 'daily' | 'monthly', startDate: string, endDate: string) => {
@@ -455,7 +417,6 @@ export function FinopsOverview() {
             setRevokeTarget(null);
             toast.success(tf.consentRevokeSuccess);
             await loadOverview(organizationId, { silent: true });
-            if (tab === 'optimize') await loadOptimize(organizationId);
         } catch {
             toast.error(tf.consentRevokeError);
         } finally {
@@ -467,7 +428,6 @@ export function FinopsOverview() {
         if (!organizationId) return;
         setRefreshing(true);
         await loadOverview(organizationId, { silent: true });
-        if (tab === 'optimize') await loadOptimize(organizationId);
         setRefreshing(false);
     };
 
@@ -513,6 +473,7 @@ export function FinopsOverview() {
                           openAnomalies: metrics?.openAnomalies ?? 0,
                           openRecs: metrics?.openRecs ?? 0,
                           hasConsent: metrics?.hasConsent ?? false,
+                          lastSyncAt: metrics?.lastSyncAt ?? null,
                           isActive: account.isActive,
                           finopsSupported,
                       };
@@ -521,6 +482,7 @@ export function FinopsOverview() {
                       const provider = (account.provider ?? '').toLowerCase();
                       return {
                           ...account,
+                          lastSyncAt: account.lastSyncAt ?? null,
                           finopsSupported: provider === 'aws' || provider === 'azure' || provider === 'gcp',
                       };
                   });
@@ -534,21 +496,6 @@ export function FinopsOverview() {
         if (!serviceFilter) return items;
         return items.filter((item) => item.service === serviceFilter);
     }, [overview?.costByService, serviceFilter]);
-
-    const filteredOptimizeItems = useMemo(() => {
-        let items = optimize?.items ?? [];
-        if (providerFilter) {
-            items = items.filter((item) => item.cloudProvider.toLowerCase() === providerFilter);
-        }
-        if (serviceFilter) {
-            items = items.filter((item) => (item.service ?? '').includes(serviceFilter) || item.title.includes(serviceFilter));
-        }
-        if (providerFilter && !selectedAccountId) {
-            const allowedIds = new Set(displayAccounts.map((account) => account.id));
-            items = items.filter((item) => allowedIds.has(item.cloudAccountId));
-        }
-        return items;
-    }, [displayAccounts, optimize?.items, providerFilter, selectedAccountId, serviceFilter]);
 
     const filteredTotals = useMemo(() => {
         if (!overview) {
@@ -568,22 +515,22 @@ export function FinopsOverview() {
                 ? displayAccounts.reduce((sum, account) => sum + Number(account.totalCost ?? 0), 0)
                 : overview.totals.cost;
 
-        const openAnomalies =
-            providerFilter || serviceFilter
-                ? filteredOptimizeItems.filter((item) => item.kind === 'anomaly').length
-                : (optimize?.totals.openAnomalies ?? overview.anomalies.length);
+        const allowedIds =
+            providerFilter && !selectedAccountId
+                ? new Set(displayAccounts.map((account) => account.id))
+                : null;
 
-        const openRecommendations =
-            providerFilter || serviceFilter
-                ? filteredOptimizeItems.filter((item) => item.kind === 'recommendation').length
-                : (optimize?.totals.openRecommendations ?? overview.recommendations.length);
+        const anomalies = overview.anomalies.filter((item) => {
+            if (allowedIds && !allowedIds.has(item.cloudAccountId)) return false;
+            if (serviceFilter && item.service !== serviceFilter) return false;
+            return true;
+        });
 
-        const potentialSavings =
-            providerFilter || serviceFilter
-                ? filteredOptimizeItems
-                      .filter((item) => item.kind === 'recommendation')
-                      .reduce((sum, item) => sum + Number(item.impact ?? 0), 0)
-                : overview.totals.potentialSavings;
+        const recommendations = overview.recommendations.filter((item) => {
+            if (allowedIds && !allowedIds.has(item.cloudAccountId)) return false;
+            if (serviceFilter && !(item.description ?? '').includes(serviceFilter)) return false;
+            return true;
+        });
 
         return {
             cost: serviceFilter
@@ -592,16 +539,16 @@ export function FinopsOverview() {
             currency: overview.totals.currency,
             momGrowth: Number(overview.totals.momGrowth),
             forecastedCost: overview.totals.forecastedCost,
-            potentialSavings,
-            openAnomalies,
-            openRecommendations,
+            potentialSavings:
+                providerFilter || serviceFilter
+                    ? recommendations.reduce((sum, item) => sum + Number(item.potentialSaving ?? 0), 0)
+                    : overview.totals.potentialSavings,
+            openAnomalies: anomalies.length,
+            openRecommendations: recommendations.length,
         };
     }, [
         displayAccounts,
         filteredCostByService,
-        filteredOptimizeItems,
-        optimize?.totals.openAnomalies,
-        optimize?.totals.openRecommendations,
         overview,
         providerFilter,
         selectedAccountId,
@@ -751,42 +698,29 @@ export function FinopsOverview() {
                             ? `/finops/budgets?account=${encodeURIComponent(selectedAccountId)}`
                             : '/finops/budgets?account=organization'
                     }
+                    savingsHref={
+                        selectedAccountId
+                            ? `/finops/savings?account=${encodeURIComponent(selectedAccountId)}`
+                            : '/finops/savings'
+                    }
+                    anomaliesHref={
+                        selectedAccountId
+                            ? `/finops/anomalies?account=${encodeURIComponent(selectedAccountId)}`
+                            : '/finops/anomalies'
+                    }
                     isLoading={loadingInitial && !overview}
                 />
 
-                <Tabs
-                    value={tab}
-                    onValueChange={(value) => {
-                        syncUrlState({ tab: value as FinopsTab });
-                    }}
-                >
-                    <TabsList>
-                        <TabsTrigger value="spend">Gastos</TabsTrigger>
-                        <TabsTrigger value="optimize">Otimizar</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="spend" className="mt-4">
-                        <FinopsSpendPanel
-                            overview={overview}
-                            accounts={displayAccounts}
-                            costByService={filteredCostByService}
-                            isLoading={loadingInitial && !overview}
-                            onServiceClick={(service) => syncUrlState({ service })}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="optimize" className="mt-4">
-                        <FinopsOptimizePanel
-                            organizationId={organizationId}
-                            items={filteredOptimizeItems}
-                            accountAliases={accountAliases}
-                            isLoading={!optimize && tab === 'optimize'}
-                            onChanged={() => {
-                                if (organizationId) void loadOptimize(organizationId);
-                            }}
-                        />
-                    </TabsContent>
-                </Tabs>
+                <FinopsSpendPanel
+                    overview={overview}
+                    accounts={displayAccounts}
+                    costByService={filteredCostByService}
+                    isLoading={loadingInitial && !overview}
+                    onServiceClick={(service) => syncUrlState({ service })}
+                    organizationId={organizationId}
+                    selectedAccountId={selectedAccountId}
+                    selectedService={urlFilters.service}
+                />
 
                 <FinopsAccountsStrip
                     accounts={displayAccounts}

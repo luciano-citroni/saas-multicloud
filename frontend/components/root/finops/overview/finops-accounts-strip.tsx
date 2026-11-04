@@ -2,7 +2,7 @@
 
 import { ArrowRight, Check, MoreVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/components/root/finops/overview/helpers';
+import { formatCurrency, formatDate } from '@/components/root/finops/overview/helpers';
 import type { OrgOverviewAccount } from '@/components/root/finops/overview/types';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -146,6 +146,14 @@ export function FinopsAccountsStrip({
                                         ? `${account.openAnomalies} anomalias · ${account.openRecs} recomendações`
                                         : 'FinOps disponível para AWS, Azure e GCP'}
                                 </p>
+                                {supported ? (
+                                    <p className="mt-1 text-[11px] text-muted-foreground">
+                                        Último sync:{' '}
+                                        <span className="font-medium text-foreground/80">
+                                            {account.lastSyncAt ? formatDate(account.lastSyncAt) : 'Nunca'}
+                                        </span>
+                                    </p>
+                                ) : null}
                             </div>
 
                             {supported ? (

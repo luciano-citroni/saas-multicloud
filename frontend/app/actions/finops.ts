@@ -89,6 +89,35 @@ export async function fetchFinopsCostByService(organizationId: string, cloudAcco
     return fetch(`/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/cost-by-service?${params.toString()}`, { cache: 'no-store' });
 }
 
+export async function fetchFinopsCostByResource(
+    organizationId: string,
+    cloudAccountId: string,
+    options?: { year?: number; month?: number; service?: string; limit?: number },
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.year !== undefined) params.set('year', String(options.year));
+    if (options?.month !== undefined) params.set('month', String(options.month));
+    if (options?.service) params.set('service', options.service);
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+    return fetch(`/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/cost-by-resource?${params.toString()}`, {
+        cache: 'no-store',
+    });
+}
+
+export async function fetchFinopsAnomalyContributors(
+    organizationId: string,
+    cloudAccountId: string,
+    anomalyId: string,
+    limit?: number,
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (limit !== undefined) params.set('limit', String(limit));
+    return fetch(
+        `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/anomalies/${encodeURIComponent(anomalyId)}/contributors?${params.toString()}`,
+        { cache: 'no-store' },
+    );
+}
+
 export async function fetchFinopsForecast(organizationId: string, cloudAccountId: string) {
     return fetch(`/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/forecast?organizationId=${encodeURIComponent(organizationId)}`, {
         cache: 'no-store',
@@ -108,10 +137,104 @@ export async function fetchFinopsAnomalies(organizationId: string, cloudAccountI
     return fetch(`/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/anomalies?${params.toString()}`, { cache: 'no-store' });
 }
 
+export async function fetchFinopsOrgAnomalies(
+    organizationId: string,
+    options?: {
+        status?: string;
+        severity?: string;
+        period?: string;
+        days?: number;
+        cloudAccountId?: string;
+        cloudAccountIds?: string[];
+        provider?: string;
+        sort?: string;
+        page?: number;
+        limit?: number;
+    },
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.status) params.set('status', options.status);
+    if (options?.severity && options.severity !== 'all') params.set('severity', options.severity);
+    if (options?.period) params.set('period', options.period);
+    if (options?.days !== undefined) params.set('days', String(options.days));
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    if (options?.provider) params.set('provider', options.provider);
+    if (options?.sort && options.sort !== 'severity') params.set('sort', options.sort);
+    if (options?.page !== undefined) params.set('page', String(options.page));
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+    return fetch(`/api/finops/anomalies?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsOrgSavings(
+    organizationId: string,
+    options?: {
+        status?: string;
+        priority?: string;
+        cloudAccountId?: string;
+        cloudAccountIds?: string[];
+        provider?: string;
+        q?: string;
+        sort?: string;
+        page?: number;
+        limit?: number;
+    },
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.status) params.set('status', options.status);
+    if (options?.priority && options.priority !== 'all') params.set('priority', options.priority);
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    if (options?.provider) params.set('provider', options.provider);
+    if (options?.q) params.set('q', options.q);
+    if (options?.sort && options.sort !== 'saving') params.set('sort', options.sort);
+    if (options?.page !== undefined) params.set('page', String(options.page));
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+    return fetch(`/api/finops/savings?${params.toString()}`, { cache: 'no-store' });
+}
+
 export async function acknowledgeFinopsAnomaly(organizationId: string, cloudAccountId: string, anomalyId: string) {
     return fetch(
         `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/anomalies/${encodeURIComponent(anomalyId)}/acknowledge?organizationId=${encodeURIComponent(organizationId)}`,
         { method: 'PATCH' }
+    );
+}
+
+export type FinopsAnomalyAlertSettings = {
+    id: string | null;
+    organizationId: string;
+    enabled: boolean;
+    alertChannels: Array<'email' | 'whatsapp'>;
+    alertNotificationGroupIds: string[];
+    minSeverity: 'low' | 'medium' | 'high' | 'critical';
+    updatedAt: string | null;
+};
+
+export type FinopsAnomalyAlertSettingsPayload = {
+    enabled: boolean;
+    alertChannels: Array<'email' | 'whatsapp'>;
+    alertNotificationGroupIds: string[];
+    minSeverity: 'low' | 'medium' | 'high' | 'critical';
+};
+
+export async function fetchFinopsAnomalyAlertSettings(organizationId: string) {
+    return fetch(
+        `/api/finops/anomaly-alerts/settings?organizationId=${encodeURIComponent(organizationId)}`,
+        { cache: 'no-store' },
+    );
+}
+
+export async function updateFinopsAnomalyAlertSettings(
+    organizationId: string,
+    payload: FinopsAnomalyAlertSettingsPayload,
+) {
+    return fetch(
+        `/api/finops/anomaly-alerts/settings?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
     );
 }
 

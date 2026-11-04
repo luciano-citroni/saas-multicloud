@@ -604,6 +604,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                             }
                             budgetStatuses={budgetStatuses}
                             budgetsHref={`/finops/budgets?account=${encodeURIComponent(cloudAccountId)}`}
+                            savingsHref={`/finops/savings?account=${encodeURIComponent(cloudAccountId)}`}
+                            anomaliesHref={`/finops/anomalies?account=${encodeURIComponent(cloudAccountId)}`}
                             isLoading={loadingInitial && !overview}
                         />
 
@@ -631,6 +633,9 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                     accounts={overview?.accounts ?? []}
                                     costByService={overview?.costByService ?? []}
                                     isLoading={loadingInitial && !overview}
+                                    organizationId={organizationId}
+                                    selectedAccountId={account.id}
+                                    selectedService={null}
                                 />
                             </TabsContent>
                             <TabsContent value="optimize" className="mt-4">

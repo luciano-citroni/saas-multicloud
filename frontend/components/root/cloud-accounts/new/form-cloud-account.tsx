@@ -17,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
-import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import { getActiveMidOrgId, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import {
     buildTrustPolicy,
     getPlatformUserArn,
@@ -138,20 +138,6 @@ export function FormCloudAccount({ organizationId }: Props) {
     const tca = useTranslations('cloudAccounts');
     const { locale } = useLocale();
 
-    useEffect(() => {
-        void fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
-            .then((r) => r.json())
-            .then((payload: unknown) => {
-                const items = Array.isArray(payload)
-                    ? (payload as MidOrg[])
-                    : Array.isArray((payload as { items?: unknown }).items)
-                      ? (payload as { items: MidOrg[] }).items
-                      : [];
-                setOrgs(items);
-            })
-            .catch(() => undefined);
-    }, [organizationId]);
-
     const schema = useMemo(() => createCloudAccountSchema(tca), [tca]);
 
     const form = useForm<FormValues>({
@@ -171,6 +157,26 @@ export function FormCloudAccount({ organizationId }: Props) {
             gcpServiceAccountEmail: '',
         },
     });
+
+    useEffect(() => {
+        void fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+            .then((r) => r.json())
+            .then((payload: unknown) => {
+                const items = Array.isArray(payload)
+                    ? (payload as MidOrg[])
+                    : Array.isArray((payload as { items?: unknown }).items)
+                      ? (payload as { items: MidOrg[] }).items
+                      : [];
+                setOrgs(items);
+
+                const activeMidOrgId = getActiveMidOrgId(organizationId);
+                const activeMidOrg = activeMidOrgId ? items.find((org) => org.id === activeMidOrgId) : undefined;
+                if (activeMidOrg && !form.getValues('orgId')) {
+                    form.setValue('orgId', activeMidOrg.name);
+                }
+            })
+            .catch(() => undefined);
+    }, [form, organizationId]);
 
     const {
         fields: awsRegionFields,

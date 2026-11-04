@@ -32,7 +32,7 @@ export interface IFinopsProvider {
     readonly provider: string;
 
     /**
-     * Coleta custos do provedor para o período informado.
+     * Coleta custos do provedor para o período informado (nível serviço/região).
      * @param creds Credenciais descriptografadas da conta.
      * @param startDate Data de início no formato YYYY-MM-DD.
      * @param endDate Data de fim no formato YYYY-MM-DD.
@@ -44,4 +44,43 @@ export interface IFinopsProvider {
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
     ): Promise<FinopsCostCollectionResult>;
+
+    /**
+     * Coleta custos no nível de recurso (resourceId preenchido).
+     * Pode retornar lista vazia se o provedor/export não suportar.
+     */
+    collectResourceCosts(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+        granularity: 'DAILY' | 'MONTHLY',
+    ): Promise<FinopsCostCollectionResult>;
+}
+
+/** Limites compartilhados da ingestão por recurso. */
+export const FINOPS_RESOURCE_COST_MIN_ABS = 0.01;
+export const FINOPS_RESOURCE_COST_TOP_N_PER_DAY = 500;
+
+export function capResourceEntriesByDay(
+    entries: FinopsCostEntry[],
+    topN = FINOPS_RESOURCE_COST_TOP_N_PER_DAY,
+    minAbs = FINOPS_RESOURCE_COST_MIN_ABS,
+): FinopsCostEntry[] {
+    const filtered = entries.filter(
+        (e) => Boolean(e.resourceId?.trim()) && Math.abs(e.cost) >= minAbs,
+    );
+
+    const byDate = new Map<string, FinopsCostEntry[]>();
+    for (const entry of filtered) {
+        const list = byDate.get(entry.date) ?? [];
+        list.push(entry);
+        byDate.set(entry.date, list);
+    }
+
+    const capped: FinopsCostEntry[] = [];
+    for (const list of byDate.values()) {
+        list.sort((a, b) => Math.abs(b.cost) - Math.abs(a.cost));
+        capped.push(...list.slice(0, topN));
+    }
+    return capped;
 }

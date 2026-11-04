@@ -296,7 +296,7 @@ export function AccountSwitcher({
                             <SearchInput value={cloudSearch} onChange={setCloudSearch} placeholder="Filtrar conta…" />
                         )}
                         {cloudAccounts.length === 0 ? (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Sem contas cloud neste tenant.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Sem contas cloud nesta organização.</p>
                         ) : filteredAccounts.length > 0 ? (
                             filteredAccounts.map((account) => (
                                 <DropdownMenuItem

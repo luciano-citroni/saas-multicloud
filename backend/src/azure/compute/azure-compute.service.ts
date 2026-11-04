@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CloudService } from '../../cloud/cloud.service';
 import { AzureVirtualMachine } from '../../db/entites/azure-virtual-machine.entity';
 import { AzureVmss } from '../../db/entites/azure-vmss.entity';
 import { AzureDisk } from '../../db/entites/azure-disk.entity';
 import { AzureAksCluster } from '../../db/entites/azure-aks-cluster.entity';
+import { FinopsResourceChangeService } from '../../finops/services/finops-resource-change.service';
 
 interface ArgResource {
     id: string;
@@ -32,6 +33,7 @@ export class AzureComputeService {
         @InjectRepository(AzureAksCluster)
         private readonly aksRepo: Repository<AzureAksCluster>,
         private readonly cloudService: CloudService,
+        private readonly resourceChangeService: FinopsResourceChangeService,
     ) {}
 
     private async validateAccount(cloudAccountId: string, organizationId: string): Promise<void> {
@@ -41,20 +43,65 @@ export class AzureComputeService {
 
     async upsertVirtualMachines(cloudAccountId: string, resources: ArgResource[]): Promise<void> {
         if (!resources.length) return;
-        const entities = resources.map(r => this.vmRepo.create({
-            cloudAccountId,
-            azureId: r.id,
-            name: r.name,
-            location: r.location ?? null,
-            resourceGroup: r.resourceGroup ?? null,
-            subscriptionId: r.subscriptionId ?? null,
-            tags: r.tags ?? null,
-            properties: r.properties ?? null,
-            vmSize: (r.properties as any)?.hardwareProfile?.vmSize ?? null,
-            osType: (r.properties as any)?.storageProfile?.osDisk?.osType ?? null,
-            provisioningState: (r.properties as any)?.provisioningState ?? null,
-            lastSyncedAt: new Date(),
-        }));
+
+        const azureIds = resources.map((r) => r.id).filter(Boolean);
+        const existing = azureIds.length
+            ? await this.vmRepo.find({
+                  where: { cloudAccountId, azureId: In(azureIds) },
+              })
+            : [];
+        const existingMap = new Map(existing.map((vm) => [vm.azureId, vm]));
+        const now = new Date();
+
+        for (const r of resources) {
+            const nextVmSize = (r.properties as any)?.hardwareProfile?.vmSize ?? null;
+            const nextProvisioningState = (r.properties as any)?.provisioningState ?? null;
+            const prev = existingMap.get(r.id);
+            if (prev) {
+                const changes: Array<{ field: string; previousValue: string; newValue: string }> = [];
+                if ((prev.vmSize ?? null) !== (nextVmSize ?? null)) {
+                    changes.push({
+                        field: 'vmSize',
+                        previousValue: String(prev.vmSize ?? ''),
+                        newValue: String(nextVmSize ?? ''),
+                    });
+                }
+                if ((prev.provisioningState ?? null) !== (nextProvisioningState ?? null)) {
+                    changes.push({
+                        field: 'provisioningState',
+                        previousValue: String(prev.provisioningState ?? ''),
+                        newValue: String(nextProvisioningState ?? ''),
+                    });
+                }
+                if (changes.length) {
+                    await this.resourceChangeService.recordFieldChanges({
+                        cloudAccountId,
+                        cloudProvider: 'azure',
+                        resourceType: 'azure_vm',
+                        resourceId: r.id,
+                        changes,
+                        detectedAt: now,
+                    });
+                }
+            }
+        }
+
+        const entities = resources.map((r) =>
+            this.vmRepo.create({
+                cloudAccountId,
+                azureId: r.id,
+                name: r.name,
+                location: r.location ?? null,
+                resourceGroup: r.resourceGroup ?? null,
+                subscriptionId: r.subscriptionId ?? null,
+                tags: r.tags ?? null,
+                properties: r.properties ?? null,
+                vmSize: (r.properties as any)?.hardwareProfile?.vmSize ?? null,
+                osType: (r.properties as any)?.storageProfile?.osDisk?.osType ?? null,
+                provisioningState: (r.properties as any)?.provisioningState ?? null,
+                lastSyncedAt: now,
+            }),
+        );
         for (let i = 0; i < entities.length; i += BATCH) {
             await this.vmRepo.upsert(entities.slice(i, i + BATCH), {
                 conflictPaths: ['cloudAccountId', 'azureId'],

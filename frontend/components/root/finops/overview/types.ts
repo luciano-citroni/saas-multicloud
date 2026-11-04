@@ -59,6 +59,39 @@ export type CostByServiceItem = {
     currency: string;
 };
 
+export type ResourceChangeCause = {
+    field: string;
+    previousValue: string;
+    newValue: string;
+    detectedAt: string;
+    resourceType: string;
+};
+
+export type CostByResourceItem = {
+    resourceId: string;
+    service: string;
+    region: string;
+    currentMonthCost: number;
+    previousMonthCost: number;
+    change: number;
+    changePercentage: number;
+    trend: 'up' | 'down' | 'stable';
+    currency: string;
+    recentChanges: ResourceChangeCause[];
+};
+
+export type AnomalyResourceContributor = {
+    resourceId: string;
+    service: string;
+    region: string;
+    costOnAnomalyDate: number;
+    avgPrior7d: number;
+    delta: number;
+    shareOfAnomalyPercent: number;
+    currency: string;
+    causes: ResourceChangeCause[];
+};
+
 export type FinopsConsent = {
     cloudAccountId: string;
     cloudProvider: string;
@@ -171,6 +204,7 @@ export type OrgOverviewAccount = {
     openAnomalies: number;
     openRecs: number;
     hasConsent: boolean;
+    lastSyncAt?: string | null;
     isActive?: boolean;
     finopsSupported?: boolean;
 };

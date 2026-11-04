@@ -4,6 +4,7 @@ import { GoogleAuth, Impersonated } from 'google-auth-library';
 import { google, bigquery_v2 } from 'googleapis';
 
 import type { IFinopsProvider, FinopsCostCollectionResult, FinopsCostEntry, FinopsProviderCredentials } from './finops-provider.interface';
+import { capResourceEntriesByDay } from './finops-provider.interface';
 
 type GcpFinopsCredentials = {
     projectId: string;
@@ -116,6 +117,102 @@ export class GcpFinopsProvider implements IFinopsProvider {
         this.logger.log(`[GCP FinOps] ${entries.length} registros coletados para conta ${cloudAccountId}`);
 
         return { entries, currency };
+    }
+
+    async collectResourceCosts(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+        granularity: 'DAILY' | 'MONTHLY',
+    ): Promise<FinopsCostCollectionResult> {
+        const { credentials, cloudAccountId } = creds;
+        const gcpCreds = credentials as GcpFinopsCredentials;
+
+        if (!gcpCreds.projectId || !gcpCreds.serviceAccountEmail) {
+            throw new BadRequestException('Credenciais GCP inválidas: projectId e serviceAccountEmail são obrigatórios.');
+        }
+
+        this.logger.log(
+            `[GCP FinOps] Coletando custos por recurso para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`,
+        );
+
+        const auth = await this.buildImpersonatedAuth(gcpCreds.serviceAccountEmail);
+        const bigquery = google.bigquery({ version: 'v2', auth: auth as never });
+
+        const exportProjectId = gcpCreds.billingExportProjectId || gcpCreds.projectId;
+        const { datasetId, tableId } = await this.resolveBillingExportTable(bigquery, exportProjectId, gcpCreds);
+
+        if (!tableId.startsWith('gcp_billing_export_resource_v1_')) {
+            this.logger.warn(
+                `[GCP FinOps] Export "${tableId}" não é detailed/resource — collectResourceCosts retorna vazio.`,
+            );
+            return { entries: [], currency: 'USD' };
+        }
+
+        const exclusiveEndDate = this.toExclusiveEndDate(endDate);
+        const dateExpr =
+            granularity === 'MONTHLY'
+                ? `FORMAT_DATE('%Y-%m-01', DATE(usage_start_time))`
+                : `FORMAT_DATE('%Y-%m-%d', DATE(usage_start_time))`;
+
+        const query = `
+            SELECT
+              ${dateExpr} AS usage_date,
+              COALESCE(service.description, 'Unknown') AS service,
+              COALESCE(location.region, location.location, '') AS region,
+              COALESCE(resource.global_name, resource.name, '') AS resource_id,
+              SUM(cost) AS cost,
+              COALESCE(ANY_VALUE(currency), 'USD') AS currency,
+              SUM(IFNULL(usage.amount, 0)) AS usage_quantity,
+              COALESCE(ANY_VALUE(usage.unit), '') AS usage_unit
+            FROM \`${exportProjectId}.${datasetId}.${tableId}\`
+            WHERE DATE(usage_start_time) >= @startDate
+              AND DATE(usage_start_time) < @endDate
+              AND project.id = @projectId
+              AND COALESCE(resource.global_name, resource.name, '') != ''
+            GROUP BY usage_date, service, region, resource_id
+            HAVING cost != 0
+            ORDER BY usage_date ASC, cost DESC
+        `;
+
+        const rows = await this.runQuery(bigquery, exportProjectId, query, {
+            startDate: { type: 'STRING', value: startDate },
+            endDate: { type: 'STRING', value: exclusiveEndDate },
+            projectId: { type: 'STRING', value: gcpCreds.projectId },
+        });
+
+        const entries: FinopsCostEntry[] = [];
+        let currency = 'USD';
+
+        for (const row of rows) {
+            const amount = Number(row.cost ?? 0);
+            if (amount === 0) continue;
+
+            const resourceId = String(row.resource_id ?? '').trim();
+            if (!resourceId) continue;
+
+            currency = String(row.currency || currency);
+
+            entries.push({
+                service: String(row.service || 'Unknown'),
+                resourceId,
+                region: row.region ? String(row.region) : null,
+                usageType: '',
+                operation: '',
+                cost: amount,
+                currency,
+                usageQuantity: Number(row.usage_quantity ?? 0),
+                usageUnit: String(row.usage_unit ?? ''),
+                date: String(row.usage_date),
+            });
+        }
+
+        const capped = capResourceEntriesByDay(entries);
+        this.logger.log(
+            `[GCP FinOps] ${capped.length} registros por recurso coletados para conta ${cloudAccountId} (raw=${entries.length})`,
+        );
+
+        return { entries: capped, currency };
     }
 
     private async resolveBillingExportTable(

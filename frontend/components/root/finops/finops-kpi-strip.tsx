@@ -25,6 +25,8 @@ type FinopsKpiStripProps = {
     openRecommendations: number;
     budgetStatuses?: FinopsBudgetStatusItem[];
     budgetsHref?: string;
+    savingsHref?: string;
+    anomaliesHref?: string;
     isLoading?: boolean;
 };
 
@@ -38,6 +40,8 @@ export function FinopsKpiStrip({
     openRecommendations,
     budgetStatuses = [],
     budgetsHref = '/finops/budgets',
+    savingsHref = '/finops/savings',
+    anomaliesHref = '/finops/anomalies',
     isLoading = false,
 }: FinopsKpiStripProps) {
     if (isLoading) {
@@ -123,8 +127,14 @@ export function FinopsKpiStrip({
                         {formatCurrency(potentialSavings, currency)}
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <p className="text-xs text-muted-foreground">Recomendações abertas</p>
+                <CardContent className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                        {openRecommendations} recomendaç{openRecommendations === 1 ? 'ão' : 'ões'} aberta
+                        {openRecommendations === 1 ? '' : 's'}
+                    </p>
+                    <Link href={savingsHref} className="text-xs font-medium text-primary hover:underline">
+                        Ver economia potencial
+                    </Link>
                 </CardContent>
             </Card>
 
@@ -136,11 +146,14 @@ export function FinopsKpiStrip({
                     </CardDescription>
                     <CardTitle className="text-xl sm:text-2xl">{openAnomalies}</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-1">
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Lightbulb className="size-3" />
-                        {openRecommendations} recomendações abertas
+                        Desvios de custo detectados
                     </p>
+                    <Link href={anomaliesHref} className="text-xs font-medium text-primary hover:underline">
+                        Ver anomalias
+                    </Link>
                 </CardContent>
             </Card>
 

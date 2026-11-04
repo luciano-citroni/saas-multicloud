@@ -4,10 +4,16 @@ import { Ec2Service } from './aws-ec2.service';
 import { Ec2Controller } from './aws-ec2.controller';
 import { AwsConnectorModule } from '../aws-connector.module';
 import { TenantModule } from '../../tenant/tenant.module';
+import { FinopsResourceChangeModule } from '../../finops/finops-resource-change.module';
 import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole]), AwsConnectorModule, TenantModule],
+    imports: [
+        TypeOrmModule.forFeature([AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole]),
+        AwsConnectorModule,
+        TenantModule,
+        FinopsResourceChangeModule,
+    ],
     providers: [Ec2Service],
     controllers: [Ec2Controller],
     exports: [Ec2Service],

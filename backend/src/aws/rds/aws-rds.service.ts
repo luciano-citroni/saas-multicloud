@@ -9,6 +9,7 @@ import { DescribeDBInstancesCommand, ListTagsForResourceCommand, type DBInstance
 import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsRdsInstance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
+import { FinopsResourceChangeService } from '../../finops/services/finops-resource-change.service';
 
 @Injectable()
 export class AwsRdsService {
@@ -28,7 +29,9 @@ export class AwsRdsService {
         private readonly securityGroupRepository: Repository<AwsSecurityGroup>,
 
         @InjectRepository(AwsIamRole)
-        private readonly iamRoleRepository: Repository<AwsIamRole>
+        private readonly iamRoleRepository: Repository<AwsIamRole>,
+
+        private readonly resourceChangeService: FinopsResourceChangeService,
     ) {}
 
     async listInstancesFromDatabase(cloudAccountId: string) {
@@ -222,6 +225,38 @@ export class AwsRdsService {
                 dbInstance.awsSecurityGroupId = awsMapped.awsSecurityGroupId;
 
                 dbInstance.roleArn = awsMapped.roleArn;
+
+                const changes: Array<{ field: string; previousValue: string; newValue: string }> = [];
+                if (dbInstance.dbInstanceClass !== awsMapped.dbInstanceClass) {
+                    changes.push({
+                        field: 'dbInstanceClass',
+                        previousValue: dbInstance.dbInstanceClass,
+                        newValue: awsMapped.dbInstanceClass,
+                    });
+                }
+                if (dbInstance.status !== awsMapped.status) {
+                    changes.push({
+                        field: 'status',
+                        previousValue: dbInstance.status,
+                        newValue: awsMapped.status,
+                    });
+                }
+                if (Boolean(dbInstance.multiAz) !== Boolean(awsMapped.multiAz)) {
+                    changes.push({
+                        field: 'multiAz',
+                        previousValue: String(dbInstance.multiAz),
+                        newValue: String(awsMapped.multiAz),
+                    });
+                }
+                if (changes.length) {
+                    await this.resourceChangeService.recordFieldChanges({
+                        cloudAccountId,
+                        cloudProvider: 'aws',
+                        resourceType: 'rds',
+                        resourceId: awsMapped.awsDbInstanceIdentifier,
+                        changes,
+                    });
+                }
 
                 dbInstance.dbInstanceClass = awsMapped.dbInstanceClass;
 

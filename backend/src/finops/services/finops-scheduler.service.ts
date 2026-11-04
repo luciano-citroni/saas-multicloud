@@ -6,23 +6,32 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
 
+import { InjectQueue } from '@nestjs/bullmq';
+
+import { Queue } from 'bullmq';
+
 import { FinopsConsent } from '../../db/entites/finops-consent.entity';
+import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { AzureAssessmentJob } from '../../db/entites/azure-assessment-job.entity';
 
 import { FinopsService } from './finops.service';
 import { FinopsBudgetService } from './finops-budget.service';
+import { FinopsAnomalyAlertService } from './finops-anomaly-alert.service';
+
+import { GENERAL_SYNC_QUEUE, GENERAL_SYNC_JOB_NAME } from '../../aws/assessment/constants';
+import { GCP_GENERAL_SYNC_QUEUE, GCP_GENERAL_SYNC_JOB_NAME } from '../../gcp/assessment/constants';
+import { AZURE_ASSESSMENT_QUEUE, AZURE_ASSESSMENT_JOB_NAME } from '../../azure/assessment/constants';
+
+/** Lookback de custo diário ≈ 3 meses — baseline da detecção de anomalias. */
+const DAILY_COST_LOOKBACK_DAYS = 90;
 
 /**
- * Agenda rotinas automáticas de sincronização de custos FinOps e avaliação de orçamentos.
+ * Agenda rotinas automáticas de sincronização de custos FinOps, inventário e orçamentos.
  *
- * - Sync diário: executa todo dia às 02:00, coleta dados do dia anterior.
- * - Alertas de orçamento: 2× ao dia (11:00 e 23:00 UTC ≈ 08:00 e 20:00 BRT).
- * - Fechamento mensal: executa no dia 6 de cada mês às 04:00,
- *   coleta dados completos do mês anterior para garantir o fechamento correto do billing.
- *
- * Idempotência: o processador usa upsert nos registros de custo, portanto re-runs
- * do mesmo período não duplicam dados. Além disso, FinopsService.startSync()
- * verifica jobs pendentes na fila antes de enfileirar um novo.
- * Alertas usam finops_budget_alert_events para não reenviar o mesmo limiar no período.
+ * - Sync diário: 02:00 UTC — inventário + custos lookback 90d + anomalias nos últimos 7d.
+ * - Digest de anomalias: 04:00 UTC — e-mail/WhatsApp via grupos de Notificações.
+ * - Alertas de orçamento: 2× ao dia (11:00 e 23:00 UTC).
+ * - Fechamento mensal: dia 6 às 04:00 — mês anterior completo.
  */
 @Injectable()
 export class FinopsSchedulerService {
@@ -32,19 +41,26 @@ export class FinopsSchedulerService {
         @InjectRepository(FinopsConsent)
         private readonly consentRepo: Repository<FinopsConsent>,
 
+        @InjectRepository(CloudAccount)
+        private readonly cloudAccountRepo: Repository<CloudAccount>,
+
+        @InjectRepository(AzureAssessmentJob)
+        private readonly azureAssessmentJobRepo: Repository<AzureAssessmentJob>,
+
+        @InjectQueue(GENERAL_SYNC_QUEUE)
+        private readonly awsGeneralSyncQueue: Queue,
+
+        @InjectQueue(GCP_GENERAL_SYNC_QUEUE)
+        private readonly gcpGeneralSyncQueue: Queue,
+
+        @InjectQueue(AZURE_ASSESSMENT_QUEUE)
+        private readonly azureAssessmentQueue: Queue,
+
         private readonly finopsService: FinopsService,
         private readonly finopsBudgetService: FinopsBudgetService,
+        private readonly finopsAnomalyAlertService: FinopsAnomalyAlertService,
     ) {}
 
-    // =========================================================================
-    // Sync Diário — todo dia às 02:00
-    // =========================================================================
-
-    /**
-     * Executa todos os dias às 02:00.
-     * Sincroniza os dados de custo do dia anterior para todas as contas com
-     * consentimento ativo.
-     */
     @Cron('0 2 * * *')
     async runDailySync(): Promise<void> {
         this.logger.log('[FinOps Scheduler] Iniciando sync diário...');
@@ -56,24 +72,43 @@ export class FinopsSchedulerService {
             return;
         }
 
-        const yesterday = this.getYesterdayDateString();
+        const inventory = await this.enqueueInventorySyncs(consents);
+        this.logger.log(
+            `[FinOps Scheduler] Inventário enfileirado: ${inventory.success} ok, ${inventory.failed} falha(s).`,
+        );
 
-        this.logger.log(`[FinOps Scheduler] Sync diário: ${consents.length} conta(s) ativas, período=${yesterday}`);
+        const { startDate, endDate } = this.getDailyLookbackRange();
 
-        const { success, failed } = await this.syncAll(consents, 'daily', yesterday, yesterday);
+        this.logger.log(
+            `[FinOps Scheduler] Sync diário de custos: ${consents.length} conta(s), período=${startDate} → ${endDate}`,
+        );
+
+        const { success, failed } = await this.syncAll(
+            consents,
+            'daily',
+            startDate,
+            endDate,
+            'scheduled_daily',
+        );
 
         this.logger.log(`[FinOps Scheduler] Sync diário concluído: ${success} enfileirado(s), ${failed} falha(s).`);
     }
 
-    // =========================================================================
-    // Alertas de orçamento — 2× ao dia (11:00 e 23:00 UTC)
-    // =========================================================================
+    @Cron('0 4 * * *')
+    async runAnomalyAlertDigest(): Promise<void> {
+        this.logger.log('[FinOps Scheduler] Iniciando digest diário de anomalias...');
 
-    /**
-     * Avalia orçamentos ativos e dispara e-mail/WhatsApp para limiares ainda não
-     * notificados na janela atual (até 2×/dia quando alertFrequency = daily).
-     * 11:00 UTC ≈ 08:00 BRT; 23:00 UTC ≈ 20:00 BRT.
-     */
+        try {
+            const result = await this.finopsAnomalyAlertService.evaluateAndNotifyDigests();
+            this.logger.log(
+                `[FinOps Scheduler] Digest de anomalias: evaluated=${result.evaluated} notified=${result.notified}`,
+            );
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[FinOps Scheduler] Falha no digest de anomalias: ${message}`);
+        }
+    }
+
     @Cron('0 11,23 * * *')
     async runBudgetAlertEvaluation(): Promise<void> {
         this.logger.log('[FinOps Scheduler] Iniciando avaliação de alertas de orçamento...');
@@ -89,18 +124,6 @@ export class FinopsSchedulerService {
         }
     }
 
-    // =========================================================================
-    // Fechamento Mensal — dia 6 de cada mês às 04:00
-    // =========================================================================
-
-    /**
-     * Executa no dia 6 de cada mês às 04:00.
-     * Realiza um sync incremental completo do mês anterior para garantir o
-     * fechamento correto do billing (provedores de nuvem podem ajustar valores
-     * de custo retroativamente nos primeiros dias do mês).
-     *
-     * Exemplo: dia 6 de abril → sincroniza dados de 01/03 a 31/03.
-     */
     @Cron('0 4 6 * *')
     async runMonthlyClosingSync(): Promise<void> {
         this.logger.log('[FinOps Scheduler] Iniciando fechamento mensal...');
@@ -118,31 +141,27 @@ export class FinopsSchedulerService {
             `[FinOps Scheduler] Fechamento mensal: ${consents.length} conta(s) ativas, período=${startDate} → ${endDate}`,
         );
 
-        const { success, failed } = await this.syncAll(consents, 'monthly', startDate, endDate);
+        const { success, failed } = await this.syncAll(
+            consents,
+            'monthly',
+            startDate,
+            endDate,
+            'scheduled_monthly_close',
+        );
 
         this.logger.log(`[FinOps Scheduler] Fechamento mensal concluído: ${success} enfileirado(s), ${failed} falha(s).`);
     }
 
-    // =========================================================================
-    // Helpers privados
-    // =========================================================================
-
-    /**
-     * Busca todos os registros de consentimento com accepted = true.
-     */
     private async findActiveConsents(): Promise<FinopsConsent[]> {
         return this.consentRepo.find({ where: { accepted: true } });
     }
 
-    /**
-     * Enfileira um job de sync para cada consentimento ativo, capturando erros
-     * individualmente para não interromper o lote.
-     */
     private async syncAll(
         consents: FinopsConsent[],
         granularity: 'daily' | 'monthly',
         startDate: string,
         endDate: string,
+        triggerType: 'manual' | 'scheduled_daily' | 'scheduled_monthly_close',
     ): Promise<{ success: number; failed: number }> {
         let success = 0;
         let failed = 0;
@@ -152,10 +171,11 @@ export class FinopsSchedulerService {
                 await this.finopsService.startSync(
                     consent.cloudAccountId,
                     consent.organizationId,
-                    consent.cloudProvider,
+                    consent.cloudProvider as 'aws' | 'azure' | 'gcp',
                     granularity,
                     startDate,
                     endDate,
+                    triggerType,
                 );
                 success++;
             } catch (error) {
@@ -170,36 +190,112 @@ export class FinopsSchedulerService {
     }
 
     /**
-     * Retorna a data de ontem no formato YYYY-MM-DD (sempre em UTC).
-     *
-     * Usa construtores UTC explícitos para evitar divergência entre o timezone
-     * local do servidor e o formato ISO retornado por toISOString().
-     * Se o servidor estiver em UTC+3 e o código usar new Date() local,
-     * toISOString() pode retornar o dia anterior ao esperado.
+     * Enfileira general sync / assessment sync por provedor, sem exigir userId
+     * (bypass das checagens de acesso do controller — cron interno).
      */
-    private getYesterdayDateString(): string {
-        const now = new Date();
-        const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-        return yesterday.toISOString().slice(0, 10);
+    private async enqueueInventorySyncs(
+        consents: FinopsConsent[],
+    ): Promise<{ success: number; failed: number }> {
+        let success = 0;
+        let failed = 0;
+
+        for (const consent of consents) {
+            try {
+                const provider = consent.cloudProvider.toLowerCase();
+
+                if (provider === 'aws') {
+                    await this.cloudAccountRepo.update(
+                        { id: consent.cloudAccountId, tenantId: consent.organizationId },
+                        { isGeneralSyncInProgress: true },
+                    );
+                    await this.awsGeneralSyncQueue.add(
+                        GENERAL_SYNC_JOB_NAME,
+                        { cloudAccountId: consent.cloudAccountId },
+                        {
+                            attempts: 2,
+                            backoff: { type: 'exponential', delay: 5000 },
+                            removeOnComplete: { count: 50 },
+                            removeOnFail: { count: 20 },
+                        },
+                    );
+                } else if (provider === 'gcp') {
+                    await this.cloudAccountRepo.update(
+                        { id: consent.cloudAccountId, tenantId: consent.organizationId },
+                        { isGeneralSyncInProgress: true },
+                    );
+                    await this.gcpGeneralSyncQueue.add(
+                        GCP_GENERAL_SYNC_JOB_NAME,
+                        { cloudAccountId: consent.cloudAccountId },
+                        {
+                            attempts: 2,
+                            backoff: { type: 'exponential', delay: 5000 },
+                            removeOnComplete: { count: 50 },
+                            removeOnFail: { count: 20 },
+                        },
+                    );
+                } else if (provider === 'azure') {
+                    const job = this.azureAssessmentJobRepo.create({
+                        cloudAccountId: consent.cloudAccountId,
+                        organizationId: consent.organizationId,
+                        status: 'pending',
+                    });
+                    const saved = await this.azureAssessmentJobRepo.save(job);
+                    await this.azureAssessmentQueue.add(
+                        AZURE_ASSESSMENT_JOB_NAME,
+                        {
+                            jobId: saved.id,
+                            cloudAccountId: consent.cloudAccountId,
+                            organizationId: consent.organizationId,
+                            runSync: true,
+                        },
+                        {
+                            attempts: 2,
+                            backoff: { type: 'exponential', delay: 5000 },
+                            removeOnComplete: { count: 50 },
+                            removeOnFail: { count: 20 },
+                        },
+                    );
+                } else {
+                    this.logger.warn(
+                        `[FinOps Scheduler] Provider desconhecido para inventário: ${consent.cloudProvider}`,
+                    );
+                    failed++;
+                    continue;
+                }
+
+                success++;
+            } catch (error) {
+                failed++;
+                this.logger.error(
+                    `[FinOps Scheduler] Falha ao enfileirar inventário ${consent.cloudAccountId}: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                );
+            }
+        }
+
+        return { success, failed };
     }
 
-    /**
-     * Retorna o intervalo completo do mês anterior (primeiro e último dia) em UTC.
-     * Usado pelo fechamento mensal para garantir dados íntegros de billing.
-     *
-     * Usa construtores UTC explícitos: new Date(year, month, day) cria uma data
-     * em timezone local, e ao converter com toISOString() (UTC) o resultado pode
-     * ser um dia antes em servidores com timezone UTC+ (ex: UTC+3 converte
-     * "01/03 00:00 local" para "28/02 21:00 UTC", resultando em startDate errada).
-     */
+    /** yesterday-(lookback-1) → yesterday (90 dias inclusive para baseline). */
+    private getDailyLookbackRange(): { startDate: string; endDate: string } {
+        const now = new Date();
+        const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+        const start = new Date(end);
+        start.setUTCDate(end.getUTCDate() - (DAILY_COST_LOOKBACK_DAYS - 1));
+
+        return {
+            startDate: start.toISOString().slice(0, 10),
+            endDate: end.toISOString().slice(0, 10),
+        };
+    }
+
     private getPreviousMonthDateRange(): { startDate: string; endDate: string } {
         const now = new Date();
         const year = now.getUTCFullYear();
-        const month = now.getUTCMonth(); // 0-indexed: mês atual
+        const month = now.getUTCMonth();
 
-        // Primeiro dia do mês anterior (UTC)
         const firstDayPrevMonth = new Date(Date.UTC(year, month - 1, 1));
-        // Último dia do mês anterior = dia 0 do mês atual (UTC)
         const lastDayPrevMonth = new Date(Date.UTC(year, month, 0));
 
         return {

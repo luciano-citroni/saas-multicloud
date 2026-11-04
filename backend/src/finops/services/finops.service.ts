@@ -40,6 +40,7 @@ export interface FinopsSyncJobPayload {
     granularity: 'DAILY' | 'MONTHLY';
     startDate: string;
     endDate: string;
+    triggerType?: 'manual' | 'scheduled_daily' | 'scheduled_monthly_close';
 }
 
 @Injectable()
@@ -165,6 +166,7 @@ export class FinopsService {
         granularity: 'daily' | 'monthly',
         startDate: string,
         endDate: string,
+        triggerType: 'manual' | 'scheduled_daily' | 'scheduled_monthly_close' = 'manual',
     ): Promise<FinopsSyncResponse> {
         const account = await this.requireCloudAccount(cloudAccountId, organizationId);
 
@@ -202,6 +204,7 @@ export class FinopsService {
             granularity: bullGranularity,
             startDate,
             endDate,
+            triggerType,
         };
 
         await this.finopsQueue.add(FINOPS_JOB_NAME, payload, {

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAggregate } from '../../db/entites/finops-cost-aggregate.entity';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 @Injectable()
 export class FinopsCostAggregationService {
@@ -37,7 +38,7 @@ export class FinopsCostAggregationService {
         this.logger.log(`[Aggregation] Calculando agregados para ${cloudAccountId} — ${year}-${String(month).padStart(2, '0')}`);
 
         // Agrupa por service + region + cloudProvider
-        const rows = await this.costRecordRepo
+        const rowsQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.cloudProvider', 'cloudProvider')
             .addSelect('cr.service', 'service')
@@ -49,7 +50,10 @@ export class FinopsCostAggregationService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: periodStartStr })
             .andWhere('cr.date <= :end', { end: periodEndStr })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(rowsQb, 'cr');
+
+        const rows = await rowsQb
             .groupBy('cr.cloudProvider')
             .addGroupBy('cr.service')
             .addGroupBy('cr.region')

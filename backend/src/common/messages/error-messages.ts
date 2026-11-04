@@ -183,6 +183,9 @@ export const ErrorMessages = {
         WHATSAPP_NOTIFICATION_GROUP_REQUIRED:
             'Select at least one WhatsApp notification group when WhatsApp alerts are enabled.',
 
+        ANOMALY_ALERT_CHANNEL_REQUIRED:
+            'Select at least one alert channel when daily anomaly alerts are enabled.',
+
         RECOMMENDATION_NOT_FOUND: 'FinOps recommendation not found.',
 
         ANOMALY_NOT_FOUND: 'FinOps anomaly not found.',

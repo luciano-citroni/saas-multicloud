@@ -19,6 +19,8 @@ const routeNames: Record<string, string> = {
     governance: 'Governança',
     analysis: 'Análise',
     finops: 'FinOps',
+    anomalies: 'Anomalias',
+    savings: 'Economia potencial',
     multicloud: 'Multicloud',
     budgets: 'Orçamentos',
     reports: 'Relatórios',

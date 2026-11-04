@@ -10,6 +10,7 @@ import {
     type PaginatedResult,
     type PaginationInput,
 } from '../../common/pagination/paginate';
+import { FinopsResourceChangeService } from '../../finops/services/finops-resource-change.service';
 
 @Injectable()
 export class GcpComputeService {
@@ -19,7 +20,9 @@ export class GcpComputeService {
         private readonly connector: GcpConnectorService,
 
         @InjectRepository(GcpVmInstance)
-        private readonly vmRepo: Repository<GcpVmInstance>
+        private readonly vmRepo: Repository<GcpVmInstance>,
+
+        private readonly resourceChangeService: FinopsResourceChangeService,
     ) {}
 
     async listInstancesFromDatabase(
@@ -67,10 +70,38 @@ export class GcpComputeService {
                 let existing = await this.vmRepo.findOne({ where: { cloudAccountId, gcpInstanceId } });
 
                 if (existing) {
+                    const nextStatus = instance.status ?? existing.status;
+                    const changes: Array<{ field: string; previousValue: string; newValue: string }> = [];
+                    if (existing.machineType !== machineType) {
+                        changes.push({
+                            field: 'machineType',
+                            previousValue: existing.machineType,
+                            newValue: machineType,
+                        });
+                    }
+                    if (existing.status !== nextStatus) {
+                        changes.push({
+                            field: 'status',
+                            previousValue: existing.status,
+                            newValue: nextStatus,
+                        });
+                    }
+                    if (changes.length) {
+                        await this.resourceChangeService.recordFieldChanges({
+                            cloudAccountId,
+                            organizationId,
+                            cloudProvider: 'gcp',
+                            resourceType: 'gcp_vm',
+                            resourceId: gcpInstanceId,
+                            changes,
+                            detectedAt: now,
+                        });
+                    }
+
                     existing.name = instance.name ?? existing.name;
                     existing.zone = zoneName;
                     existing.machineType = machineType;
-                    existing.status = instance.status ?? existing.status;
+                    existing.status = nextStatus;
                     existing.networkIp = networkIp;
                     existing.externalIp = externalIp;
                     existing.networkInterface = networkInterface;

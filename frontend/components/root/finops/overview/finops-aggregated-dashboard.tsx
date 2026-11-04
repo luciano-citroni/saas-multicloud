@@ -492,8 +492,8 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                             </Link>
                         </Button>
                         <Button variant="outline" size="sm" asChild>
-                            <Link href="/finops/insights">
-                                Ver insights
+                            <Link href="/finops/savings">
+                                Ver economia potencial
                                 <ArrowUpRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>

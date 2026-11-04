@@ -17,6 +17,7 @@ import { ErrorMessages } from '../../common/messages/error-messages';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { MailerService } from '../../mailer/mailer.service';
 import { findCloudAccountForTenant } from '../utils/find-cloud-account';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export interface CreateBudgetDto {
     name: string;
@@ -483,6 +484,9 @@ export class FinopsBudgetService {
 
             if (budget.alertType === 'resource' && budget.resourceId) {
                 qb.andWhere('r.resourceId = :resourceId', { resourceId: budget.resourceId });
+            } else {
+                // Totais org/conta: apenas nível serviço, evitando double-count com drill-down por recurso.
+                andWhereServiceLevelCost(qb, 'r');
             }
 
             const result = await qb.getRawOne<{ total: string }>();

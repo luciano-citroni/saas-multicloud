@@ -12,6 +12,7 @@ import { AwsConnectorService } from '../aws-connector.service';
 
 import { AwsEc2Instance, AwsVpc, AwsSubnet, AwsSecurityGroup, AwsIamRole } from '../../db/entites/index';
 import { paginateQuery, type PaginationInput } from '../../common/pagination/paginate';
+import { FinopsResourceChangeService } from '../../finops/services/finops-resource-change.service';
 
 @Injectable()
 export class Ec2Service {
@@ -31,7 +32,9 @@ export class Ec2Service {
         private readonly securityGroupRepository: Repository<AwsSecurityGroup>,
 
         @InjectRepository(AwsIamRole)
-        private readonly iamRoleRepository: Repository<AwsIamRole>
+        private readonly iamRoleRepository: Repository<AwsIamRole>,
+
+        private readonly resourceChangeService: FinopsResourceChangeService,
     ) {}
 
     // =========================================================================
@@ -256,6 +259,34 @@ export class Ec2Service {
             }
 
             if (dbInstance) {
+                const nextInstanceType = instanceData.instanceType ?? dbInstance.instanceType;
+                const nextState = instanceData.state ?? dbInstance.state;
+                const changes: Array<{ field: string; previousValue: string; newValue: string }> = [];
+                if (dbInstance.instanceType !== nextInstanceType) {
+                    changes.push({
+                        field: 'instanceType',
+                        previousValue: dbInstance.instanceType,
+                        newValue: nextInstanceType,
+                    });
+                }
+                if (dbInstance.state !== nextState) {
+                    changes.push({
+                        field: 'state',
+                        previousValue: dbInstance.state,
+                        newValue: nextState,
+                    });
+                }
+                if (changes.length && instanceData.awsInstanceId) {
+                    await this.resourceChangeService.recordFieldChanges({
+                        cloudAccountId,
+                        cloudProvider: 'aws',
+                        resourceType: 'ec2',
+                        resourceId: instanceData.awsInstanceId,
+                        changes,
+                        detectedAt: now,
+                    });
+                }
+
                 // Atualiza instância existente
 
                 dbInstance.vpcId = vpc.id;
@@ -266,9 +297,9 @@ export class Ec2Service {
 
                 dbInstance.awsSubnetId = subnet.awsSubnetId;
 
-                dbInstance.instanceType = instanceData.instanceType ?? dbInstance.instanceType;
+                dbInstance.instanceType = nextInstanceType;
 
-                dbInstance.state = instanceData.state ?? dbInstance.state;
+                dbInstance.state = nextState;
 
                 dbInstance.stateReason = (instanceData.stateReason as string | null) ?? null;
 

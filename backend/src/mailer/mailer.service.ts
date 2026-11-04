@@ -207,7 +207,7 @@ export class MailerService {
             </p>
         `;
 
-        await this.transporter.sendMail({
+            await this.transporter.sendMail({
             from: this.fromAddress,
             to: params.to.join(', '),
             subject: `Alerta de orçamento: ${params.budgetName} · ${EMAIL_BRAND.name}`,
@@ -218,6 +218,70 @@ export class MailerService {
                 frontendUrl: this.frontendUrl,
                 cta: { label: 'Ver orçamentos', href: budgetsUrl },
                 footerNote: 'Você recebe este alerta porque está cadastrado nas notificações do tenant.',
+            }),
+        });
+    }
+
+    async sendFinopsAnomalyDigest(params: {
+        to: string[];
+        minSeverity: string;
+        lookbackDays: number;
+        anomalies: Array<{
+            service: string;
+            cloudProvider: string;
+            severity: string;
+            anomalyDate: string;
+            financialImpact: number;
+            deviationPercentage: number;
+            currency: string;
+            region: string | null;
+        }>;
+    }): Promise<void> {
+        if (params.to.length === 0) {
+            return;
+        }
+
+        const anomaliesUrl = `${this.frontendUrl}/finops/anomalies`;
+        const count = params.anomalies.length;
+        const top = params.anomalies.slice(0, 12);
+        const rows = top
+            .map((a) =>
+                emailMetricRow(
+                    `${a.severity.toUpperCase()} · ${a.service}`,
+                    `${a.financialImpact.toFixed(2)} ${a.currency} (+${a.deviationPercentage.toFixed(0)}%) · ${a.cloudProvider}${a.region ? ` / ${a.region}` : ''} · ${a.anomalyDate}`,
+                ),
+            )
+            .join('');
+        const extra =
+            count > top.length
+                ? `<p style="margin:12px 0 0;color:${EMAIL_BRAND.muted};font-size:13px;">… e mais ${count - top.length} anomalia(s) no período.</p>`
+                : '';
+
+        const bodyHtml = `
+            <p style="margin:0 0 12px;">
+              Detectamos <strong style="color:${EMAIL_BRAND.destructive};">${count}</strong>
+              anomalia(s) de custo aberta(s) nos últimos
+              <strong>${params.lookbackDays}</strong> dias
+              (severidade ≥ <strong>${escapeHtml(params.minSeverity)}</strong>).
+            </p>
+            ${emailMetricsCard(rows)}
+            ${extra}
+            <p style="margin:16px 0 0;color:${EMAIL_BRAND.muted};font-size:13px;">
+              Abra FinOps → Anomalias para investigar o recurso que causou o spike.
+            </p>
+        `;
+
+        await this.transporter.sendMail({
+            from: this.fromAddress,
+            to: params.to.join(', '),
+            subject: `Digest de anomalias (${count}) · ${EMAIL_BRAND.name}`,
+            html: renderEmailLayout({
+                title: 'Anomalias de custo',
+                preheader: `${count} anomalia(s) aberta(s) nos últimos ${params.lookbackDays} dias`,
+                bodyHtml,
+                frontendUrl: this.frontendUrl,
+                cta: { label: 'Ver anomalias', href: anomaliesUrl },
+                footerNote: 'Você recebe este digest porque está cadastrado nas notificações do tenant.',
             }),
         });
     }

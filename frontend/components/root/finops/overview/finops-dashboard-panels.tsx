@@ -475,8 +475,8 @@ export function FinopsDashboardPanels({
                             </Link>
                         </Button>
                         <Button variant="outline" size="sm" asChild>
-                            <Link href={`/finops/insights?${sharedQuery}`}>
-                                Ver insights
+                            <Link href={`/finops/savings?${sharedQuery}`}>
+                                Ver economia potencial
                                 <Lightbulb className="size-4" />
                             </Link>
                         </Button>

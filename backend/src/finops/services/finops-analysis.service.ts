@@ -21,6 +21,7 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { ErrorMessages } from '../../common/messages/error-messages';
 import { findCloudAccountForTenant } from '../utils/find-cloud-account';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -195,14 +196,14 @@ export class FinopsAnalysisService {
                 organizationId,
                 this.formatDateOnly(startOfCurrentMonth),
                 this.formatDateOnly(startOfNextMonth),
-                'daily-first'
+                'highest-total',
             ),
             this.resolveGranularityForPeriod(
                 cloudAccountId,
                 organizationId,
                 this.formatDateOnly(startOfPreviousMonth),
                 this.formatDateOnly(startOfCurrentMonth),
-                'monthly-first'
+                'highest-total',
             ),
         ]);
 
@@ -235,15 +236,15 @@ export class FinopsAnalysisService {
         const start = this.formatDateOnly(startDate);
         const exclusiveEnd = this.formatDateOnly(this.addDays(endDate, 1));
 
-        const records = await this.costRecordRepo
+        const recordsQb = this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
             .andWhere('r.granularity = :granularity', { granularity })
             .andWhere('r.date >= :startDate', { startDate: start })
-            .andWhere('r.date < :endDate', { endDate: exclusiveEnd })
-            .orderBy('r.date', 'ASC')
-            .getMany();
+            .andWhere('r.date < :endDate', { endDate: exclusiveEnd });
+        andWhereServiceLevelCost(recordsQb, 'r');
+        const records = await recordsQb.orderBy('r.date', 'ASC').getMany();
 
         const grouped = new Map<string, { cost: number; currency: string }>();
 
@@ -415,13 +416,11 @@ export class FinopsAnalysisService {
         const prevMonth = month === 1 ? 12 : month - 1;
         const prevYear = month === 1 ? year - 1 : year;
         const startOfPrevMonth = `${prevYear}-${pad(prevMonth)}-01`;
-        const now = new Date();
-        const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
-
-        // Resolve granularity independently for each period to avoid double-counting
+        // Prefere a granularidade com maior |soma| — evita totais truncados quando o sync
+        // mensal incompleto "ganha" do diário completo (ou o inverso).
         const [currentGranularity, prevGranularity] = await Promise.all([
-            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfMonth, endOfMonth, isCurrentMonth ? 'daily-first' : 'monthly-first'),
-            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfPrevMonth, startOfMonth, 'monthly-first'),
+            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfMonth, endOfMonth, 'highest-total'),
+            this.resolveGranularityForPeriod(cloudAccountId, organizationId, startOfPrevMonth, startOfMonth, 'highest-total'),
         ]);
 
         interface RawServiceRow {
@@ -430,31 +429,32 @@ export class FinopsAnalysisService {
             currency: string;
         }
 
+        const currentQb = this.costRecordRepo
+            .createQueryBuilder('r')
+            .select('r.service', 'service')
+            .addSelect('SUM(r.cost)', 'totalCost')
+            .addSelect('MAX(r.currency)', 'currency')
+            .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.granularity = :granularity', { granularity: currentGranularity })
+            .andWhere('r.date >= :start', { start: startOfMonth })
+            .andWhere('r.date < :end', { end: endOfMonth });
+        andWhereServiceLevelCost(currentQb, 'r');
+
+        const previousQb = this.costRecordRepo
+            .createQueryBuilder('r')
+            .select('r.service', 'service')
+            .addSelect('SUM(r.cost)', 'totalCost')
+            .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.granularity = :granularity', { granularity: prevGranularity })
+            .andWhere('r.date >= :start', { start: startOfPrevMonth })
+            .andWhere('r.date < :end', { end: startOfMonth });
+        andWhereServiceLevelCost(previousQb, 'r');
+
         const [currentRows, previousRows] = await Promise.all([
-            this.costRecordRepo
-                .createQueryBuilder('r')
-                .select('r.service', 'service')
-                .addSelect('SUM(r.cost)', 'totalCost')
-                .addSelect('MAX(r.currency)', 'currency')
-                .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
-                .andWhere('r.organizationId = :organizationId', { organizationId })
-                .andWhere('r.granularity = :granularity', { granularity: currentGranularity })
-                .andWhere('r.date >= :start', { start: startOfMonth })
-                .andWhere('r.date < :end', { end: endOfMonth })
-                .groupBy('r.service')
-                .orderBy('SUM(r.cost)', 'DESC')
-                .getRawMany<RawServiceRow>(),
-            this.costRecordRepo
-                .createQueryBuilder('r')
-                .select('r.service', 'service')
-                .addSelect('SUM(r.cost)', 'totalCost')
-                .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
-                .andWhere('r.organizationId = :organizationId', { organizationId })
-                .andWhere('r.granularity = :granularity', { granularity: prevGranularity })
-                .andWhere('r.date >= :start', { start: startOfPrevMonth })
-                .andWhere('r.date < :end', { end: startOfMonth })
-                .groupBy('r.service')
-                .getRawMany<RawServiceRow>(),
+            currentQb.groupBy('r.service').orderBy('SUM(r.cost)', 'DESC').getRawMany<RawServiceRow>(),
+            previousQb.groupBy('r.service').getRawMany<RawServiceRow>(),
         ]);
 
         const currentMap = new Map<string, { cost: number; currency: string }>();
@@ -562,14 +562,15 @@ export class FinopsAnalysisService {
             awsGranularity
         );
 
-        const dbRecords = await this.costRecordRepo
+        const dbRecordsQb = this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
             .andWhere('r.granularity = :granularity', { granularity })
             .andWhere('r.date >= :startDate', { startDate })
-            .andWhere('r.date <= :endDate', { endDate })
-            .getMany();
+            .andWhere('r.date <= :endDate', { endDate });
+        andWhereServiceLevelCost(dbRecordsQb, 'r');
+        const dbRecords = await dbRecordsQb.getMany();
 
         // Agregar entradas AWS por serviço+região
         const awsMap = new Map<string, { service: string; region: string; cost: number }>();
@@ -665,8 +666,10 @@ export class FinopsAnalysisService {
 
     /**
      * Detecta a granularidade dominante no período.
-     * Prefere 'daily' quando há registros diários; senão usa 'monthly'.
      * Evita dupla contagem quando o scheduler cria registros de ambas as granularidades.
+     *
+     * `highest-total`: escolhe a granularidade com maior |custo| — protege contra sync
+     * mensal/diário truncado por paginação incompleta da API do provedor.
      */
     private async hasGranularityRecords(
         cloudAccountId: string,
@@ -675,16 +678,37 @@ export class FinopsAnalysisService {
         to: string,
         granularity: 'daily' | 'monthly'
     ): Promise<boolean> {
-        const count = await this.costRecordRepo
+        const countQb = this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
             .andWhere('r.granularity = :granularity', { granularity })
             .andWhere('r.date >= :from', { from })
-            .andWhere('r.date < :to', { to })
-            .getCount();
+            .andWhere('r.date < :to', { to });
+        andWhereServiceLevelCost(countQb, 'r');
+        const count = await countQb.getCount();
 
         return count > 0;
+    }
+
+    private async sumGranularityCost(
+        cloudAccountId: string,
+        organizationId: string,
+        from: string,
+        to: string,
+        granularity: 'daily' | 'monthly',
+    ): Promise<number> {
+        const sumQb = this.costRecordRepo
+            .createQueryBuilder('r')
+            .select('COALESCE(SUM(r.cost), 0)', 'total')
+            .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.granularity = :granularity', { granularity })
+            .andWhere('r.date >= :from', { from })
+            .andWhere('r.date < :to', { to });
+        andWhereServiceLevelCost(sumQb, 'r');
+        const row = await sumQb.getRawOne<{ total: string }>();
+        return Number(row?.total ?? 0);
     }
 
     private async resolveGranularityForPeriod(
@@ -692,12 +716,25 @@ export class FinopsAnalysisService {
         organizationId: string,
         from: string,
         to: string,
-        preference: 'daily-first' | 'monthly-first'
+        preference: 'daily-first' | 'monthly-first' | 'highest-total',
     ): Promise<'daily' | 'monthly'> {
         const [hasDaily, hasMonthly] = await Promise.all([
             this.hasGranularityRecords(cloudAccountId, organizationId, from, to, 'daily'),
             this.hasGranularityRecords(cloudAccountId, organizationId, from, to, 'monthly'),
         ]);
+
+        if (preference === 'highest-total') {
+            if (hasDaily && hasMonthly) {
+                const [dailyTotal, monthlyTotal] = await Promise.all([
+                    this.sumGranularityCost(cloudAccountId, organizationId, from, to, 'daily'),
+                    this.sumGranularityCost(cloudAccountId, organizationId, from, to, 'monthly'),
+                ]);
+                return Math.abs(dailyTotal) >= Math.abs(monthlyTotal) ? 'daily' : 'monthly';
+            }
+            if (hasDaily) return 'daily';
+            if (hasMonthly) return 'monthly';
+            return 'daily';
+        }
 
         if (preference === 'daily-first') {
             if (hasDaily) return 'daily';
@@ -747,14 +784,16 @@ export class FinopsAnalysisService {
         const toStr = this.formatDateOnly(to);
         const resolvedGranularity = granularity ?? (await this.resolveGranularityForPeriod(cloudAccountId, organizationId, fromStr, toStr, 'daily-first'));
 
-        return this.costRecordRepo
+        const qb = this.costRecordRepo
             .createQueryBuilder('r')
             .where('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('r.organizationId = :organizationId', { organizationId })
             .andWhere('r.granularity = :granularity', { granularity: resolvedGranularity })
             .andWhere('r.date >= :from', { from: fromStr })
-            .andWhere('r.date < :to', { to: toStr })
-            .getMany();
+            .andWhere('r.date < :to', { to: toStr });
+        andWhereServiceLevelCost(qb, 'r');
+
+        return qb.getMany();
     }
 
     private computeServiceBreakdown(records: FinopsCostRecord[], totalCost: number): ServiceCostBreakdown[] {

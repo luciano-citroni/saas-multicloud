@@ -174,6 +174,86 @@ export class FinopsScoreDto {
     insights!: string[];
 }
 
+// ─── Resource drill-down ─────────────────────────────────────────────────────
+
+export class ResourceChangeCauseDto {
+    @ApiProperty({ example: 'instanceType' })
+    field!: string;
+
+    @ApiProperty({ example: 't3.medium' })
+    previousValue!: string;
+
+    @ApiProperty({ example: 'm5.xlarge' })
+    newValue!: string;
+
+    @ApiProperty()
+    detectedAt!: string;
+
+    @ApiProperty({ example: 'ec2' })
+    resourceType!: string;
+}
+
+export class CostByResourceItemDto {
+    @ApiProperty({ example: 'i-0abc123def' })
+    resourceId!: string;
+
+    @ApiProperty({ example: 'Amazon Elastic Compute Cloud - Compute' })
+    service!: string;
+
+    @ApiProperty({ example: 'us-east-1' })
+    region!: string;
+
+    @ApiProperty({ example: 120.5 })
+    currentMonthCost!: number;
+
+    @ApiProperty({ example: 80.2 })
+    previousMonthCost!: number;
+
+    @ApiProperty({ example: 40.3 })
+    change!: number;
+
+    @ApiProperty({ example: 50.25 })
+    changePercentage!: number;
+
+    @ApiProperty({ example: 'up', enum: ['up', 'down', 'stable'] })
+    trend!: string;
+
+    @ApiProperty({ example: 'USD' })
+    currency!: string;
+
+    @ApiProperty({ type: [ResourceChangeCauseDto] })
+    recentChanges!: ResourceChangeCauseDto[];
+}
+
+export class AnomalyResourceContributorDto {
+    @ApiProperty({ example: 'i-0abc123def' })
+    resourceId!: string;
+
+    @ApiProperty()
+    service!: string;
+
+    @ApiProperty()
+    region!: string;
+
+    @ApiProperty()
+    costOnAnomalyDate!: number;
+
+    @ApiProperty()
+    avgPrior7d!: number;
+
+    @ApiProperty()
+    delta!: number;
+
+    @ApiProperty()
+    shareOfAnomalyPercent!: number;
+
+    @ApiProperty({ example: 'USD' })
+    currency!: string;
+
+    @ApiProperty({ type: [ResourceChangeCauseDto] })
+    causes!: ResourceChangeCauseDto[];
+}
+
 // ─── Recommendations ─────────────────────────────────────────────────────────
 
 export class FinopsRecommendationDto {
@@ -472,4 +552,41 @@ export class BudgetStatusDto {
 
     @ApiProperty({ example: 'USD' })
     currency!: string;
+}
+
+export class AnomalyAlertSettingsDto {
+    @ApiPropertyOptional({ format: 'uuid', nullable: true })
+    id!: string | null;
+
+    @ApiProperty({ format: 'uuid' })
+    organizationId!: string;
+
+    @ApiProperty({ example: false })
+    enabled!: boolean;
+
+    @ApiProperty({ example: ['email'], enum: ['email', 'whatsapp'], isArray: true })
+    alertChannels!: Array<'email' | 'whatsapp'>;
+
+    @ApiProperty({ type: [String], format: 'uuid' })
+    alertNotificationGroupIds!: string[];
+
+    @ApiProperty({ example: 'high', enum: ['low', 'medium', 'high', 'critical'] })
+    minSeverity!: 'low' | 'medium' | 'high' | 'critical';
+
+    @ApiPropertyOptional({ nullable: true })
+    updatedAt!: string | null;
+}
+
+export class UpdateAnomalyAlertSettingsRequestDto {
+    @ApiProperty({ example: true })
+    enabled!: boolean;
+
+    @ApiPropertyOptional({ example: ['email'], enum: ['email', 'whatsapp'], isArray: true })
+    alertChannels?: Array<'email' | 'whatsapp'>;
+
+    @ApiPropertyOptional({ type: [String], format: 'uuid' })
+    alertNotificationGroupIds?: string[];
+
+    @ApiPropertyOptional({ example: 'high', enum: ['low', 'medium', 'high', 'critical'] })
+    minSeverity?: 'low' | 'medium' | 'high' | 'critical';
 }

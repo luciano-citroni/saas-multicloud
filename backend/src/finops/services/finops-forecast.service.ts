@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export interface ForecastResult {
     cloudAccountId: string;
@@ -51,7 +52,7 @@ export class FinopsForecastService {
         const daysRemaining = totalDays - daysElapsed;
 
         // Custo total até hoje
-        const result = await this.costRecordRepo
+        const totalQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('SUM(cr.cost)', 'totalCost')
             .addSelect('cr.currency', 'currency')
@@ -59,9 +60,10 @@ export class FinopsForecastService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: periodStart })
             .andWhere('cr.date <= :today', { today })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
-            .groupBy('cr.currency')
-            .getRawOne<{ totalCost: string; currency: string }>();
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(totalQb, 'cr');
+
+        const result = await totalQb.groupBy('cr.currency').getRawOne<{ totalCost: string; currency: string }>();
 
         const totalSoFar = Number(result?.totalCost ?? 0);
         const currency = result?.currency ?? 'USD';
@@ -69,7 +71,7 @@ export class FinopsForecastService {
         const forecastedCost = avgDailyCost * totalDays;
 
         // Por serviço
-        const serviceRows = await this.costRecordRepo
+        const serviceQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.service', 'service')
             .addSelect('SUM(cr.cost)', 'totalCost')
@@ -77,7 +79,10 @@ export class FinopsForecastService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: periodStart })
             .andWhere('cr.date <= :today', { today })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(serviceQb, 'cr');
+
+        const serviceRows = await serviceQb
             .groupBy('cr.service')
             .orderBy('"totalCost"', 'DESC')
             .limit(10)
@@ -123,16 +128,17 @@ export class FinopsForecastService {
         threeMonthsAgo.setUTCMonth(threeMonthsAgo.getUTCMonth() - 3);
         const baseDate = threeMonthsAgo.toISOString().slice(0, 10);
 
-        const result = await this.costRecordRepo
+        const baseQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('SUM(cr.cost)', 'totalCost')
             .addSelect('cr.currency', 'currency')
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :baseDate', { baseDate })
-            .andWhere('cr.granularity = :gran', { gran: 'daily' })
-            .groupBy('cr.currency')
-            .getRawOne<{ totalCost: string; currency: string }>();
+            .andWhere('cr.granularity = :gran', { gran: 'daily' });
+        andWhereServiceLevelCost(baseQb, 'cr');
+
+        const result = await baseQb.groupBy('cr.currency').getRawOne<{ totalCost: string; currency: string }>();
 
         const totalCost = Number(result?.totalCost ?? 0);
         const currency = result?.currency ?? 'USD';

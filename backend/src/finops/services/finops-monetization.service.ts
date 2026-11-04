@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsTenantBilling } from '../../db/entites/finops-tenant-billing.entity';
+import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export interface BillingRecord {
     cloudAccountId: string;
@@ -49,16 +50,17 @@ export class FinopsMonetizationService {
         endDate: string,
         markupPercentage: number,
     ): Promise<BillingRecord> {
-        const result = await this.costRecordRepo
+        const totalQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('SUM(cr.cost)', 'totalCost')
             .addSelect('cr.currency', 'currency')
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: startDate })
-            .andWhere('cr.date <= :end', { end: endDate })
-            .groupBy('cr.currency')
-            .getRawOne<{ totalCost: string; currency: string }>();
+            .andWhere('cr.date <= :end', { end: endDate });
+        andWhereServiceLevelCost(totalQb, 'cr');
+
+        const result = await totalQb.groupBy('cr.currency').getRawOne<{ totalCost: string; currency: string }>();
 
         const cloudCost = Number(result?.totalCost ?? 0);
         const currency = result?.currency ?? 'USD';
@@ -69,7 +71,7 @@ export class FinopsMonetizationService {
         const marginPercentage = cloudCost > 0 ? (margin / finalPrice) * 100 : 0;
 
         // Chargeback por serviço
-        const chargebackRows = await this.costRecordRepo
+        const chargebackQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.service', 'groupKey')
             .addSelect('SUM(cr.cost)', 'cost')
@@ -77,7 +79,10 @@ export class FinopsMonetizationService {
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: startDate })
-            .andWhere('cr.date <= :end', { end: endDate })
+            .andWhere('cr.date <= :end', { end: endDate });
+        andWhereServiceLevelCost(chargebackQb, 'cr');
+
+        const chargebackRows = await chargebackQb
             .groupBy('cr.service')
             .addGroupBy('cr.currency')
             .orderBy('"cost"', 'DESC')
@@ -159,7 +164,7 @@ export class FinopsMonetizationService {
         endDate: string,
     ): Promise<ChargebackItem[]> {
         // Tags são armazenadas como JSONB - extrair valor da tag específica
-        const rows = await this.costRecordRepo
+        const tagQb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select(`cr.tags->>'${tagKey}'`, 'tagValue')
             .addSelect('SUM(cr.cost)', 'cost')
@@ -168,7 +173,10 @@ export class FinopsMonetizationService {
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
             .andWhere('cr.date >= :start', { start: startDate })
             .andWhere('cr.date <= :end', { end: endDate })
-            .andWhere(`cr.tags ? '${tagKey}'`)
+            .andWhere(`cr.tags ? '${tagKey}'`);
+        andWhereServiceLevelCost(tagQb, 'cr');
+
+        const rows = await tagQb
             .groupBy(`cr.tags->>'${tagKey}'`)
             .addGroupBy('cr.currency')
             .orderBy('"cost"', 'DESC')

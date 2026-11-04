@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Bar,
     BarChart,
@@ -13,6 +13,8 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CostTrendChart, type ChartType } from '@/components/root/finops/overview/cost-trend-chart';
@@ -27,7 +29,15 @@ import {
     finopsChartTooltipStyles,
 } from '@/components/root/finops/overview/finops-chart-theme';
 import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
-import type { CostByServiceItem, OrgFinopsOverview, OrgOverviewAccount } from '@/components/root/finops/overview/types';
+import { formatResourceChange, shortResourceId } from '@/components/root/finops/overview/finops-resource-id';
+import type {
+    CostByResourceItem,
+    CostByServiceItem,
+    OrgFinopsOverview,
+    OrgOverviewAccount,
+} from '@/components/root/finops/overview/types';
+import { fetchFinopsCostByResource } from '@/app/actions/finops';
+import { extractErrorMessage } from '@/lib/error-messages';
 import { cn } from '@/lib/utils';
 
 type FinopsSpendPanelProps = {
@@ -36,6 +46,9 @@ type FinopsSpendPanelProps = {
     costByService: CostByServiceItem[];
     isLoading?: boolean;
     onServiceClick?: (service: string) => void;
+    organizationId?: string | null;
+    selectedAccountId?: string | null;
+    selectedService?: string | null;
 };
 
 function serviceLabel(service: string): string {
@@ -51,9 +64,57 @@ export function FinopsSpendPanel({
     costByService,
     isLoading = false,
     onServiceClick,
+    organizationId = null,
+    selectedAccountId = null,
+    selectedService = null,
 }: FinopsSpendPanelProps) {
     const [servicesChartType, setServicesChartType] = useState<ChartType>('bar');
     const [providerChartType, setProviderChartType] = useState<ChartType>('bar');
+    const [resources, setResources] = useState<CostByResourceItem[]>([]);
+    const [loadingResources, setLoadingResources] = useState(false);
+
+    useEffect(() => {
+        if (!organizationId || !selectedAccountId || !overview) {
+            setResources([]);
+            return;
+        }
+
+        let cancelled = false;
+        const load = async () => {
+            setLoadingResources(true);
+            try {
+                const response = await fetchFinopsCostByResource(organizationId, selectedAccountId, {
+                    year: overview.period.year,
+                    month: overview.period.month,
+                    service: selectedService || undefined,
+                    limit: 15,
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok) {
+                    if (!cancelled) {
+                        toast.error(extractErrorMessage(payload));
+                        setResources([]);
+                    }
+                    return;
+                }
+                if (!cancelled) {
+                    setResources(Array.isArray(payload) ? (payload as CostByResourceItem[]) : []);
+                }
+            } catch {
+                if (!cancelled) {
+                    toast.error('Não foi possível carregar custo por recurso.');
+                    setResources([]);
+                }
+            } finally {
+                if (!cancelled) setLoadingResources(false);
+            }
+        };
+
+        void load();
+        return () => {
+            cancelled = true;
+        };
+    }, [organizationId, selectedAccountId, selectedService, overview?.period.year, overview?.period.month]);
 
     if (isLoading || !overview) {
         return (
@@ -105,6 +166,79 @@ export function FinopsSpendPanel({
                 title="Evolução dos gastos"
                 description={`${overview.period.startDate} → ${overview.period.endDate}`}
             />
+
+            {selectedAccountId ? (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Top recursos</CardTitle>
+                        <CardDescription>
+                            {selectedService
+                                ? `Variação MoM para ${selectedService}`
+                                : 'Selecione uma conta (e opcionalmente um serviço) para ver quais recursos mais custaram'}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {loadingResources ? (
+                            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+                                <Loader2 className="size-4 animate-spin" />
+                                Carregando recursos…
+                            </div>
+                        ) : resources.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-muted-foreground">
+                                Nenhum custo por recurso no período. Re-sincronize a conta FinOps para popular
+                                resource IDs.
+                            </p>
+                        ) : (
+                            <div className="divide-y rounded-lg border">
+                                {resources.map((row) => (
+                                    <div
+                                        key={`${row.service}-${row.resourceId}`}
+                                        className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="truncate font-mono text-xs font-medium" title={row.resourceId}>
+                                                {shortResourceId(row.resourceId)}
+                                            </p>
+                                            <p className="truncate text-[11px] text-muted-foreground">{row.service}</p>
+                                            {row.recentChanges[0] ? (
+                                                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                                                    {formatResourceChange(
+                                                        row.recentChanges[0].field,
+                                                        row.recentChanges[0].previousValue,
+                                                        row.recentChanges[0].newValue,
+                                                    )}
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            <p className="text-sm font-semibold tabular-nums">
+                                                {formatCurrency(row.currentMonthCost, row.currency)}
+                                            </p>
+                                            <p
+                                                className={cn(
+                                                    'text-[11px] tabular-nums',
+                                                    row.trend === 'up'
+                                                        ? 'text-destructive'
+                                                        : row.trend === 'down'
+                                                          ? 'text-emerald-600'
+                                                          : 'text-muted-foreground',
+                                                )}
+                                            >
+                                                {row.changePercentage >= 0 ? '+' : ''}
+                                                {row.changePercentage.toFixed(1)}%
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            ) : (
+                <p className="text-xs text-muted-foreground">
+                    Filtre uma conta cloud para ver drill-down por recurso (EC2, VM, etc.).
+                </p>
+            )}
 
             <div className="grid gap-4 lg:grid-cols-2">
                 <Card>

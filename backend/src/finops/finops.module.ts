@@ -17,6 +17,8 @@ import { FinopsForecastService } from './services/finops-forecast.service';
 import { FinopsMonetizationService } from './services/finops-monetization.service';
 import { FinopsOptimizationService } from './services/finops-optimization.service';
 import { FinopsOrgOverviewService } from './services/finops-org-overview.service';
+import { FinopsResourceCostService } from './services/finops-resource-cost.service';
+import { FinopsAnomalyAlertService } from './services/finops-anomaly-alert.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -31,8 +33,11 @@ import { FinopsConsent } from '../db/entites/finops-consent.entity';
 import { FinopsCostRecord } from '../db/entites/finops-cost-record.entity';
 import { FinopsBudget } from '../db/entites/finops-budget.entity';
 import { FinopsBudgetAlertEvent } from '../db/entites/finops-budget-alert-event.entity';
+import { FinopsAnomalyAlertSettings } from '../db/entites/finops-anomaly-alert-settings.entity';
+import { FinopsAnomalyAlertEvent } from '../db/entites/finops-anomaly-alert-event.entity';
 import { FinopsJob } from '../db/entites/finops-job.entity';
 import { FinopsRecommendation } from '../db/entites/finops-recommendation.entity';
+import { FinopsResourceChangeEvent } from '../db/entites/finops-resource-change-event.entity';
 
 // FinOps enterprise entities
 import { FinopsCostAggregate } from '../db/entites/finops-cost-aggregate.entity';
@@ -42,6 +47,7 @@ import { FinopsTenantBilling } from '../db/entites/finops-tenant-billing.entity'
 
 // Supporting entities
 import { CloudAccount } from '../db/entites/cloud-account.entity';
+import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 import { AwsEc2Instance } from '../db/entites/aws-ec2.entity';
 import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
 import { AwsS3Bucket } from '../db/entites/aws-s3-bucket.entity';
@@ -57,28 +63,36 @@ import { BillingModule } from '../billing/billing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { PlanModuleGuard } from '../common/guards/plan-module.guard';
+import { FinopsResourceChangeModule } from './finops-resource-change.module';
 
 import { FINOPS_QUEUE } from './constants';
+import { GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
+import { GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
+import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
 
 @Module({
     imports: [
         BullModule.registerQueue({ name: FINOPS_QUEUE }),
+        BullModule.registerQueue({ name: GENERAL_SYNC_QUEUE }),
+        BullModule.registerQueue({ name: GCP_GENERAL_SYNC_QUEUE }),
+        BullModule.registerQueue({ name: AZURE_ASSESSMENT_QUEUE }),
 
         TypeOrmModule.forFeature([
-            // FinOps core entities
             FinopsConsent,
             FinopsCostRecord,
             FinopsBudget,
             FinopsBudgetAlertEvent,
+            FinopsAnomalyAlertSettings,
+            FinopsAnomalyAlertEvent,
             FinopsJob,
             FinopsRecommendation,
-            // FinOps enterprise entities
+            FinopsResourceChangeEvent,
             FinopsCostAggregate,
             FinopsCostSyncRun,
             FinopsCostAnomaly,
             FinopsTenantBilling,
-            // Supporting entities
             CloudAccount,
+            AzureAssessmentJob,
             AwsEc2Instance,
             AwsRdsInstance,
             AwsS3Bucket,
@@ -93,16 +107,15 @@ import { FINOPS_QUEUE } from './constants';
         BillingModule,
         NotificationsModule,
         MailerModule,
+        FinopsResourceChangeModule,
     ],
     controllers: [FinopsController],
     providers: [
         PlanModuleGuard,
-        // Core services
         FinopsService,
         FinopsAnalysisService,
         FinopsBudgetService,
         FinopsSchedulerService,
-        // Enterprise services
         FinopsCostIngestionService,
         FinopsCostAggregationService,
         FinopsAnomalyDetectionService,
@@ -110,9 +123,9 @@ import { FINOPS_QUEUE } from './constants';
         FinopsMonetizationService,
         FinopsOptimizationService,
         FinopsOrgOverviewService,
-        // Processor
+        FinopsResourceCostService,
+        FinopsAnomalyAlertService,
         FinopsProcessor,
-        // Providers
         AwsFinopsProvider,
         AzureFinopsProvider,
         GcpFinopsProvider,
@@ -124,6 +137,7 @@ import { FINOPS_QUEUE } from './constants';
         FinopsAnomalyDetectionService,
         FinopsForecastService,
         FinopsOrgOverviewService,
+        FinopsResourceChangeModule,
     ],
 })
 export class FinopsModule {}

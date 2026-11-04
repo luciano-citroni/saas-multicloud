@@ -502,6 +502,10 @@ export const ErrorMessages = {
             en: 'Select at least one WhatsApp notification group when WhatsApp alerts are enabled.',
             pt: 'Selecione ao menos um grupo de WhatsApp quando o alerta por WhatsApp estiver ativo.',
         },
+        ANOMALY_ALERT_CHANNEL_REQUIRED: {
+            en: 'Select at least one alert channel when daily anomaly alerts are enabled.',
+            pt: 'Selecione ao menos um canal quando o alerta diário de anomalias estiver ativo.',
+        },
     },
 
     // General (mapeado por HTTP status code)

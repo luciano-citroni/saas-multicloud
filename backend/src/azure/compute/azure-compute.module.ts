@@ -9,6 +9,7 @@ import { AzureComputeService } from './azure-compute.service';
 import { CloudModule } from '../../cloud/cloud.module';
 import { TenantModule } from '../../tenant/tenant.module';
 import { RbacModule } from '../../rbac/rbac.module';
+import { FinopsResourceChangeModule } from '../../finops/finops-resource-change.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { RbacModule } from '../../rbac/rbac.module';
         CloudModule,
         TenantModule,
         RbacModule,
+        FinopsResourceChangeModule,
     ],
     providers: [AzureComputeService],
     controllers: [AzureComputeController],

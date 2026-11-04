@@ -52,7 +52,16 @@ export class FinopsProcessor extends WorkerHost {
     }
 
     async process(job: Job<FinopsSyncJobPayload>): Promise<void> {
-        const { jobId, cloudAccountId, organizationId, cloudProvider, granularity, startDate, endDate } = job.data;
+        const {
+            jobId,
+            cloudAccountId,
+            organizationId,
+            cloudProvider,
+            granularity,
+            startDate,
+            endDate,
+            triggerType = 'manual',
+        } = job.data;
 
         this.logger.log(`[${jobId}] Iniciando coleta de custos para conta ${cloudAccountId} (${cloudProvider})`);
 
@@ -60,8 +69,8 @@ export class FinopsProcessor extends WorkerHost {
 
         try {
             // ── 1. Carregar credenciais ───────────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 1/5: Carregando credenciais...`);
-            await job.updateProgress(10);
+            this.logger.log(`[${jobId}] Fase 1/6: Carregando credenciais...`);
+            await job.updateProgress(8);
 
             const cloudAccount = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId, {
                 withCredentials: true,
@@ -71,22 +80,44 @@ export class FinopsProcessor extends WorkerHost {
                 throw new Error(`CloudAccount ${cloudAccountId} não encontrada`);
             }
 
-            // ── 2. Coletar custos via provider ────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 2/5: Coletando custos via ${cloudProvider}...`);
-            await job.updateProgress(25);
+            // ── 2. Coletar custos via provider (serviço + região) ─────────────
+            this.logger.log(`[${jobId}] Fase 2/6: Coletando custos via ${cloudProvider}...`);
+            await job.updateProgress(20);
 
             const provider = this.resolveProvider(cloudProvider);
             const decryptedCredentials = this.decryptCloudCredentials(cloudAccount.credentialsEncrypted);
+            const providerCreds = { credentials: decryptedCredentials, cloudAccountId };
 
-            const { entries } = await provider.collectCosts(
-                { credentials: decryptedCredentials, cloudAccountId },
-                startDate,
-                endDate,
-                granularity,
+            const { entries } = await provider.collectCosts(providerCreds, startDate, endDate, granularity);
+
+            // ── 3. Coletar custos por recurso (AWS CE WithResources ≤ 14d) ───
+            this.logger.log(`[${jobId}] Fase 3/6: Coletando custos por recurso...`);
+            await job.updateProgress(35);
+
+            let resourceEntries: typeof entries = [];
+            try {
+                const resourceStartDate = this.clampResourceCostStart(startDate, endDate);
+                const resourceResult = await provider.collectResourceCosts(
+                    providerCreds,
+                    resourceStartDate,
+                    endDate,
+                    granularity,
+                );
+                resourceEntries = resourceResult.entries;
+            } catch (error) {
+                this.logger.warn(
+                    `[${jobId}] collectResourceCosts falhou (seguindo só com serviço): ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                );
+            }
+
+            const allEntries = [...entries, ...resourceEntries];
+
+            // ── 4. Ingestão (normalize + persist) ────────────────────────────
+            this.logger.log(
+                `[${jobId}] Fase 4/6: Persistindo ${allEntries.length} registros (serviço=${entries.length}, recurso=${resourceEntries.length})...`,
             );
-
-            // ── 3. Ingestão (normalize + persist) ────────────────────────────
-            this.logger.log(`[${jobId}] Fase 3/5: Persistindo ${entries.length} registros...`);
             await job.updateProgress(50);
 
             const { recordsUpserted } = await this.ingestionService.ingest(
@@ -96,18 +127,17 @@ export class FinopsProcessor extends WorkerHost {
                 startDate,
                 endDate,
                 granularity,
-                entries,
-                'manual',
+                allEntries,
+                triggerType,
             );
 
-            // ── 4. Agregar (atualiza cost_aggregates) ─────────────────────────
-            this.logger.log(`[${jobId}] Fase 4/5: Calculando agregados mensais...`);
+            // ── 5. Agregar (atualiza cost_aggregates) ─────────────────────────
+            this.logger.log(`[${jobId}] Fase 5/6: Calculando agregados mensais...`);
             await job.updateProgress(70);
 
             const start = new Date(startDate + 'T00:00:00Z');
             const end = new Date(endDate + 'T00:00:00Z');
 
-            // Agregar todos os meses no range
             const months = new Set<string>();
             const cursor = new Date(start);
             while (cursor <= end) {
@@ -125,23 +155,19 @@ export class FinopsProcessor extends WorkerHost {
                 );
             }
 
-            // ── 5. Detecção de anomalias + recomendações ──────────────────────
-            this.logger.log(`[${jobId}] Fase 5/5: Detectando anomalias e gerando recomendações...`);
+            // ── 6. Detecção de anomalias + recomendações ──────────────────────
+            // Baseline: custo diário ~3 meses; marca só anomalias dos últimos 7 dias.
+            this.logger.log(`[${jobId}] Fase 6/6: Detectando anomalias (últimos 7d) e gerando recomendações...`);
             await job.updateProgress(85);
 
-            // Detectar anomalias para cada dia no range (apenas granularity DAILY)
             if (granularity === 'DAILY') {
-                const daysCursor = new Date(start);
-                while (daysCursor <= end) {
-                    const dateStr = daysCursor.toISOString().slice(0, 10);
-                    await this.anomalyService.detectForDate(
-                        organizationId,
-                        cloudAccountId,
-                        cloudProvider,
-                        dateStr,
-                    );
-                    daysCursor.setUTCDate(daysCursor.getUTCDate() + 1);
-                }
+                await this.anomalyService.detectRecentWindow(
+                    organizationId,
+                    cloudAccountId,
+                    cloudProvider,
+                    endDate,
+                    7,
+                );
             }
 
             await this.optimizationService.generateCrossModuleRecommendations(
@@ -150,7 +176,6 @@ export class FinopsProcessor extends WorkerHost {
                 cloudProvider,
             );
 
-            // ── Finalizar ─────────────────────────────────────────────────────
             await this.jobRepo.update(jobId, {
                 status: 'completed',
                 recordsCollected: recordsUpserted,
@@ -168,6 +193,16 @@ export class FinopsProcessor extends WorkerHost {
         }
     }
 
+    /** AWS Cost Explorer WithResources só cobre ~14 dias — evita falhar o range inteiro. */
+    private clampResourceCostStart(startDate: string, endDate: string): string {
+        const end = new Date(`${endDate}T00:00:00Z`);
+        const minStart = new Date(end);
+        minStart.setUTCDate(end.getUTCDate() - 13);
+        const start = new Date(`${startDate}T00:00:00Z`);
+        const clamped = start > minStart ? start : minStart;
+        return clamped.toISOString().slice(0, 10);
+    }
+
     private resolveProvider(cloudProvider: string): IFinopsProvider {
         if (cloudProvider === 'aws') return this.awsProvider;
         if (cloudProvider === 'azure') return this.azureProvider;
@@ -175,10 +210,6 @@ export class FinopsProcessor extends WorkerHost {
         throw new Error(`Provider FinOps não suportado: ${cloudProvider}`);
     }
 
-    /**
-     * Descriptografa as credenciais usando AES-256-GCM.
-     * Replica a lógica de CloudService para evitar dependências circulares.
-     */
     private decryptCloudCredentials(encrypted: string): Record<string, any> {
         const keyHex = process.env['CREDENTIALS_ENCRYPTION_KEY'];
 
