@@ -101,7 +101,7 @@ function parseGroups(payload: unknown): NotificationGroupOption[] {
                 isActive: row.isActive !== false,
             } satisfies NotificationGroupOption;
         })
-        .filter((g): g is NotificationGroupOption => Boolean(g) && g.isActive);
+        .filter((g): g is NotificationGroupOption => g != null && g.isActive);
 }
 
 function settingsToForm(
