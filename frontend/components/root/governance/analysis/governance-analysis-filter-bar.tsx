@@ -26,12 +26,9 @@ type GovernanceAnalysisFilterBarProps = {
     resourceTypeOptions: string[];
     totalFiltered: number;
     totalFindings: number;
-    pageSize: number;
-    pageSizeOptions: readonly number[];
     onNameChange: (value: string) => void;
     onSeverityChange: (value: SeverityFilter) => void;
     onResourceTypeChange: (value: ResourceTypeFilter) => void;
-    onPageSizeChange: (value: number) => void;
     onClear: () => void;
     className?: string;
 };
@@ -140,12 +137,9 @@ export function GovernanceAnalysisFilterBar({
     resourceTypeOptions,
     totalFiltered,
     totalFindings,
-    pageSize,
-    pageSizeOptions,
     onNameChange,
     onSeverityChange,
     onResourceTypeChange,
-    onPageSizeChange,
     onClear,
     className,
 }: GovernanceAnalysisFilterBarProps) {
@@ -224,19 +218,6 @@ export function GovernanceAnalysisFilterBar({
                     <span className="text-xs text-muted-foreground">
                         {tg.filteredOfTotal.replace('{filtered}', String(totalFiltered)).replace('{total}', String(totalFindings))}
                     </span>
-
-                    <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
-                        <SelectTrigger className="h-8 w-[7.5rem]" aria-label={tg.itemsPerPage}>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {pageSizeOptions.map((size) => (
-                                <SelectItem key={size} value={String(size)}>
-                                    {tg.perPageOption.replace('{size}', String(size))}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
 
                     {hasActiveFilters && (
                         <Button type="button" size="sm" variant="ghost" onClick={handleClear}>

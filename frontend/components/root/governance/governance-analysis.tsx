@@ -2,11 +2,24 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, RefreshCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    ClipboardList,
+    RefreshCcw,
+    ShieldAlert,
+    ShieldCheck,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     GovernanceAnalysisFilterBar,
     RESOURCE_TYPE_FILTER_ALL,
@@ -586,8 +599,6 @@ export function GovernanceAnalysis() {
                         resourceTypeOptions={resourceTypeOptions}
                         totalFiltered={filteredTotalItems}
                         totalFindings={job?.totalFindings ?? findings.length}
-                        pageSize={pageSize}
-                        pageSizeOptions={PAGE_SIZE_OPTIONS}
                         onNameChange={(value) =>
                             syncFilterUrlState({
                                 nameFilter: value,
@@ -613,15 +624,6 @@ export function GovernanceAnalysis() {
                                 resourceTypeFilter: value,
                                 page: DEFAULT_PAGE,
                                 pageSize,
-                            })
-                        }
-                        onPageSizeChange={(value) =>
-                            syncFilterUrlState({
-                                nameFilter,
-                                severityFilter,
-                                resourceTypeFilter,
-                                page: DEFAULT_PAGE,
-                                pageSize: value,
                             })
                         }
                         onClear={() =>
@@ -701,46 +703,110 @@ export function GovernanceAnalysis() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs text-muted-foreground">
-                            {tc.page} {currentPage} {tc.of} {totalPages}
-                        </p>
+                    <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8 sm:pr-32 md:pr-36">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
+                            <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
+                            <Select
+                                value={`${pageSize}`}
+                                onValueChange={(value) =>
+                                    syncFilterUrlState({
+                                        nameFilter,
+                                        severityFilter,
+                                        resourceTypeFilter,
+                                        page: DEFAULT_PAGE,
+                                        pageSize: Number(value),
+                                    })
+                                }
+                                disabled={loadingFindings}
+                            >
+                                <SelectTrigger className="h-8 min-w-22">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PAGE_SIZE_OPTIONS.map((size) => (
+                                        <SelectItem key={size} value={`${size}`}>
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                    syncFilterUrlState({
-                                        nameFilter,
-                                        severityFilter,
-                                        resourceTypeFilter,
-                                        page: Math.max(currentPage - 1, DEFAULT_PAGE),
-                                        pageSize,
-                                    })
-                                }
-                                disabled={!pagination?.hasPreviousPage}
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                                {tg.previous}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                    syncFilterUrlState({
-                                        nameFilter,
-                                        severityFilter,
-                                        resourceTypeFilter,
-                                        page: Math.min(currentPage + 1, totalPages),
-                                        pageSize,
-                                    })
-                                }
-                                disabled={!pagination?.hasNextPage}
-                            >
-                                {tg.next}
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                            <span className="text-sm font-medium">
+                                {tc.page} {currentPage} {tc.of} {totalPages}
+                            </span>
+
+                            <div className="flex items-center gap-1 self-start sm:self-auto">
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                        syncFilterUrlState({
+                                            nameFilter,
+                                            severityFilter,
+                                            resourceTypeFilter,
+                                            page: DEFAULT_PAGE,
+                                            pageSize,
+                                        })
+                                    }
+                                    disabled={loadingFindings || !pagination?.hasPreviousPage}
+                                >
+                                    <ChevronsLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                        syncFilterUrlState({
+                                            nameFilter,
+                                            severityFilter,
+                                            resourceTypeFilter,
+                                            page: Math.max(currentPage - 1, DEFAULT_PAGE),
+                                            pageSize,
+                                        })
+                                    }
+                                    disabled={loadingFindings || !pagination?.hasPreviousPage}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                        syncFilterUrlState({
+                                            nameFilter,
+                                            severityFilter,
+                                            resourceTypeFilter,
+                                            page: Math.min(currentPage + 1, totalPages),
+                                            pageSize,
+                                        })
+                                    }
+                                    disabled={loadingFindings || !pagination?.hasNextPage}
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                        syncFilterUrlState({
+                                            nameFilter,
+                                            severityFilter,
+                                            resourceTypeFilter,
+                                            page: totalPages,
+                                            pageSize,
+                                        })
+                                    }
+                                    disabled={loadingFindings || !pagination?.hasNextPage}
+                                >
+                                    <ChevronsRight className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
