@@ -4,6 +4,7 @@ import { BarChart3, LineChart as LineChartIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ChartType } from '@/components/root/finops/overview/cost-trend-chart';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 type ChartViewToggleProps = {
     value: ChartType;
@@ -11,11 +12,13 @@ type ChartViewToggleProps = {
 };
 
 export function ChartViewToggle({ value, onChange }: ChartViewToggleProps) {
+    const t = useTranslations('finops');
+
     return (
         <div
             className="inline-flex w-fit items-center rounded-lg border border-border p-0.5"
             role="group"
-            aria-label="Tipo de gráfico"
+            aria-label={t.chartTypeAria}
         >
             <Button
                 type="button"
@@ -31,7 +34,7 @@ export function ChartViewToggle({ value, onChange }: ChartViewToggleProps) {
                 aria-pressed={value === 'line'}
             >
                 <LineChartIcon className="size-3.5" />
-                Linha
+                {t.chartLine}
             </Button>
             <Button
                 type="button"
@@ -47,7 +50,7 @@ export function ChartViewToggle({ value, onChange }: ChartViewToggleProps) {
                 aria-pressed={value === 'bar'}
             >
                 <BarChart3 className="size-3.5" />
-                Barra
+                {t.chartBar}
             </Button>
         </div>
     );

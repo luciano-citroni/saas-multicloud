@@ -15,6 +15,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTranslations } from '@/lib/i18n';
 
 const syncSchema = z.object({
     granularity: z.enum(['daily', 'monthly']),
@@ -46,6 +47,7 @@ function getDefaultDates() {
 }
 
 export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isLoading = false }: FinopsSyncDialogProps) {
+    const tf = useTranslations('finops');
     const { startDate, endDate } = getDefaultDates();
 
     const form = useForm<SyncFormData>({
@@ -82,7 +84,7 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
                                             <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Selecione" />
+                                                <SelectValue placeholder={tf.selectPlaceholder} />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>

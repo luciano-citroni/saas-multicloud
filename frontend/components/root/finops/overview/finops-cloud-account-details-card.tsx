@@ -8,6 +8,8 @@ import { formatCurrency, isTaxService } from '@/components/root/finops/overview/
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { FinopsDashboard } from './types';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations } from '@/lib/i18n';
 
 type FinopsCloudAccountDetailsCardProps = {
     account: OrganizationCloudAccount;
@@ -16,6 +18,8 @@ type FinopsCloudAccountDetailsCardProps = {
 };
 
 export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = false }: FinopsCloudAccountDetailsCardProps) {
+    const t = useTranslations('finops');
+
     if (isLoading) {
         return <div className="rounded-xl border bg-muted h-64 animate-pulse" />;
     }
@@ -41,13 +45,13 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
                     {account.isSyncInProgress && (
                         <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                             <div className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                            Sincronização em progresso
+                            {t.syncInProgress}
                         </div>
                     )}
 
                     {account.lastGeneralSyncAt && (
                         <p className="text-xs text-muted-foreground mt-1">
-                            Última sync: {new Date(account.lastGeneralSyncAt).toLocaleDateString('pt-BR')}
+                            {t.lastSync}: {new Date(account.lastGeneralSyncAt).toLocaleDateString(toIntlLocale())}
                         </p>
                     )}
                 </div>
@@ -62,12 +66,12 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
                             <Link href={accountDashboardHref} className="cursor-pointer">
-                                Ver detalhes
+                                {t.viewDetails}
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                             <Link href={`/cloud-accounts/${account.id}`} className="cursor-pointer">
-                                Gerenciar conta
+                                {t.manageAccount}
                             </Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -78,7 +82,7 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
             {dashboard ? (
                 <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-lg border p-2.5">
-                        <p className="text-xs text-muted-foreground">Custo do mês</p>
+                        <p className="text-xs text-muted-foreground">{t.monthCost}</p>
                         <p className="mt-1 text-lg font-bold">{formatCurrency(totalCost, currency)}</p>
                         <div
                             className={cn(
@@ -92,7 +96,7 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
                     </div>
 
                     <div className="rounded-lg border p-2.5">
-                        <p className="text-xs text-muted-foreground">Top serviço</p>
+                        <p className="text-xs text-muted-foreground">{t.topService}</p>
                         {(() => {
                             const topService = dashboard.topServices?.find((item) => !isTaxService(item.service));
                             return (
@@ -112,12 +116,12 @@ export function FinopsCloudAccountDetailsCard({ account, dashboard, isLoading = 
                     </div>
                 </div>
             ) : (
-                <div className="mt-4 p-3 text-center text-sm text-muted-foreground rounded-lg border border-dashed">Nenhum dado de FinOps disponível</div>
+                <div className="mt-4 p-3 text-center text-sm text-muted-foreground rounded-lg border border-dashed">{t.noFinopsData}</div>
             )}
 
             <Link href={accountDashboardHref} className="mt-3 block w-full">
                 <Button variant="outline" size="sm" className="w-full">
-                    Abrir dashboard
+                    {t.openDashboard}
                 </Button>
             </Link>
         </div>

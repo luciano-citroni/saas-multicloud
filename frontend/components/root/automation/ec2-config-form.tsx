@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Loader2, Key, Plus, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useTranslations } from '@/lib/i18n';
+import { extractErrorMessage } from '@/lib/error-messages';
 
 const OS_PRESETS = [
     { id: 'amazon-linux-2023', label: 'Amazon Linux 2023', short: 'AL2023', color: 'bg-orange-500' },
@@ -72,6 +74,8 @@ type Props = {
 };
 
 export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId }: Props) {
+    const ta = useTranslations('automation');
+    const tc = useTranslations('common');
     const [vpcs, setVpcs] = useState<Vpc[]>([]);
     const [subnets, setSubnets] = useState<Subnet[]>([]);
     const [sgs, setSgs] = useState<SecurityGroup[]>([]);
@@ -170,10 +174,10 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 const data = await res.json();
                 onChange('amiId', data.amiId);
             } else {
-                toast.error(`AMI não encontrada para ${osId} em ${region}`);
+                toast.error(ta.ec2AmiNotFound.replace('{os}', osId).replace('{region}', region));
             }
         } catch {
-            toast.error('Erro ao resolver AMI');
+            toast.error(ta.ec2AmiError);
         } finally {
             setLoadingAmi(false);
         }
@@ -197,7 +201,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
             });
             if (!res.ok) {
                 const err = await res.json();
-                toast.error(err.message ?? 'Erro ao criar chave');
+                toast.error(extractErrorMessage(err));
                 return;
             }
             const data = await res.json();
@@ -215,25 +219,26 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
             onChange('keyName', data.name);
             setKeyDialogOpen(false);
             setNewKeyName('');
-            toast.success(`Chave "${data.name}" criada e baixada com sucesso`);
+            toast.success(ta.ec2KeyCreated.replace('{name}', String(data.name)));
         } catch {
-            toast.error('Erro ao criar chave');
+            toast.error(ta.ec2KeyCreateError);
         } finally {
             setCreatingKey(false);
         }
     };
 
     const diskType = String(config.diskType ?? 'gp3');
+    const [keyDialogDescriptionBefore, keyDialogDescriptionAfter = ''] = ta.ec2KeyDialogDescription.split('{region}');
 
     return (
         <div className="space-y-4">
             {/* OS Preset */}
             <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Sistema Operacional</Label>
+                <Label className="text-xs font-medium">{ta.ec2Os}</Label>
                 {loadingAmi && (
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                        Resolvendo AMI...
+                        {ta.ec2ResolvingAmi}
                     </div>
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
@@ -260,7 +265,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 ) : null}
                 {!config.osPreset && (
                     <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Ou informe AMI manualmente</Label>
+                        <Label className="text-[10px] text-muted-foreground">{ta.ec2ManualAmi}</Label>
                         <Input
                             className="h-7 text-xs"
                             value={String(config.amiId ?? '')}
@@ -273,11 +278,11 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
 
             {/* Instance Type */}
             <div className="space-y-1">
-                <Label className="text-xs">Tipo de Instância</Label>
+                <Label className="text-xs">{ta.ec2InstanceType}</Label>
                 <Combobox items={ALL_INSTANCE_TYPES} value={String(config.instanceType ?? 't3.micro')} onValueChange={(v) => { if (v) onChange('instanceType', v); }}>
-                    <ComboboxInput placeholder="Buscar tipo..." className="h-8 text-xs" />
+                    <ComboboxInput placeholder={ta.ec2SearchType} className="h-8 text-xs" />
                     <ComboboxContent>
-                        <ComboboxEmpty className="text-xs">Tipo não encontrado.</ComboboxEmpty>
+                        <ComboboxEmpty className="text-xs">{ta.ec2TypeNotFound}</ComboboxEmpty>
                         <ComboboxList>
                             {(t: string) => (
                                 <ComboboxItem key={t} value={t} className="text-xs">{t}</ComboboxItem>
@@ -289,11 +294,11 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
 
             {/* Region */}
             <div className="space-y-1">
-                <Label className="text-xs">Região</Label>
+                <Label className="text-xs">{ta.ec2Region}</Label>
                 <Combobox items={AWS_REGIONS} value={region} onValueChange={(v) => { if (v) handleRegionChange(v); }}>
-                    <ComboboxInput placeholder="Buscar região..." className="h-8 text-xs" />
+                    <ComboboxInput placeholder={ta.ec2SearchRegion} className="h-8 text-xs" />
                     <ComboboxContent>
-                        <ComboboxEmpty className="text-xs">Região não encontrada.</ComboboxEmpty>
+                        <ComboboxEmpty className="text-xs">{ta.ec2RegionNotFound}</ComboboxEmpty>
                         <ComboboxList>
                             {(r: string) => (
                                 <ComboboxItem key={r} value={r} className="text-xs">{r}</ComboboxItem>
@@ -313,16 +318,16 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 </div>
                 <Select value={vpcId} onValueChange={handleVpcChange} disabled={loadingVpcs}>
                     <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder={loadingVpcs ? 'Carregando...' : 'Selecionar VPC'} />
+                        <SelectValue placeholder={loadingVpcs ? tc.loading : ta.ec2SelectVpc} />
                     </SelectTrigger>
                     <SelectContent>
                         {vpcs.map((v) => (
                             <SelectItem key={v.id} value={v.id} className="text-xs">
-                                {v.isDefault ? `${v.id} (padrão)` : `${v.name} — ${v.cidr}`}
+                                {v.isDefault ? `${v.id} (${ta.ec2DefaultSuffix})` : `${v.name} — ${v.cidr}`}
                             </SelectItem>
                         ))}
                         {vpcs.length === 0 && !loadingVpcs && (
-                            <div className="px-2 py-1.5 text-[10px] text-muted-foreground">Nenhuma VPC encontrada</div>
+                            <div className="px-2 py-1.5 text-[10px] text-muted-foreground">{ta.ec2NoVpc}</div>
                         )}
                     </SelectContent>
                 </Select>
@@ -338,7 +343,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 </div>
                 <Select value={String(config.subnetId ?? '')} onValueChange={(v) => onChange('subnetId', v)} disabled={loadingSubnets}>
                     <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder={loadingSubnets ? 'Carregando...' : 'Selecionar subnet'} />
+                        <SelectValue placeholder={loadingSubnets ? tc.loading : ta.ec2SelectSubnet} />
                     </SelectTrigger>
                     <SelectContent>
                         {subnets.map((s) => (
@@ -347,7 +352,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                             </SelectItem>
                         ))}
                         {subnets.length === 0 && !loadingSubnets && (
-                            <div className="px-2 py-1.5 text-[10px] text-muted-foreground">Nenhuma subnet encontrada</div>
+                            <div className="px-2 py-1.5 text-[10px] text-muted-foreground">{ta.ec2NoSubnet}</div>
                         )}
                     </SelectContent>
                 </Select>
@@ -363,10 +368,10 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 </div>
                 {loadingSgs ? (
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground py-1">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Carregando...
+                        <Loader2 className="h-3 w-3 animate-spin" /> {tc.loading}
                     </div>
                 ) : sgs.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground py-1">Nenhum SG encontrado</p>
+                    <p className="text-[10px] text-muted-foreground py-1">{ta.ec2NoSg}</p>
                 ) : (
                     <div className="max-h-28 overflow-y-auto rounded-md border p-1.5 space-y-1">
                         {sgs.map((sg) => (
@@ -398,14 +403,14 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                 <div className="flex gap-1.5">
                     <Select value={String(config.keyName ?? '')} onValueChange={(v) => onChange('keyName', v)} disabled={loadingKeyPairs}>
                         <SelectTrigger className="h-8 flex-1 text-xs">
-                            <SelectValue placeholder={loadingKeyPairs ? 'Carregando...' : 'Sem chave'} />
+                            <SelectValue placeholder={loadingKeyPairs ? tc.loading : ta.ec2NoKeyPlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
                             {keyPairs.map((kp) => (
                                 <SelectItem key={kp.id} value={kp.name} className="text-xs">{kp.name}</SelectItem>
                             ))}
                             {keyPairs.length === 0 && !loadingKeyPairs && (
-                                <div className="px-2 py-1.5 text-[10px] text-muted-foreground">Nenhuma chave encontrada</div>
+                                <div className="px-2 py-1.5 text-[10px] text-muted-foreground">{ta.ec2NoKey}</div>
                             )}
                         </SelectContent>
                     </Select>
@@ -415,7 +420,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                         size="icon"
                         className="h-8 w-8 shrink-0"
                         onClick={() => setKeyDialogOpen(true)}
-                        title="Criar nova chave PEM"
+                        title={ta.ec2CreateKeyTitle}
                     >
                         <Plus className="h-3.5 w-3.5" />
                     </Button>
@@ -424,10 +429,10 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
 
             {/* Disk Configuration */}
             <div className="space-y-1.5 rounded-md border p-2">
-                <Label className="text-xs font-medium">Disco (EBS)</Label>
+                <Label className="text-xs font-medium">{ta.ec2Disk}</Label>
                 <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Tipo</Label>
+                        <Label className="text-[10px] text-muted-foreground">{ta.ec2DiskType}</Label>
                         <Select value={diskType} onValueChange={(v) => onChange('diskType', v)}>
                             <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -438,7 +443,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                         </Select>
                     </div>
                     <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Tamanho (GB)</Label>
+                        <Label className="text-[10px] text-muted-foreground">{ta.ec2DiskSize}</Label>
                         <Input
                             className="h-7 text-xs"
                             type="number"
@@ -481,7 +486,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                         onCheckedChange={(v) => onChange('diskDeleteOnTermination', Boolean(v))}
                         className="h-3.5 w-3.5"
                     />
-                    <span className="text-[10px]">Excluir disco ao terminar instância</span>
+                    <span className="text-[10px]">{ta.ec2DeleteDiskOnTerminate}</span>
                 </label>
             </div>
 
@@ -491,33 +496,33 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-sm">
                             <Key className="h-4 w-4" />
-                            Criar novo Key Pair
+                            {ta.ec2KeyDialogTitle}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3 py-2">
                         <p className="text-xs text-muted-foreground">
-                            O par de chaves será criado na AWS na região <strong>{region}</strong>. O arquivo <code>.pem</code> será baixado automaticamente — guarde-o em local seguro.
+                            {keyDialogDescriptionBefore}<strong>{region}</strong>{keyDialogDescriptionAfter}
                         </p>
                         <div className="space-y-1">
-                            <Label className="text-xs">Nome da chave</Label>
+                            <Label className="text-xs">{ta.ec2KeyName}</Label>
                             <Input
                                 className="h-8 text-xs"
                                 value={newKeyName}
                                 onChange={(e) => setNewKeyName(e.target.value)}
-                                placeholder="minha-chave-ec2"
+                                placeholder={ta.ec2KeyNamePlaceholder}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateKeyPair(); }}
                             />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" size="sm" onClick={() => setKeyDialogOpen(false)}>Cancelar</Button>
+                        <Button variant="outline" size="sm" onClick={() => setKeyDialogOpen(false)}>{tc.cancel}</Button>
                         <Button
                             size="sm"
                             isLoading={creatingKey}
                             disabled={!newKeyName.trim() || creatingKey}
                             onClick={() => void handleCreateKeyPair()}
                         >
-                            Criar e baixar .pem
+                            {ta.ec2CreateAndDownload}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

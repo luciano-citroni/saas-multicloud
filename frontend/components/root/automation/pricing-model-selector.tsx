@@ -3,34 +3,27 @@
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PricingModel, CostEstimateResponse } from '@/app/actions/automation';
+import { useTranslations } from '@/lib/i18n';
 
 const MODELS = [
     {
         id: 'ON_DEMAND' as PricingModel,
         title: 'On-Demand',
-        description: 'Pague apenas pelo que usar, sem compromisso.',
-        badge: 'Flexível',
         badgeClass: 'bg-muted text-muted-foreground',
         costKey: 'onDemand' as const,
-        discount: null,
     },
     {
         id: 'RESERVED' as PricingModel,
-        title: 'Reserved (1 ano)',
-        description: 'Comprometimento de 1 ano com desconto de 30%.',
         badge: '−30%',
         badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
         costKey: 'reserved' as const,
-        discount: 30,
     },
     {
         id: 'SAVINGS' as PricingModel,
         title: 'Savings Plan',
-        description: 'Flexibilidade com desconto de até 40% sobre On-Demand.',
         badge: '−40%',
         badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
         costKey: 'savings' as const,
-        discount: 40,
     },
 ] as const;
 
@@ -45,11 +38,19 @@ type Props = {
 };
 
 export function PricingModelSelector({ selected, onChange, totals }: Props) {
+    const t = useTranslations('automation');
+    const copy = {
+        ON_DEMAND: { title: 'On-Demand', description: t.pricingOnDemandDesc, badge: t.pricingFlexible },
+        RESERVED: { title: t.pricingReservedTitle, description: t.pricingReservedDesc, badge: '−30%' },
+        SAVINGS: { title: 'Savings Plan', description: t.pricingSavingsDesc, badge: '−40%' },
+    } as const;
+
     return (
         <div className="space-y-3">
             {MODELS.map((model) => {
                 const isSelected = selected === model.id;
                 const monthlyCost = totals[model.costKey];
+                const text = copy[model.id];
 
                 return (
                     <button
@@ -74,12 +75,12 @@ export function PricingModelSelector({ selected, onChange, totals }: Props) {
                         {/* Content */}
                         <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                                <span className="font-semibold">{model.title}</span>
+                                <span className="font-semibold">{text.title}</span>
                                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', model.badgeClass)}>
-                                    {model.badge}
+                                    {text.badge}
                                 </span>
                             </div>
-                            <p className="mt-0.5 text-sm text-muted-foreground">{model.description}</p>
+                            <p className="mt-0.5 text-sm text-muted-foreground">{text.description}</p>
                         </div>
 
                         {/* Cost */}
@@ -91,7 +92,7 @@ export function PricingModelSelector({ selected, onChange, totals }: Props) {
                             )}>
                                 {formatCost(monthlyCost)}
                             </p>
-                            <p className="text-xs text-muted-foreground">por mês</p>
+                            <p className="text-xs text-muted-foreground">{t.perMonth}</p>
                         </div>
                     </button>
                 );

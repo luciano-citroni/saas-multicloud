@@ -1,4 +1,6 @@
 import { formatCurrency, formatDate } from '@/components/root/finops/overview/helpers';
+import { translations } from '@/lib/i18n/translations';
+import { getLocale } from '@/lib/locale';
 import type {
     CostByServiceItem,
     OrgFinopsOverview,
@@ -44,10 +46,14 @@ function getTableEndY(doc: PdfDoc, fallback: number): number {
     return doc.lastAutoTable?.finalY ?? fallback;
 }
 
+function finopsCopy() {
+    return translations[getLocale()].finops;
+}
+
 async function loadBridgeLogoDataUrl(): Promise<string> {
     const response = await fetch('/logo.svg', { cache: 'force-cache' });
     if (!response.ok) {
-        throw new Error('Falha ao carregar a logo Bridge.');
+        throw new Error(finopsCopy().pdfLogoLoadError);
     }
 
     // Logo padrão é clara; no PDF (fundo branco) usamos versão preta.
@@ -61,7 +67,7 @@ async function loadBridgeLogoDataUrl(): Promise<string> {
         const image = await new Promise<HTMLImageElement>((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('Falha ao decodificar a logo Bridge.'));
+            img.onerror = () => reject(new Error(finopsCopy().pdfLogoDecodeError));
             img.src = objectUrl;
         });
 
@@ -73,7 +79,7 @@ async function loadBridgeLogoDataUrl(): Promise<string> {
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            throw new Error('Falha ao preparar canvas da logo.');
+            throw new Error(finopsCopy().pdfLogoCanvasError);
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -131,7 +137,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
             : jspdfAny.default?.jsPDF);
 
     if (!jsPDFCtor) {
-        throw new Error('Falha ao carregar jsPDF no navegador.');
+        throw new Error(finopsCopy().pdfJsPdfLoadError);
     }
 
     const autoTable = (autoTableModule as unknown as { default: (doc: PdfDoc, options: object) => void }).default;
@@ -258,7 +264,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
         head: [['Tipo', 'Conta', 'Título', 'Provedor', 'Impacto']],
         body:
             input.optimizeItems.length === 0
-                ? [['—', '—', 'Nenhuma oportunidade/anomalia aberta', '—', '—']]
+                ? [['—', '—', finopsCopy().noOpenOpportunity, '—', '—']]
                 : input.optimizeItems.map((item) => [
                       item.kind,
                       input.accountAliases[item.cloudAccountId] ?? item.cloudAccountId.slice(0, 8),

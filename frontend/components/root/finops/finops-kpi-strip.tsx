@@ -12,6 +12,7 @@ import {
     type FinopsBudgetStatusItem,
 } from '@/components/root/finops/finops-budget-types';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 export type { FinopsBudgetStatusItem };
 
@@ -44,6 +45,8 @@ export function FinopsKpiStrip({
     anomaliesHref = '/finops/anomalies',
     isLoading = false,
 }: FinopsKpiStripProps) {
+    const t = useTranslations('finops');
+
     if (isLoading) {
         return (
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -63,12 +66,12 @@ export function FinopsKpiStrip({
 
     const riskSubtitle =
         riskState === 'empty'
-            ? 'Nenhum orçamento ativo'
+            ? t.kpiNoActiveBudget
             : riskState === 'exceeded'
-              ? 'Limite excedido'
+              ? t.kpiLimitExceeded
               : riskState === 'near'
-                ? 'Próximo do limiar'
-                : 'Dentro do limite';
+                ? t.kpiNearThreshold
+                : t.budgetsWithinLimit;
 
     return (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -76,18 +79,18 @@ export function FinopsKpiStrip({
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <Wallet className="size-3.5" />
-                        Custo no período
+                        {t.kpiCostPeriod}
                     </CardDescription>
                     <CardTitle className="text-xl sm:text-2xl">{formatCurrency(cost, currency)}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-xs text-muted-foreground">Valor acumulado no filtro atual</p>
+                    <p className="text-xs text-muted-foreground">{t.kpiCostPeriodHint}</p>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader className="pb-2">
-                    <CardDescription>Variação vs período anterior</CardDescription>
+                    <CardDescription>{t.kpiVariation}</CardDescription>
                     <CardTitle
                         className={cn(
                             'flex items-center gap-1.5 text-xl sm:text-2xl',
@@ -100,20 +103,20 @@ export function FinopsKpiStrip({
                 </CardHeader>
                 <CardContent>
                     <p className="text-xs text-muted-foreground">
-                        {growthPositive ? 'Redução ou estabilidade' : 'Aumento — investigar drivers'}
+                        {growthPositive ? t.kpiVariationDown : t.kpiVariationUp}
                     </p>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader className="pb-2">
-                    <CardDescription>Previsão do mês</CardDescription>
+                    <CardDescription>{t.kpiForecastTitle}</CardDescription>
                     <CardTitle className="text-xl sm:text-2xl">
                         {forecastedCost != null ? formatCurrency(forecastedCost, currency) : '—'}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-xs text-muted-foreground">Estimativa com base no ritmo atual</p>
+                    <p className="text-xs text-muted-foreground">{t.kpiForecastHint}</p>
                 </CardContent>
             </Card>
 
@@ -121,7 +124,7 @@ export function FinopsKpiStrip({
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <PiggyBank className="size-3.5" />
-                        Economia potencial
+                        {t.potentialSavings}
                     </CardDescription>
                     <CardTitle className="text-xl text-emerald-600 sm:text-2xl">
                         {formatCurrency(potentialSavings, currency)}
@@ -129,11 +132,13 @@ export function FinopsKpiStrip({
                 </CardHeader>
                 <CardContent className="space-y-1">
                     <p className="text-xs text-muted-foreground">
-                        {openRecommendations} recomendaç{openRecommendations === 1 ? 'ão' : 'ões'} aberta
-                        {openRecommendations === 1 ? '' : 's'}
+                        {(openRecommendations === 1
+                            ? t.kpiOpenRecommendationsOne
+                            : t.kpiOpenRecommendationsMany
+                        ).replace('{count}', String(openRecommendations))}
                     </p>
                     <Link href={savingsHref} className="text-xs font-medium text-primary hover:underline">
-                        Ver economia potencial
+                        {t.kpiViewSavings}
                     </Link>
                 </CardContent>
             </Card>
@@ -142,17 +147,17 @@ export function FinopsKpiStrip({
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <AlertTriangle className="size-3.5" />
-                        Anomalias
+                        {t.subnavAnomalies}
                     </CardDescription>
                     <CardTitle className="text-xl sm:text-2xl">{openAnomalies}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1">
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Lightbulb className="size-3" />
-                        Desvios de custo detectados
+                        {t.kpiAnomaliesHint}
                     </p>
                     <Link href={anomaliesHref} className="text-xs font-medium text-primary hover:underline">
-                        Ver anomalias
+                        {t.kpiViewAnomalies}
                     </Link>
                 </CardContent>
             </Card>
@@ -166,7 +171,7 @@ export function FinopsKpiStrip({
                 <CardHeader className="pb-2">
                     <CardDescription className="flex items-center gap-1.5">
                         <Target className="size-3.5" />
-                        Orçamento
+                        {t.kpiBudget}
                     </CardDescription>
                     <CardTitle
                         className={cn(
@@ -185,12 +190,18 @@ export function FinopsKpiStrip({
                                 {primaryBudget.budget.name}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                {formatCurrency(primaryBudget.currentSpend, primaryBudget.currency)} de{' '}
-                                {formatCurrency(effectiveLimit, primaryBudget.currency)}
+                                {t.budgetsSpendOf
+                                    .replace(
+                                        '{spent}',
+                                        formatCurrency(primaryBudget.currentSpend, primaryBudget.currency)
+                                    )
+                                    .replace('{limit}', formatCurrency(effectiveLimit, primaryBudget.currency))}
                             </p>
                             {totalBudgets > 1 ? (
                                 <p className="text-xs text-muted-foreground">
-                                    {atRiskCount} de {totalBudgets} em risco
+                                    {t.budgetsAtRiskCount
+                                        .replace('{atRisk}', String(atRiskCount))
+                                        .replace('{total}', String(totalBudgets))}
                                 </p>
                             ) : (
                                 <p className="text-xs text-muted-foreground">{riskSubtitle}</p>
@@ -202,11 +213,11 @@ export function FinopsKpiStrip({
                     {(riskState === 'near' || riskState === 'exceeded') && (
                         <p className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="size-3" />
-                            {riskState === 'exceeded' ? 'Limite excedido' : 'Limiar atingido'}
+                            {riskState === 'exceeded' ? t.kpiLimitExceeded : t.kpiThresholdReached}
                         </p>
                     )}
                     <Link href={budgetsHref} className="text-xs font-medium text-primary hover:underline">
-                        Gerenciar orçamentos
+                        {t.kpiManageBudgets}
                     </Link>
                 </CardContent>
             </Card>

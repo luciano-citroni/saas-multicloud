@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import { finopsChartInitialDimension } from '@/components/root/finops/overview/finops-chart-theme';
 import type { AggregatedFinopsData } from './finops-aggregator';
@@ -43,10 +44,10 @@ const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'
 
 type DecisionStatus = 'healthy' | 'warning' | 'critical';
 
-function decisionStatusLabel(status: DecisionStatus): string {
-    if (status === 'critical') return 'Crítico';
-    if (status === 'warning') return 'Atenção';
-    return 'Saudável';
+function decisionStatusLabel(status: DecisionStatus, labels: { critical: string; warning: string; healthy: string }): string {
+    if (status === 'critical') return labels.critical;
+    if (status === 'warning') return labels.warning;
+    return labels.healthy;
 }
 
 function decisionStatusClass(status: DecisionStatus): string {
@@ -55,13 +56,18 @@ function decisionStatusClass(status: DecisionStatus): string {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
 }
 
-function periodLabel(period: DashboardPeriod): string {
-    if (period === 'last7days') return 'Últimos 7 dias';
-    if (period === 'last30days') return 'Últimos 30 dias';
-    if (period === 'last90days') return 'Últimos 90 dias';
-    if (period === 'currentmonth') return 'Mês atual';
-    if (period === 'lastmonth') return 'Mês passado';
-    return 'Ano até hoje';
+function periodLabel(
+    period: DashboardPeriod,
+    labels: {
+        last7days: string;
+        last30days: string;
+        last90days: string;
+        currentmonth: string;
+        lastmonth: string;
+        ytd: string;
+    },
+): string {
+    return labels[period];
 }
 
 function isDashboardPeriod(value: string | null): value is DashboardPeriod {
@@ -71,6 +77,16 @@ function isDashboardPeriod(value: string | null): value is DashboardPeriod {
 }
 
 export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodChange }: FinopsAggregatedDashboardProps) {
+    const tf = useTranslations('finops');
+    const statusLabels = { critical: tf.decisionCritical, warning: tf.decisionWarning, healthy: tf.decisionHealthy };
+    const periodLabels = {
+        last7days: tf.periodLast7days,
+        last30days: tf.periodLast30days,
+        last90days: tf.periodLast90days,
+        currentmonth: tf.periodCurrentMonth,
+        lastmonth: tf.periodLastMonth,
+        ytd: tf.periodYtd,
+    };
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -200,7 +216,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                 <CardContent>
                     <div className="py-8 text-center">
                         <p className="text-sm text-muted-foreground">
-                            Nenhum dado disponível. Sincronize suas contas cloud para visualizar o dashboard agregado.
+                            {tf.aggregatedEmpty}
                         </p>
                     </div>
                 </CardContent>
@@ -221,27 +237,27 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                             <CardDescription>Visão executiva consolidada para priorização de ações</CardDescription>
                         </div>
                         <div className={cn('rounded-full border px-3 py-1 text-xs font-medium', decisionStatusClass(globalStatus))}>
-                            Saúde global: {decisionStatusLabel(globalStatus)}
+                            {tf.globalHealth.replace('{status}', decisionStatusLabel(globalStatus, statusLabels))}
                         </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                         <div className="w-full sm:w-56">
                             <Select value={selectedPeriod} onValueChange={(value) => setPeriodFilter(value as DashboardPeriod)}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Período" />
+                                    <SelectValue placeholder={tf.billingColPeriod} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="last7days">Últimos 7 dias</SelectItem>
-                                    <SelectItem value="last30days">Últimos 30 dias</SelectItem>
-                                    <SelectItem value="last90days">Últimos 90 dias</SelectItem>
-                                    <SelectItem value="currentmonth">Mês atual</SelectItem>
-                                    <SelectItem value="lastmonth">Mês passado</SelectItem>
-                                    <SelectItem value="ytd">Ano até hoje</SelectItem>
+                                    <SelectItem value="last7days">{periodLabels.last7days}</SelectItem>
+                                    <SelectItem value="last30days">{periodLabels.last30days}</SelectItem>
+                                    <SelectItem value="last90days">{periodLabels.last90days}</SelectItem>
+                                    <SelectItem value="currentmonth">{periodLabels.currentmonth}</SelectItem>
+                                    <SelectItem value="lastmonth">{periodLabels.lastmonth}</SelectItem>
+                                    <SelectItem value="ytd">{periodLabels.ytd}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground">
-                            Período: {periodLabel(selectedPeriod)}
+                            {tf.periodChip.replace('{period}', periodLabel(selectedPeriod, periodLabels))}
                         </div>
                     </div>
                 </CardHeader>
@@ -276,7 +292,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                         <div className="text-2xl font-bold">{data.criticalAnomalies}</div>
                         <p className="text-xs text-muted-foreground mt-1">anomalias críticas/altas</p>
                         <div className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', decisionStatusClass(riskStatus))}>
-                            {decisionStatusLabel(riskStatus)}
+                            {decisionStatusLabel(riskStatus, statusLabels)}
                         </div>
                     </CardContent>
                 </Card>
@@ -295,7 +311,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                                 decisionStatusClass(concentrationStatus)
                             )}
                         >
-                            {decisionStatusLabel(concentrationStatus)}
+                            {decisionStatusLabel(concentrationStatus, statusLabels)}
                         </div>
                     </CardContent>
                 </Card>
@@ -311,7 +327,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                         <div
                             className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', decisionStatusClass(savingsStatus))}
                         >
-                            {decisionStatusLabel(savingsStatus)}
+                            {decisionStatusLabel(savingsStatus, statusLabels)}
                         </div>
                     </CardContent>
                 </Card>
@@ -331,7 +347,7 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                         <div
                             className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', decisionStatusClass(forecastStatus))}
                         >
-                            {decisionStatusLabel(forecastStatus)}
+                            {decisionStatusLabel(forecastStatus, statusLabels)}
                         </div>
                     </CardContent>
                 </Card>
@@ -434,8 +450,8 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                 {barData.length > 0 && (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Comparativo: Mês Atual vs. Anterior</CardTitle>
-                            <CardDescription>{periodLabel(selectedPeriod)} comparado ao período anterior</CardDescription>
+                            <CardTitle>{tf.compareMonthsTitle}</CardTitle>
+                            <CardDescription>{tf.periodCompared.replace('{period}', periodLabel(selectedPeriod, periodLabels))}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="h-64">
@@ -446,8 +462,8 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                                         <YAxis fontSize={12} />
                                         <Tooltip formatter={(value) => (typeof value === 'number' ? formatCurrency(value, data.currency) : '')} />
                                         <Legend />
-                                        <Bar dataKey="current" fill="#3b82f6" name="Mês Atual" />
-                                        <Bar dataKey="previous" fill="#9ca3af" name="Mês Anterior" />
+                                        <Bar dataKey="current" fill="#3b82f6" name={tf.currentMonthSeries} />
+                                        <Bar dataKey="previous" fill="#9ca3af" name={tf.previousMonthSeries} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

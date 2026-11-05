@@ -54,8 +54,11 @@ import {
 import { fetchNotificationGroups } from '@/app/actions/notifications';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { cn } from '@/lib/utils';
+import { useTranslations, type Translations } from '@/lib/i18n';
 
 export type { FinopsBudgetStatusItem };
+
+type FinopsT = Record<keyof Translations['finops'], string>;
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const ORG_SCOPE_VALUE = 'organization';
@@ -71,7 +74,10 @@ function normalizeBudgetStatusesPayload(payload: unknown): FinopsBudgetStatusIte
     return [];
 }
 
-function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroupOption[] {
+function normalizeNotificationGroupsPayload(
+    payload: unknown,
+    fallbackName: string
+): NotificationGroupOption[] {
     const items = Array.isArray(payload)
         ? payload
         : Array.isArray((payload as { items?: unknown } | null)?.items)
@@ -82,7 +88,7 @@ function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroup
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
         .map((item): NotificationGroupOption => ({
             id: String(item.id ?? ''),
-            name: String(item.name ?? 'Grupo'),
+            name: String(item.name ?? fallbackName),
             channel: item.channel === 'whatsapp' ? 'whatsapp' : 'email',
             isActive: item.isActive !== false,
         }))
@@ -95,18 +101,18 @@ function usageTone(percentage: number, triggered: number[]): 'ok' | 'warn' | 'cr
     return 'ok';
 }
 
-function periodLabel(period: string) {
-    return period === 'daily' ? 'Diário' : 'Mensal';
+function periodLabel(t: FinopsT, period: string) {
+    return period === 'daily' ? t.daily : t.monthly;
 }
 
-function alertFrequencyLabel(frequency: string) {
-    return frequency === 'daily' ? 'até 2×/dia' : 'mensal';
+function alertFrequencyLabel(t: FinopsT, frequency: string) {
+    return frequency === 'daily' ? t.budgetFreqDaily : t.monthly.toLowerCase();
 }
 
-function alertTypeLabel(type: string | undefined) {
-    if (type === 'amount') return 'Por valor';
-    if (type === 'resource') return 'Por recurso';
-    return 'Por % do orçamento';
+function alertTypeLabel(t: FinopsT, type: string | undefined) {
+    if (type === 'amount') return t.budgetAlertTypeAmount;
+    if (type === 'resource') return t.budgetAlertTypeResource;
+    return t.budgetAlertTypePercentage;
 }
 
 function BudgetUsageBar({
@@ -137,6 +143,8 @@ function BudgetUsageBar({
 }
 
 export function FinopsBudgets() {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -267,8 +275,8 @@ export function FinopsBudgets() {
                 const whatsappPayload = whatsappResponse.ok
                     ? await whatsappResponse.json().catch(() => null)
                     : null;
-                setEmailGroups(normalizeNotificationGroupsPayload(emailPayload));
-                setWhatsappGroups(normalizeNotificationGroupsPayload(whatsappPayload));
+                setEmailGroups(normalizeNotificationGroupsPayload(emailPayload, t.groupFallbackName));
+                setWhatsappGroups(normalizeNotificationGroupsPayload(whatsappPayload, t.groupFallbackName));
             } catch {
                 setCloudAccounts([]);
                 setEmailGroups([]);
@@ -277,7 +285,7 @@ export function FinopsBudgets() {
         };
 
         void loadAccountsAndGroups();
-    }, [organizationId, midOrgId]);
+    }, [organizationId, midOrgId, t]);
 
     useEffect(() => {
         if (scopeFilter) return;
@@ -326,11 +334,11 @@ export function FinopsBudgets() {
                     const parsed = await parseStatuses(await fetchOrganizationFinopsBudgetStatuses(orgId, 50));
                     if (!parsed.ok) {
                         if (parsed.status === 401) {
-                            toast.error('Sessão expirada.');
+                            toast.error(tCommon.sessionExpired);
                             router.replace('/auth/sign-in');
                             return;
                         }
-                        toast.error(extractErrorMessage(parsed.body, 'pt'));
+                        toast.error(extractErrorMessage(parsed.body));
                         setStatuses([]);
                         return;
                     }
@@ -347,21 +355,21 @@ export function FinopsBudgets() {
                     (!accountParsed.ok && accountParsed.status === 401) ||
                     (!orgParsed.ok && orgParsed.status === 401)
                 ) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tCommon.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
 
                 if (!accountParsed.ok && !orgParsed.ok) {
-                    toast.error(extractErrorMessage(accountParsed.body, 'pt'));
+                    toast.error(extractErrorMessage(accountParsed.body));
                     setStatuses([]);
                     return;
                 }
 
                 if (!accountParsed.ok) {
-                    toast.error(extractErrorMessage(accountParsed.body, 'pt'));
+                    toast.error(extractErrorMessage(accountParsed.body));
                 } else if (!orgParsed.ok) {
-                    toast.error(extractErrorMessage(orgParsed.body, 'pt'));
+                    toast.error(extractErrorMessage(orgParsed.body));
                 }
 
                 setStatuses(
@@ -371,14 +379,14 @@ export function FinopsBudgets() {
                     ])
                 );
             } catch {
-                toast.error('Não foi possível carregar os orçamentos.');
+                toast.error(t.budgetLoadError);
                 setStatuses([]);
             } finally {
                 setLoading(false);
                 setRefreshing(false);
             }
         },
-        [router]
+        [router, t, tCommon]
     );
 
     useEffect(() => {
@@ -442,15 +450,15 @@ export function FinopsBudgets() {
             const response = await deleteFinopsBudgetUnified(organizationId, deleteTarget.budget.id);
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return false;
             }
-            toast.success('Orçamento removido.');
+            toast.success(t.budgetsRemoved);
             setDeleteTarget(null);
             if (scopeFilter) void loadStatuses(organizationId, scopeFilter, true);
             return true;
         } catch {
-            toast.error('Não foi possível remover o orçamento.');
+            toast.error(t.budgetDeleteError);
             return false;
         } finally {
             setDeleting(false);
@@ -461,8 +469,8 @@ export function FinopsBudgets() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Orçamentos</CardTitle>
-                    <CardDescription>Selecione uma organização na sidebar.</CardDescription>
+                    <CardTitle>{t.budgetsTitle}</CardTitle>
+                    <CardDescription>{t.selectOrgSidebar}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -477,11 +485,8 @@ export function FinopsBudgets() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Orçamentos</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Defina limites diários ou mensais para o tenant ou por conta, com alertas por grupos de
-                            notificação.
-                        </p>
+                        <h1 className="text-xl font-semibold tracking-tight">{t.budgetsTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{t.budgetsDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -497,10 +502,10 @@ export function FinopsBudgets() {
                         }}
                     >
                         <SelectTrigger className="w-[240px]">
-                            <SelectValue placeholder="Escopo" />
+                            <SelectValue placeholder={t.scopeLabel} />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={ORG_SCOPE_VALUE}>Todos os orçamentos</SelectItem>
+                            <SelectItem value={ORG_SCOPE_VALUE}>{t.budgetsAllBudgets}</SelectItem>
                             {cloudAccounts.map((account) => (
                                 <SelectItem key={account.id} value={account.id}>
                                     {`${account.alias} (${account.provider.toUpperCase()})`}
@@ -520,12 +525,12 @@ export function FinopsBudgets() {
                         }}
                     >
                         <SelectTrigger className="w-[170px]">
-                            <SelectValue placeholder="Avaliação" />
+                            <SelectValue placeholder={t.budgetsViewPlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Todas cadências</SelectItem>
-                            <SelectItem value="daily">Alerta 2×/dia</SelectItem>
-                            <SelectItem value="monthly">Alerta mensal</SelectItem>
+                            <SelectItem value="all">{t.budgetsAllCadences}</SelectItem>
+                            <SelectItem value="daily">{t.budgetsAlertTwiceDaily}</SelectItem>
+                            <SelectItem value="monthly">{t.budgetsAlertMonthly}</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -538,14 +543,14 @@ export function FinopsBudgets() {
                         disabled={!scopeFilter || refreshing}
                     >
                         <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
-                        Atualizar
+                        {tCommon.refresh}
                     </Button>
 
                     {canManage && scopeFilter ? (
                         <Button size="sm" asChild>
                             <Link href={newBudgetHref}>
                                 <Plus className="size-3.5" />
-                                Novo orçamento
+                                {t.newBudget}
                             </Link>
                         </Button>
                     ) : null}
@@ -559,18 +564,22 @@ export function FinopsBudgets() {
                         <div className="space-y-2">
                             <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
                                 {activeAlerts.length === 1
-                                    ? '1 orçamento com alerta disparado'
-                                    : `${activeAlerts.length} orçamentos com alertas disparados`}
+                                    ? t.budgetsOneAlertFired
+                                    : t.budgetsManyAlertsFired.replace('{count}', String(activeAlerts.length))}
                             </p>
                             <ul className="space-y-1.5">
                                 {activeAlerts.map((alert) => (
                                     <li key={alert.id} className="text-sm text-amber-900/90 dark:text-amber-50/90">
                                         <span className="font-medium">{alert.name}</span>
                                         {': '}
-                                        {alert.usagePercentage.toFixed(0)}% usado (
-                                        {formatCurrency(alert.currentSpend, alert.currency)} de{' '}
-                                        {formatCurrency(alert.amount, alert.currency)}) — limiares{' '}
-                                        {alert.triggeredAlerts.map((t) => `${t}%`).join(', ')}
+                                        {t.budgetsAlertUsage
+                                            .replace('{percent}', alert.usagePercentage.toFixed(0))
+                                            .replace('{spent}', formatCurrency(alert.currentSpend, alert.currency))
+                                            .replace('{limit}', formatCurrency(alert.amount, alert.currency))
+                                            .replace(
+                                                '{thresholds}',
+                                                alert.triggeredAlerts.map((threshold) => `${threshold}%`).join(', ')
+                                            )}
                                     </li>
                                 ))}
                             </ul>
@@ -581,36 +590,40 @@ export function FinopsBudgets() {
 
             {allBudgetsWithoutSpend && (
                 <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                    Nenhum custo encontrado no período dos orçamentos (mês/dia atual). A FinOps abre em{' '}
-                    <span className="font-medium text-foreground">mês passado</span> por padrão — mude para{' '}
-                    <span className="font-medium text-foreground">mês atual</span> ou sincronize o período corrente
-                    em FinOps para preencher a barra.
+                    {t.budgetsNoSpendIntro}{' '}
+                    <span className="font-medium text-foreground">{t.periodLastMonth.toLowerCase()}</span>{' '}
+                    {t.budgetsNoSpendMiddle}{' '}
+                    <span className="font-medium text-foreground">{t.periodCurrentMonth.toLowerCase()}</span>{' '}
+                    {t.budgetsNoSpendOutro}
                 </div>
             )}
 
             <div className="grid gap-3 sm:grid-cols-3">
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Orçamentos ativos</CardDescription>
+                        <CardDescription>{t.budgetsActiveTitle}</CardDescription>
                         <CardTitle className="text-2xl">{visibleStatuses.length}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xs text-muted-foreground">
                             {isOrgScope
-                                ? 'Tenant + contas'
-                                : `${selectedAccount?.alias ?? 'Conta'} + organização`}
+                                ? t.budgetsScopeOrgAndAccounts
+                                : t.budgetsScopeAccountAndOrg.replace(
+                                      '{account}',
+                                      selectedAccount?.alias ?? t.accountScope
+                                  )}
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Alertas disparados</CardDescription>
+                        <CardDescription>{t.budgetsAlertsTriggered}</CardDescription>
                         <CardTitle className={cn('text-2xl', activeAlerts.length > 0 && 'text-amber-600')}>
                             {activeAlerts.length}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-xs text-muted-foreground">Com base nos limiares e canais cadastrados</p>
+                        <p className="text-xs text-muted-foreground">{t.budgetsAlertsHint}</p>
                     </CardContent>
                 </Card>
                 <Card
@@ -620,7 +633,7 @@ export function FinopsBudgets() {
                     )}
                 >
                     <CardHeader className="pb-2">
-                        <CardDescription>Maior risco</CardDescription>
+                        <CardDescription>{t.budgetsHighestRisk}</CardDescription>
                         <CardTitle
                             className={cn(
                                 'text-2xl',
@@ -638,20 +651,29 @@ export function FinopsBudgets() {
                                     {highestRiskBudget.budget.name}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    {formatCurrency(highestRiskBudget.currentSpend, highestRiskBudget.currency)} de{' '}
-                                    {formatCurrency(
-                                        getBudgetEffectiveLimit(highestRiskBudget.budget),
-                                        highestRiskBudget.currency
-                                    )}
+                                    {t.budgetsSpendOf
+                                        .replace(
+                                            '{spent}',
+                                            formatCurrency(highestRiskBudget.currentSpend, highestRiskBudget.currency)
+                                        )
+                                        .replace(
+                                            '{limit}',
+                                            formatCurrency(
+                                                getBudgetEffectiveLimit(highestRiskBudget.budget),
+                                                highestRiskBudget.currency
+                                            )
+                                        )}
                                 </p>
                                 {visibleStatuses.length > 1 ? (
                                     <p className="text-xs text-muted-foreground">
-                                        {atRiskCount} de {visibleStatuses.length} em risco
+                                        {t.budgetsAtRiskCount
+                                            .replace('{atRisk}', String(atRiskCount))
+                                            .replace('{total}', String(visibleStatuses.length))}
                                     </p>
                                 ) : null}
                             </>
                         ) : (
-                            <p className="text-xs text-muted-foreground">Nenhum orçamento</p>
+                            <p className="text-xs text-muted-foreground">{t.budgetsNone}</p>
                         )}
                     </CardContent>
                 </Card>
@@ -662,12 +684,10 @@ export function FinopsBudgets() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-base">
                             <Target className="size-4" />
-                            {isOrgScope ? 'Nenhum orçamento da organização' : 'Nenhum orçamento nesta conta'}
+                            {isOrgScope ? t.budgetsEmptyOrgTitle : t.budgetsEmptyAccountTitle}
                         </CardTitle>
                         <CardDescription>
-                            {canManage
-                                ? 'Crie um limite diário ou mensal e configure alertas por e-mail e/ou WhatsApp.'
-                                : 'Peça a um admin para criar um orçamento.'}
+                            {canManage ? t.budgetsEmptyCanManage : t.budgetsEmptyReadOnly}
                         </CardDescription>
                     </CardHeader>
                     {canManage && (
@@ -675,7 +695,7 @@ export function FinopsBudgets() {
                             <Button asChild>
                                 <Link href={newBudgetHref}>
                                     <Plus className="size-3.5" />
-                                    Criar orçamento
+                                    {t.createBudget}
                                 </Link>
                             </Button>
                         </CardContent>
@@ -696,7 +716,7 @@ export function FinopsBudgets() {
                             groupNames.length > 0
                                 ? groupNames.join(', ')
                                 : groupIds.length > 0
-                                  ? `${groupIds.length} grupo(s)`
+                                  ? t.budgetsGroupsCount.replace('{count}', String(groupIds.length))
                                   : legacyEmails.length > 0
                                     ? legacyEmails.join(', ')
                                     : null;
@@ -706,33 +726,41 @@ export function FinopsBudgets() {
                                     <div className="space-y-1">
                                         <CardTitle className="text-base">{item.budget.name}</CardTitle>
                                         <CardDescription>
-                                            {periodLabel(item.budget.period)}
+                                            {periodLabel(t, item.budget.period)}
                                             {' · '}
-                                            {item.budget.scope === 'organization' ? 'Organização' : 'Conta'}
-                                            {item.budget.service ? ` · ${item.budget.service}` : ' · todos os serviços'}
+                                            {item.budget.scope === 'organization' ? t.organizationScope : t.accountScope}
+                                            {item.budget.service
+                                                ? ` · ${item.budget.service}`
+                                                : ` · ${t.budgetsAllServices}`}
                                             {' · '}
-                                            {alertTypeLabel(item.budget.alertType)}
-                                            {' · alerta '}
-                                            {alertFrequencyLabel(item.budget.alertFrequency ?? item.budget.period)}
+                                            {alertTypeLabel(t, item.budget.alertType)}
+                                            {' · '}
+                                            {t.budgetsAlertFrequency.replace(
+                                                '{frequency}',
+                                                alertFrequencyLabel(t, item.budget.alertFrequency ?? item.budget.period)
+                                            )}
                                         </CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5">
                                         {item.triggeredAlerts.length > 0 ? (
                                             <Badge variant="destructive" className="gap-1">
                                                 <AlertTriangle className="size-3" />
-                                                Alerta {Math.max(...item.triggeredAlerts)}%
+                                                {t.budgetsAlertBadge.replace(
+                                                    '{percent}',
+                                                    String(Math.max(...item.triggeredAlerts))
+                                                )}
                                             </Badge>
                                         ) : (
-                                            <Badge variant="secondary">Dentro do limite</Badge>
+                                            <Badge variant="secondary">{t.budgetsWithinLimit}</Badge>
                                         )}
-                                        {channels.includes('email') && <Badge variant="outline">E-mail</Badge>}
+                                        {channels.includes('email') && <Badge variant="outline">{tCommon.email}</Badge>}
                                         {channels.includes('whatsapp') && <Badge variant="outline">WhatsApp</Badge>}
                                         {canManage && (
                                             <>
                                                 <Button variant="ghost" size="icon-sm" asChild>
                                                     <Link href={editBudgetHref(item.budget.id)}>
                                                         <Pencil className="size-3.5" />
-                                                        <span className="sr-only">Editar</span>
+                                                        <span className="sr-only">{tCommon.edit}</span>
                                                     </Link>
                                                 </Button>
                                                 <Button
@@ -741,7 +769,7 @@ export function FinopsBudgets() {
                                                     onClick={() => setDeleteTarget(item)}
                                                 >
                                                     <Trash2 className="size-3.5" />
-                                                    <span className="sr-only">Remover</span>
+                                                    <span className="sr-only">{t.budgetsRemoveAction}</span>
                                                 </Button>
                                             </>
                                         )}
@@ -760,15 +788,19 @@ export function FinopsBudgets() {
                                                 {item.usagePercentage.toFixed(1)}%
                                             </p>
                                             <p className="text-sm text-muted-foreground">
-                                                {formatCurrency(item.currentSpend, item.currency)} de{' '}
-                                                {formatCurrency(getBudgetEffectiveLimit(item.budget), item.currency)}
+                                                {t.budgetsSpendOf
+                                                    .replace('{spent}', formatCurrency(item.currentSpend, item.currency))
+                                                    .replace(
+                                                        '{limit}',
+                                                        formatCurrency(getBudgetEffectiveLimit(item.budget), item.currency)
+                                                    )}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {formatBudgetSpendPeriodLabel(item.budget.period)}
                                             </p>
                                         </div>
                                         <p className="text-sm text-muted-foreground">
-                                            Restante:{' '}
+                                            {t.budgetsRemaining}{' '}
                                             <span className="font-medium text-foreground">
                                                 {formatCurrency(item.remainingAmount, item.currency)}
                                             </span>
@@ -781,10 +813,7 @@ export function FinopsBudgets() {
                                     />
 
                                     {hasNoSpendInBudgetPeriod(item) ? (
-                                        <p className="text-xs text-muted-foreground">
-                                            Sem custos sincronizados neste período — a barra preenche conforme o gasto
-                                            real, não o valor do limite.
-                                        </p>
+                                        <p className="text-xs text-muted-foreground">{t.budgetsNoSyncedSpend}</p>
                                     ) : null}
 
                                     <div className="flex flex-wrap gap-1.5">
@@ -796,7 +825,7 @@ export function FinopsBudgets() {
                                                     variant={triggered ? 'destructive' : 'outline'}
                                                     className="tabular-nums"
                                                 >
-                                                    {threshold}%{triggered ? ' atingido' : ''}
+                                                    {threshold}%{triggered ? ` ${t.budgetsThresholdReached}` : ''}
                                                 </Badge>
                                             );
                                         })}
@@ -804,7 +833,7 @@ export function FinopsBudgets() {
 
                                     {alertTargetsLabel ? (
                                         <p className="text-xs text-muted-foreground">
-                                            Notificações: {alertTargetsLabel}
+                                            {t.budgetsNotificationsTargets.replace('{targets}', alertTargetsLabel)}
                                         </p>
                                     ) : null}
                                 </CardContent>
@@ -814,7 +843,7 @@ export function FinopsBudgets() {
 
                     <div className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                            <span className="shrink-0 whitespace-nowrap">{tCommon.rowsPerPage}</span>
                             <Select
                                 value={`${pageSize}`}
                                 onValueChange={(value) => {
@@ -835,7 +864,10 @@ export function FinopsBudgets() {
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                             <span className="text-sm font-medium">
-                                Página {safePage} de {totalPages} · {visibleStatuses.length} orçamento(s)
+                                {t.budgetsPageSummary
+                                    .replace('{page}', String(safePage))
+                                    .replace('{pages}', String(totalPages))
+                                    .replace('{count}', String(visibleStatuses.length))}
                             </span>
                             <div className="flex items-center gap-1 self-start sm:self-auto">
                                 <Button
@@ -885,10 +917,10 @@ export function FinopsBudgets() {
                 onOpenChange={(open) => {
                     if (!open) setDeleteTarget(null);
                 }}
-                title="Remover orçamento?"
-                description={`O orçamento “${deleteTarget?.budget.name ?? ''}” será excluído permanentemente.`}
+                title={t.budgetsRemoveTitle}
+                description={t.budgetsRemoveDescription.replace('{name}', deleteTarget?.budget.name ?? '')}
                 resourceName={deleteTarget?.budget.name ?? ''}
-                confirmLabel="Remover"
+                confirmLabel={t.budgetsRemoveAction}
                 isConfirming={deleting}
                 onConfirm={onDelete}
             />

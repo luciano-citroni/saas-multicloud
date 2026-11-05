@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTranslations } from '@/lib/i18n';
 
 type TenantItem = {
     id: string;
@@ -111,6 +112,10 @@ export function AccountSwitcher({
     onCloudAccountChange,
 }: AccountSwitcherProps) {
     const { isMobile } = useSidebar();
+    const tc = useTranslations('common');
+    const tn = useTranslations('nav');
+    const to = useTranslations('organizations');
+    const ts = useTranslations('accountSwitcher');
     const [tenantSearch, setTenantSearch] = React.useState('');
     const [orgSearch, setOrgSearch] = React.useState('');
     const [cloudSearch, setCloudSearch] = React.useState('');
@@ -172,7 +177,7 @@ export function AccountSwitcher({
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">
-                                    {selectedTenant?.name ?? 'Nenhum tenant'}
+                                    {selectedTenant?.name ?? ts.noTenant}
                                 </span>
                                 <span className="truncate text-xs text-muted-foreground">
                                     {selectedTenant?.slug ?? 'tenant'}
@@ -187,9 +192,9 @@ export function AccountSwitcher({
                         side={side}
                         sideOffset={4}
                     >
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">Tenant</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">{tn.tenant}</DropdownMenuLabel>
                         {tenants.length > 3 && (
-                            <SearchInput value={tenantSearch} onChange={setTenantSearch} placeholder="Filtrar tenant…" />
+                            <SearchInput value={tenantSearch} onChange={setTenantSearch} placeholder={ts.filterTenant} />
                         )}
                         {filteredTenants.map((tenant) => (
                             <DropdownMenuItem
@@ -205,7 +210,7 @@ export function AccountSwitcher({
                             </DropdownMenuItem>
                         ))}
                         {filteredTenants.length === 0 && (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum resultado.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild className="gap-2 p-2">
@@ -213,7 +218,7 @@ export function AccountSwitcher({
                                 <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
                                     <Plus className="size-4" aria-hidden="true" />
                                 </div>
-                                <div className="font-medium text-sidebar-primary">Novo tenant</div>
+                                <div className="font-medium text-sidebar-primary">{ts.newTenant}</div>
                             </Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -233,7 +238,7 @@ export function AccountSwitcher({
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">
-                                    {selectedMidOrg?.name ?? 'Nenhuma organização'}
+                                    {selectedMidOrg?.name ?? tc.noOrganization}
                                 </span>
                                 {selectedCloudAccount ? (
                                     <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
@@ -244,7 +249,7 @@ export function AccountSwitcher({
                                         </span>
                                     </span>
                                 ) : (
-                                    <span className="truncate text-xs text-muted-foreground">Sem conta cloud</span>
+                                    <span className="truncate text-xs text-muted-foreground">{ts.noCloudAccount}</span>
                                 )}
                             </div>
                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
@@ -257,12 +262,12 @@ export function AccountSwitcher({
                         sideOffset={4}
                     >
                         {/* Organizações */}
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">Organização</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">{tn.organization}</DropdownMenuLabel>
                         {midOrgs.length > 3 && (
-                            <SearchInput value={orgSearch} onChange={setOrgSearch} placeholder="Filtrar organização…" />
+                            <SearchInput value={orgSearch} onChange={setOrgSearch} placeholder={ts.filterOrganization} />
                         )}
                         {midOrgs.length === 0 ? (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma organização criada.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noOrganizationsCreated}</p>
                         ) : filteredOrgs.length > 0 ? (
                             filteredOrgs.map((org) => (
                                 <DropdownMenuItem
@@ -278,25 +283,25 @@ export function AccountSwitcher({
                                 </DropdownMenuItem>
                             ))
                         ) : (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum resultado.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}
                         <DropdownMenuItem asChild className="mt-1 gap-2 p-2">
                             <Link href={createMidOrgHref}>
                                 <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
                                     <Plus className="size-4" aria-hidden="true" />
                                 </div>
-                                <div className="font-medium text-sidebar-primary">Nova organização</div>
+                                <div className="font-medium text-sidebar-primary">{to.newOrg}</div>
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
 
                         {/* Contas Cloud */}
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">Conta Cloud</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">{ts.cloudAccountLabel}</DropdownMenuLabel>
                         {cloudAccounts.length > 3 && (
-                            <SearchInput value={cloudSearch} onChange={setCloudSearch} placeholder="Filtrar conta…" />
+                            <SearchInput value={cloudSearch} onChange={setCloudSearch} placeholder={ts.filterAccount} />
                         )}
                         {cloudAccounts.length === 0 ? (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Sem contas cloud nesta organização.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noCloudAccountsInOrg}</p>
                         ) : filteredAccounts.length > 0 ? (
                             filteredAccounts.map((account) => (
                                 <DropdownMenuItem
@@ -323,14 +328,14 @@ export function AccountSwitcher({
                                 </DropdownMenuItem>
                             ))
                         ) : (
-                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum resultado.</p>
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}
                         <DropdownMenuItem asChild className="mt-1 gap-2 p-2">
                             <Link href={createCloudAccountHref}>
                                 <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
                                     <Plus className="size-4" aria-hidden="true" />
                                 </div>
-                                <div className="font-medium text-sidebar-primary">Nova conta cloud</div>
+                                <div className="font-medium text-sidebar-primary">{tn.newCloudAccount}</div>
                             </Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>

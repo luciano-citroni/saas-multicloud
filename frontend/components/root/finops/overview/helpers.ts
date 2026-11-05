@@ -1,4 +1,10 @@
 import type { FinopsJob, PaginationMeta } from '@/components/root/finops/overview/types';
+import { getLocale } from '@/lib/locale';
+import { translations } from '@/lib/i18n/translations';
+import {
+    formatCurrency as formatCurrencyIntl,
+    formatDateTime as formatDateTimeIntl,
+} from '@/lib/i18n/format';
 
 export const DEFAULT_JOBS_PAGE = 1;
 export const DEFAULT_JOBS_LIMIT = 10;
@@ -73,9 +79,10 @@ export function scoreColor(score: number): string {
 }
 
 export function scoreLabel(score: number): string {
-    if (score >= 80) return 'Excelente';
-    if (score >= 60) return 'Regular';
-    return 'Crítico';
+    const t = translations[getLocale()].finops;
+    if (score >= 80) return t.scoreExcellent;
+    if (score >= 60) return t.scoreRegular;
+    return t.scoreCritical;
 }
 
 export function priorityColor(priority: string): string {
@@ -88,36 +95,44 @@ export function priorityColor(priority: string): string {
 }
 
 export function priorityLabel(priority: string): string {
+    const locale = getLocale();
+    if (locale === 'en') {
+        switch (priority) {
+            case 'critical':
+                return 'Critical';
+            case 'high':
+                return 'High';
+            case 'medium':
+                return 'Medium';
+            default:
+                return 'Low';
+        }
+    }
     switch (priority) {
-        case 'critical': return 'Crítica';
-        case 'high': return 'Alta';
-        case 'medium': return 'Média';
-        default: return 'Baixa';
+        case 'critical':
+            return 'Crítica';
+        case 'high':
+            return 'Alta';
+        case 'medium':
+            return 'Média';
+        default:
+            return 'Baixa';
     }
 }
 
 export function formatCurrency(value: number, currency = 'USD'): string {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(value);
+    return formatCurrencyIntl(value, currency);
 }
 
 export function formatDate(dateStr: string | null): string {
-    if (!dateStr) return '-';
-
-    return new Date(dateStr).toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    if (!dateStr) return '—';
+    return formatDateTimeIntl(dateStr);
 }
 
 export function granularityLabel(granularity: string): string {
+    if (getLocale() === 'en') {
+        return granularity === 'daily' ? 'Daily' : 'Monthly';
+    }
     return granularity === 'daily' ? 'Diária' : 'Mensal';
 }
 

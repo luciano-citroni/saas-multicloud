@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,25 +12,28 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from '@/lib/i18n';
 
 export type VariableMap = Record<
     string,
     { type: string; default?: unknown; required?: boolean; description?: string; sensitive?: boolean }
 >;
 
-const variableSchema = z.object({
-    name: z
-        .string()
-        .min(1, 'Nome é obrigatório')
-        .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'Use letras, números e _'),
-    type: z.enum(['string', 'number', 'boolean']),
-    defaultValue: z.string(),
-    required: z.boolean(),
-    sensitive: z.boolean(),
-    description: z.string(),
-});
+function createVariableSchema(messages: { nameRequired: string; nameInvalid: string }) {
+    return z.object({
+        name: z
+            .string()
+            .min(1, messages.nameRequired)
+            .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, messages.nameInvalid),
+        type: z.enum(['string', 'number', 'boolean']),
+        defaultValue: z.string(),
+        required: z.boolean(),
+        sensitive: z.boolean(),
+        description: z.string(),
+    });
+}
 
-type VariableFormValues = z.infer<typeof variableSchema>;
+type VariableFormValues = z.infer<ReturnType<typeof createVariableSchema>>;
 
 const emptyValues: VariableFormValues = {
     name: '',
@@ -67,6 +70,12 @@ export function VariableEditor({
     saving?: boolean;
     readOnly?: boolean;
 }) {
+    const t = useTranslations('automation');
+    const tc = useTranslations('common');
+    const variableSchema = useMemo(
+        () => createVariableSchema({ nameRequired: tc.nameRequired, nameInvalid: t.variableNameInvalid }),
+        [tc.nameRequired, t.variableNameInvalid],
+    );
     const [editing, setEditing] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const entries = Object.entries(variables);
@@ -75,10 +84,10 @@ export function VariableEditor({
             zodResolver(
                 variableSchema.superRefine((data, ctx) => {
                     if (data.name !== editing && Object.prototype.hasOwnProperty.call(variables, data.name)) {
-                        ctx.addIssue({ code: 'custom', path: ['name'], message: 'Já existe uma variável com esse nome' });
+                        ctx.addIssue({ code: 'custom', path: ['name'], message: t.variableDuplicate });
                     }
                     if (data.type === 'number' && data.defaultValue.trim() !== '' && Number.isNaN(Number(data.defaultValue))) {
-                        ctx.addIssue({ code: 'custom', path: ['defaultValue'], message: 'Informe um número' });
+                        ctx.addIssue({ code: 'custom', path: ['defaultValue'], message: t.variableNumberInvalid });
                     }
                 }),
             )(values, context, options),
@@ -133,22 +142,22 @@ export function VariableEditor({
                         <Badge variant="outline">{entries.length}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Defina entradas do fluxo. Na execução, o usuário informa os valores (ou usa o padrão).
+                        {t.variablesIntro}
                     </p>
                 </div>
                 {!readOnly && (
                     <Button type="button" variant="outline" size="sm" onClick={startNew}>
                         <Plus className="mr-1.5 h-3.5 w-3.5" />
-                        Nova variável
+                        {t.newVariable}
                     </Button>
                 )}
             </div>
 
             {entries.length === 0 ? (
                 <div className="mb-4 rounded-lg border border-dashed px-4 py-6 text-center">
-                    <p className="text-sm text-muted-foreground">Nenhuma variável ainda.</p>
+                    <p className="text-sm text-muted-foreground">{t.noVariablesYet}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Ex.: <span className="font-mono">appName</span>, <span className="font-mono">region</span>. Use-as nos blocos como binding de variável.
+                        {t.variablesExample}
                     </p>
                 </div>
             ) : (
@@ -163,19 +172,19 @@ export function VariableEditor({
                                     </Badge>
                                     {variable.required !== false && (
                                         <Badge variant="outline" className="text-[10px]">
-                                            obrigatória
+                                            {t.requiredBadge}
                                         </Badge>
                                     )}
                                     {variable.sensitive && (
                                         <Badge variant="outline" className="text-[10px]">
-                                            sensível
+                                            {t.sensitiveLabel}
                                         </Badge>
                                     )}
                                 </div>
                                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                    {variable.description || 'Sem descrição'}
+                                    {variable.description || t.noDescription}
                                     {variable.default != null && variable.default !== ''
-                                        ? ` · padrão: ${variable.sensitive ? '••••' : String(variable.default)}`
+                                        ? ` · ${t.variableDefault.replace('{value}', variable.sensitive ? '••••' : String(variable.default))}`
                                         : ''}
                                 </p>
                             </div>
@@ -210,14 +219,14 @@ export function VariableEditor({
             {!readOnly && showForm && (
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 rounded-lg border bg-muted/20 p-4">
-                        <p className="text-sm font-medium">{editing ? `Editando ${editing}` : 'Nova variável'}</p>
+                        <p className="text-sm font-medium">{editing ? t.editingVariable.replace('{name}', editing) : t.newVariable}</p>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <FormField
                                 control={form.control}
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tc.name}</FormLabel>
                                         <FormControl>
                                             <Input placeholder="appName" className="font-mono" {...field} />
                                         </FormControl>
@@ -230,7 +239,7 @@ export function VariableEditor({
                                 name="type"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Tipo</FormLabel>
+                                        <FormLabel>{t.typeLabel}</FormLabel>
                                         <Select value={field.value} onValueChange={field.onChange}>
                                             <FormControl>
                                                 <SelectTrigger className="w-full">
@@ -238,9 +247,9 @@ export function VariableEditor({
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                <SelectItem value="string">Texto</SelectItem>
-                                                <SelectItem value="number">Número</SelectItem>
-                                                <SelectItem value="boolean">Booleano</SelectItem>
+                                                <SelectItem value="string">{t.typeText}</SelectItem>
+                                                <SelectItem value="number">{t.typeNumber}</SelectItem>
+                                                <SelectItem value="boolean">{t.typeBoolean}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />
@@ -252,12 +261,12 @@ export function VariableEditor({
                                 name="defaultValue"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Valor padrão</FormLabel>
+                                        <FormLabel>{t.defaultValueLabel}</FormLabel>
                                         <FormControl>
                                             {selectedType === 'boolean' ? (
                                                 <Select value={field.value || undefined} onValueChange={field.onChange}>
                                                     <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Sem padrão" />
+                                                        <SelectValue placeholder={t.noDefault} />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="true">true</SelectItem>
@@ -265,10 +274,10 @@ export function VariableEditor({
                                                     </SelectContent>
                                                 </Select>
                                             ) : (
-                                                <Input placeholder="Usado se o usuário não informar" {...field} />
+                                                <Input placeholder={t.defaultPlaceholder} {...field} />
                                             )}
                                         </FormControl>
-                                        <FormDescription>Preenchido automaticamente na execução se vazio.</FormDescription>
+                                        <FormDescription>{t.defaultHint}</FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -278,9 +287,9 @@ export function VariableEditor({
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Descrição</FormLabel>
+                                        <FormLabel>{t.descriptionLabel}</FormLabel>
                                         <FormControl>
-                                            <Textarea rows={2} placeholder="Aparece no formulário de execução" {...field} />
+                                            <Textarea rows={2} placeholder={t.descriptionPlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -296,7 +305,7 @@ export function VariableEditor({
                                         <FormControl>
                                             <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
                                         </FormControl>
-                                        <FormLabel>Obrigatória na execução</FormLabel>
+                                        <FormLabel>{t.requiredAtExecution}</FormLabel>
                                     </FormItem>
                                 )}
                             />
@@ -308,7 +317,7 @@ export function VariableEditor({
                                         <FormControl>
                                             <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
                                         </FormControl>
-                                        <FormLabel>Sensível (oculta no histórico)</FormLabel>
+                                        <FormLabel>{t.sensitiveHidden}</FormLabel>
                                     </FormItem>
                                 )}
                             />
@@ -323,9 +332,9 @@ export function VariableEditor({
                                     form.reset(emptyValues);
                                 }}
                             >
-                                Cancelar
+                                {tc.cancel}
                             </Button>
-                            <Button type="submit" isLoading={saving} loadingText="Salvando...">
+                            <Button type="submit" isLoading={saving} loadingText={t.saving}>
                                 {saveLabel}
                             </Button>
                         </div>

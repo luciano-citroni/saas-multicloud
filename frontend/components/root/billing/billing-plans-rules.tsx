@@ -70,7 +70,7 @@ async function extractResponseError(response: Response, fallbackMessage: string)
         return fallbackMessage;
     }
 
-    const message = extractErrorMessage(payload, 'pt');
+    const message = extractErrorMessage(payload);
     return message || fallbackMessage;
 }
 

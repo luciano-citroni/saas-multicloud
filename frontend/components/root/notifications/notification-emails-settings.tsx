@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,6 +39,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
@@ -77,20 +78,22 @@ export type NotificationGroupItem = {
     updatedAt: string;
 };
 
-const groupSchema = z.object({
-    name: z.string().min(1, 'Nome é obrigatório').max(120),
-    description: z.string().max(255).optional(),
-    isActive: z.boolean(),
-});
+const createGroupSchema = (t: { nameRequired: string }) =>
+    z.object({
+        name: z.string().min(1, t.nameRequired).max(120),
+        description: z.string().max(255).optional(),
+        isActive: z.boolean(),
+    });
 
-const emailSchema = z.object({
-    email: z.string().email('E-mail inválido').max(320),
-    label: z.string().max(120).optional(),
-    isActive: z.boolean(),
-});
+const createEmailSchema = (t: { emailInvalid: string }) =>
+    z.object({
+        email: z.string().email(t.emailInvalid).max(320),
+        label: z.string().max(120).optional(),
+        isActive: z.boolean(),
+    });
 
-type GroupFormData = z.infer<typeof groupSchema>;
-type EmailFormData = z.infer<typeof emailSchema>;
+type GroupFormData = z.infer<ReturnType<typeof createGroupSchema>>;
+type EmailFormData = z.infer<ReturnType<typeof createEmailSchema>>;
 
 type DeleteTarget =
     | { kind: 'group'; item: NotificationGroupItem }
@@ -143,6 +146,8 @@ function normalizeGroupsPayload(payload: unknown): {
 }
 
 export function NotificationEmailsSettings() {
+    const t = useTranslations('notifications');
+    const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
@@ -166,6 +171,9 @@ export function NotificationEmailsSettings() {
     const [deleting, setDeleting] = useState(false);
     const [testingId, setTestingId] = useState<string | null>(null);
     const [testingGroupId, setTestingGroupId] = useState<string | null>(null);
+
+    const groupSchema = useMemo(() => createGroupSchema(t), [t]);
+    const emailSchema = useMemo(() => createEmailSchema(t), [t]);
 
     const groupForm = useForm<GroupFormData>({
         resolver: zodResolver(groupSchema),
@@ -201,7 +209,7 @@ export function NotificationEmailsSettings() {
                 });
                 if (!response.ok) {
                     const body = await response.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+                    toast.error(extractErrorMessage(body));
                     setGroups([]);
                     setPagination(null);
                     return;
@@ -221,14 +229,14 @@ export function NotificationEmailsSettings() {
                     return merged;
                 });
             } catch {
-                toast.error('Não foi possível carregar os grupos de notificação.');
+                toast.error(t.loadGroupsError);
                 setGroups([]);
                 setPagination(null);
             } finally {
                 setLoading(false);
             }
         },
-        [page, pageSize]
+        [page, pageSize, t]
     );
 
     useEffect(() => {
@@ -290,15 +298,15 @@ export function NotificationEmailsSettings() {
                 : await createNotificationGroup(organizationId, payload);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(editingGroup ? 'Grupo atualizado.' : 'Grupo criado.');
+            toast.success(editingGroup ? t.groupUpdated : t.groupCreated);
             setGroupDialogOpen(false);
             if (!editingGroup) setPage(1);
             void load(organizationId, editingGroup ? page : 1, pageSize);
         } catch {
-            toast.error('Não foi possível salvar o grupo.');
+            toast.error(t.saveGroupError);
         }
     };
 
@@ -316,14 +324,14 @@ export function NotificationEmailsSettings() {
                 : await createNotificationEmail(organizationId, emailGroupId, payload);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(editingEmail ? 'E-mail atualizado.' : 'E-mail adicionado.');
+            toast.success(editingEmail ? t.emailUpdated : t.emailAdded);
             setEmailDialogOpen(false);
             void load(organizationId, page, pageSize);
         } catch {
-            toast.error('Não foi possível salvar o e-mail.');
+            toast.error(t.saveEmailError);
         }
     };
 
@@ -338,11 +346,11 @@ export function NotificationEmailsSettings() {
 
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return false;
             }
 
-            toast.success(deleteTarget.kind === 'group' ? 'Grupo removido.' : 'E-mail removido.');
+            toast.success(deleteTarget.kind === 'group' ? t.groupRemoved : t.emailRemoved);
             setDeleteTarget(null);
             const shouldGoPrev =
                 deleteTarget.kind === 'group' &&
@@ -353,7 +361,7 @@ export function NotificationEmailsSettings() {
             void load(organizationId, nextPage, pageSize);
             return true;
         } catch {
-            toast.error('Não foi possível remover.');
+            toast.error(t.removeError);
             return false;
         } finally {
             setDeleting(false);
@@ -367,12 +375,12 @@ export function NotificationEmailsSettings() {
             const response = await sendNotificationTestEmail(organizationId, email.id);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(`E-mail de teste enviado para ${email.email}.`);
+            toast.success(t.testEmailSent.replace('{email}', email.email));
         } catch {
-            toast.error('Não foi possível enviar o e-mail de teste.');
+            toast.error(t.sendTestEmailError);
         } finally {
             setTestingId(null);
         }
@@ -389,18 +397,20 @@ export function NotificationEmailsSettings() {
                 message?: string;
             } | null;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
             const sent = body?.sent ?? 0;
             const failed = body?.failed ?? 0;
             if (failed > 0) {
-                toast.success(`Teste do grupo: ${sent} enviado(s), ${failed} falha(s).`);
+                toast.success(
+                    t.groupTestResult.replace('{sent}', String(sent)).replace('{failed}', String(failed)),
+                );
             } else {
-                toast.success(`E-mail de teste enviado para ${sent} destinatário(s) do grupo.`);
+                toast.success(t.groupTestEmailSent.replace('{count}', String(sent)));
             }
         } catch {
-            toast.error('Não foi possível enviar o teste do grupo.');
+            toast.error(t.sendGroupTestError);
         } finally {
             setTestingGroupId(null);
         }
@@ -411,8 +421,8 @@ export function NotificationEmailsSettings() {
             <div className="flex flex-col gap-4">
                 <div className="rounded-xl border">
                     <div className="border-b px-4 py-3">
-                        <p className="text-sm font-medium">Notificações</p>
-                        <p className="text-xs text-muted-foreground">Selecione um tenant na sidebar.</p>
+                        <p className="text-sm font-medium">{t.title}</p>
+                        <p className="text-xs text-muted-foreground">{t.selectTenant}</p>
                     </div>
                 </div>
             </div>
@@ -423,10 +433,8 @@ export function NotificationEmailsSettings() {
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Notificações</p>
-                    <p className="text-xs text-muted-foreground">
-                        Configuração do tenant inteiro. Organize destinatários em grupos e envie testes.
-                    </p>
+                    <p className="text-sm font-medium">{t.title}</p>
+                    <p className="text-xs text-muted-foreground">{t.pageDescription}</p>
                 </div>
 
                 <div className="flex flex-col gap-4 px-4 py-4">
@@ -434,27 +442,24 @@ export function NotificationEmailsSettings() {
                         <TabsList>
                             <TabsTrigger value="email" className="gap-1.5">
                                 <Mail className="size-3.5" />
-                                E-mail
+                                {t.tabEmail}
                             </TabsTrigger>
                             <TabsTrigger value="whatsapp" className="gap-1.5">
                                 <MessageCircle className="size-3.5" />
-                                WhatsApp
+                                {t.whatsappTitle}
                             </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="email" className="mt-4 space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="space-y-0.5">
-                                    <p className="text-sm font-medium">Grupos de e-mail</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        Expanda um grupo para gerenciar os e-mails. Você pode editar ou excluir
-                                        grupos e destinatários.
-                                    </p>
+                                    <p className="text-sm font-medium">{t.emailGroupsTitle}</p>
+                                    <p className="text-xs text-muted-foreground">{t.emailGroupsDesc}</p>
                                 </div>
                                 {canManage && (
                                     <Button size="sm" onClick={openCreateGroup}>
                                         <Plus className="h-4 w-4" />
-                                        Novo grupo
+                                        {t.newGroup}
                                     </Button>
                                 )}
                             </div>
@@ -468,11 +473,11 @@ export function NotificationEmailsSettings() {
                             ) : groups.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                                     <Layers className="h-10 w-10 text-muted-foreground/50" />
-                                    <p className="text-sm text-muted-foreground">Nenhum grupo cadastrado.</p>
+                                    <p className="text-sm text-muted-foreground">{t.emptyGroups}</p>
                                     {canManage && (
                                         <Button variant="outline" size="sm" onClick={openCreateGroup}>
                                             <Plus className="h-3 w-3" />
-                                            Criar grupo
+                                            {t.createGroup}
                                         </Button>
                                     )}
                                 </div>
@@ -483,10 +488,10 @@ export function NotificationEmailsSettings() {
                                             <TableHeader className="bg-muted/50">
                                                 <TableRow>
                                                     <TableHead className="w-10" />
-                                                    <TableHead>Grupo</TableHead>
-                                                    <TableHead>E-mails</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead className="text-right">Ações</TableHead>
+                                                    <TableHead>{t.group}</TableHead>
+                                                    <TableHead>{t.emails}</TableHead>
+                                                    <TableHead>{tc.status}</TableHead>
+                                                    <TableHead className="text-right">{tc.actions}</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -526,9 +531,9 @@ export function NotificationEmailsSettings() {
                                                                 <TableCell>{group.emails?.length ?? 0}</TableCell>
                                                                 <TableCell>
                                                                     {group.isActive ? (
-                                                                        <Badge variant="secondary">Ativo</Badge>
+                                                                        <Badge variant="secondary">{t.active}</Badge>
                                                                     ) : (
-                                                                        <Badge variant="outline">Inativo</Badge>
+                                                                        <Badge variant="outline">{t.inactive}</Badge>
                                                                     )}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
@@ -552,7 +557,7 @@ export function NotificationEmailsSettings() {
                                                                                 }
                                                                             >
                                                                                 <Send className="size-3.5" />
-                                                                                Testar grupo
+                                                                                {t.testGroup}
                                                                             </Button>
                                                                             <Button
                                                                                 variant="outline"
@@ -562,7 +567,7 @@ export function NotificationEmailsSettings() {
                                                                                 }
                                                                             >
                                                                                 <Plus className="size-3.5" />
-                                                                                E-mail
+                                                                                {tc.email}
                                                                             </Button>
                                                                             <Button
                                                                                 variant="ghost"
@@ -594,17 +599,17 @@ export function NotificationEmailsSettings() {
                                                                         <div className="border-t px-4 py-3">
                                                                             {(group.emails?.length ?? 0) === 0 ? (
                                                                                 <p className="text-muted-foreground text-sm">
-                                                                                    Nenhum e-mail neste grupo.
+                                                                                    {t.emptyGroupEmails}
                                                                                 </p>
                                                                             ) : (
                                                                                 <Table>
                                                                                     <TableHeader>
                                                                                         <TableRow>
-                                                                                            <TableHead>E-mail</TableHead>
-                                                                                            <TableHead>Rótulo</TableHead>
-                                                                                            <TableHead>Status</TableHead>
+                                                                                            <TableHead>{tc.email}</TableHead>
+                                                                                            <TableHead>{t.label}</TableHead>
+                                                                                            <TableHead>{tc.status}</TableHead>
                                                                                             <TableHead className="text-right">
-                                                                                                Ações
+                                                                                                {tc.actions}
                                                                                             </TableHead>
                                                                                         </TableRow>
                                                                                     </TableHeader>
@@ -620,11 +625,11 @@ export function NotificationEmailsSettings() {
                                                                                                 <TableCell>
                                                                                                     {email.isActive ? (
                                                                                                         <Badge variant="secondary">
-                                                                                                            Ativo
+                                                                                                            {t.active}
                                                                                                         </Badge>
                                                                                                     ) : (
                                                                                                         <Badge variant="outline">
-                                                                                                            Inativo
+                                                                                                            {t.inactive}
                                                                                                         </Badge>
                                                                                                     )}
                                                                                                 </TableCell>
@@ -651,7 +656,7 @@ export function NotificationEmailsSettings() {
                                                                                                                 }
                                                                                                             >
                                                                                                                 <Send className="size-3.5" />
-                                                                                                                Testar
+                                                                                                                {t.test}
                                                                                                             </Button>
                                                                                                             <Button
                                                                                                                 variant="ghost"
@@ -699,7 +704,7 @@ export function NotificationEmailsSettings() {
 
                                     <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                            <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                             <Select
                                                 value={`${pageSize}`}
                                                 onValueChange={(value) => {
@@ -721,10 +726,10 @@ export function NotificationEmailsSettings() {
                                         </div>
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                                             <span className="text-sm font-medium">
-                                                Página {pagination?.page ?? page} de{' '}
+                                                {tc.page} {pagination?.page ?? page} {tc.of}{' '}
                                                 {Math.max(1, pagination?.totalPages ?? 1)}
                                                 {typeof pagination?.totalItems === 'number'
-                                                    ? ` · ${pagination.totalItems} grupo(s)`
+                                                    ? ` · ${t.groupsCount.replace('{count}', String(pagination.totalItems))}`
                                                     : ''}
                                             </span>
                                             <div className="flex items-center gap-1 self-start sm:self-auto">
@@ -788,10 +793,8 @@ export function NotificationEmailsSettings() {
             <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editingGroup ? 'Editar grupo' : 'Novo grupo'}</DialogTitle>
-                        <DialogDescription>
-                            Grupos organizam os e-mails de notificação do tenant.
-                        </DialogDescription>
+                        <DialogTitle>{editingGroup ? t.editGroup : t.newGroup}</DialogTitle>
+                        <DialogDescription>{t.groupDialogDesc}</DialogDescription>
                     </DialogHeader>
                     <Form {...groupForm}>
                         <form onSubmit={groupForm.handleSubmit(onSubmitGroup)} className="space-y-4">
@@ -800,7 +803,7 @@ export function NotificationEmailsSettings() {
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tc.name}</FormLabel>
                                         <FormControl>
                                             <Input placeholder="FinOps" {...field} />
                                         </FormControl>
@@ -813,9 +816,9 @@ export function NotificationEmailsSettings() {
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Descrição (opcional)</FormLabel>
+                                        <FormLabel>{t.descriptionOptional}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Alertas de orçamento" {...field} />
+                                            <Input placeholder={t.groupDescPlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -833,9 +836,9 @@ export function NotificationEmailsSettings() {
                                             />
                                         </FormControl>
                                         <div className="space-y-0.5">
-                                            <FormLabel className="font-normal">Ativo</FormLabel>
+                                            <FormLabel className="font-normal">{t.active}</FormLabel>
                                             <p className="text-muted-foreground text-xs">
-                                                Grupos inativos não recebem alertas.
+                                                {t.groupInactiveHint}
                                             </p>
                                         </div>
                                     </FormItem>
@@ -843,10 +846,10 @@ export function NotificationEmailsSettings() {
                             />
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={() => setGroupDialogOpen(false)}>
-                                    Cancelar
+                                    {tc.cancel}
                                 </Button>
                                 <Button type="submit" isLoading={groupForm.formState.isSubmitting}>
-                                    {editingGroup ? 'Salvar' : 'Criar'}
+                                    {editingGroup ? t.save : t.create}
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -857,8 +860,8 @@ export function NotificationEmailsSettings() {
             <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editingEmail ? 'Editar e-mail' : 'Novo e-mail'}</DialogTitle>
-                        <DialogDescription>Adicione um destinatário ao grupo selecionado.</DialogDescription>
+                        <DialogTitle>{editingEmail ? t.editEmail : t.newEmail}</DialogTitle>
+                        <DialogDescription>{t.emailDialogDesc}</DialogDescription>
                     </DialogHeader>
                     <Form {...emailForm}>
                         <form onSubmit={emailForm.handleSubmit(onSubmitEmail)} className="space-y-4">
@@ -867,7 +870,7 @@ export function NotificationEmailsSettings() {
                                 name="email"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>E-mail</FormLabel>
+                                        <FormLabel>{tc.email}</FormLabel>
                                         <FormControl>
                                             <Input type="email" placeholder="finops@empresa.com" {...field} />
                                         </FormControl>
@@ -880,7 +883,7 @@ export function NotificationEmailsSettings() {
                                 name="label"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Rótulo (opcional)</FormLabel>
+                                        <FormLabel>{t.labelOptional}</FormLabel>
                                         <FormControl>
                                             <Input placeholder="On-call" {...field} />
                                         </FormControl>
@@ -899,16 +902,16 @@ export function NotificationEmailsSettings() {
                                                 onCheckedChange={(checked) => field.onChange(checked === true)}
                                             />
                                         </FormControl>
-                                        <FormLabel className="font-normal">Ativo</FormLabel>
+                                        <FormLabel className="font-normal">{t.active}</FormLabel>
                                     </FormItem>
                                 )}
                             />
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={() => setEmailDialogOpen(false)}>
-                                    Cancelar
+                                    {tc.cancel}
                                 </Button>
                                 <Button type="submit" isLoading={emailForm.formState.isSubmitting}>
-                                    {editingEmail ? 'Salvar' : 'Adicionar'}
+                                    {editingEmail ? t.save : t.add}
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -921,11 +924,14 @@ export function NotificationEmailsSettings() {
                 onOpenChange={(open) => {
                     if (!open) setDeleteTarget(null);
                 }}
-                title={deleteTarget?.kind === 'group' ? 'Remover grupo?' : 'Remover e-mail?'}
+                title={deleteTarget?.kind === 'group' ? t.removeGroupTitle : t.removeEmailTitle}
                 description={
                     deleteTarget?.kind === 'group'
-                        ? `O grupo “${deleteTarget.item.name}” e todos os e-mails dele serão removidos.`
-                        : `O e-mail “${deleteTarget?.kind === 'email' ? deleteTarget.item.email : ''}” será removido.`
+                        ? t.removeGroupDesc.replace('{name}', deleteTarget.item.name)
+                        : t.removeEmailDesc.replace(
+                              '{email}',
+                              deleteTarget?.kind === 'email' ? deleteTarget.item.email : '',
+                          )
                 }
                 resourceName={
                     deleteTarget?.kind === 'group'
@@ -934,7 +940,7 @@ export function NotificationEmailsSettings() {
                           ? deleteTarget.item.email
                           : ''
                 }
-                confirmLabel="Remover"
+                confirmLabel={t.remove}
                 isConfirming={deleting}
                 onConfirm={onDelete}
             />

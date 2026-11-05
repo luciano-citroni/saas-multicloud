@@ -40,6 +40,9 @@ import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { fetchFinopsOrgSavings } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { cn } from '@/lib/utils';
+import { useTranslations, type Translations } from '@/lib/i18n';
+
+type FinopsT = Record<keyof Translations['finops'], string>;
 
 type SavingsRow = FinopsRecommendation & { cloudAccountId: string };
 
@@ -68,32 +71,34 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
 const DEFAULT_SORT = 'saving';
 const SORT_OPTIONS = [
-    { value: 'saving', label: 'Economia (maior → menor)' },
-    { value: 'priority', label: 'Prioridade' },
-    { value: 'date', label: 'Data (mais recente)' },
-] as const;
+    { value: 'saving', labelKey: 'sortSaving' },
+    { value: 'priority', labelKey: 'sortPriority' },
+    { value: 'date', labelKey: 'sortDate' },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: keyof FinopsT }>;
 type SortOption = (typeof SORT_OPTIONS)[number]['value'];
 
 const PRIORITY_BADGE = {
-    high: { label: 'Alta', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-    medium: { label: 'Média', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    low: { label: 'Baixa', className: 'bg-muted text-muted-foreground' },
-} as const;
+    high: { labelKey: 'severityHigh', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    medium: { labelKey: 'severityMedium', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    low: { labelKey: 'severityLow', className: 'bg-muted text-muted-foreground' },
+} as const satisfies Record<string, { labelKey: keyof FinopsT; className: string }>;
 
 function isSortOption(value: string | null): value is SortOption {
     return SORT_OPTIONS.some((o) => o.value === value);
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
+function PriorityBadge({ priority, t }: { priority: string; t: FinopsT }) {
     const cfg = PRIORITY_BADGE[priority as keyof typeof PRIORITY_BADGE] ?? PRIORITY_BADGE.low;
     return (
         <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cfg.className)}>
-            {cfg.label}
+            {t[cfg.labelKey]}
         </span>
     );
 }
 
 export function FinopsSavingsPage() {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -258,19 +263,19 @@ export function FinopsSavingsPage() {
                     limit: pageSize,
                 });
                 if (response.status === 401) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tCommon.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
                 const payload = await response.json().catch(() => null);
                 if (!response.ok) {
-                    toast.error(extractErrorMessage(payload, 'pt'));
+                    toast.error(extractErrorMessage(payload));
                     setData(null);
                     return;
                 }
                 setData(payload as SavingsListResponse);
             } catch {
-                toast.error('Não foi possível carregar a economia potencial.');
+                toast.error(t.loadSavingsError);
                 setData(null);
             } finally {
                 setLoading(false);
@@ -284,6 +289,8 @@ export function FinopsSavingsPage() {
             router,
             sortFilter,
             statusFilter,
+            t,
+            tCommon,
             urlFilters.accountId,
             urlFilters.provider,
         ],
@@ -337,8 +344,8 @@ export function FinopsSavingsPage() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Economia potencial</CardTitle>
-                    <CardDescription>Selecione uma organização na sidebar.</CardDescription>
+                    <CardTitle>{t.potentialSavings}</CardTitle>
+                    <CardDescription>{t.selectOrgSidebar}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -378,10 +385,8 @@ export function FinopsSavingsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Economia potencial</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Recursos otimizáveis com estimativa aproximada de economia mensal.
-                        </p>
+                        <h1 className="text-xl font-semibold tracking-tight">{t.potentialSavings}</h1>
+                        <p className="text-sm text-muted-foreground">{t.savingsDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -395,7 +400,7 @@ export function FinopsSavingsPage() {
                     disabled={loading || !accountsReady}
                 >
                     <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-                    Atualizar
+                    {tCommon.refresh}
                 </Button>
             </div>
 
@@ -404,41 +409,43 @@ export function FinopsSavingsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription className="flex items-center gap-1.5">
                             <PiggyBank className="size-3.5" />
-                            Economia estimada
+                            {t.savingsEstimated}
                         </CardDescription>
                         <CardTitle className="text-2xl tabular-nums text-emerald-600">
                             {formatCurrency(totals?.potentialSavings ?? 0, currency)}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-xs text-muted-foreground">Soma das recomendações abertas</p>
+                        <p className="text-xs text-muted-foreground">{t.savingsOpenSum}</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription className="flex items-center gap-1.5">
                             <Lightbulb className="size-3.5" />
-                            Oportunidades abertas
+                            {t.savingsOpenOpportunities}
                         </CardDescription>
                         <CardTitle className="text-2xl tabular-nums">{totals?.open ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Prioridade alta</CardDescription>
+                        <CardDescription>{t.savingsHighPriority}</CardDescription>
                         <CardTitle className={cn('text-2xl tabular-nums', priorityColor('high'))}>
                             {totals?.high ?? 0}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xs text-muted-foreground">
-                            Média {totals?.medium ?? 0} · Baixa {totals?.low ?? 0}
+                            {t.savingsMediumLow
+                                .replace('{medium}', String(totals?.medium ?? 0))
+                                .replace('{low}', String(totals?.low ?? 0))}
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Resultados filtrados</CardDescription>
+                        <CardDescription>{t.filteredResults}</CardDescription>
                         <CardTitle className="text-2xl tabular-nums">{pagination?.totalItems ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
@@ -448,20 +455,20 @@ export function FinopsSavingsPage() {
                 <CardHeader className="gap-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                            <CardTitle className="text-base">Filtros</CardTitle>
-                            <CardDescription>Persistidos na URL — compartilháveis e com histórico</CardDescription>
+                            <CardTitle className="text-base">{t.filtersTitle}</CardTitle>
+                            <CardDescription>{t.filtersUrlHint}</CardDescription>
                         </div>
                         {hasActiveFilters ? (
                             <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" onClick={clearFilters}>
                                 <RotateCcw className="size-3.5" />
-                                Limpar filtros
+                                {t.clearFilters}
                             </Button>
                         ) : null}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                         <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                             <label htmlFor="savings-cloud-account" className="text-xs font-medium text-muted-foreground">
-                                Cloud account
+                                {t.cloudAccountLabel}
                             </label>
                             <Select
                                 value={
@@ -481,10 +488,10 @@ export function FinopsSavingsPage() {
                                 disabled={!accountsReady}
                             >
                                 <SelectTrigger id="savings-cloud-account" className="w-full">
-                                    <SelectValue placeholder="Selecione a conta" />
+                                    <SelectValue placeholder={t.selectAccountPlaceholder} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={ACCOUNT_FILTER_ALL}>Todas as contas</SelectItem>
+                                    <SelectItem value={ACCOUNT_FILTER_ALL}>{t.allAccounts}</SelectItem>
                                     {cloudAccounts.map((account) => (
                                         <SelectItem key={account.id} value={account.id}>
                                             {account.alias}
@@ -497,47 +504,47 @@ export function FinopsSavingsPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="savings-status" className="text-xs font-medium text-muted-foreground">
-                                Status
+                                {tCommon.status}
                             </label>
                             <Select
                                 value={statusFilter}
                                 onValueChange={(value) => syncUrlState({ status: value, page: null })}
                             >
                                 <SelectTrigger id="savings-status" className="w-full">
-                                    <SelectValue placeholder="Status" />
+                                    <SelectValue placeholder={tCommon.status} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="open">Abertas</SelectItem>
-                                    <SelectItem value="dismissed">Descartadas</SelectItem>
-                                    <SelectItem value="resolved">Resolvidas</SelectItem>
-                                    <SelectItem value="all">Todas</SelectItem>
+                                    <SelectItem value="open">{t.statusOpen}</SelectItem>
+                                    <SelectItem value="dismissed">{t.statusDismissed}</SelectItem>
+                                    <SelectItem value="resolved">{t.statusResolved}</SelectItem>
+                                    <SelectItem value="all">{t.statusAll}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
                             <label htmlFor="savings-priority" className="text-xs font-medium text-muted-foreground">
-                                Prioridade
+                                {t.priorityLabel}
                             </label>
                             <Select
                                 value={priorityFilter}
                                 onValueChange={(value) => syncUrlState({ priority: value, page: null })}
                             >
                                 <SelectTrigger id="savings-priority" className="w-full">
-                                    <SelectValue placeholder="Prioridade" />
+                                    <SelectValue placeholder={t.priorityLabel} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Todas prioridades</SelectItem>
-                                    <SelectItem value="high">Alta</SelectItem>
-                                    <SelectItem value="medium">Média</SelectItem>
-                                    <SelectItem value="low">Baixa</SelectItem>
+                                    <SelectItem value="all">{t.allPriorities}</SelectItem>
+                                    <SelectItem value="high">{t.severityHigh}</SelectItem>
+                                    <SelectItem value="medium">{t.severityMedium}</SelectItem>
+                                    <SelectItem value="low">{t.severityLow}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
                             <label htmlFor="savings-provider" className="text-xs font-medium text-muted-foreground">
-                                Provedor
+                                {t.providerLabel}
                             </label>
                             <Select
                                 value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
@@ -549,10 +556,10 @@ export function FinopsSavingsPage() {
                                 }
                             >
                                 <SelectTrigger id="savings-provider" className="w-full">
-                                    <SelectValue placeholder="Provedor" />
+                                    <SelectValue placeholder={t.providerLabel} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={PROVIDER_FILTER_ALL}>Todos provedores</SelectItem>
+                                    <SelectItem value={PROVIDER_FILTER_ALL}>{t.allProviders}</SelectItem>
                                     <SelectItem value="aws">AWS</SelectItem>
                                     <SelectItem value="azure">Azure</SelectItem>
                                     <SelectItem value="gcp">GCP</SelectItem>
@@ -562,19 +569,19 @@ export function FinopsSavingsPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="savings-sort" className="text-xs font-medium text-muted-foreground">
-                                Ordenar por
+                                {t.sortByLabel}
                             </label>
                             <Select
                                 value={sortFilter}
                                 onValueChange={(value) => syncUrlState({ sort: value, page: null })}
                             >
                                 <SelectTrigger id="savings-sort" className="w-full">
-                                    <SelectValue placeholder="Ordenação" />
+                                    <SelectValue placeholder={t.sortPlaceholder} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {SORT_OPTIONS.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
+                                            {t[option.labelKey]}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -583,7 +590,7 @@ export function FinopsSavingsPage() {
 
                         <div className="space-y-1.5 sm:col-span-2 xl:col-span-1">
                             <label htmlFor="savings-q" className="text-xs font-medium text-muted-foreground">
-                                Buscar recurso
+                                {t.searchResource}
                             </label>
                             <form
                                 className="flex gap-2"
@@ -596,11 +603,11 @@ export function FinopsSavingsPage() {
                                     id="savings-q"
                                     value={searchDraft}
                                     onChange={(event) => setSearchDraft(event.target.value)}
-                                    placeholder="ID, tipo ou descrição…"
+                                    placeholder={t.searchResourcePlaceholder}
                                     className="h-9"
                                 />
                                 <Button type="submit" variant="outline" size="sm" className="h-9 shrink-0">
-                                    Buscar
+                                    {tCommon.search}
                                 </Button>
                             </form>
                         </div>
@@ -610,11 +617,14 @@ export function FinopsSavingsPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">Recursos com economia potencial</CardTitle>
+                    <CardTitle className="text-base">{t.savingsListTitle}</CardTitle>
                     <CardDescription>
                         {pagination
-                            ? `${pagination.totalItems} resultado(s) · página ${currentPage} de ${totalPages}`
-                            : 'Carregando…'}
+                            ? t.resultsPageSummary
+                                  .replace('{total}', String(pagination.totalItems))
+                                  .replace('{page}', String(currentPage))
+                                  .replace('{pages}', String(totalPages))
+                            : tCommon.loading}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -627,21 +637,19 @@ export function FinopsSavingsPage() {
                     ) : items.length === 0 ? (
                         <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                            <p className="text-sm font-medium">Nenhuma oportunidade encontrada</p>
-                            <p className="text-xs text-muted-foreground">
-                                Ajuste os filtros ou sincronize o FinOps para gerar recomendações.
-                            </p>
+                            <p className="text-sm font-medium">{t.savingsEmptyTitle}</p>
+                            <p className="text-xs text-muted-foreground">{t.savingsEmptyHint}</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader className="bg-muted/50">
                                     <TableRow>
-                                        <TableHead className="px-4">Prioridade</TableHead>
-                                        <TableHead className="px-4">Recurso</TableHead>
-                                        <TableHead className="hidden px-4 md:table-cell">Ação recomendada</TableHead>
-                                        <TableHead className="hidden px-4 lg:table-cell">Conta</TableHead>
-                                        <TableHead className="px-4 text-right">Economia/mês</TableHead>
+                                        <TableHead className="px-4">{t.priorityLabel}</TableHead>
+                                        <TableHead className="px-4">{t.colResource}</TableHead>
+                                        <TableHead className="hidden px-4 md:table-cell">{t.colRecommendedAction}</TableHead>
+                                        <TableHead className="hidden px-4 lg:table-cell">{t.colAccount}</TableHead>
+                                        <TableHead className="px-4 text-right">{t.colSavingsMonth}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -651,7 +659,7 @@ export function FinopsSavingsPage() {
                                         return (
                                             <TableRow key={rec.id}>
                                                 <TableCell className="px-4">
-                                                    <PriorityBadge priority={rec.priority} />
+                                                    <PriorityBadge priority={rec.priority} t={t} />
                                                 </TableCell>
                                                 <TableCell className="px-4">
                                                     <div className="min-w-0 space-y-0.5">
@@ -689,7 +697,7 @@ export function FinopsSavingsPage() {
                                                             {formatCurrency(rec.potentialSaving, rec.currency)}
                                                         </p>
                                                     ) : (
-                                                        <p className="text-xs text-muted-foreground">sem estimativa</p>
+                                                        <p className="text-xs text-muted-foreground">{t.noEstimate}</p>
                                                     )}
                                                     <p className="text-[11px] text-muted-foreground lg:hidden">
                                                         {alias} · {rec.cloudProvider}
@@ -709,7 +717,7 @@ export function FinopsSavingsPage() {
             {pagination && pagination.totalItems > 0 ? (
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                        <span className="shrink-0 whitespace-nowrap">{tCommon.rowsPerPage}</span>
                         <Select
                             value={`${pageSize}`}
                             onValueChange={(value) =>
@@ -730,7 +738,9 @@ export function FinopsSavingsPage() {
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                         <span className="text-sm font-medium">
-                            Página {currentPage} de {totalPages}
+                            {t.pageOfPages
+                                .replace('{page}', String(currentPage))
+                                .replace('{pages}', String(totalPages))}
                         </span>
                         <div className="flex items-center gap-1 self-start sm:self-auto">
                             <Button

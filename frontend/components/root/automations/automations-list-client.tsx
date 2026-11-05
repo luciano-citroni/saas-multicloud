@@ -43,6 +43,8 @@ import {
 import { cn } from '@/lib/utils';
 import { executionStatusClass, workflowStatusClass } from './status-styles';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations } from '@/lib/i18n';
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
@@ -86,6 +88,8 @@ function normalizePagination(payload: unknown): PaginationMeta | null {
 }
 
 export function AutomationsListClient() {
+    const t = useTranslations('automation');
+    const tc = useTranslations('common');
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -142,18 +146,18 @@ export function AutomationsListClient() {
             });
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             const items = (body as { items?: AutomationWorkflow[] }).items ?? (body as AutomationWorkflow[]);
             setAutomations(Array.isArray(items) ? items : []);
             setPagination(normalizePagination(body));
         } catch {
-            toast.error('Falha ao carregar automações');
+            toast.error(t.loadError);
         } finally {
             setLoading(false);
         }
-    }, [midOrgId, page, pageSize]);
+    }, [midOrgId, page, pageSize, t.loadError]);
 
     useEffect(() => {
         setOrgId(getOrgId());
@@ -188,9 +192,14 @@ export function AutomationsListClient() {
     const totalItems = pagination?.totalItems ?? automations.length;
 
     const pageSummary = useMemo(() => {
-        if (totalItems === 0) return '0 automação(ões)';
-        return `Página ${safePage} de ${totalPages} · ${totalItems} automação(ões)`;
-    }, [safePage, totalItems, totalPages]);
+        if (totalItems === 0) return t.pageSummaryEmpty;
+        return t.pageSummary
+            .replace('{page}', String(safePage))
+            .replace('{totalPages}', String(totalPages))
+            .replace('{totalItems}', String(totalItems));
+    }, [safePage, t.pageSummary, t.pageSummaryEmpty, totalItems, totalPages]);
+
+    const [deleteDescriptionBefore, deleteDescriptionAfter = ''] = t.deleteDialogDescription.split('{name}');
 
     async function handleAction(action: string, id: string) {
         const currentOrgId = getOrgId();
@@ -220,15 +229,15 @@ export function AutomationsListClient() {
         const body = await response.json().catch(() => ({}));
         if (response.status === 499) return;
         if (!response.ok && response.status !== 204) {
-            toast.error(extractErrorMessage(body as never, 'pt'));
+            toast.error(extractErrorMessage(body as never));
             return;
         }
 
         if (action === 'execute') {
-            toast.success('Execução enfileirada');
+            toast.success(t.executionQueued);
             router.push(`/automations/${id}`);
         } else {
-            toast.success('Automação atualizada');
+            toast.success(t.updated);
         }
         await load();
     }
@@ -243,15 +252,15 @@ export function AutomationsListClient() {
             const response = await deleteAutomation(deleteTarget.id, currentOrgId);
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => ({}));
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return false;
             }
-            toast.success('Automação excluída');
+            toast.success(t.deleteSuccess);
             setDeleteTarget(null);
             await load();
             return true;
         } catch {
-            toast.error('Falha ao excluir automação');
+            toast.error(t.deleteError);
             return false;
         } finally {
             setDeleting(false);
@@ -270,13 +279,13 @@ export function AutomationsListClient() {
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Automações</h1>
-                    <p className="text-sm text-muted-foreground">Fluxos de provisionamento cloud</p>
+                    <h1 className="text-2xl font-bold">{t.listTitle}</h1>
+                    <p className="text-sm text-muted-foreground">{t.listSubtitle}</p>
                 </div>
                 <Button asChild>
                     <Link href="/automations/new">
                         <Plus className="mr-2 h-4 w-4" />
-                        Nova automação
+                        {t.newAutomation}
                     </Link>
                 </Button>
             </div>
@@ -285,20 +294,20 @@ export function AutomationsListClient() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>Provider</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Última execução</TableHead>
-                            <TableHead>Versão</TableHead>
-                            <TableHead>Atualizado</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
+                            <TableHead>{tc.name}</TableHead>
+                            <TableHead>{t.provider}</TableHead>
+                            <TableHead>{tc.status}</TableHead>
+                            <TableHead>{t.lastExecution}</TableHead>
+                            <TableHead>{t.version}</TableHead>
+                            <TableHead>{t.updatedColumn}</TableHead>
+                            <TableHead className="text-right">{tc.actions}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {automations.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center text-muted-foreground">
-                                    Nenhuma automação criada
+                                    {t.emptyList}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -344,7 +353,7 @@ export function AutomationsListClient() {
                                     </TableCell>
                                     <TableCell>v{automation.version}</TableCell>
                                     <TableCell className="text-xs text-muted-foreground">
-                                        {new Date(automation.updatedAt).toLocaleString('pt-BR')}
+                                        {new Date(automation.updatedAt).toLocaleString(toIntlLocale())}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
@@ -412,7 +421,7 @@ export function AutomationsListClient() {
             {totalItems > 0 ? (
                 <div className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                        <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                        <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                         <Select
                             value={`${pageSize}`}
                             onValueChange={(value) => {
@@ -480,11 +489,12 @@ export function AutomationsListClient() {
                 onOpenChange={(open) => {
                     if (!open && !deleting) setDeleteTarget(null);
                 }}
-                title="Excluir automação?"
+                title={t.deleteDialogTitle}
                 description={
                     <>
-                        A automação <span className="font-medium text-foreground">{deleteTarget?.name}</span> será
-                        removida permanentemente. Esta ação não pode ser desfeita.
+                        {deleteDescriptionBefore}
+                        <span className="font-medium text-foreground">{deleteTarget?.name}</span>
+                        {deleteDescriptionAfter}
                     </>
                 }
                 resourceName={deleteTarget?.name ?? ''}

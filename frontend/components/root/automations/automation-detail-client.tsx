@@ -68,6 +68,7 @@ import {
     resolveDefaultCloudAccountId,
 } from './execution-parameters-form';
 import { executionStatusClass } from './status-styles';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -83,18 +84,22 @@ function getSidebarCloudAccountId(organizationId: string | null): string | null 
     return window.localStorage.getItem('smc_active_cloud_account_id');
 }
 
-const detailsSchema = z.object({
-    name: z.string().min(1, 'Nome é obrigatório'),
-    description: z.string(),
-});
+function createDetailsSchema(nameRequired: string) {
+    return z.object({
+        name: z.string().min(1, nameRequired),
+        description: z.string(),
+    });
+}
 
-const importSchema = z.object({
-    templateName: z.string().min(1, 'Nome é obrigatório'),
-    templateBody: z.string().min(1, 'Cole o template YAML ou JSON'),
-});
+function createImportSchema(nameRequired: string, templateRequired: string) {
+    return z.object({
+        templateName: z.string().min(1, nameRequired),
+        templateBody: z.string().min(1, templateRequired),
+    });
+}
 
-type DetailsFormValues = z.infer<typeof detailsSchema>;
-type ImportFormValues = z.infer<typeof importSchema>;
+type DetailsFormValues = z.infer<ReturnType<typeof createDetailsSchema>>;
+type ImportFormValues = z.infer<ReturnType<typeof createImportSchema>>;
 type AutomationDetailMode = 'draft' | 'published';
 
 export function AutomationDetailClient({
@@ -105,6 +110,7 @@ export function AutomationDetailClient({
     mode?: AutomationDetailMode;
 }) {
     const t = useTranslations('automation');
+    const tc = useTranslations('common');
     const router = useRouter();
     const searchParams = useSearchParams();
     const autoExecuteOpened = useRef(false);
@@ -138,6 +144,11 @@ export function AutomationDetailClient({
     const [grantingPermissions, setGrantingPermissions] = useState(false);
     const [manualPolicyJson, setManualPolicyJson] = useState<string | null>(null);
     const [copiedPolicy, setCopiedPolicy] = useState(false);
+    const detailsSchema = useMemo(() => createDetailsSchema(tc.nameRequired), [tc.nameRequired]);
+    const importSchema = useMemo(
+        () => createImportSchema(tc.nameRequired, t.templateRequired),
+        [tc.nameRequired, t.templateRequired],
+    );
     const detailsForm = useForm<DetailsFormValues>({
         resolver: zodResolver(detailsSchema),
         defaultValues: { name: '', description: '' },
@@ -167,7 +178,7 @@ export function AutomationDetailClient({
             const autoRes = await fetchAutomation(automationId, currentOrgId);
             const autoBody = await autoRes.json();
             if (!autoRes.ok) {
-                toast.error(extractErrorMessage(autoBody as never, 'pt'));
+                toast.error(extractErrorMessage(autoBody as never));
                 return;
             }
             const auto = autoBody as AutomationWorkflow;
@@ -196,25 +207,25 @@ export function AutomationDetailClient({
             if (auto.version > 0) {
                 const snapshot = await loadPublished(currentOrgId);
                 if (mode === 'published' && !snapshot) {
-                    toast.error('Versão publicada não encontrada');
+                    toast.error(t.publishedVersionNotFound);
                     router.replace(`/automations/${automationId}`);
                     return;
                 }
             } else {
                 setPublished(null);
                 if (mode === 'published') {
-                    toast.error('Esta automação ainda não foi publicada');
+                    toast.error(t.notPublishedYet);
                     router.replace(`/automations/${automationId}`);
                     return;
                 }
             }
         } catch {
-            toast.error('Falha ao carregar automação');
+            toast.error(t.detailLoadError);
         } finally {
             setLoading(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- detailsForm.reset is stable enough for initial load
-    }, [automationId, loadPublished, midOrgId, mode, router]);
+    }, [automationId, loadPublished, midOrgId, mode, router, t]);
 
     useEffect(() => {
         setOrgId(getOrgId());
@@ -257,7 +268,7 @@ export function AutomationDetailClient({
         });
         const body = await response.json();
         if (!response.ok) {
-            toast.error(extractErrorMessage(body as never, 'pt'));
+            toast.error(extractErrorMessage(body as never));
             return null;
         }
         const saved = body as AutomationWorkflow;
@@ -288,7 +299,7 @@ export function AutomationDetailClient({
             const response = await publishAutomation(automationId, currentOrgId);
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             toast.success(t.published);
@@ -313,7 +324,7 @@ export function AutomationDetailClient({
             });
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 setCloudAccounts([]);
                 return { accounts: [], selectedId: '' };
             }
@@ -337,7 +348,7 @@ export function AutomationDetailClient({
         const currentOrgId = getOrgId();
         if (!currentOrgId || !automation) return;
         if (!hasPublishedVersion) {
-            toast.error('Publique a automação antes de gerar o plano de execução');
+            toast.error(t.publishFirst);
             return;
         }
 
@@ -348,7 +359,7 @@ export function AutomationDetailClient({
         });
         const body = await response.json();
         if (!response.ok) {
-            toast.error(extractErrorMessage(body as never, 'pt'));
+            toast.error(extractErrorMessage(body as never));
             return;
         }
         setPlan(body as Record<string, unknown>);
@@ -372,7 +383,7 @@ export function AutomationDetailClient({
             };
             if (replayRes.ok && replayBody.available && replayBody.parameters) {
                 params = mergeReplayParameters(vars, params, replayBody.parameters);
-                toast.message('Parâmetros da execução anterior preenchidos');
+                toast.message(t.replayFilled);
             }
         }
         setExecutionParams(params);
@@ -388,11 +399,11 @@ export function AutomationDetailClient({
         const currentOrgId = getOrgId();
         if (!currentOrgId) return;
         if (!selectedCloudAccountId) {
-            toast.error('Selecione a conta cloud');
+            toast.error(t.selectCloudAccount);
             return;
         }
         if (!permissionCheck?.missing?.length) {
-            toast.error('Não há permissões faltantes para aplicar');
+            toast.error(t.noMissingPermissions);
             return;
         }
 
@@ -411,7 +422,7 @@ export function AutomationDetailClient({
                 } else if (permissionCheck.suggestedPolicy) {
                     setManualPolicyJson(JSON.stringify(permissionCheck.suggestedPolicy, null, 2));
                 }
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
 
@@ -419,9 +430,9 @@ export function AutomationDetailClient({
             setPermissionCheck(result.check);
             setManualPolicyJson(JSON.stringify(result.suggestedPolicy, null, 2));
             if (result.check.ok) {
-                toast.success(result.message || 'Permissões aplicadas com sucesso');
+                toast.success(result.message || t.permissionsApplied);
             } else {
-                toast.error(result.message || 'Policy atualizada, mas ainda faltam permissões');
+                toast.error(result.message || t.policyUpdatedMissing);
             }
         } finally {
             setGrantingPermissions(false);
@@ -436,10 +447,10 @@ export function AutomationDetailClient({
         try {
             await navigator.clipboard.writeText(json);
             setCopiedPolicy(true);
-            toast.success('Policy copiada');
+            toast.success(t.policyCopied);
             window.setTimeout(() => setCopiedPolicy(false), 2000);
         } catch {
-            toast.error('Não foi possível copiar a policy');
+            toast.error(t.policyCopyError);
         }
     }
 
@@ -450,11 +461,11 @@ export function AutomationDetailClient({
         const currentOrgId = getOrgId();
         const cloudAccountId = options?.cloudAccountId ?? selectedCloudAccountId;
         if (!currentOrgId) {
-            toast.error('Organização não encontrada');
+            toast.error(t.orgNotFound);
             return { ok: false, flowOk: false, permissionsOk: false };
         }
         if (!cloudAccountId) {
-            toast.error('Selecione a conta cloud');
+            toast.error(t.selectCloudAccount);
             return { ok: false, flowOk: false, permissionsOk: false };
         }
 
@@ -463,10 +474,10 @@ export function AutomationDetailClient({
             const flowResponse = await validateAutomation(automationId, currentOrgId);
             const flowBody = await flowResponse.json();
             if (!flowResponse.ok) {
-                const message = extractErrorMessage(flowBody as never, 'pt');
+                const message = extractErrorMessage(flowBody as never);
                 setFlowValidation({ ok: false, message });
                 setPermissionCheck(null);
-                toast.error(`Fluxo inválido: ${message}`);
+                toast.error(t.invalidFlowWithMessage.replace('{message}', message));
                 return { ok: false, flowOk: false, permissionsOk: false };
             }
             setFlowValidation({ ok: true, message: null });
@@ -476,9 +487,9 @@ export function AutomationDetailClient({
             });
             const permissionsBody = await permissionsResponse.json();
             if (!permissionsResponse.ok) {
-                const message = extractErrorMessage(permissionsBody as never, 'pt');
+                const message = extractErrorMessage(permissionsBody as never);
                 setPermissionCheck(null);
-                toast.error(`Falha ao validar permissões: ${message}`);
+                toast.error(t.permissionsValidateFailed.replace('{message}', message));
                 return { ok: false, flowOk: true, permissionsOk: false };
             }
 
@@ -486,12 +497,12 @@ export function AutomationDetailClient({
             setPermissionCheck(result);
             if (!result.ok || result.blocking) {
                 const message = result.message ?? t.validatePermissionsMissing;
-                toast.error(`Permissões insuficientes: ${message}`);
+                toast.error(t.permissionsInsufficientWithMessage.replace('{message}', message));
                 return { ok: false, flowOk: true, permissionsOk: false };
             }
 
             if (!options?.silentSuccess) {
-                toast.success('Fluxo e permissões IAM validados com sucesso');
+                toast.success(t.flowAndPermissionsValid);
             }
             return { ok: true, flowOk: true, permissionsOk: true };
         } finally {
@@ -519,7 +530,7 @@ export function AutomationDetailClient({
             const raw = executionParams[name];
             const missing = raw == null || String(raw).trim() === '';
             if (variable.required !== false && variable.default == null && missing) {
-                errors[name] = 'Campo obrigatório';
+                errors[name] = t.fieldRequired;
             }
         }
         setExecutionParamErrors(errors);
@@ -530,15 +541,15 @@ export function AutomationDetailClient({
         const currentOrgId = getOrgId();
         if (!currentOrgId) return;
         if (!selectedCloudAccountId) {
-            toast.error('Selecione a conta cloud');
+            toast.error(t.selectCloudAccount);
             return;
         }
         if (!validateExecutionParams()) {
-            toast.error('Preencha os parâmetros obrigatórios');
+            toast.error(t.fillRequiredParams);
             return;
         }
         if (plan?.blocking === true) {
-            toast.error('O plano possui bloqueios. Corrija as limitações antes de executar.');
+            toast.error(t.planBlocked);
             return;
         }
 
@@ -559,12 +570,12 @@ export function AutomationDetailClient({
             });
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             const executionId = (body as { id?: string }).id;
             if (!executionId) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             toast.success(t.executionQueued);
@@ -581,7 +592,7 @@ export function AutomationDetailClient({
         const response = await reviseAutomation(automationId, currentOrgId);
         const body = await response.json();
         if (!response.ok) {
-            toast.error(extractErrorMessage(body as never, 'pt'));
+            toast.error(extractErrorMessage(body as never));
             return;
         }
         setAutomation(body as AutomationWorkflow);
@@ -597,7 +608,7 @@ export function AutomationDetailClient({
         });
         const body = await response.json();
         if (!response.ok) {
-            toast.error(extractErrorMessage(body as never, 'pt'));
+            toast.error(extractErrorMessage(body as never));
             return;
         }
         setImportOpen(false);
@@ -606,7 +617,7 @@ export function AutomationDetailClient({
         const listBody = await list.json();
         const items = (listBody as { items?: TemplateOption[] }).items ?? listBody;
         setTemplates(Array.isArray(items) ? items : []);
-        toast.success('Template importado');
+        toast.success(t.templateImported);
     }
 
     const createItems = useMemo(
@@ -640,12 +651,12 @@ export function AutomationDetailClient({
                         <Badge>{automation.cloudProvider}</Badge>
                         <Badge variant="outline">{automation.status}</Badge>
                         <span className="text-xs text-muted-foreground">
-                            {isPublishedPage ? `Publicada v${automation.version}` : `v${automation.version}`}
+                            {isPublishedPage ? t.publishedVersionLabel.replace('{version}', String(automation.version)) : `v${automation.version}`}
                         </span>
                         {isPublishedPage ? (
-                            <Badge variant="secondary">Somente leitura</Badge>
+                            <Badge variant="secondary">{t.readOnly}</Badge>
                         ) : isDraft ? (
-                            <Badge variant="secondary">Rascunho</Badge>
+                            <Badge variant="secondary">{t.statusDraft}</Badge>
                         ) : null}
                     </div>
                 </div>
@@ -653,13 +664,13 @@ export function AutomationDetailClient({
                     {isPublishedPage ? (
                         <Button variant="outline" asChild>
                             <Link href={`/automations/${automationId}`}>
-                                {isDraft ? 'Ir para rascunho' : 'Voltar à automação'}
+                                {isDraft ? t.goToDraft : t.backToAutomation}
                             </Link>
                         </Button>
                     ) : hasPublishedVersion ? (
                         <Button variant="outline" asChild>
                             <Link href={`/automations/${automationId}/published`}>
-                                Ver versão publicada
+                                {t.viewPublishedVersion}
                             </Link>
                         </Button>
                     ) : null}
@@ -698,10 +709,8 @@ export function AutomationDetailClient({
 
             {isPublishedPage ? (
                 <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-200">
-                    Você está na versão publicada v{automation.version}. Execuções usam este snapshot.
-                    {isDraft
-                        ? ' O rascunho em andamento continua editável na página do rascunho.'
-                        : ''}
+                    {t.publishedBanner.replace('{version}', String(automation.version))}
+                    {isDraft ? ` ${t.publishedBannerDraftHint}` : ''}
                 </div>
             ) : null}
 
@@ -714,7 +723,7 @@ export function AutomationDetailClient({
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tc.name}</FormLabel>
                                         <FormControl>
                                             <Input {...field} />
                                         </FormControl>
@@ -727,7 +736,7 @@ export function AutomationDetailClient({
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Descrição</FormLabel>
+                                        <FormLabel>{t.descriptionLabel}</FormLabel>
                                         <FormControl>
                                             <Textarea rows={3} {...field} />
                                         </FormControl>
@@ -736,7 +745,7 @@ export function AutomationDetailClient({
                                 )}
                             />
                             <div className="flex justify-end">
-                                <Button type="submit" isLoading={saving} loadingText="Salvando...">
+                                <Button type="submit" isLoading={saving} loadingText={t.saving}>
                                     <Save className="mr-2 h-4 w-4" />
                                     {t.save}
                                 </Button>
@@ -787,9 +796,9 @@ export function AutomationDetailClient({
             />
 
             <div className="space-y-3 rounded-xl border p-4">
-                <h2 className="font-semibold">Histórico de execuções</h2>
+                <h2 className="font-semibold">{t.executionHistory}</h2>
                 {executions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma execução registrada</p>
+                    <p className="text-sm text-muted-foreground">{t.noExecutions}</p>
                 ) : (
                     <ul className="space-y-2">
                         {executions.map((exec) => (
@@ -805,7 +814,7 @@ export function AutomationDetailClient({
                                     <Badge className={cn('text-[10px]', executionStatusClass(exec.status))}>{exec.status}</Badge>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
-                                    {exec.startedAt ? new Date(exec.startedAt).toLocaleString('pt-BR') : new Date(exec.createdAt).toLocaleString('pt-BR')}
+                                    {exec.startedAt ? new Date(exec.startedAt).toLocaleString(toIntlLocale()) : new Date(exec.createdAt).toLocaleString(toIntlLocale())}
                                     {exec.durationMs != null ? ` · ${Math.round(exec.durationMs / 1000)}s` : ''}
                                 </p>
                                 {exec.status === 'FAILED' && exec.errorMessage && (
@@ -819,7 +828,7 @@ export function AutomationDetailClient({
                                         onClick={() => void handlePlan(exec.id)}
                                     >
                                         <RefreshCw className="h-3 w-3" />
-                                        Rodar novamente
+                                        {t.rerun}
                                     </Button>
                                 )}
                             </li>
@@ -833,7 +842,7 @@ export function AutomationDetailClient({
                     <DialogHeader>
                         <DialogTitle>{t.planTitle}</DialogTitle>
                         <DialogDescription>
-                            Configure a conta, parâmetros e permissões da versão publicada antes de confirmar.
+                            {t.planDescription}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 text-sm">
@@ -868,11 +877,11 @@ export function AutomationDetailClient({
                         <Accordion type="multiple" defaultValue={['plan']} className="rounded-lg border px-3">
                             <AccordionItem value="plan" className="border-b-0">
                                 <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">
-                                    Plano de execução ({steps.length} passos)
+                                    {t.planStepsTitle.replace('{count}', String(steps.length))}
                                 </AccordionTrigger>
                                 <AccordionContent className="space-y-2 pb-3">
                                     {steps.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground">Nenhum passo no plano.</p>
+                                        <p className="text-xs text-muted-foreground">{t.noPlanSteps}</p>
                                     ) : (
                                         steps.map((step) => (
                                             <div key={String(step.nodeId)} className="space-y-1 rounded-md border p-2.5">
@@ -885,7 +894,7 @@ export function AutomationDetailClient({
                                                 </p>
                                                 {Array.isArray(step.dependencies) && step.dependencies.length > 0 && (
                                                     <p className="text-xs text-muted-foreground">
-                                                        Depende de {step.dependencies.map(String).join(', ')}
+                                                        {t.dependsOn.replace('{dependencies}', step.dependencies.map(String).join(', '))}
                                                     </p>
                                                 )}
                                                 {Array.isArray(step.warnings) &&
@@ -906,7 +915,7 @@ export function AutomationDetailClient({
                                 <div className="min-w-0 space-y-1">
                                     <p className="text-sm font-semibold">{t.validate}</p>
                                     <p className="text-xs text-muted-foreground">
-                                        Valida o fluxo da versão publicada e as permissões IAM da conta selecionada antes de executar.
+                                        {t.validateHint}
                                     </p>
                                 </div>
                                 <Button
@@ -916,7 +925,7 @@ export function AutomationDetailClient({
                                     className="h-8"
                                     onClick={() => void runPreExecutionValidations()}
                                     isLoading={validatingPreRun}
-                                    loadingText="Validando..."
+                                    loadingText={t.validating}
                                     disabled={!selectedCloudAccountId || executing}
                                 >
                                     <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
@@ -934,7 +943,7 @@ export function AutomationDetailClient({
                                     )}
                                 >
                                     <p className="font-medium">
-                                        {flowValidation.ok ? t.validationOk : 'Fluxo inválido'}
+                                        {flowValidation.ok ? t.validationOk : t.invalidFlow}
                                     </p>
                                     {flowValidation.message ? <p>{flowValidation.message}</p> : null}
                                 </div>
@@ -1010,13 +1019,9 @@ export function AutomationDetailClient({
                                     {!permissionCheck.ok && (permissionCheck.missing?.length ?? 0) > 0 && (
                                         <div className="space-y-2 rounded-md border border-border/70 bg-background/70 p-2.5 text-foreground">
                                             <div className="space-y-1">
-                                                <p className="text-xs font-semibold">Atualizar permissões da role</p>
+                                                <p className="text-xs font-semibold">{t.updateRolePermissions}</p>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Aplica as actions faltantes como inline policy{' '}
-                                                    <span className="font-mono">SaaSMultiCloudAutomationGap</span> na
-                                                    role da conta. A role precisa permitir{' '}
-                                                    <span className="font-mono">iam:PutRolePolicy</span> e{' '}
-                                                    <span className="font-mono">iam:GetRolePolicy</span> sobre si mesma.
+                                                    {t.grantPolicyHint}
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
@@ -1026,11 +1031,11 @@ export function AutomationDetailClient({
                                                     className="h-8"
                                                     onClick={() => void handleGrantMissingPermissions()}
                                                     isLoading={grantingPermissions}
-                                                    loadingText="Aplicando..."
+                                                    loadingText={t.applying}
                                                     disabled={!selectedCloudAccountId || validatingPreRun || executing}
                                                 >
                                                     <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                                                    Aplicar permissões faltantes
+                                                    {t.grantMissingPermissions}
                                                 </Button>
                                                 <Button
                                                     type="button"
@@ -1047,7 +1052,7 @@ export function AutomationDetailClient({
                                                     ) : (
                                                         <Copy className="mr-1.5 h-3.5 w-3.5" />
                                                     )}
-                                                    Copiar policy
+                                                    {t.copyPolicy}
                                                 </Button>
                                             </div>
                                             {(manualPolicyJson || permissionCheck.suggestedPolicy) && (
@@ -1094,7 +1099,7 @@ export function AutomationDetailClient({
                                     !selectedCloudAccountId
                                 }
                                 isLoading={executing || validatingPreRun}
-                                loadingText={validatingPreRun ? 'Validando...' : 'Enfileirando...'}
+                                loadingText={validatingPreRun ? t.validating : t.enqueueing}
                             >
                                 {t.confirmProvision}
                             </Button>
@@ -1107,7 +1112,7 @@ export function AutomationDetailClient({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{t.importTemplate}</DialogTitle>
-                        <DialogDescription>O conteúdo é validado antes de ficar disponível para execução.</DialogDescription>
+                        <DialogDescription>{t.importDescription}</DialogDescription>
                     </DialogHeader>
                     <Form {...importForm}>
                         <form onSubmit={importForm.handleSubmit(handleImport)} className="flex flex-col gap-5">
@@ -1116,9 +1121,9 @@ export function AutomationDetailClient({
                                 name="templateName"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tc.name}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Nome" {...field} />
+                                            <Input placeholder={tc.name} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -1129,9 +1134,9 @@ export function AutomationDetailClient({
                                 name="templateBody"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Template</FormLabel>
+                                        <FormLabel>{t.templateLabel}</FormLabel>
                                         <FormControl>
-                                            <Textarea className="min-h-48 font-mono text-xs" placeholder="YAML ou JSON" {...field} />
+                                            <Textarea className="min-h-48 font-mono text-xs" placeholder={t.templatePlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

@@ -3,25 +3,26 @@
 import { CheckCircle2, LoaderCircle, Search, XCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trace, TraceIcon, TraceLine, TraceTitle } from '@/components/ui/trace';
+import { useTranslations } from '@/lib/i18n';
 
 export type AiChatToolStep = {
     name: string;
     status: 'started' | 'finished' | 'error';
 };
 
-const TOOL_LABELS: Record<string, string> = {
-    get_cloud_accounts: 'Contas cloud',
-    get_cost_summary: 'Resumo de custos',
-    compare_cloud_costs: 'Comparação de custos',
-    get_saving_opportunities: 'Oportunidades de economia',
-    get_cloud_resources_summary: 'Inventário de recursos',
-    get_assessment_jobs: 'Análises da conta',
-    get_governance_score: 'Score de governança',
-    get_governance_findings: 'Problemas de conformidade',
-    get_automations: 'Automações',
-    get_automation_runs: 'Execuções de automação',
-    get_saas_documentation: 'Ajuda da plataforma',
-};
+const TOOL_LABEL_KEYS = {
+    get_cloud_accounts: 'toolCloudAccounts',
+    get_cost_summary: 'toolCostSummary',
+    compare_cloud_costs: 'toolCompareCosts',
+    get_saving_opportunities: 'toolSavings',
+    get_cloud_resources_summary: 'toolInventory',
+    get_assessment_jobs: 'toolAssessments',
+    get_governance_score: 'toolGovScore',
+    get_governance_findings: 'toolGovFindings',
+    get_automations: 'toolAutomations',
+    get_automation_runs: 'toolAutomationRuns',
+    get_saas_documentation: 'toolDocs',
+} as const;
 
 export function AiChatResearching({ label }: { label: string }) {
     return (
@@ -56,6 +57,8 @@ export function AiChatResearching({ label }: { label: string }) {
 }
 
 export function AiChatToolTrace({ steps, label }: { steps: AiChatToolStep[]; label: string }) {
+    const t = useTranslations('aiChat');
+
     if (!steps.length) {
         return null;
     }
@@ -85,7 +88,11 @@ export function AiChatToolTrace({ steps, label }: { steps: AiChatToolStep[]; lab
                                     <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                                 )}
                             </TraceIcon>
-                            <TraceTitle>{TOOL_LABELS[step.name] ?? step.name}</TraceTitle>
+                            <TraceTitle>
+                                {TOOL_LABEL_KEYS[step.name as keyof typeof TOOL_LABEL_KEYS]
+                                    ? t[TOOL_LABEL_KEYS[step.name as keyof typeof TOOL_LABEL_KEYS]]
+                                    : step.name}
+                            </TraceTitle>
                         </TraceLine>
                     );
                 })}

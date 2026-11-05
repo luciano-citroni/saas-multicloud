@@ -1,4 +1,7 @@
+'use client';
+
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from 'lucide-react';
+import { useTranslations } from '@/lib/i18n';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +57,7 @@ export function FinopsJobsTable({
     onGoNext,
     onGoLast,
 }: FinopsJobsTableProps) {
+    const tf = useTranslations('finops');
     const isPreview = typeof previewLimit === 'number';
     const displayJobs = isPreview ? jobs.slice(0, previewLimit) : jobs;
 
@@ -72,7 +76,7 @@ export function FinopsJobsTable({
             </div>
 
             {displayJobs.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">Nenhuma sincronização executada ainda para esta conta.</div>
+                <div className="px-4 py-6 text-sm text-muted-foreground">{tf.noSyncForAccount}</div>
             ) : (
                 <>
                     <div className={cn('relative transition-opacity duration-150', loadingTable && 'pointer-events-none opacity-50')}>

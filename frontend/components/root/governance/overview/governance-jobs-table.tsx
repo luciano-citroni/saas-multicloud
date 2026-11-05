@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/lib/i18n';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -45,16 +46,18 @@ export function GovernanceJobsTable({
     onGoNext,
     onGoLast,
 }: GovernanceJobsTableProps) {
+    const tg = useTranslations('governance');
+    const tc = useTranslations('common');
     const emptyMessage =
         statusFilter !== JOB_STATUS_FILTER_ALL
-            ? 'Nenhuma varredura corresponde ao filtro selecionado.'
-            : 'Nenhuma varredura executada ainda para esta conta.';
+            ? tg.jobsEmptyFiltered
+            : tg.jobsEmpty;
 
     return (
         <div className="rounded-xl border">
             <div className="border-b px-4 py-3">
-                <p className="text-sm font-medium">Histórico de Varreduras</p>
-                <p className="text-xs text-muted-foreground">Clique em uma varredura concluída para abrir a análise detalhada</p>
+                <p className="text-sm font-medium">{tg.jobsHistoryTitle}</p>
+                <p className="text-xs text-muted-foreground">{tg.jobsHistoryDesc}</p>
             </div>
 
             <GovernanceJobsFilterBar status={statusFilter} onStatusChange={onStatusFilterChange} onClear={onClearFilters} />
@@ -72,13 +75,13 @@ export function GovernanceJobsTable({
                         <Table>
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
-                                    <TableHead className="px-4">Varredura</TableHead>
-                                    <TableHead className="px-4">Status</TableHead>
-                                    <TableHead className="px-4">Score</TableHead>
-                                    <TableHead className="px-4">Achados</TableHead>
-                                    <TableHead className="px-4">Verificações</TableHead>
-                                    <TableHead className="px-4">Concluído em</TableHead>
-                                    <TableHead className="px-4 text-right">Ações</TableHead>
+                                    <TableHead className="px-4">{tg.colScan}</TableHead>
+                                    <TableHead className="px-4">{tc.status}</TableHead>
+                                    <TableHead className="px-4">{tg.colScore}</TableHead>
+                                    <TableHead className="px-4">{tg.colFindings}</TableHead>
+                                    <TableHead className="px-4">{tg.colChecks}</TableHead>
+                                    <TableHead className="px-4">{tg.colCompletedAt}</TableHead>
+                                    <TableHead className="px-4 text-right">{tc.actions}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -110,7 +113,7 @@ export function GovernanceJobsTable({
                                         <TableCell className="px-4">{formatDate(job.completedAt)}</TableCell>
                                         <TableCell className="px-4 text-right">
                                             <Button size="sm" variant="outline" onClick={() => onOpenAnalysis(job)} disabled={job.status !== 'completed'}>
-                                                Ver análise
+                                                {tg.viewAnalysis}
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -121,7 +124,7 @@ export function GovernanceJobsTable({
 
                     <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                            <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                             <Select value={`${jobsLimit}`} onValueChange={(value) => onChangeLimit(Number(value))} disabled={loadingTable}>
                                 <SelectTrigger className="h-8 min-w-22">
                                     <SelectValue />
@@ -138,7 +141,7 @@ export function GovernanceJobsTable({
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                             <span className="text-sm font-medium">
-                                Página {jobsPagination?.page ?? jobsPage} de {jobsPagination?.totalPages || 1}
+                                {tc.page} {jobsPagination?.page ?? jobsPage} {tc.of} {jobsPagination?.totalPages || 1}
                             </span>
 
                             <div className="flex items-center gap-1 self-start sm:self-auto">

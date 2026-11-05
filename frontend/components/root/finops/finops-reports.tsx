@@ -195,7 +195,7 @@ export function FinopsReports() {
     const accountAlias =
         urlFilters.accountId != null
             ? (cloudAccounts.find((account) => account.id === urlFilters.accountId)?.alias ?? urlFilters.accountId)
-            : 'Todas as contas';
+            : tf.reportAllAccounts;
 
     const accountAliases = useMemo(() => {
         const map: Record<string, string> = {};
@@ -208,35 +208,35 @@ export function FinopsReports() {
 
     const handleExport = () => {
         if (!overview) {
-            toast.error('Gere a pré-visualização antes de exportar.');
+            toast.error(tf.reportPreviewRequired);
             return;
         }
 
         const today = new Date().toISOString().slice(0, 10);
         const orgSlug = (organizationId ?? 'org').slice(0, 8);
         const rows: string[][] = [
-            ['Relatório FinOps'],
-            ['Gerado em', generatedAt ? formatDate(generatedAt) : today],
-            ['Organização', organizationId ?? ''],
-            ['Período', periodLabel(urlFilters.period)],
-            ['Intervalo', `${overview.period.startDate} → ${overview.period.endDate}`],
-            ['Conta', accountAlias],
-            ['Provedor', urlFilters.provider?.toUpperCase() ?? 'Todos'],
-            ['Serviço', urlFilters.service ?? 'Todos'],
+            [tf.reportCsvTitle],
+            [tf.reportGeneratedOn, generatedAt ? formatDate(generatedAt) : today],
+            [tf.reportOrganization, organizationId ?? ''],
+            [tf.reportPeriod, periodLabel(urlFilters.period)],
+            [tf.reportRange, `${overview.period.startDate} → ${overview.period.endDate}`],
+            [tf.reportAccount, accountAlias],
+            [tf.reportProvider, urlFilters.provider?.toUpperCase() ?? tf.reportAll],
+            [tf.reportService, urlFilters.service ?? tf.reportAll],
             [],
-            ['Resumo executivo'],
-            ['Custo total', String(totalCost), currency],
-            ['Variação MoM %', String(overview.totals.momGrowth)],
-            ['Previsão do mês', overview.totals.forecastedCost != null ? String(overview.totals.forecastedCost) : ''],
-            ['Economia potencial', String(overview.totals.potentialSavings)],
-            ['Anomalias abertas', String(filteredOptimizeItems.filter((item) => item.kind === 'anomaly').length)],
+            [tf.reportExecutiveSummary],
+            [tf.reportTotalCost, String(totalCost), currency],
+            [tf.reportMomPct, String(overview.totals.momGrowth)],
+            [tf.reportMonthForecast, overview.totals.forecastedCost != null ? String(overview.totals.forecastedCost) : ''],
+            [tf.potentialSavings, String(overview.totals.potentialSavings)],
+            [tf.reportOpenAnomalies, String(filteredOptimizeItems.filter((item) => item.kind === 'anomaly').length)],
             [
-                'Recomendações abertas',
+                tf.reportOpenRecs,
                 String(filteredOptimizeItems.filter((item) => item.kind === 'recommendation').length),
             ],
             [],
-            ['Custos por conta'],
-            ['Alias', 'Provedor', 'Custo', 'Anomalias', 'Recomendações'],
+            [tf.reportCostsByAccount],
+            [tf.reportColAlias, tf.reportProvider, tf.reportColCost, tf.reportColAnomalies, tf.reportColRecs],
             ...filteredAccounts.map((account) => [
                 account.alias,
                 account.provider,
@@ -245,8 +245,8 @@ export function FinopsReports() {
                 String(account.openRecs),
             ]),
             [],
-            ['Custos por serviço'],
-            ['Serviço', 'Custo atual', 'Custo anterior', 'Variação %', 'Tendência'],
+            [tf.reportCostsByService],
+            [tf.reportService, tf.reportColCurrentCost, tf.reportColPreviousCost, tf.reportMomPct, tf.reportColTrend],
             ...filteredServices.map((item) => [
                 item.service,
                 String(item.currentMonthCost),
@@ -255,8 +255,8 @@ export function FinopsReports() {
                 item.trend,
             ]),
             [],
-            ['Oportunidades e anomalias'],
-            ['Tipo', 'Conta', 'Título', 'Provedor', 'Impacto', 'Severidade/Prioridade', 'Status'],
+            [tf.reportOpportunities],
+            [tf.reportColType, tf.reportAccount, tf.reportColTitle, tf.reportProvider, tf.reportColImpact, tf.reportColSeverity, tc.status],
             ...filteredOptimizeItems.map((item) => [
                 item.kind,
                 accountAliases[item.cloudAccountId] ?? item.cloudAccountId,
@@ -269,12 +269,12 @@ export function FinopsReports() {
         ];
 
         downloadCsv(`finops-report-${orgSlug}-${today}.csv`, rows);
-        toast.success('Relatório CSV gerado (compatível com Excel).');
+        toast.success(tf.reportCsvSuccess);
     };
 
     const handleExportPdf = async () => {
         if (!overview || !generatedAt) {
-            toast.error('Gere a pré-visualização antes de exportar.');
+            toast.error(tf.reportPreviewRequired);
             return;
         }
 
@@ -294,14 +294,14 @@ export function FinopsReports() {
                 currency,
                 periodLabel: periodLabel(urlFilters.period),
                 accountLabel: accountAlias,
-                providerLabel: urlFilters.provider?.toUpperCase() ?? 'Todos',
-                serviceLabel: urlFilters.service ?? 'Todos',
+                providerLabel: urlFilters.provider?.toUpperCase() ?? tf.reportAll,
+                serviceLabel: urlFilters.service ?? tf.reportAll,
                 generatedAt,
                 fileName: `finops-report-${orgSlug}-${today}.pdf`,
             });
-            toast.success('Relatório PDF gerado.');
+            toast.success(tf.reportPdfSuccess);
         } catch {
-            toast.error('Não foi possível gerar o PDF.');
+            toast.error(tf.pdfGenerateError);
         } finally {
             setExportingPdf(false);
         }
@@ -325,10 +325,8 @@ export function FinopsReports() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Relatórios</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Pré-visualização sob demanda com os mesmos critérios do dashboard. Sem histórico persistido.
-                        </p>
+                        <h1 className="text-xl font-semibold tracking-tight">{tf.reportsTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{tf.reportsDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -345,15 +343,15 @@ export function FinopsReports() {
                         }}
                     >
                         <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                        Atualizar
+                        {tc.refresh}
                     </Button>
                     <Button size="sm" variant="outline" onClick={handleExport} disabled={!overview}>
                         <Download className="size-4" />
-                        Exportar CSV
+                        {tf.exportCsv}
                     </Button>
                     <Button size="sm" onClick={() => void handleExportPdf()} disabled={!overview} isLoading={exportingPdf}>
                         <FileText className="size-4" />
-                        Exportar PDF
+                        {tf.exportPdf}
                     </Button>
                 </div>
             </div>
@@ -384,31 +382,31 @@ export function FinopsReports() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <FileSpreadsheet className="size-5" />
-                        Pré-visualização
+                        {tf.reportPreview}
                     </CardTitle>
                     <CardDescription>
-                        {generatedAt ? `Gerado em ${formatDate(generatedAt)}` : 'Aguardando dados'}
+                        {generatedAt ? tf.reportGeneratedAt.replace('{date}', formatDate(generatedAt)) : tf.reportWaitingData}
                         {overview?.period ? ` · ${overview.period.startDate} → ${overview.period.endDate}` : ''}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {!overview ? (
-                        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados para o relatório</p>
+                        <p className="py-8 text-center text-sm text-muted-foreground">{tf.reportNoData}</p>
                     ) : (
                         <>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                 <div className="rounded-xl border p-4">
-                                    <p className="text-xs text-muted-foreground">Custo total</p>
+                                    <p className="text-xs text-muted-foreground">{tf.reportTotalCost}</p>
                                     <p className="text-xl font-semibold">{formatCurrency(totalCost, currency)}</p>
                                 </div>
                                 <div className="rounded-xl border p-4">
-                                    <p className="text-xs text-muted-foreground">Variação MoM</p>
+                                    <p className="text-xs text-muted-foreground">{tf.reportMom}</p>
                                     <p className="text-xl font-semibold">
                                         {Number(overview.totals.momGrowth).toFixed(1)}%
                                     </p>
                                 </div>
                                 <div className="rounded-xl border p-4">
-                                    <p className="text-xs text-muted-foreground">Previsão (estimativa)</p>
+                                    <p className="text-xs text-muted-foreground">{tf.reportForecastEstimate}</p>
                                     <p className="text-xl font-semibold">
                                         {overview.totals.forecastedCost != null
                                             ? formatCurrency(overview.totals.forecastedCost, currency)
@@ -416,7 +414,7 @@ export function FinopsReports() {
                                     </p>
                                 </div>
                                 <div className="rounded-xl border p-4">
-                                    <p className="text-xs text-muted-foreground">Economia potencial</p>
+                                    <p className="text-xs text-muted-foreground">{tf.potentialSavings}</p>
                                     <p className="text-xl font-semibold text-emerald-600">
                                         {formatCurrency(overview.totals.potentialSavings, currency)}
                                     </p>
@@ -424,21 +422,21 @@ export function FinopsReports() {
                             </div>
 
                             <div className="overflow-x-auto">
-                                <h3 className="mb-2 text-sm font-semibold">Por conta</h3>
+                                <h3 className="mb-2 text-sm font-semibold">{tf.reportByAccount}</h3>
                                 <table className="w-full min-w-[480px] text-sm">
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
-                                            <th className="pb-2 font-medium">Conta</th>
-                                            <th className="pb-2 font-medium">Provedor</th>
-                                            <th className="pb-2 text-right font-medium">Custo</th>
-                                            <th className="pb-2 text-right font-medium">% do total</th>
+                                            <th className="pb-2 font-medium">{tf.reportAccount}</th>
+                                            <th className="pb-2 font-medium">{tf.reportProvider}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportColCost}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportShareOfTotal}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {filteredAccounts.length === 0 ? (
                                             <tr>
                                                 <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                                                    Nenhuma conta no filtro
+                                                    {tf.noAccountInFilter}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -464,7 +462,7 @@ export function FinopsReports() {
 
                             <div className="overflow-x-auto">
                                 <h3 className="mb-2 text-sm font-semibold">
-                                    Por serviço
+                                    {tf.reportByService}
                                     {filteredServices.length > 0 ? (
                                         <span className="ml-2 font-normal text-muted-foreground">
                                             ({filteredServices.length})
@@ -474,17 +472,17 @@ export function FinopsReports() {
                                 <table className="w-full min-w-[480px] text-sm">
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
-                                            <th className="pb-2 font-medium">Serviço</th>
-                                            <th className="pb-2 text-right font-medium">Atual</th>
-                                            <th className="pb-2 text-right font-medium">Anterior</th>
-                                            <th className="pb-2 text-right font-medium">Variação</th>
+                                            <th className="pb-2 font-medium">{tf.reportService}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportCurrent}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportPrevious}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportVariation}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {filteredServices.length === 0 ? (
                                             <tr>
                                                 <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                                                    Nenhum serviço no filtro
+                                                    {tf.noServiceInFilter}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -508,22 +506,22 @@ export function FinopsReports() {
                             </div>
 
                             <div className="overflow-x-auto">
-                                <h3 className="mb-2 text-sm font-semibold">Oportunidades e anomalias</h3>
+                                <h3 className="mb-2 text-sm font-semibold">{tf.reportOpportunities}</h3>
                                 <table className="w-full min-w-[720px] text-sm">
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
-                                            <th className="pb-2 font-medium">Tipo</th>
-                                            <th className="pb-2 font-medium">Conta</th>
-                                            <th className="pb-2 font-medium">Título</th>
-                                            <th className="pb-2 font-medium">Provedor</th>
-                                            <th className="pb-2 text-right font-medium">Impacto</th>
+                                            <th className="pb-2 font-medium">{tf.reportColType}</th>
+                                            <th className="pb-2 font-medium">{tf.reportAccount}</th>
+                                            <th className="pb-2 font-medium">{tf.reportColTitle}</th>
+                                            <th className="pb-2 font-medium">{tf.reportProvider}</th>
+                                            <th className="pb-2 text-right font-medium">{tf.reportColImpact}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {filteredOptimizeItems.length === 0 ? (
                                             <tr>
                                                 <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                                                    Nenhuma oportunidade/anomalia aberta
+                                                    {tf.noOpenOpportunity}
                                                 </td>
                                             </tr>
                                         ) : (

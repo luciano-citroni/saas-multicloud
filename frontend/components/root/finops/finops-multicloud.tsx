@@ -233,7 +233,7 @@ export function FinopsMulticloud() {
                     }}
                 >
                     <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                    Atualizar
+                    {tc.refresh}
                 </Button>
             </div>
 
@@ -294,7 +294,7 @@ export function FinopsMulticloud() {
                         <CardDescription>
                             {overview?.period
                                 ? `${overview.period.startDate} → ${overview.period.endDate}`
-                                : 'Período selecionado'}
+                                : tf.selectedPeriod}
                         </CardDescription>
                     </div>
                     <ChartViewToggle value={providerChartType} onChange={setProviderChartType} />
@@ -377,27 +377,27 @@ export function FinopsMulticloud() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Detalhamento multicloud</CardTitle>
-                    <CardDescription>Contas, custo e oportunidades por provedor</CardDescription>
+                    <CardTitle>{tf.multicloudBreakdown}</CardTitle>
+                    <CardDescription>{tf.multicloudBreakdownDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[560px] text-sm">
                             <thead>
                                 <tr className="border-b text-left text-muted-foreground">
-                                    <th className="pb-2 font-medium">Provedor</th>
-                                    <th className="pb-2 font-medium">Contas</th>
-                                    <th className="pb-2 text-right font-medium">Custo</th>
-                                    <th className="pb-2 text-right font-medium">Anomalias</th>
-                                    <th className="pb-2 text-right font-medium">Recomendações</th>
-                                    <th className="pb-2 text-right font-medium">Participação</th>
+                                    <th className="pb-2 font-medium">{tf.colProvider}</th>
+                                    <th className="pb-2 font-medium">{tf.colAccounts}</th>
+                                    <th className="pb-2 text-right font-medium">{tf.colCost}</th>
+                                    <th className="pb-2 text-right font-medium">{tf.colAnomalies}</th>
+                                    <th className="pb-2 text-right font-medium">{tf.colRecommendations}</th>
+                                    <th className="pb-2 text-right font-medium">{tf.colShare}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {providerRows.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="py-8 text-center text-muted-foreground">
-                                            Nenhum provedor com dados no período
+                                            {tf.noProviderDataInPeriod}
                                         </td>
                                     </tr>
                                 ) : (

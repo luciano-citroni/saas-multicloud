@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canManageMembers, type OrganizationRole } from '@/lib/organization-rbac';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations } from '@/lib/i18n';
 
 type MidLevelOrg = {
     id: string;
@@ -27,11 +29,13 @@ type MidLevelOrgsResponse = {
     items?: MidLevelOrg[];
 };
 
-const orgSchema = z.object({
-    name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
-});
+function createOrgSchema(t: { nameMin: string; nameMax: string }) {
+    return z.object({
+        name: z.string().min(2, t.nameMin).max(100, t.nameMax),
+    });
+}
 
-type OrgFormValues = z.infer<typeof orgSchema>;
+type OrgFormValues = z.infer<ReturnType<typeof createOrgSchema>>;
 
 type Props = {
     tenantId: string;
@@ -46,6 +50,9 @@ function normalizeOrgs(payload: unknown): MidLevelOrg[] {
 }
 
 export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
+    const orgSchema = useMemo(() => createOrgSchema(t), [t]);
     const canManage = canManageMembers(currentRole);
     const [orgs, setOrgs] = useState<MidLevelOrg[]>([]);
     const [loading, setLoading] = useState(true);
@@ -87,7 +94,7 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
             }
             setOrgs(normalizeOrgs(payload));
         } catch {
-            toast.error('Não foi possível carregar os grupos.');
+            toast.error(t.groupsLoadError);
         } finally {
             setLoading(false);
         }
@@ -110,12 +117,12 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                 toast.error(extractErrorMessage(payload));
                 return;
             }
-            toast.success('Grupo criado com sucesso!');
+            toast.success(t.groupCreateSuccess);
             createForm.reset();
             setShowCreate(false);
             await loadOrgs();
         } catch {
-            toast.error('Erro ao criar grupo.');
+            toast.error(t.groupCreateError);
         } finally {
             setIsSubmitting(false);
         }
@@ -135,11 +142,11 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                 toast.error(extractErrorMessage(payload));
                 return;
             }
-            toast.success('Grupo atualizado com sucesso!');
+            toast.success(t.groupUpdateSuccess);
             setEditOrg(null);
             await loadOrgs();
         } catch {
-            toast.error('Erro ao atualizar grupo.');
+            toast.error(t.groupUpdateError);
         } finally {
             setIsSubmitting(false);
         }
@@ -157,12 +164,12 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                 toast.error(extractErrorMessage(payload));
                 return false;
             }
-            toast.success('Grupo excluído com sucesso!');
+            toast.success(t.groupDeleteSuccess);
             setDeleteOrg(null);
             await loadOrgs();
             return true;
         } catch {
-            toast.error('Erro ao excluir grupo.');
+            toast.error(t.groupDeleteError);
             return false;
         } finally {
             setIsDeleting(false);
@@ -174,18 +181,20 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
         setEditOrg(org);
     };
 
+    const [deleteDescBefore, deleteDescAfter = ''] = t.groupDeleteDesc.split('{name}');
+
     return (
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Grupos de Contas</p>
-                        <p className="text-xs text-muted-foreground">Organize suas contas cloud em grupos dentro do tenant.</p>
+                        <p className="text-sm font-medium">{t.groupsTitle}</p>
+                        <p className="text-xs text-muted-foreground">{t.groupsDesc}</p>
                     </div>
                     {canManage && (
                         <Button size="sm" onClick={() => { createForm.reset(); setShowCreate(true); }}>
                             <Plus className="h-4 w-4" />
-                            Novo Grupo
+                            {t.newGroup}
                         </Button>
                     )}
                 </div>
@@ -197,11 +206,11 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                     ) : orgs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
                             <Layers className="h-10 w-10 text-muted-foreground/50" />
-                            <p className="text-muted-foreground text-sm">Nenhum grupo criado ainda.</p>
+                            <p className="text-muted-foreground text-sm">{t.groupsEmpty}</p>
                             {canManage && (
                                 <Button variant="outline" size="sm" onClick={() => { createForm.reset(); setShowCreate(true); }}>
                                     <Plus className="h-3 w-3" />
-                                    Criar primeiro grupo
+                                    {t.createFirstGroup}
                                 </Button>
                             )}
                         </div>
@@ -212,7 +221,7 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                                 <Input
                                     value={nameFilter}
                                     onChange={(e) => { setNameFilter(e.target.value); setPageIndex(0); }}
-                                    placeholder="Filtrar por nome..."
+                                    placeholder={t.groupsFilterPlaceholder}
                                     className="h-8 w-60"
                                 />
                             </div>
@@ -222,16 +231,16 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
-                                            <TableHead className="px-4 font-medium">Nome</TableHead>
-                                            <TableHead className="px-4 font-medium">Criado em</TableHead>
-                                            {canManage && <TableHead className="w-25 px-4 font-medium">Ações</TableHead>}
+                                            <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                                            <TableHead className="px-4 font-medium">{t.groupsTableCreatedAt}</TableHead>
+                                            {canManage && <TableHead className="w-25 px-4 font-medium">{tc.actions}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {paginatedOrgs.length === 0 ? (
                                             <TableRow>
                                                 <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center text-muted-foreground">
-                                                    Nenhum grupo encontrado para o filtro aplicado.
+                                                    {t.groupsFilterEmpty}
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
@@ -239,7 +248,7 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                                                 <TableRow key={org.id}>
                                                     <TableCell className="px-4 font-medium">{org.name}</TableCell>
                                                     <TableCell className="px-4 text-muted-foreground text-sm">
-                                                        {org.createdAt ? new Date(org.createdAt).toLocaleDateString('pt-BR') : '—'}
+                                                        {org.createdAt ? new Date(org.createdAt).toLocaleDateString(toIntlLocale()) : '—'}
                                                     </TableCell>
                                                     {canManage && (
                                                         <TableCell className="px-4">
@@ -263,7 +272,7 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                             {/* Paginação */}
                             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                    <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                    <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                     <Select value={`${pageSize}`} onValueChange={(v) => { setPageSize(Number(v)); setPageIndex(0); }}>
                                         <SelectTrigger className="h-8 min-w-22"><SelectValue /></SelectTrigger>
                                         <SelectContent>
@@ -272,7 +281,7 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                                     </Select>
                                 </div>
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                                    <span className="text-sm font-medium">Página {pageIndex + 1} de {totalPages}</span>
+                                    <span className="text-sm font-medium">{tc.page} {pageIndex + 1} {tc.of} {totalPages}</span>
                                     <div className="flex items-center gap-1 self-start sm:self-auto">
                                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>
                                             <ChevronsLeft className="h-4 w-4" />
@@ -298,22 +307,22 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
             <Dialog open={showCreate} onOpenChange={setShowCreate}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Novo Grupo</DialogTitle>
+                        <DialogTitle>{t.newGroup}</DialogTitle>
                     </DialogHeader>
                     <Form {...createForm}>
                         <form onSubmit={handleCreate} className="space-y-4">
                             <FormField control={createForm.control} name="name" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Nome do grupo</FormLabel>
+                                    <FormLabel>{t.groupNameLabel}</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Ex: Produção, Homologação, Dev..." {...field} />
+                                        <Input placeholder={t.orgNameExample} {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancelar</Button>
-                                <Button type="submit" isLoading={isSubmitting}>Criar</Button>
+                                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>{tc.cancel}</Button>
+                                <Button type="submit" isLoading={isSubmitting}>{tc.create}</Button>
                             </DialogFooter>
                         </form>
                     </Form>
@@ -324,13 +333,13 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
             <Dialog open={!!editOrg} onOpenChange={(open) => { if (!open) setEditOrg(null); }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Editar Grupo</DialogTitle>
+                        <DialogTitle>{t.editGroup}</DialogTitle>
                     </DialogHeader>
                     <Form {...editForm}>
                         <form onSubmit={handleEdit} className="space-y-4">
                             <FormField control={editForm.control} name="name" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Nome do grupo</FormLabel>
+                                    <FormLabel>{t.groupNameLabel}</FormLabel>
                                     <FormControl>
                                         <Input {...field} />
                                     </FormControl>
@@ -338,8 +347,8 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                                 </FormItem>
                             )} />
                             <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setEditOrg(null)}>Cancelar</Button>
-                                <Button type="submit" isLoading={isSubmitting}>Salvar</Button>
+                                <Button type="button" variant="outline" onClick={() => setEditOrg(null)}>{tc.cancel}</Button>
+                                <Button type="submit" isLoading={isSubmitting}>{tc.save}</Button>
                             </DialogFooter>
                         </form>
                     </Form>
@@ -351,14 +360,16 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                 onOpenChange={(open) => {
                     if (!open) setDeleteOrg(null);
                 }}
-                title="Excluir grupo?"
+                title={t.groupDeleteTitle}
                 description={
                     <>
-                        Esta ação não pode ser desfeita. O grupo <strong>{deleteOrg?.name}</strong> será removido permanentemente.
+                        {deleteDescBefore}
+                        <strong>{deleteOrg?.name}</strong>
+                        {deleteDescAfter}
                     </>
                 }
                 resourceName={deleteOrg?.name ?? ''}
-                confirmLabel={isDeleting ? 'Excluindo...' : 'Excluir'}
+                confirmLabel={isDeleting ? t.tenantsDeleting : tc.delete}
                 isConfirming={isDeleting}
                 onConfirm={handleDelete}
             />

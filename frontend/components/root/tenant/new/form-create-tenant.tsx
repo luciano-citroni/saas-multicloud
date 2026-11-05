@@ -16,33 +16,29 @@ import { Separator } from '@/components/ui/separator';
 import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { formatCNPJ, isValidCNPJ } from '@/lib/validators/cnpj';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 
 type CreateTenantResponse = { id: string; name: string };
 
-function createSchema() {
+function createSchema(t: { nameMin: string; nameMax: string; cnpjInvalid: string }) {
     return z.object({
-        name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
+        name: z.string().min(2, t.nameMin).max(100, t.nameMax),
         cnpj: z
             .string()
             .optional()
-            .refine((v) => !v || isValidCNPJ(v), 'CNPJ inválido'),
+            .refine((v) => !v || isValidCNPJ(v), t.cnpjInvalid),
     });
 }
 
 type FormValues = z.infer<ReturnType<typeof createSchema>>;
 
-const BENEFITS = [
-    'Controle total de membros e papéis (Owner, Admin, Member, Viewer)',
-    'Agrupe contas cloud em sub-organizações',
-    'Plano de billing independente por tenant',
-    'Governança, Assessment e FinOps por tenant',
-];
-
 export function FormCreateTenant() {
     const router = useRouter();
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
     const [done, setDone] = useState(false);
     const [createdName, setCreatedName] = useState('');
-    const schema = useMemo(() => createSchema(), []);
+    const schema = useMemo(() => createSchema(t), [t]);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(schema),
@@ -75,9 +71,11 @@ export function FormCreateTenant() {
             setCreatedName(data.name.trim());
             setDone(true);
         } catch {
-            toast.error('Não foi possível criar o tenant. Tente novamente.');
+            toast.error(t.tenantCreateError);
         }
     });
+
+    const [readyBefore, readyAfter = ''] = t.tenantReadyDesc.split('{name}');
 
     if (done) {
         return (
@@ -86,14 +84,16 @@ export function FormCreateTenant() {
                     <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-semibold">Tenant criado com sucesso!</h2>
+                    <h2 className="text-xl font-semibold">{t.tenantCreatedTitle}</h2>
                     <p className="text-muted-foreground mt-1 text-sm">
-                        <strong>{createdName}</strong> está pronto para uso.
+                        {readyBefore}
+                        <strong>{createdName}</strong>
+                        {readyAfter}
                     </p>
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" onClick={() => router.push('/organizations')}>
-                        Ver todos os tenants
+                        {t.tenantViewAll}
                     </Button>
                     <Button
                         onClick={() => {
@@ -101,7 +101,7 @@ export function FormCreateTenant() {
                             router.refresh();
                         }}
                     >
-                        Ir para o dashboard
+                        {t.goToDashboard}
                     </Button>
                 </div>
             </div>
@@ -114,8 +114,8 @@ export function FormCreateTenant() {
                 {/* Identity */}
                 <div className="space-y-4">
                     <div>
-                        <h3 className="text-sm font-medium">Identidade do tenant</h3>
-                        <p className="text-muted-foreground text-xs mt-0.5">Nome e dados legais da empresa ou projeto.</p>
+                        <h3 className="text-sm font-medium">{t.tenantIdentityTitle}</h3>
+                        <p className="text-muted-foreground text-xs mt-0.5">{t.tenantIdentityDesc}</p>
                     </div>
 
                     <FormField
@@ -124,12 +124,12 @@ export function FormCreateTenant() {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>
-                                    Nome do tenant <span className="text-destructive">*</span>
+                                    {t.tenantNameLabel} <span className="text-destructive">*</span>
                                 </FormLabel>
                                 <FormControl>
-                                    <IconInput placeholder="Ex: Acme Corp, Projeto Alpha..." StartIcon={Building2} autoFocus {...field} />
+                                    <IconInput placeholder={t.tenantNamePlaceholder} StartIcon={Building2} autoFocus {...field} />
                                 </FormControl>
-                                <FormDescription>Aparecerá no seletor de tenants da barra lateral.</FormDescription>
+                                <FormDescription>{t.tenantNameHint}</FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -137,7 +137,7 @@ export function FormCreateTenant() {
 
                     <InputMaskForm
                         form={form}
-                        label="CNPJ (opcional)"
+                        label={t.cnpjLabel}
                         name="cnpj"
                         maxLength={18}
                         placeholder="00.000.000/0000-00"
@@ -152,10 +152,10 @@ export function FormCreateTenant() {
                 <div className="flex items-center justify-between pt-2">
                     <Button type="button" variant="ghost" size="sm" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Voltar
+                        {tc.back}
                     </Button>
                     <Button type="submit" isLoading={form.formState.isSubmitting}>
-                        Criar Tenant
+                        {t.tenantCreateButton}
                     </Button>
                 </div>
             </form>

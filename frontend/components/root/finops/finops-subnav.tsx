@@ -4,46 +4,61 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { AlertTriangle, BarChart3, Cloud, FileText, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
-const LINKS = [
-    { href: '/finops', label: 'Visão geral', icon: LayoutDashboard, match: (path: string) => path === '/finops' },
+type SubnavLabelKey =
+    | 'subnavOverview'
+    | 'subnavAnomalies'
+    | 'subnavSavings'
+    | 'subnavMulticloud'
+    | 'subnavBudgets'
+    | 'subnavReports';
+
+const LINKS: ReadonlyArray<{
+    href: string;
+    labelKey: SubnavLabelKey;
+    icon: typeof LayoutDashboard;
+    match: (path: string) => boolean;
+}> = [
+    { href: '/finops', labelKey: 'subnavOverview', icon: LayoutDashboard, match: (path) => path === '/finops' },
     {
         href: '/finops/anomalies',
-        label: 'Anomalias',
+        labelKey: 'subnavAnomalies',
         icon: AlertTriangle,
-        match: (path: string) => path.startsWith('/finops/anomalies'),
+        match: (path) => path.startsWith('/finops/anomalies'),
     },
     {
         href: '/finops/savings',
-        label: 'Economia potencial',
+        labelKey: 'subnavSavings',
         icon: PiggyBank,
-        match: (path: string) => path.startsWith('/finops/savings'),
+        match: (path) => path.startsWith('/finops/savings'),
     },
     {
         href: '/finops/multicloud',
-        label: 'Multicloud',
+        labelKey: 'subnavMulticloud',
         icon: Cloud,
-        match: (path: string) => path.startsWith('/finops/multicloud'),
+        match: (path) => path.startsWith('/finops/multicloud'),
     },
     {
         href: '/finops/budgets',
-        label: 'Orçamentos',
+        labelKey: 'subnavBudgets',
         icon: Target,
-        match: (path: string) => path.startsWith('/finops/budgets'),
+        match: (path) => path.startsWith('/finops/budgets'),
     },
     {
         href: '/finops/reports',
-        label: 'Relatórios',
+        labelKey: 'subnavReports',
         icon: FileText,
-        match: (path: string) => path.startsWith('/finops/reports'),
+        match: (path) => path.startsWith('/finops/reports'),
     },
-] as const;
+];
 
 type FinopsSubnavProps = {
     className?: string;
 };
 
 export function FinopsSubnav({ className }: FinopsSubnavProps) {
+    const t = useTranslations('finops');
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
@@ -59,7 +74,7 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
 
     return (
         <nav
-            aria-label="Navegação FinOps"
+            aria-label={t.subnavAria}
             className={cn(
                 'inline-flex w-fit max-w-full flex-wrap items-center rounded-lg border border-border p-0.5',
                 className
@@ -88,7 +103,7 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
                         )}
                     >
                         <Icon className="size-3.5 shrink-0" />
-                        {link.label}
+                        {t[link.labelKey]}
                     </Link>
                 );
             })}
@@ -96,7 +111,7 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
             {isAccountDetail && (
                 <span className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm font-medium text-foreground">
                     <BarChart3 className="size-3.5 shrink-0" />
-                    Análise por conta
+                    {t.subnavAccountDetail}
                 </span>
             )}
         </nav>

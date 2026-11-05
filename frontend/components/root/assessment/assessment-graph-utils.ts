@@ -7,6 +7,7 @@ import type {
     GroupingMode,
     ResourceVisibilityFilterId,
 } from '@/components/root/assessment/types';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 const NODE_WIDTH = 230;
 const NODE_HEIGHT = 80;
@@ -380,7 +381,9 @@ function buildVpcHierarchyNodes(resourceNodes: Node[], allEdges: Edge[]): Node[]
     const SECTION_GAP_Y = 36; // gap between subnet section and VPC-level extras
 
     const preparedGroups = Array.from(groups.entries())
-        .sort((a, b) => (labelsById.get(a[0]) ?? a[0]).localeCompare(labelsById.get(b[0]) ?? b[0], 'pt-BR'))
+        .sort((a, b) =>
+            (labelsById.get(a[0]) ?? a[0]).localeCompare(labelsById.get(b[0]) ?? b[0], toIntlLocale())
+        )
         .map(([groupId, children]) => {
             const label = labelsById.get(groupId) ?? groupId.replace('group:', '');
             const childNodeById = new Map(children.map((n) => [n.id, n]));
@@ -604,7 +607,7 @@ export function buildGroupedNodesByModes(resourceNodes: Node[], allEdges: Edge[]
                 return aRegion.rank - bRegion.rank;
             }
 
-            const regionCompare = aRegion.value.localeCompare(bRegion.value, 'pt-BR');
+            const regionCompare = aRegion.value.localeCompare(bRegion.value, toIntlLocale());
             if (regionCompare !== 0) {
                 return regionCompare;
             }
@@ -614,7 +617,7 @@ export function buildGroupedNodesByModes(resourceNodes: Node[], allEdges: Edge[]
             return getGroupPriority(aLabel) - getGroupPriority(bLabel);
         }
 
-        return aLabel.localeCompare(bLabel, 'pt-BR');
+        return aLabel.localeCompare(bLabel, toIntlLocale());
     });
 
     const preparedGroups = orderedGroups.map(([groupId, children]) => {

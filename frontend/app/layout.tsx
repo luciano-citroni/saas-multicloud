@@ -32,7 +32,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="pt-BR" suppressHydrationWarning>
+        <html lang="pt-BR" suppressHydrationWarning data-default-locale="pt">
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
                     <LocaleProvider>

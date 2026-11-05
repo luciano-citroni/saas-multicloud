@@ -1,3 +1,6 @@
+import { getLocale } from '@/lib/locale';
+import { toIntlLocale } from '@/lib/i18n/format';
+
 export type FinopsBudgetStatusItem = {
     budget: {
         id: string;
@@ -62,11 +65,13 @@ export function getBudgetRiskState(item: FinopsBudgetStatusItem | null): BudgetR
 /** Rótulo do período de acumulação do gasto (mês/dia atual em UTC). */
 export function formatBudgetSpendPeriodLabel(period: string): string {
     const now = new Date();
+    const locale = getLocale();
     if (period === 'daily') {
-        return `Gasto de hoje (${now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })})`;
+        const day = now.toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short', timeZone: 'UTC' });
+        return locale === 'en' ? `Today's spend (${day})` : `Gasto de hoje (${day})`;
     }
-    const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    return `Gasto do mês atual (${monthLabel})`;
+    const monthLabel = now.toLocaleDateString(toIntlLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return locale === 'en' ? `Current month spend (${monthLabel})` : `Gasto do mês atual (${monthLabel})`;
 }
 
 export function hasNoSpendInBudgetPeriod(item: FinopsBudgetStatusItem): boolean {

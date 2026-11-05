@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from './helpers';
 import type { OptimizationInsight } from './types';
+import { useTranslations } from '@/lib/i18n';
 
 export type Insight = {
     type: 'positive' | 'warning' | 'opportunity' | 'info';
@@ -23,6 +24,8 @@ type InsightsPanelProps = {
 };
 
 export function InsightsPanel({ insights, isLoading = false }: InsightsPanelProps) {
+    const tf = useTranslations('finops');
+
     if (isLoading) {
         return (
             <Card>
@@ -49,7 +52,7 @@ export function InsightsPanel({ insights, isLoading = false }: InsightsPanelProp
                     <CardDescription>Análise automática dos seus dados</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="py-8 text-center text-sm text-muted-foreground">Nenhum insight disponível no momento</div>
+                    <div className="py-8 text-center text-sm text-muted-foreground">{tf.noInsightsNow}</div>
                 </CardContent>
             </Card>
         );

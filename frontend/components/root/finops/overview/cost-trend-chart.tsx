@@ -27,6 +27,10 @@ import {
 } from '@/components/root/finops/overview/finops-chart-theme';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from './helpers';
+import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { translations } from '@/lib/i18n/translations';
+import { getLocale } from '@/lib/locale';
 
 export type CostTrendDataPoint = {
     date: string;
@@ -78,7 +82,7 @@ function formatBucketLabel(key: string, granularity: ChartGranularity): string {
 
     if (granularity === 'month') {
         const [year, month] = key.split('-').map(Number);
-        return new Date(year, month - 1, 1).toLocaleDateString('pt-BR', {
+        return new Date(year, month - 1, 1).toLocaleDateString(toIntlLocale(), {
             month: 'short',
             year: 'numeric',
         });
@@ -86,11 +90,11 @@ function formatBucketLabel(key: string, granularity: ChartGranularity): string {
 
     if (granularity === 'week') {
         const date = new Date(`${key}T00:00:00`);
-        return `Sem ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+        return `${translations[getLocale()].finops.weekPrefix} ${date.toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short' })}`;
     }
 
     const date = new Date(`${key}T00:00:00`);
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    return date.toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short' });
 }
 
 function aggregateTrendData(
@@ -123,22 +127,24 @@ function aggregateTrendData(
         }));
 }
 
-const GRANULARITY_OPTIONS: Array<{ value: ChartGranularity; label: string }> = [
-    { value: 'day', label: 'Dia' },
-    { value: 'week', label: 'Semana' },
-    { value: 'month', label: 'Mês' },
-    { value: 'year', label: 'Ano' },
-];
-
 export function CostTrendChart({
     data,
     currency = 'USD',
-    title = 'Custo ao longo do tempo',
-    description = 'Últimos 30 dias',
+    title,
+    description,
     isLoading = false,
     defaultChartType = 'line',
     defaultGranularity = 'day',
 }: CostTrendChartProps) {
+    const tf = useTranslations('finops');
+    const resolvedTitle = title ?? tf.costOverTime;
+    const resolvedDescription = description ?? tf.periodLast30days;
+    const granularityOptions: Array<{ value: ChartGranularity; label: string }> = [
+        { value: 'day', label: tf.granularityDay },
+        { value: 'week', label: tf.granularityWeek },
+        { value: 'month', label: tf.granularityMonth },
+        { value: 'year', label: tf.granularityYear },
+    ];
     const [chartType, setChartType] = useState<ChartType>(defaultChartType);
     const [granularity, setGranularity] = useState<ChartGranularity>(defaultGranularity);
 
@@ -152,9 +158,9 @@ export function CostTrendChart({
             <div
                 className="inline-flex w-fit items-center rounded-lg border border-border p-0.5"
                 role="group"
-                aria-label="Granularidade"
+                aria-label={tf.granularityAria}
             >
-                {GRANULARITY_OPTIONS.map((option) => (
+                {granularityOptions.map((option) => (
                     <Button
                         key={option.value}
                         type="button"
@@ -181,8 +187,8 @@ export function CostTrendChart({
             <Card>
                 <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <CardTitle>{title}</CardTitle>
-                        <CardDescription>{description}</CardDescription>
+                        <CardTitle>{resolvedTitle}</CardTitle>
+                        <CardDescription>{resolvedDescription}</CardDescription>
                     </div>
                     {controls}
                 </CardHeader>
@@ -198,14 +204,14 @@ export function CostTrendChart({
             <Card>
                 <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <CardTitle>{title}</CardTitle>
-                        <CardDescription>{description}</CardDescription>
+                        <CardTitle>{resolvedTitle}</CardTitle>
+                        <CardDescription>{resolvedDescription}</CardDescription>
                     </div>
                     {controls}
                 </CardHeader>
                 <CardContent>
                     <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-                        Nenhum dado disponível
+                        {tf.noDataAvailable}
                     </div>
                 </CardContent>
             </Card>
@@ -232,7 +238,7 @@ export function CostTrendChart({
             />
             <Tooltip
                 formatter={(value) => (typeof value === 'number' ? formatCurrency(value, currency) : '')}
-                labelFormatter={(label) => `${granularity === 'week' ? 'Semana de' : 'Período'}: ${label}`}
+                labelFormatter={(label) => `${granularity === 'week' ? tf.weekOf : tf.chartPeriod}: ${label}`}
                 contentStyle={finopsChartTooltipStyles.contentStyle}
                 labelStyle={finopsChartTooltipStyles.labelStyle}
                 itemStyle={finopsChartTooltipStyles.itemStyle}
@@ -246,11 +252,11 @@ export function CostTrendChart({
         <Card>
             <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <CardTitle>{title}</CardTitle>
+                    <CardTitle>{resolvedTitle}</CardTitle>
                     <CardDescription className={cn('mt-1')}>
-                        {description}
+                        {resolvedDescription}
                         {' · '}
-                        {GRANULARITY_OPTIONS.find((option) => option.value === granularity)?.label}
+                        {granularityOptions.find((option) => option.value === granularity)?.label}
                     </CardDescription>
                 </div>
                 {controls}
@@ -265,7 +271,7 @@ export function CostTrendChart({
                                     type="monotone"
                                     dataKey="cost"
                                     stroke={FINOPS_CHART_PRIMARY}
-                                    name="Custo"
+                                    name={tf.seriesCost}
                                     strokeWidth={2}
                                     dot={chartData.length <= 31 ? { fill: FINOPS_CHART_PRIMARY, strokeWidth: 0 } : false}
                                     activeDot={{ r: 5, fill: FINOPS_CHART_PRIMARY }}
@@ -275,7 +281,7 @@ export function CostTrendChart({
                                         type="monotone"
                                         dataKey="forecast"
                                         stroke={FINOPS_CHART_MUTED}
-                                        name="Previsão"
+                                        name={tf.seriesForecast}
                                         strokeWidth={2}
                                         strokeDasharray="5 5"
                                         dot={false}
@@ -285,12 +291,12 @@ export function CostTrendChart({
                         ) : (
                             <BarChart data={chartData}>
                                 {commonAxis}
-                                <Bar dataKey="cost" fill={FINOPS_CHART_PRIMARY} name="Custo" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="cost" fill={FINOPS_CHART_PRIMARY} name={tf.seriesCost} radius={[4, 4, 0, 0]} />
                                 {hasForecast && (
                                     <Bar
                                         dataKey="forecast"
                                         fill={FINOPS_CHART_MUTED}
-                                        name="Previsão"
+                                        name={tf.seriesForecast}
                                         radius={[4, 4, 0, 0]}
                                     />
                                 )}

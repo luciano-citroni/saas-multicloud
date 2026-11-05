@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations, type Translations } from '@/lib/i18n';
+
 export type StackResource = {
     logicalId: string;
     type: string;
@@ -8,31 +10,35 @@ export type StackResource = {
     condition?: string;
 };
 
-const TYPE_LABELS: Record<string, string> = {
-    'AWS::ECS::Cluster': 'Cluster ECS',
-    'AWS::ECS::Service': 'Serviço ECS',
-    'AWS::ECS::TaskDefinition': 'Task definition',
-    'AWS::ECR::Repository': 'Repositório ECR',
-    'AWS::IAM::Role': 'Role IAM',
-    'AWS::IAM::Policy': 'Política IAM',
-    'AWS::Logs::LogGroup': 'Grupo de logs',
-    'AWS::EC2::VPC': 'VPC',
-    'AWS::EC2::Subnet': 'Subnet',
-    'AWS::EC2::RouteTable': 'Tabela de rota',
-    'AWS::EC2::NatGateway': 'NAT Gateway',
-    'AWS::EC2::Instance': 'Instância EC2',
-    'AWS::EC2::SecurityGroup': 'Security group',
-    'AWS::EC2::SecurityGroupIngress': 'Regra de entrada',
-    'AWS::ElasticLoadBalancingV2::LoadBalancer': 'Load balancer',
-    'AWS::ElasticLoadBalancingV2::TargetGroup': 'Target group',
-    'AWS::ElasticLoadBalancingV2::Listener': 'Listener',
-    'AWS::S3::Bucket': 'Bucket S3',
-    'AWS::Lambda::Function': 'Função Lambda',
-    'AWS::RDS::DBInstance': 'Instância RDS',
-    'AWS::ApiGateway::RestApi': 'API Gateway',
-    'AWS::Amplify::App': 'App Amplify',
-    'AWS::CloudFront::Distribution': 'CloudFront',
-};
+type StackText = { [K in keyof Translations['automation']['stackCreation']]: string };
+
+function getTypeLabels(s: StackText): Record<string, string> {
+    return {
+        'AWS::ECS::Cluster': s.typeEcsCluster,
+        'AWS::ECS::Service': s.typeEcsService,
+        'AWS::ECS::TaskDefinition': 'Task definition',
+        'AWS::ECR::Repository': s.typeEcrRepository,
+        'AWS::IAM::Role': s.typeIamRole,
+        'AWS::IAM::Policy': s.typeIamPolicy,
+        'AWS::Logs::LogGroup': s.typeLogGroup,
+        'AWS::EC2::VPC': 'VPC',
+        'AWS::EC2::Subnet': 'Subnet',
+        'AWS::EC2::RouteTable': s.typeRouteTable,
+        'AWS::EC2::NatGateway': 'NAT Gateway',
+        'AWS::EC2::Instance': s.typeEc2Instance,
+        'AWS::EC2::SecurityGroup': 'Security group',
+        'AWS::EC2::SecurityGroupIngress': s.typeIngressRule,
+        'AWS::ElasticLoadBalancingV2::LoadBalancer': 'Load balancer',
+        'AWS::ElasticLoadBalancingV2::TargetGroup': 'Target group',
+        'AWS::ElasticLoadBalancingV2::Listener': 'Listener',
+        'AWS::S3::Bucket': s.typeS3Bucket,
+        'AWS::Lambda::Function': s.typeLambda,
+        'AWS::RDS::DBInstance': s.typeRds,
+        'AWS::ApiGateway::RestApi': 'API Gateway',
+        'AWS::Amplify::App': s.typeAmplify,
+        'AWS::CloudFront::Distribution': 'CloudFront',
+    };
+}
 
 type Creation = { included: boolean | null; how: string };
 
@@ -49,8 +55,8 @@ function isLoadBalancerEnabled(parameters: Record<string, unknown>): boolean | n
     return String(value) === 'true';
 }
 
-function describe(condition: string | undefined, parameters: Record<string, unknown>): Creation {
-    if (!condition) return { included: true, how: 'Criado direto no stack, sem condição.' };
+function describe(s: StackText, condition: string | undefined, parameters: Record<string, unknown>): Creation {
+    if (!condition) return { included: true, how: s.noCondition };
 
     const cluster = isBlank(parameters.ExistingClusterName);
     const repository = isBlank(parameters.ExistingRepositoryUri);
@@ -63,70 +69,70 @@ function describe(condition: string | undefined, parameters: Record<string, unkn
     const rules: Record<string, () => Creation> = {
         CreateCluster: () =>
             cluster === null
-                ? { included: null, how: 'Cria o cluster quando o nome existente fica vazio.' }
+                ? { included: null, how: s.clusterUnknown }
                 : cluster
-                  ? { included: true, how: 'Cria um cluster ECS novo com o nome da aplicação.' }
-                  : { included: false, how: 'Não cria. Usa o cluster já informado.' },
+                  ? { included: true, how: s.clusterCreate }
+                  : { included: false, how: s.clusterSkip },
         CreateRepository: () =>
             repository === null
-                ? { included: null, how: 'Cria o repositório quando a URI existente fica vazia.' }
+                ? { included: null, how: s.repositoryUnknown }
                 : repository
-                  ? { included: true, how: 'Cria um repositório ECR novo.' }
-                  : { included: false, how: 'Não cria. Usa o repositório já informado.' },
+                  ? { included: true, how: s.repositoryCreate }
+                  : { included: false, how: s.repositorySkip },
         CreateExecutionRole: () =>
             executionRole === null
-                ? { included: null, how: 'Cria a role de execução quando o ARN fica vazio.' }
+                ? { included: null, how: s.executionRoleUnknown }
                 : executionRole
-                  ? { included: true, how: 'Cria a role de execução da task.' }
-                  : { included: false, how: 'Não cria. Usa a role de execução informada.' },
+                  ? { included: true, how: s.executionRoleCreate }
+                  : { included: false, how: s.executionRoleSkip },
         CreateTaskRole: () =>
             taskRole === null
-                ? { included: null, how: 'Cria a role da task quando o ARN fica vazio.' }
+                ? { included: null, how: s.taskRoleUnknown }
                 : taskRole
-                  ? { included: true, how: 'Cria a role da task.' }
-                  : { included: false, how: 'Não cria. Usa a role da task informada.' },
+                  ? { included: true, how: s.taskRoleCreate }
+                  : { included: false, how: s.taskRoleSkip },
         HasSecret: () =>
             secret === null
-                ? { included: null, how: 'Entra no stack quando um segredo é informado.' }
+                ? { included: null, how: s.secretUnknown }
                 : secret
-                  ? { included: false, how: 'Não cria. Nenhum segredo foi informado.' }
-                  : { included: true, how: 'Usa o segredo informado na task.' },
+                  ? { included: false, how: s.secretSkip }
+                  : { included: true, how: s.secretUse },
         GrantSecretToNewRole: () => {
             if (executionRole === null || secret === null) {
-                return { included: null, how: 'Cria a política quando há segredo e a role de execução é nova.' };
+                return { included: null, how: s.grantUnknown };
             }
-            if (executionRole && !secret) return { included: true, how: 'Cria a política para a role nova ler o segredo.' };
-            return { included: false, how: 'Não cria a política de leitura do segredo.' };
+            if (executionRole && !secret) return { included: true, how: s.grantCreate };
+            return { included: false, how: s.grantSkip };
         },
         UseLoadBalancer: () =>
             loadBalancer === null
-                ? { included: null, how: 'Criado quando o load balancer está habilitado.' }
+                ? { included: null, how: s.loadBalancerUnknown }
                 : loadBalancer
-                  ? { included: true, how: 'Cria o recurso do load balancer.' }
-                  : { included: false, how: 'Não cria. O load balancer está desligado.' },
+                  ? { included: true, how: s.loadBalancerCreate }
+                  : { included: false, how: s.loadBalancerSkip },
         SkipLoadBalancer: () =>
             loadBalancer === null
-                ? { included: null, how: 'Criado só quando o load balancer está desligado.' }
+                ? { included: null, how: s.noLoadBalancerUnknown }
                 : loadBalancer
-                  ? { included: false, how: 'Não cria. O tráfego entra pelo load balancer.' }
-                  : { included: true, how: 'Abre a porta do serviço direto, sem load balancer.' },
+                  ? { included: false, how: s.noLoadBalancerSkip }
+                  : { included: true, how: s.noLoadBalancerCreate },
         UseHttps: () => {
             if (loadBalancer === null || certificate === null) {
-                return { included: null, how: 'Criado quando há load balancer e certificado ACM.' };
+                return { included: null, how: s.httpsUnknown };
             }
-            if (loadBalancer && !certificate) return { included: true, how: 'Publica HTTPS e redireciona o HTTP.' };
-            return { included: false, how: 'Não cria o listener HTTPS.' };
+            if (loadBalancer && !certificate) return { included: true, how: s.httpsCreate };
+            return { included: false, how: s.httpsSkip };
         },
         UseHttpOnly: () => {
             if (loadBalancer === null || certificate === null) {
-                return { included: null, how: 'Criado quando há load balancer e nenhum certificado.' };
+                return { included: null, how: s.httpOnlyUnknown };
             }
-            if (loadBalancer && certificate) return { included: true, how: 'Publica só HTTP e encaminha para o target group.' };
-            return { included: false, how: 'Não cria o listener só HTTP.' };
+            if (loadBalancer && certificate) return { included: true, how: s.httpOnlyCreate };
+            return { included: false, how: s.httpOnlySkip };
         },
     };
 
-    return rules[condition]?.() ?? { included: null, how: `Criado quando a condição ${condition} é verdadeira.` };
+    return rules[condition]?.() ?? { included: null, how: s.conditionFallback.replace('{condition}', condition) };
 }
 
 export function orderStackResources(resources: StackResource[]): StackResource[] {
@@ -181,15 +187,18 @@ export function StackCreationLine({
     resources: StackResource[];
     parameters: Record<string, unknown>;
 }) {
+    const t = useTranslations('automation');
+    const s: StackText = t.stackCreation;
+    const typeLabels = getTypeLabels(s);
     const ordered = orderStackResources(resources);
     if (ordered.length === 0) return null;
 
     return (
         <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-            <p className="text-xs font-semibold">Ordem de criação</p>
+            <p className="text-xs font-semibold">{s.title}</p>
             <ol className="space-y-0">
                 {ordered.map((resource, position) => {
-                    const creation = describe(resource.condition, parameters);
+                    const creation = describe(s, resource.condition, parameters);
                     const previous = [...(resource.dependsOn ?? []), ...(resource.references ?? [])].filter(
                         (id, offset, list) => ordered.some((item) => item.logicalId === id) && list.indexOf(id) === offset,
                     );
@@ -207,13 +216,13 @@ export function StackCreationLine({
                                 {position + 1}
                             </span>
                             <div className={`min-w-0 ${skipped ? 'opacity-70' : ''}`}>
-                                <p className="text-xs font-semibold">{TYPE_LABELS[resource.type] ?? resource.logicalId}</p>
+                                <p className="text-xs font-semibold">{typeLabels[resource.type] ?? resource.logicalId}</p>
                                 <p className="font-mono text-[10px] text-muted-foreground">
                                     {resource.logicalId} · {resource.type.replace('AWS::', '')}
                                 </p>
                                 <p className="mt-0.5 text-[11px] leading-snug">{creation.how}</p>
                                 {previous.length > 0 && (
-                                    <p className="text-[10px] text-muted-foreground">Depois de {previous.join(', ')}</p>
+                                    <p className="text-[10px] text-muted-foreground">{s.after.replace('{items}', previous.join(', '))}</p>
                                 )}
                             </div>
                         </li>

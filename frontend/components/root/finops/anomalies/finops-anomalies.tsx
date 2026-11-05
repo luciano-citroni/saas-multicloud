@@ -13,29 +13,39 @@ import { fetchFinopsAnomalies, acknowledgeFinopsAnomaly } from '@/app/actions/fi
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { FinopsAnomaly } from '@/components/root/finops/overview/types';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations, type Translations } from '@/lib/i18n';
+
+type FinopsT = Record<keyof Translations['finops'], string>;
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
 const SEVERITY_CONFIG = {
-    critical: { label: 'Crítica', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-    high: { label: 'Alta', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-    medium: { label: 'Média', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    low: { label: 'Baixa', className: 'bg-muted text-muted-foreground' },
-} as const;
+    critical: { labelKey: 'severityCritical', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+    high: { labelKey: 'severityHigh', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    medium: { labelKey: 'severityMedium', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    low: { labelKey: 'severityLow', className: 'bg-muted text-muted-foreground' },
+} as const satisfies Record<string, { labelKey: keyof FinopsT; className: string }>;
 
-const STATUS_LABELS: Record<string, string> = {
-    open: 'Abertas',
-    acknowledged: 'Reconhecidas',
-    resolved: 'Resolvidas',
-    all: 'Todas',
-};
+const STATUS_LABEL_KEYS = {
+    open: 'statusOpen',
+    acknowledged: 'statusAcknowledged',
+    resolved: 'statusResolved',
+    all: 'statusAll',
+} as const satisfies Record<string, keyof FinopsT>;
 
-function SeverityBadge({ severity }: { severity: FinopsAnomaly['severity'] }) {
+function SeverityBadge({ severity, t }: { severity: FinopsAnomaly['severity']; t: FinopsT }) {
     const cfg = SEVERITY_CONFIG[severity];
-    return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cfg.className)}>{cfg.label}</span>;
+    return (
+        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cfg.className)}>
+            {t[cfg.labelKey]}
+        </span>
+    );
 }
 
 export function FinopsAnomalies() {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const searchParams = useSearchParams();
     const accountFromQuery = searchParams.get('account');
@@ -99,7 +109,7 @@ export function FinopsAnomalies() {
             try {
                 const res = await fetchFinopsAnomalies(orgId, cloudId, filter === 'all' ? undefined : filter, 90);
                 if (res.status === 401) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tCommon.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
@@ -111,12 +121,12 @@ export function FinopsAnomalies() {
                 const data = await res.json().catch(() => []);
                 setAnomalies(Array.isArray(data) ? data : []);
             } catch {
-                toast.error('Não foi possível carregar as anomalias.');
+                toast.error(t.loadAnomaliesError);
             } finally {
                 setLoading(false);
             }
         },
-        [router]
+        [router, t, tCommon]
     );
 
     useEffect(() => {
@@ -137,10 +147,10 @@ export function FinopsAnomalies() {
                 toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success('Anomalia reconhecida.');
+            toast.success(t.acknowledgeSuccess);
             void loadData(organizationId, cloudAccountId, statusFilter);
         } catch {
-            toast.error('Não foi possível reconhecer a anomalia.');
+            toast.error(t.acknowledgeError);
         } finally {
             setAcknowledging(null);
         }
@@ -159,8 +169,8 @@ export function FinopsAnomalies() {
         return (
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Anomalias de Custo</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma organização e conta cloud na sidebar.</p>
+                    <p className="text-sm font-medium">{t.anomaliesTitle}</p>
+                    <p className="text-xs text-muted-foreground">{t.selectOrgAndAccountSidebar}</p>
                 </div>
             </div>
         );
@@ -173,24 +183,24 @@ export function FinopsAnomalies() {
                     <div className="space-y-2">
                         <div className="inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             <Cloud className="size-3.5" />
-                            Conta selecionada
+                            {t.selectedAccountBadge}
                         </div>
                         <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? 'Carregando conta'}</p>
+                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? t.loadingAccount}</p>
                                 {cloudAccount?.provider ? (
                                     <span className="rounded-full border px-2 py-0.5 text-xs font-medium uppercase text-muted-foreground">
                                         {cloudAccount.provider}
                                     </span>
                                 ) : null}
                             </div>
-                            <p className="text-sm text-muted-foreground">Todas as anomalias exibidas abaixo pertencem a esta conta cloud.</p>
+                            <p className="text-sm text-muted-foreground">{t.anomaliesAccountScopeNote}</p>
                         </div>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href={dashboardHref}>
                             <ArrowLeft className="size-4" />
-                            Voltar ao dashboard
+                            {t.backToDashboard}
                         </Link>
                     </Button>
                 </div>
@@ -201,10 +211,13 @@ export function FinopsAnomalies() {
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Anomalias de Custo</p>
+                        <p className="text-sm font-medium">{t.anomaliesTitle}</p>
                         <p className="text-xs text-muted-foreground">
-                            Desvios detectados nos últimos 90 dias
-                            {!loading && ` — ${anomalies.length} ${STATUS_LABELS[statusFilter]?.toLowerCase()}`}
+                            {loading
+                                ? t.anomaliesLast90
+                                : t.anomaliesLast90Count
+                                      .replace('{count}', String(anomalies.length))
+                                      .replace('{status}', t[STATUS_LABEL_KEYS[statusFilter]].toLowerCase())}
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -219,7 +232,9 @@ export function FinopsAnomalies() {
                                         statusFilter === s ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
                                     )}
                                 >
-                                    {s === 'open' && openCount > 0 ? `${STATUS_LABELS[s]} (${openCount})` : STATUS_LABELS[s]}
+                                    {s === 'open' && openCount > 0
+                                        ? `${t[STATUS_LABEL_KEYS[s]]} (${openCount})`
+                                        : t[STATUS_LABEL_KEYS[s]]}
                                 </button>
                             ))}
                         </div>
@@ -245,26 +260,26 @@ export function FinopsAnomalies() {
                 ) : anomalies.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                         <CheckCircle2 className="h-8 w-8 text-green-500" />
-                        <p className="text-sm font-medium">Nenhuma anomalia encontrada</p>
-                        <p className="text-xs text-muted-foreground">Os custos estão dentro dos padrões esperados.</p>
+                        <p className="text-sm font-medium">{t.anomaliesEmptyTitle}</p>
+                        <p className="text-xs text-muted-foreground">{t.anomaliesWithinExpected}</p>
                     </div>
                 ) : (
                     <>
                         <div className="hidden sm:grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
-                            <span>Severidade</span>
-                            <span>Serviço / Data</span>
-                            <span className="text-right">Esperado</span>
-                            <span className="text-right">Real</span>
-                            <span className="text-right">Desvio</span>
+                            <span>{t.severity}</span>
+                            <span>{t.colServiceDate}</span>
+                            <span className="text-right">{t.colExpected}</span>
+                            <span className="text-right">{t.colActual}</span>
+                            <span className="text-right">{t.colDeviation}</span>
                         </div>
                         <div className="divide-y">
                             {anomalies.map((anomaly) => (
                                 <div key={anomaly.id} className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto_auto_auto] items-center gap-2 px-4 py-2.5">
-                                    <SeverityBadge severity={anomaly.severity} />
+                                    <SeverityBadge severity={anomaly.severity} t={t} />
                                     <div className="min-w-0">
                                         <p className="truncate text-sm font-medium">{anomaly.service}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {anomaly.region || 'global'} · {new Date(anomaly.anomalyDate).toLocaleDateString('pt-BR')}
+                                            {anomaly.region || t.globalRegion} · {new Date(anomaly.anomalyDate).toLocaleDateString(toIntlLocale())}
                                         </p>
                                     </div>
                                     <span className="shrink-0 text-right text-sm tabular-nums text-muted-foreground">
@@ -286,7 +301,7 @@ export function FinopsAnomalies() {
                                                 disabled={acknowledging !== null}
                                                 onClick={() => void handleAcknowledge(anomaly.id)}
                                             >
-                                                OK
+                                                {t.acknowledgeShort}
                                             </Button>
                                         )}
                                     </div>

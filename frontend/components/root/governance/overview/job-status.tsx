@@ -1,5 +1,6 @@
 import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from '@/lib/i18n';
 import type { GovernanceJob } from '@/components/root/governance/overview/types';
 
 export function JobStatusIcon({ status }: { status: GovernanceJob['status'] }) {
@@ -15,11 +16,12 @@ export function JobStatusIcon({ status }: { status: GovernanceJob['status'] }) {
 }
 
 export function JobStatusBadge({ status }: { status: GovernanceJob['status'] }) {
+    const tg = useTranslations('governance');
     const map: Record<GovernanceJob['status'], { label: string; variant: 'secondary' | 'outline' | 'destructive' | 'default' }> = {
-        pending: { label: 'Aguardando', variant: 'outline' },
-        running: { label: 'Em andamento', variant: 'secondary' },
-        completed: { label: 'Concluído', variant: 'default' },
-        failed: { label: 'Falhou', variant: 'destructive' },
+        pending: { label: tg.statusPending, variant: 'outline' },
+        running: { label: tg.statusRunning, variant: 'secondary' },
+        completed: { label: tg.statusCompleted, variant: 'default' },
+        failed: { label: tg.statusFailed, variant: 'destructive' },
     };
 
     const { label, variant } = map[status];

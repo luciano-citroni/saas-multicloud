@@ -11,10 +11,12 @@ import type { FinopsRecommendation } from '@/components/root/finops/overview/typ
 import { fetchFinopsRecommendations } from '@/app/actions/finops';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
 export function FinopsRecommendationsPage() {
+    const tf = useTranslations('finops');
     const router = useRouter();
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -56,12 +58,12 @@ export function FinopsRecommendationsPage() {
 
                 setRecommendations(items);
             } catch {
-                toast.error('Não foi possível carregar as recomendações.');
+                toast.error(tf.recommendationsLoadError);
             } finally {
                 setLoading(false);
             }
         },
-        [router]
+        [router, tf.recommendationsLoadError]
     );
 
     useEffect(() => {
@@ -78,7 +80,7 @@ export function FinopsRecommendationsPage() {
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
                     <p className="text-sm font-medium">Recomendações de Otimização</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma organização e conta cloud na sidebar.</p>
+                    <p className="text-xs text-muted-foreground">{tf.selectOrgAndAccountSidebar}</p>
                 </div>
             </div>
         );

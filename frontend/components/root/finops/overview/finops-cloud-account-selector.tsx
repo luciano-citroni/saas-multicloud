@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 
@@ -30,6 +31,8 @@ function providerStyles(provider: string) {
 }
 
 export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, onAccountChange }: FinopsCloudAccountSelectorProps) {
+    const t = useTranslations('finops');
+
     if (cloudAccounts.length === 0) {
         return null;
     }
@@ -65,16 +68,16 @@ export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, o
                 <div className="space-y-1">
                     <div className="inline-flex items-center gap-2 rounded-full border bg-background/90 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         <Cloud className="size-3.5" />
-                        Conta do dashboard
+                        {t.accountSelectorBadge}
                     </div>
-                    <p className="text-sm text-muted-foreground">Selecione qual conta será usada para métricas, anomalias e recomendações.</p>
+                    <p className="text-sm text-muted-foreground">{t.accountSelectorDesc}</p>
                 </div>
 
                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className={cn('border', providerStyles(selectedAccount.provider))}>
                         {selectedAccount.provider.toUpperCase()}
                     </Badge>
-                    <Badge variant="outline">{cloudAccounts.length} contas</Badge>
+                    <Badge variant="outline">{t.accountsCount.replace('{count}', String(cloudAccounts.length))}</Badge>
                 </div>
             </div>
 
@@ -86,14 +89,14 @@ export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, o
                     className="shrink-0 rounded-xl"
                     disabled={!isMultipleAccounts}
                     onClick={() => handleStep('previous')}
-                    aria-label="Conta anterior"
+                    aria-label={t.previousAccount}
                 >
                     <ChevronLeft className="size-4" />
                 </Button>
 
                 <Select value={selectedAccount.id} onValueChange={handleAccountChange}>
                     <SelectTrigger className="h-12 flex-1 rounded-xl">
-                        <SelectValue placeholder="Selecionar conta" />
+                        <SelectValue placeholder={t.selectAccountPlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
                         {cloudAccounts.map((account) => (
@@ -118,7 +121,7 @@ export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, o
                     className="shrink-0 rounded-xl"
                     disabled={!isMultipleAccounts}
                     onClick={() => handleStep('next')}
-                    aria-label="Próxima conta"
+                    aria-label={t.nextAccount}
                 >
                     <ChevronRight className="size-4" />
                 </Button>
@@ -126,12 +129,17 @@ export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, o
 
             <div className="mt-3 flex flex-wrap gap-2">
                 <Badge variant="outline" className="max-w-full truncate">
-                    Conta ativa: {selectedAccount.alias}
+                    {t.activeAccountChip.replace('{name}', selectedAccount.alias)}
                 </Badge>
                 <Badge variant="outline" className={cn('border', providerStyles(selectedAccount.provider))}>
-                    Provider: {selectedAccount.provider.toUpperCase()}
+                    {t.filterChipProvider.replace('{value}', selectedAccount.provider.toUpperCase())}
                 </Badge>
-                <Badge variant="outline">Status: {selectedAccount.isActive ? 'ativa' : 'inativa'}</Badge>
+                <Badge variant="outline">
+                    {t.accountStatusChip.replace(
+                        '{status}',
+                        selectedAccount.isActive ? t.accountStatusActive : t.accountStatusInactive
+                    )}
+                </Badge>
             </div>
         </section>
     );

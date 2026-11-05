@@ -18,8 +18,8 @@ type FinopsAccountsStripProps = {
     onRevokeConsent?: (account: OrgOverviewAccount) => void;
 };
 
-function statusLabel(account: OrgOverviewAccount): string {
-    if (account.finopsSupported === false) return 'Não suportado';
+function statusLabel(account: OrgOverviewAccount, notSupportedLabel: string): string {
+    if (account.finopsSupported === false) return notSupportedLabel;
     if (account.isActive === false) return 'Inativa';
     if (account.hasConsent) return 'Ativa';
     return 'Sem consentimento';
@@ -55,7 +55,7 @@ export function FinopsAccountsStrip({
     if (accounts.length === 0) {
         return (
             <div className="rounded-xl border p-8 text-center">
-                <p className="text-sm text-muted-foreground">Nenhuma cloud account neste tenant</p>
+                <p className="text-sm text-muted-foreground">{tf.noCloudAccountsInTenant}</p>
             </div>
         );
     }
@@ -114,7 +114,7 @@ export function FinopsAccountsStrip({
                                                 : 'bg-muted text-muted-foreground'
                                         )}
                                     >
-                                        {statusLabel(account)}
+                                        {statusLabel(account, tf.notSupported)}
                                     </span>
                                     {showRevoke && (
                                         <DropdownMenu>

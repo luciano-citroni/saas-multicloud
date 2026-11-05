@@ -13,6 +13,7 @@ import { IconInput } from '@/components/ui/input-icon';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 import {
@@ -27,18 +28,24 @@ type CreatedOrganization = {
     name?: string;
 };
 
-const schema = z.object({
-    name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
-});
+function createSchema(t: { nameMin: string; nameMax: string }) {
+    return z.object({
+        name: z.string().trim().min(2, t.nameMin).max(100, t.nameMax),
+    });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof createSchema>>;
 
 export function FormCreateOrganization() {
     const router = useRouter();
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
     const sidebarQuery = useSidebarContext();
     const [tenantId, setTenantId] = useState<string | null>(null);
     const [storageReady, setStorageReady] = useState(false);
     const [createdName, setCreatedName] = useState('');
+
+    const schema = useMemo(() => createSchema(t), [t]);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(schema),
@@ -65,7 +72,7 @@ export function FormCreateOrganization() {
         }
 
         if (sidebarQuery.isError || !sidebarQuery.data) {
-            toast.error('Não foi possível validar as permissões.');
+            toast.error(t.validatePermissionsError);
             router.replace('/');
             return;
         }
@@ -75,14 +82,14 @@ export function FormCreateOrganization() {
         }
 
         if (!canCreate) {
-            toast.error('Você não tem permissão para criar uma organização.');
+            toast.error(t.createNoPermission);
             router.replace('/');
         }
-    }, [activeTenant, canCreate, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, storageReady]);
+    }, [activeTenant, canCreate, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, storageReady, t.createNoPermission, t.validatePermissionsError]);
 
     const onSubmit = form.handleSubmit(async (data) => {
         if (!activeTenant) {
-            toast.error('Selecione um tenant antes de criar a organização.');
+            toast.error(t.selectTenantFirst);
             return;
         }
 
@@ -95,7 +102,7 @@ export function FormCreateOrganization() {
             const payload = (await response.json().catch(() => null)) as CreatedOrganization | null;
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
 
@@ -109,11 +116,14 @@ export function FormCreateOrganization() {
 
             notifySidebarContextUpdated();
             setCreatedName(name);
-            toast.success('Organização criada com sucesso.');
+            toast.success(t.createSuccess);
         } catch {
-            toast.error('Não foi possível criar a organização.');
+            toast.error(t.createError);
         }
     });
+
+    const [createdActiveBefore, createdActiveAfter = ''] = t.createdActiveDesc.split('{name}');
+    const [createInTenantBefore, createInTenantAfter = ''] = t.createInTenantDesc.split('{name}');
 
     if (!storageReady || !sidebarQuery.isFetched || sidebarQuery.isLoading) {
         return (
@@ -128,9 +138,9 @@ export function FormCreateOrganization() {
     if (!activeTenant) {
         return (
             <div className="flex flex-col gap-4">
-                <p className="text-sm text-muted-foreground">Selecione ou crie um tenant antes de criar uma organização.</p>
+                <p className="text-sm text-muted-foreground">{t.selectOrCreateTenant}</p>
                 <Button asChild className="w-fit">
-                    <Link href="/tenant/new">Criar tenant</Link>
+                    <Link href="/tenant/new">{t.createTenantAction}</Link>
                 </Button>
             </div>
         );
@@ -147,14 +157,16 @@ export function FormCreateOrganization() {
                     <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-semibold">Organização criada</h2>
+                    <h2 className="text-xl font-semibold">{t.createdTitle}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        <strong>{createdName}</strong> já está ativa no seletor da barra lateral.
+                        {createdActiveBefore}
+                        <strong>{createdName}</strong>
+                        {createdActiveAfter}
                     </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-3">
                     <Button variant="outline" onClick={() => router.push('/tenant/organizations')}>
-                        Ver organizações
+                        {t.viewOrgs}
                     </Button>
                     <Button
                         onClick={() => {
@@ -162,7 +174,7 @@ export function FormCreateOrganization() {
                             router.refresh();
                         }}
                     >
-                        Ir para o dashboard
+                        {t.goToDashboard}
                     </Button>
                 </div>
             </div>
@@ -178,13 +190,15 @@ export function FormCreateOrganization() {
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>
-                                Nome da organização <span className="text-destructive">*</span>
+                                {t.orgNameLabel} <span className="text-destructive">*</span>
                             </FormLabel>
                             <FormControl>
-                                <IconInput placeholder="Ex: Produção, Homologação, Dev..." StartIcon={Layers} autoFocus {...field} />
+                                <IconInput placeholder={t.orgNameExample} StartIcon={Layers} autoFocus {...field} />
                             </FormControl>
                             <FormDescription>
-                                Será criada dentro de <strong>{activeTenant.name}</strong> e aparece no seletor da barra lateral.
+                                {createInTenantBefore}
+                                <strong>{activeTenant.name}</strong>
+                                {createInTenantAfter}
                             </FormDescription>
                             <FormMessage />
                         </FormItem>
@@ -194,10 +208,10 @@ export function FormCreateOrganization() {
                 <div className="flex items-center justify-between pt-2">
                     <Button type="button" variant="ghost" size="sm" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Voltar
+                        {tc.back}
                     </Button>
                     <Button type="submit" isLoading={form.formState.isSubmitting}>
-                        Criar organização
+                        {t.createOrg}
                     </Button>
                 </div>
             </form>

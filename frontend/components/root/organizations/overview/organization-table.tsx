@@ -10,9 +10,10 @@ import { flexRender, getCoreRowModel, getPaginationRowModel, useReactTable, type
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { OrganizationColumns } from './organization-columns';
+import { useOrganizationColumns } from './organization-columns';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTranslations } from '@/lib/i18n';
 
 type RoleFilter = 'all' | 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -23,6 +24,8 @@ type OrganizationTableProps = {
 };
 
 export function OrganizationTable({ data, onEditOrganization, onViewCloudAccounts }: OrganizationTableProps) {
+    const t = useTranslations('organizations');
+    const tc = useTranslations('common');
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -43,7 +46,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
         router.push(newUrl);
     }, [nameFilter, roleFilter, router]);
 
-    const columns = useMemo(() => OrganizationColumns({ onEditOrganization, onViewCloudAccounts }), [onEditOrganization, onViewCloudAccounts]);
+    const columns = useOrganizationColumns({ onEditOrganization, onViewCloudAccounts });
 
     const filteredData = useMemo(() => {
         const normalizedName = nameFilter.trim().toLowerCase();
@@ -85,7 +88,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
                             setNameFilter(e.target.value);
                             setPageIndex(0);
                         }}
-                        placeholder="Filtrar por nome..."
+                        placeholder={t.filterByName}
                         className="h-8 w-50"
                     />
 
@@ -97,7 +100,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
                         }}
                     >
                         <TabsList>
-                            <TabsTrigger value="all">Todos</TabsTrigger>
+                            <TabsTrigger value="all">{tc.all}</TabsTrigger>
                             <TabsTrigger value="owner">Owner</TabsTrigger>
                             <TabsTrigger value="admin">Admin</TabsTrigger>
                             <TabsTrigger value="member">Member</TabsTrigger>
@@ -110,7 +113,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
                     <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm">
                             <SlidersHorizontal className="h-4 w-4" />
-                            <span className="hidden sm:inline">Colunas</span>
+                            <span className="hidden sm:inline">{tc.columns}</span>
                             <ChevronDown className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -160,7 +163,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                                    Nenhuma organização encontrada para os filtros aplicados.
+                                    {t.orgsFilterEmpty}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -171,7 +174,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
             {/* Paginação */}
             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                    <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                    <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                     <Select
                         value={`${pageSize}`}
                         onValueChange={(v) => {
@@ -194,7 +197,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                     <span className="text-sm font-medium">
-                        Página {pageIndex + 1} de {table.getPageCount() || 1}
+                        {tc.pageOf.replace('{page}', String(pageIndex + 1)).replace('{pages}', String(table.getPageCount() || 1))}
                     </span>
 
                     <div className="flex items-center gap-1 self-start sm:self-auto">

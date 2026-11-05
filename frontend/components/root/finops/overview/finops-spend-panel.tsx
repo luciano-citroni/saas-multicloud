@@ -37,6 +37,7 @@ import type {
     OrgOverviewAccount,
 } from '@/components/root/finops/overview/types';
 import { fetchFinopsCostByResource } from '@/app/actions/finops';
+import { useTranslations } from '@/lib/i18n';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { cn } from '@/lib/utils';
 
@@ -68,6 +69,7 @@ export function FinopsSpendPanel({
     selectedAccountId = null,
     selectedService = null,
 }: FinopsSpendPanelProps) {
+    const tf = useTranslations('finops');
     const [servicesChartType, setServicesChartType] = useState<ChartType>('bar');
     const [providerChartType, setProviderChartType] = useState<ChartType>('bar');
     const [resources, setResources] = useState<CostByResourceItem[]>([]);
@@ -102,7 +104,7 @@ export function FinopsSpendPanel({
                 }
             } catch {
                 if (!cancelled) {
-                    toast.error('Não foi possível carregar custo por recurso.');
+                    toast.error(tf.resourceCostLoadError);
                     setResources([]);
                 }
             } finally {
@@ -114,7 +116,7 @@ export function FinopsSpendPanel({
         return () => {
             cancelled = true;
         };
-    }, [organizationId, selectedAccountId, selectedService, overview?.period.year, overview?.period.month]);
+    }, [organizationId, selectedAccountId, selectedService, overview?.period.year, overview?.period.month, tf.resourceCostLoadError]);
 
     if (isLoading || !overview) {
         return (
@@ -163,7 +165,7 @@ export function FinopsSpendPanel({
             <CostTrendChart
                 data={costTrend.map((point) => ({ date: point.date, cost: point.cost }))}
                 currency={totals.currency}
-                title="Evolução dos gastos"
+                title={tf.spendEvolution}
                 description={`${overview.period.startDate} → ${overview.period.endDate}`}
             />
 
@@ -174,7 +176,7 @@ export function FinopsSpendPanel({
                         <CardDescription>
                             {selectedService
                                 ? `Variação MoM para ${selectedService}`
-                                : 'Selecione uma conta (e opcionalmente um serviço) para ver quais recursos mais custaram'}
+                                : tf.selectAccountForResources}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -185,8 +187,7 @@ export function FinopsSpendPanel({
                             </div>
                         ) : resources.length === 0 ? (
                             <p className="py-6 text-center text-sm text-muted-foreground">
-                                Nenhum custo por recurso no período. Re-sincronize a conta FinOps para popular
-                                resource IDs.
+                                {tf.noResourceCostInPeriod}
                             </p>
                         ) : (
                             <div className="divide-y rounded-lg border">
@@ -252,7 +253,7 @@ export function FinopsSpendPanel({
                     <CardContent>
                         {topServices.length === 0 ? (
                             <p className="py-10 text-center text-sm text-muted-foreground">
-                                Nenhum custo coletado ainda. Aceite os termos e sincronize.
+                                {tf.noCostCollectedYet}
                             </p>
                         ) : (
                             <div className={cn('h-72 w-full min-w-0', finopsChartSurfaceClassName)}>
@@ -458,7 +459,7 @@ export function FinopsSpendPanel({
                 </CardHeader>
                 <CardContent>
                     {topAccounts.length === 0 ? (
-                        <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma conta com custo no período</p>
+                        <p className="py-8 text-center text-sm text-muted-foreground">{tf.noAccountCostInPeriod}</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[480px] text-sm">

@@ -1,6 +1,19 @@
+import { getLocale } from '@/lib/locale';
+
 type FindingSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export function translateGovernanceSeverity(severity: FindingSeverity): string {
+    if (getLocale() === 'en') {
+        const enLabels: Record<FindingSeverity, string> = {
+            critical: 'critical',
+            high: 'high',
+            medium: 'medium',
+            low: 'low',
+        };
+
+        return enLabels[severity] ?? severity;
+    }
+
     const labels: Record<FindingSeverity, string> = {
         critical: 'crítica',
         high: 'alta',
@@ -12,6 +25,8 @@ export function translateGovernanceSeverity(severity: FindingSeverity): string {
 }
 
 export function translateGovernancePolicyName(name: string): string {
+    if (getLocale() === 'en') return name;
+
     const policyMap: Record<string, string> = {
         'EC2 Instance Must Have Required Tags': 'Instância EC2 deve ter tags obrigatórias',
         'S3 Bucket Must Have Server-Side Encryption Enabled': 'Bucket S3 deve ter criptografia no servidor habilitada',
@@ -22,6 +37,28 @@ export function translateGovernancePolicyName(name: string): string {
 }
 
 export function translateGovernanceResourceType(resourceType: string): string {
+    if (getLocale() === 'en') {
+        const enResourceTypeMap: Record<string, string> = {
+            EC2Instance: 'EC2 Instance',
+            S3Bucket: 'S3 Bucket',
+            SecurityGroup: 'Security Group',
+            RDSInstance: 'RDS Instance',
+            IAMRole: 'IAM Role',
+            LambdaFunction: 'Lambda Function',
+            EKSCluster: 'EKS Cluster',
+            CloudTrailTrail: 'CloudTrail',
+            KMSKey: 'KMS Key',
+            GuardDutyDetector: 'GuardDuty',
+            GcpVmInstance: 'VM Instance (GCP)',
+            GcpStorageBucket: 'Storage Bucket (GCP)',
+            GcpFirewallRule: 'Firewall Rule (GCP)',
+            GcpSqlInstance: 'Cloud SQL (GCP)',
+            GcpGkeCluster: 'GKE Cluster',
+        };
+
+        return enResourceTypeMap[resourceType] ?? resourceType;
+    }
+
     const resourceTypeMap: Record<string, string> = {
         EC2Instance: 'Instância EC2',
         S3Bucket: 'Bucket S3',
@@ -92,6 +129,8 @@ function applyCommonEnglishReplacements(text: string): string {
 }
 
 export function translateGovernanceDescription(description: string): string {
+    if (getLocale() === 'en') return description;
+
     const missingTagsRegex = /^EC2 instance "([^"]+)" is missing required tags: (.+)\.$/i;
     const match = description.match(missingTagsRegex);
 
@@ -128,6 +167,8 @@ export function translateGovernanceDescription(description: string): string {
 }
 
 export function translateGovernanceRecommendation(recommendation: string): string {
+    if (getLocale() === 'en') return recommendation;
+
     const addTagsRegex =
         /^Add the following required tags to the EC2 instance: (.+)\. Tags should describe the resource's name, environment \(e\.g\., production, staging\), and purpose\.$/i;
 

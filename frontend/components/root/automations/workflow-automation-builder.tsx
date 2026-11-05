@@ -46,6 +46,7 @@ import {
     type AutomationNodeInput,
 } from '@/app/actions/automations';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 import { StackCreationLine, type StackResource } from './stack-creation-line';
 
 const ACTION_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
@@ -136,6 +137,7 @@ function BuilderCanvas({
     onChange,
     readOnly = false,
 }: Props) {
+    const t = useTranslations('automation');
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -224,7 +226,7 @@ function BuilderCanvas({
         );
     });
     const actionsByCategory = filteredActions.reduce<Record<string, ActionDefinition[]>>((acc, action) => {
-        const category = action.category || 'Outros';
+        const category = action.category || t.categoryOther;
         (acc[category] ??= []).push(action);
         return acc;
     }, {});
@@ -242,25 +244,25 @@ function BuilderCanvas({
             {!readOnly && (
                 <div className="flex w-64 shrink-0 flex-col border-r bg-muted/30">
                     <div className="sticky top-0 z-10 space-y-2 border-b bg-muted/30 p-3 backdrop-blur">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Blocos</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.blocks}</p>
                         <div className="relative">
                             <Search className="pointer-events-none absolute top-2.5 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
                                 className="h-8 pl-8 text-xs"
-                                placeholder="Buscar recurso ou ação…"
+                                placeholder={t.blockSearchPlaceholder}
                                 value={blockSearch}
                                 onChange={(event) => setBlockSearch(event.target.value)}
                             />
                         </div>
                         <p className="text-[10px] text-muted-foreground">
-                            {filteredActions.length} de {actions.length} blocos
+                            {t.blocksCount.replace('{count}', String(filteredActions.length)).replace('{total}', String(actions.length))}
                         </p>
                     </div>
                     <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
                         {actions.length === 0 ? (
-                            <p className="text-[11px] text-muted-foreground">Nenhum bloco disponível para este provedor.</p>
+                            <p className="text-[11px] text-muted-foreground">{t.noBlocksAvailable}</p>
                         ) : filteredActions.length === 0 ? (
-                            <p className="text-[11px] text-muted-foreground">Nenhum bloco corresponde à busca.</p>
+                            <p className="text-[11px] text-muted-foreground">{t.noBlocksMatch}</p>
                         ) : (
                             orderedCategories.map((category) => {
                                 const categoryActions = actionsByCategory[category] ?? [];
@@ -371,7 +373,7 @@ function BuilderCanvas({
                     <div className="flex items-center justify-between border-b px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
                             <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-semibold">Propriedades</span>
+                            <span className="text-xs font-semibold">{t.properties}</span>
                         </div>
                         <button
                             type="button"
@@ -420,7 +422,7 @@ function BuilderCanvas({
             {!selected && nodes.length > 0 && !readOnly && (
                 <div className="flex w-48 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center">
                     <ChevronRight className="h-6 w-6 text-muted-foreground" />
-                    <p className="px-4 text-xs text-muted-foreground">Arraste um bloco e conecte as dependências</p>
+                    <p className="px-4 text-xs text-muted-foreground">{t.dragBlockHint}</p>
                 </div>
             )}
         </div>
@@ -481,6 +483,7 @@ function AssessmentParameter({
     cloudAccountId?: string;
     onChange: (value: unknown) => void;
 }) {
+    const t = useTranslations('automation');
     const [options, setOptions] = useState<AssessmentResource[]>([]);
 
     useEffect(() => {
@@ -501,8 +504,8 @@ function AssessmentParameter({
     if (visible.length === 0) {
         return (
             <div className="space-y-1">
-                <Label className="text-xs">{label}{sensitive ? ' · sensível' : ''}</Label>
-                <p className="text-[10px] text-muted-foreground">Nenhum dado do assessment para {resourceType}</p>
+                <Label className="text-xs">{label}{sensitive ? ` · ${t.sensitiveLabel}` : ''}</Label>
+                <p className="text-[10px] text-muted-foreground">{t.noAssessmentDataFor.replace('{resource}', resourceType)}</p>
                 <Input className="h-8 text-xs" type={sensitive ? 'password' : 'text'} value={current} onChange={(event) => onChange(event.target.value)} />
             </div>
         );
@@ -539,9 +542,9 @@ function AssessmentParameter({
 
     return (
         <div className="space-y-1">
-            <Label className="text-xs">{label} · assessment{sensitive ? ' · sensível' : ''}</Label>
+            <Label className="text-xs">{label} · assessment{sensitive ? ` · ${t.sensitiveLabel}` : ''}</Label>
             <Select value={current || undefined} onValueChange={onChange}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione do assessment" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.selectFromAssessment} /></SelectTrigger>
                 <SelectContent>
                     {visible.map((resource) => {
                         const optionValue = assessmentValue(resource, field);
@@ -585,6 +588,7 @@ function FieldEditor({
     onChange: (value: unknown) => void;
     onPatch: (patch: Record<string, unknown>) => void;
 }) {
+    const t = useTranslations('automation');
     const [templateParameters, setTemplateParameters] = useState<Array<{ name: string; type?: string; description?: string; default?: unknown; required?: boolean; noEcho?: boolean; allowedValues?: unknown[] }>>([]);
     const [templateResources, setTemplateResources] = useState<StackResource[]>([]);
     const [resources, setResources] = useState<AssessmentResource[]>([]);
@@ -657,7 +661,7 @@ function FieldEditor({
                     <Label className="text-xs">{field.label}</Label>
                     {field.acceptsBinding && (
                         <button type="button" className="text-[10px] text-primary" onClick={() => onChange({ type: 'VARIABLE', name: Object.keys(variables)[0] ?? '' })}>
-                            Vincular
+                            {t.bind}
                         </button>
                     )}
                 </div>
@@ -678,11 +682,11 @@ function FieldEditor({
             <div className="space-y-2">
                 <Label className="text-xs">{field.label}</Label>
                 <Select value={value ? String(value) : undefined} onValueChange={onChange}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.selectPlaceholder} /></SelectTrigger>
                     <SelectContent>
                         {templates.map((template) => (
                             <SelectItem key={template.id} value={template.id} className="text-xs">
-                                {template.name}{template.origin === 'PLATFORM' ? ' · plataforma' : ''}
+                                {template.name}{template.origin === 'PLATFORM' ? ` · ${t.platformLabel}` : ''}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -747,7 +751,7 @@ function FieldEditor({
                 <Label className="text-xs">{field.label} · assessment</Label>
                 {resources.length > 0 ? (
                     <Select value={value ? String(value) : undefined} onValueChange={onChange}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione do assessment" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.selectFromAssessment} /></SelectTrigger>
                         <SelectContent>
                             {resources.map((resource) => (
                                 <SelectItem key={resource.id} value={resource.id} className="text-xs">
@@ -757,7 +761,7 @@ function FieldEditor({
                         </SelectContent>
                     </Select>
                 ) : (
-                    <Input className="h-8 text-xs" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder="Nenhum dado do assessment" />
+                    <Input className="h-8 text-xs" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder={t.noAssessmentData} />
                 )}
             </div>
         );
@@ -814,11 +818,11 @@ function FieldEditor({
                     type="button"
                     className="text-xs text-primary"
                     onClick={() => {
-                        const key = `valor${entries.length + 1}`;
+                        const key = `${t.valueKeyPrefix}${entries.length + 1}`;
                         onChange({ ...record, [key]: '' });
                     }}
                 >
-                    Adicionar valor
+                    {t.addValue}
                 </button>
             </div>
         );
@@ -886,6 +890,7 @@ function BindingControl({
     sensitive?: boolean;
     onChange: (value: unknown) => void;
 }) {
+    const t = useTranslations('automation');
     const binding = value && typeof value === 'object' && 'type' in (value as object)
         ? (value as { type: string; name?: string; nodeId?: string; field?: string; value?: unknown; resourceType?: string; resourceId?: string })
         : null;
@@ -899,7 +904,7 @@ function BindingControl({
 
     return (
         <div className="space-y-1">
-            <Label className="text-xs">{label}{sensitive ? ' · sensível' : ''}</Label>
+            <Label className="text-xs">{label}{sensitive ? ` · ${t.sensitiveLabel}` : ''}</Label>
             <Select
                 value={mode}
                 onValueChange={(next) => {
@@ -915,10 +920,10 @@ function BindingControl({
             >
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                    {modes.includes('LITERAL') && <SelectItem value="LITERAL" className="text-xs">Valor fixo</SelectItem>}
-                    {modes.includes('VARIABLE') && <SelectItem value="VARIABLE" className="text-xs">Variável</SelectItem>}
-                    {modes.includes('NODE_OUTPUT') && <SelectItem value="NODE_OUTPUT" className="text-xs">Saída de bloco</SelectItem>}
-                    {modes.includes('EXISTING_RESOURCE') && <SelectItem value="EXISTING_RESOURCE" className="text-xs">Recurso existente</SelectItem>}
+                    {modes.includes('LITERAL') && <SelectItem value="LITERAL" className="text-xs">{t.fixedValue}</SelectItem>}
+                    {modes.includes('VARIABLE') && <SelectItem value="VARIABLE" className="text-xs">{t.variableValue}</SelectItem>}
+                    {modes.includes('NODE_OUTPUT') && <SelectItem value="NODE_OUTPUT" className="text-xs">{t.outputValue}</SelectItem>}
+                    {modes.includes('EXISTING_RESOURCE') && <SelectItem value="EXISTING_RESOURCE" className="text-xs">{t.resourceValue}</SelectItem>}
                 </SelectContent>
             </Select>
             {mode === 'LITERAL' && (
@@ -932,7 +937,7 @@ function BindingControl({
             {mode === 'VARIABLE' && (
                 Object.keys(variables).length > 0 ? (
                     <Select value={binding?.name || undefined} onValueChange={(name) => onChange({ type: 'VARIABLE', name })}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Variável" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.variableValue} /></SelectTrigger>
                         <SelectContent>
                             {Object.keys(variables).map((name) => (
                                 <SelectItem key={name} value={name} className="text-xs">{name}</SelectItem>
@@ -940,7 +945,7 @@ function BindingControl({
                         </SelectContent>
                     </Select>
                 ) : (
-                    <p className="text-[10px] text-muted-foreground">Crie uma variável no detalhe da automação</p>
+                    <p className="text-[10px] text-muted-foreground">{t.createVariableHint}</p>
                 )
             )}
             {mode === 'NODE_OUTPUT' && (
@@ -953,7 +958,7 @@ function BindingControl({
                             onChange({ type: 'NODE_OUTPUT', nodeId: sourceId, field: fields[0] ?? binding?.field ?? '' });
                         }}
                     >
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Bloco anterior" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.previousBlock} /></SelectTrigger>
                         <SelectContent>
                             {upstream.map((node) => (
                                 <SelectItem key={node.id} value={node.id} className="text-xs">{(node.data as AutomationNodeData).label}</SelectItem>
@@ -965,7 +970,7 @@ function BindingControl({
                             value={binding?.field || undefined}
                             onValueChange={(field) => onChange({ type: 'NODE_OUTPUT', nodeId: binding?.nodeId ?? '', field })}
                         >
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Campo" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.fieldPlaceholder} /></SelectTrigger>
                             <SelectContent>
                                 {upstreamFields.map((field) => (
                                     <SelectItem key={field} value={field} className="text-xs">{field}</SelectItem>
@@ -975,7 +980,7 @@ function BindingControl({
                     ) : (
                         <Input
                             className="h-8 text-xs"
-                            placeholder="Campo de saída"
+                            placeholder={t.outputFieldPlaceholder}
                             value={binding?.field ?? ''}
                             onChange={(event) => onChange({ type: 'NODE_OUTPUT', nodeId: binding?.nodeId ?? '', field: event.target.value })}
                         />
@@ -997,7 +1002,7 @@ function BindingControl({
                     </Select>
                     <Input
                         className="h-8 text-xs"
-                        placeholder="Id ou ARN"
+                        placeholder={t.resourceIdPlaceholder}
                         value={binding?.resourceId ?? ''}
                         onChange={(event) => onChange({ type: 'EXISTING_RESOURCE', resourceType: binding?.resourceType ?? defaultExistingType, resourceId: event.target.value })}
                     />

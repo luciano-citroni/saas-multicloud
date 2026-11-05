@@ -12,10 +12,12 @@ import type { FinopsJob, PaginationMeta } from '@/components/root/finops/overvie
 import { fetchFinopsJobs } from '@/app/actions/finops';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
 export function FinopsSyncHistory() {
+    const tf = useTranslations('finops');
     const router = useRouter();
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -55,12 +57,12 @@ export function FinopsSyncHistory() {
                 setJobs(normalizeJobs(payload));
                 setJobsPagination(normalizePagination(payload));
             } catch {
-                toast.error('Não foi possível carregar o histórico de sincronizações.');
+                toast.error(tf.syncHistoryLoadError);
             } finally {
                 setLoadingTable(false);
             }
         },
-        [router]
+        [router, tf.syncHistoryLoadError]
     );
 
     useEffect(() => {
@@ -77,7 +79,7 @@ export function FinopsSyncHistory() {
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
                     <p className="text-sm font-medium">Histórico de Sincronizações</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma organização e conta cloud na sidebar.</p>
+                    <p className="text-xs text-muted-foreground">{tf.selectOrgAndAccountSidebar}</p>
                 </div>
             </div>
         );

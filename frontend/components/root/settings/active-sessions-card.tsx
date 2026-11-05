@@ -104,7 +104,7 @@ export function ActiveSessionsCard({ sessions, isLoading, removingSessionId, dat
                     {sessions.length > 0 && (
                         <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                             <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                 <Select
                                     value={`${pageSize}`}
                                     onValueChange={(v) => {
@@ -126,7 +126,7 @@ export function ActiveSessionsCard({ sessions, isLoading, removingSessionId, dat
                             </div>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                                 <span className="text-sm font-medium">
-                                    Página {pageIndex + 1} de {totalPages}
+                                    {tc.pageOf.replace('{page}', String(pageIndex + 1)).replace('{pages}', String(totalPages))}
                                 </span>
                                 <div className="flex items-center gap-1 self-start sm:self-auto">
                                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>

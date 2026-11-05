@@ -400,7 +400,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
             const response = await revokeFinopsConsent(organizationId, account.id, account.provider);
             if (!response.ok) {
                 const payload = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
             setShowRevokeDialog(false);
@@ -435,10 +435,10 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Conta não encontrada</CardTitle>
+                    <CardTitle>{tf.accountNotFound}</CardTitle>
                     <CardDescription>
                         <Link href="/finops" className="underline">
-                            Voltar ao FinOps
+                            {tf.backToFinops}
                         </Link>
                     </CardDescription>
                 </CardHeader>
@@ -513,7 +513,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                             disabled={refreshing || hasConsent !== true}
                         >
                             <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                            Atualizar
+                            {tc.refresh}
                         </Button>
 
                         {canSync && (

@@ -1,6 +1,9 @@
 import type { JobStatusFilter } from '@/components/root/governance/overview/governance-jobs-filter-bar';
 import { JOB_STATUS_FILTER_ALL } from '@/components/root/governance/overview/governance-jobs-filter-bar';
 import type { GovernanceJob, PaginationMeta } from '@/components/root/governance/overview/types';
+import { getLocale } from '@/lib/locale';
+import { translations } from '@/lib/i18n/translations';
+import { formatDateTime } from '@/lib/i18n/format';
 
 export const DEFAULT_JOBS_PAGE = 1;
 export const DEFAULT_JOBS_LIMIT = 10;
@@ -85,19 +88,13 @@ export function scoreColor(score: number): string {
 }
 
 export function scoreLabel(score: number): string {
-    if (score >= 80) return 'Bom';
-    if (score >= 60) return 'Regular';
-    return 'Crítico';
+    const t = translations[getLocale()].governance;
+    if (score >= 80) return t.scoreGood;
+    if (score >= 60) return t.scoreFair;
+    return t.scoreCritical;
 }
 
 export function formatDate(dateStr: string | null): string {
-    if (!dateStr) return '-';
-
-    return new Date(dateStr).toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    if (!dateStr) return '—';
+    return formatDateTime(dateStr);
 }

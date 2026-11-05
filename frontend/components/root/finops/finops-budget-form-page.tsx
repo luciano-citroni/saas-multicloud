@@ -32,11 +32,15 @@ import {
 } from '@/app/actions/finops';
 import { fetchNotificationGroups } from '@/app/actions/notifications';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 const ORG_SCOPE_VALUE = 'organization';
 
-function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroupOption[] {
+function normalizeNotificationGroupsPayload(
+    payload: unknown,
+    fallbackName: string
+): NotificationGroupOption[] {
     const items = Array.isArray(payload)
         ? payload
         : Array.isArray((payload as { items?: unknown } | null)?.items)
@@ -47,7 +51,7 @@ function normalizeNotificationGroupsPayload(payload: unknown): NotificationGroup
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
         .map((item): NotificationGroupOption => ({
             id: String(item.id ?? ''),
-            name: String(item.name ?? 'Grupo'),
+            name: String(item.name ?? fallbackName),
             channel: item.channel === 'whatsapp' ? 'whatsapp' : 'email',
             isActive: item.isActive !== false,
         }))
@@ -102,6 +106,7 @@ type FinopsBudgetFormPageProps = {
 };
 
 export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPageProps) {
+    const t = useTranslations('finops');
     const router = useRouter();
     const searchParams = useSearchParams();
     const accountHint = searchParams.get('account');
@@ -149,8 +154,12 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
             ]);
             const emailPayload = emailResponse.ok ? await emailResponse.json().catch(() => null) : null;
             const whatsappPayload = whatsappResponse.ok ? await whatsappResponse.json().catch(() => null) : null;
-            const emails = normalizeNotificationGroupsPayload(emailPayload).filter((g) => g.isActive);
-            const whatsapps = normalizeNotificationGroupsPayload(whatsappPayload).filter((g) => g.isActive);
+            const emails = normalizeNotificationGroupsPayload(emailPayload, t.groupFallbackName).filter(
+                (g) => g.isActive
+            );
+            const whatsapps = normalizeNotificationGroupsPayload(whatsappPayload, t.groupFallbackName).filter(
+                (g) => g.isActive
+            );
             setEmailGroups(emails);
             setWhatsappGroups(whatsapps);
             return { emails, whatsapps };
@@ -161,7 +170,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
         } finally {
             setLoadingGroups(false);
         }
-    }, []);
+    }, [t]);
 
     const resolveBudget = useCallback(
         async (orgId: string, id: string): Promise<FinopsBudgetStatusItem | null> => {
@@ -262,7 +271,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
                     setFormValues(budgetToFormValues(budget, groups.emails, groups.whatsapps));
                 }
             } catch {
-                toast.error('Não foi possível carregar o formulário.');
+                toast.error(t.budgetFormLoadError);
                 if (!cancelled && mode === 'edit') setNotFound(true);
             } finally {
                 if (!cancelled) setLoading(false);
@@ -281,6 +290,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
         accountHint,
         loadNotificationGroups,
         resolveBudget,
+        t,
     ]);
 
     const onSubmit = async (data: BudgetFormData) => {
@@ -296,18 +306,18 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
 
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
-            toast.success(mode === 'edit' ? 'Orçamento atualizado.' : 'Orçamento criado.');
+            toast.success(mode === 'edit' ? t.budgetUpdated : t.budgetCreated);
 
             // Volta para a visão completa para não “esconder” budgets de outro escopo.
             const params = new URLSearchParams();
             params.set('account', ORG_SCOPE_VALUE);
             router.push(`/finops/budgets?${params.toString()}`);
         } catch {
-            toast.error('Não foi possível salvar o orçamento.');
+            toast.error(t.budgetSaveError);
         }
     };
 
@@ -316,8 +326,8 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
             <div className="flex flex-col gap-6">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Orçamentos</h1>
-                        <p className="text-sm text-muted-foreground">Selecione uma organização na sidebar.</p>
+                        <h1 className="text-xl font-semibold tracking-tight">{t.budgetsTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{t.selectOrgSidebar}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -331,11 +341,9 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
                 <div className="space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">
-                            {mode === 'edit' ? 'Editar orçamento' : 'Novo orçamento'}
+                            {mode === 'edit' ? t.editBudget : t.newBudget}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Apenas administradores podem criar ou editar orçamentos.
-                        </p>
+                        <p className="text-sm text-muted-foreground">{t.budgetAdminOnly}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -349,10 +357,8 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
                 <div className="flex flex-col gap-6">
                     <div className="space-y-3">
                         <div>
-                            <h1 className="text-xl font-semibold tracking-tight">Orçamento não encontrado</h1>
-                            <p className="text-sm text-muted-foreground">
-                                O orçamento pode ter sido removido ou não pertence a esta organização.
-                            </p>
+                            <h1 className="text-xl font-semibold tracking-tight">{t.budgetNotFoundTitle}</h1>
+                            <p className="text-sm text-muted-foreground">{t.budgetNotFoundDesc}</p>
                         </div>
                         <FinopsSubnav />
                     </div>
@@ -367,10 +373,8 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
             <div className="flex flex-col gap-6">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Orçamento não encontrado</h1>
-                        <p className="text-sm text-muted-foreground">
-                            O orçamento pode ter sido removido ou não pertence a esta organização.
-                        </p>
+                        <h1 className="text-xl font-semibold tracking-tight">{t.budgetNotFoundTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{t.budgetNotFoundDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>

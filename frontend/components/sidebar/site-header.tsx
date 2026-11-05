@@ -4,32 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-
-const navMain = [{ title: 'Dashboard', url: '/' }];
-
-const routeNames: Record<string, string> = {
-    organizations: 'Organizações',
-    new: 'Nova',
-    billing: 'Planos e Regras',
-    settings: 'Configurações',
-    notifications: 'Notificações',
-    'cloud-accounts': 'Contas Cloud',
-    edit: 'Editar',
-    assessment: 'Assessment',
-    governance: 'Governança',
-    analysis: 'Análise',
-    finops: 'FinOps',
-    anomalies: 'Anomalias',
-    savings: 'Economia potencial',
-    multicloud: 'Multicloud',
-    budgets: 'Orçamentos',
-    reports: 'Relatórios',
-    accounts: 'Contas',
-    tenant: 'Tenant',
-    users: 'Usuários',
-    automation: 'Automação',
-    members: 'Usuários',
-};
+import { useTranslations } from '@/lib/i18n';
 
 function isId(segment: string) {
     return segment.length > 20 || /^[0-9]+$/.test(segment);
@@ -37,6 +12,32 @@ function isId(segment: string) {
 
 export function SiteHeader() {
     const pathname = usePathname();
+    const nav = useTranslations('nav');
+    const finops = useTranslations('finops');
+
+    const routeNames: Record<string, string> = {
+        organizations: nav.organizations,
+        new: nav.breadcrumbNew,
+        billing: nav.breadcrumbBilling,
+        settings: nav.settings,
+        notifications: nav.notifications,
+        'cloud-accounts': nav.cloudAccounts,
+        edit: nav.breadcrumbEdit,
+        assessment: nav.assessment,
+        governance: nav.governance,
+        analysis: nav.breadcrumbAnalysis,
+        finops: nav.finops,
+        anomalies: finops.subnavAnomalies,
+        savings: finops.subnavSavings,
+        multicloud: finops.subnavMulticloud,
+        budgets: finops.subnavBudgets,
+        reports: finops.subnavReports,
+        accounts: nav.breadcrumbAccounts,
+        tenant: nav.tenant,
+        users: nav.users,
+        automation: nav.automation,
+        members: nav.members,
+    };
 
     const rawSegments = pathname.split('/').filter(Boolean);
 
@@ -59,10 +60,7 @@ export function SiteHeader() {
         }
 
         const url = `/${rawSegments.slice(0, i + 1).join('/')}`;
-
-        const found = navMain.find((item) => item.url === url);
-
-        const title = found?.title ?? routeNames[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
+        const title = routeNames[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
 
         breadcrumbs.push({ title, url });
 
@@ -77,7 +75,7 @@ export function SiteHeader() {
                 <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
 
                 <nav aria-label="Breadcrumb" className="text-base font-medium flex items-center gap-2">
-                    {breadcrumbs.length === 0 && <span>Dashboard</span>}
+                    {breadcrumbs.length === 0 && <span>{nav.dashboard}</span>}
 
                     {breadcrumbs.map((crumb, index) => (
                         <span key={crumb.url} className="flex items-center gap-2">

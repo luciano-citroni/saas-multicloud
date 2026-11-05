@@ -13,13 +13,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { automationNodeTypes, type AutomationNodeData } from './automation-nodes';
 import { Ec2ConfigForm } from './ec2-config-form';
 import type { FlowDefinition, FlowNode, ResourceType } from '@/app/actions/automation';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 const PALETTE_ITEMS = [
-    { type: 'ec2', label: 'EC2', description: 'Instância virtual', icon: Server, color: 'bg-orange-500' },
-    { type: 's3', label: 'S3', description: 'Armazenamento de objetos', icon: HardDrive, color: 'bg-green-500' },
-    { type: 'rds', label: 'RDS', description: 'Banco de dados gerenciado', icon: Database, color: 'bg-blue-500' },
-    { type: 'lambda', label: 'Lambda', description: 'Computação serverless', icon: Zap, color: 'bg-purple-500' },
+    { type: 'ec2', label: 'EC2', icon: Server, color: 'bg-orange-500' },
+    { type: 's3', label: 'S3', icon: HardDrive, color: 'bg-green-500' },
+    { type: 'rds', label: 'RDS', icon: Database, color: 'bg-blue-500' },
+    { type: 'lambda', label: 'Lambda', icon: Zap, color: 'bg-purple-500' },
 ] as const;
 
 const DEFAULT_CONFIGS: Record<string, Record<string, unknown>> = {
@@ -31,6 +32,7 @@ const DEFAULT_CONFIGS: Record<string, Record<string, unknown>> = {
 
 
 function S3ConfigForm({ config, onChange }: { config: Record<string, unknown>; onChange: (k: string, v: unknown) => void }) {
+    const t = useTranslations('automation');
     return (
         <div className="space-y-3">
             <div className="space-y-1">
@@ -42,26 +44,27 @@ function S3ConfigForm({ config, onChange }: { config: Record<string, unknown>; o
                 <RegionSelect value={String(config.region ?? 'us-east-1')} onChange={(v) => onChange('region', v)} />
             </div>
             <div className="space-y-1">
-                <Label className="text-xs">Storage estimado (GB)</Label>
+                <Label className="text-xs">{t.s3StorageEstimate}</Label>
                 <Input className="h-8 text-xs" type="number" min={1} value={Number(config.storageGb ?? 10)} onChange={(e) => onChange('storageGb', Number(e.target.value))} />
             </div>
             <div className="flex items-center gap-2">
                 <Checkbox checked={Boolean(config.versioning)} onCheckedChange={(v) => onChange('versioning', Boolean(v))} />
-                <Label className="text-xs">Versionamento</Label>
+                <Label className="text-xs">{t.s3Versioning}</Label>
             </div>
             <div className="flex items-center gap-2">
                 <Checkbox checked={config.encryption !== false} onCheckedChange={(v) => onChange('encryption', Boolean(v))} />
-                <Label className="text-xs">Criptografia AES-256</Label>
+                <Label className="text-xs">{t.s3Encryption}</Label>
             </div>
         </div>
     );
 }
 
 function RdsConfigForm({ config, onChange }: { config: Record<string, unknown>; onChange: (k: string, v: unknown) => void }) {
+    const t = useTranslations('automation');
     return (
         <div className="space-y-3">
             <div className="space-y-1">
-                <Label className="text-xs">Identificador</Label>
+                <Label className="text-xs">{t.rdsIdentifier}</Label>
                 <Input className="h-8 text-xs" value={String(config.dbInstanceIdentifier ?? '')} onChange={(e) => onChange('dbInstanceIdentifier', e.target.value)} placeholder="my-db-instance" />
             </div>
             <div className="space-y-1">
@@ -156,12 +159,13 @@ function LambdaConfigForm({ config, onChange }: { config: Record<string, unknown
 }
 
 function RegionSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const t = useTranslations('automation');
     const regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1', 'eu-west-2', 'eu-central-1', 'ap-southeast-1', 'ap-northeast-1', 'sa-east-1'];
     return (
         <Combobox items={regions} value={value} onValueChange={(v) => { if (v) onChange(v); }}>
-            <ComboboxInput placeholder="Buscar região..." className="h-8 text-xs" />
+            <ComboboxInput placeholder={t.searchRegion} className="h-8 text-xs" />
             <ComboboxContent>
-                <ComboboxEmpty className="text-xs">Região não encontrada.</ComboboxEmpty>
+                <ComboboxEmpty className="text-xs">{t.regionNotFound}</ComboboxEmpty>
                 <ComboboxList>
                     {(r: string) => (
                         <ComboboxItem key={r} value={r} className="text-xs">{r}</ComboboxItem>
@@ -179,6 +183,7 @@ type Props = {
 };
 
 export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId }: Props) {
+    const t = useTranslations('automation');
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -260,8 +265,8 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
         <div className="flex h-140 overflow-hidden rounded-xl border">
             {/* Node palette */}
             <div className="flex w-52 shrink-0 flex-col gap-2 border-r bg-muted/30 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recursos</p>
-                {PALETTE_ITEMS.map(({ type, label, description, icon: Icon, color }) => (
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t.paletteResources}</p>
+                {PALETTE_ITEMS.map(({ type, label, icon: Icon, color }) => (
                     <button
                         key={type}
                         onClick={() => addNode(type)}
@@ -272,12 +277,14 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs font-semibold">{label}</p>
-                            <p className="truncate text-[10px] text-muted-foreground">{description}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                                {type === 'ec2' ? t.paletteEc2 : type === 's3' ? t.paletteS3 : type === 'rds' ? t.paletteRds : t.paletteLambda}
+                            </p>
                         </div>
                     </button>
                 ))}
                 {nodes.length === 0 && (
-                    <p className="mt-4 text-center text-[11px] text-muted-foreground">Clique em um recurso para adicioná-lo ao canvas</p>
+                    <p className="mt-4 text-center text-[11px] text-muted-foreground">{t.paletteEmptyHint}</p>
                 )}
             </div>
 
@@ -307,7 +314,7 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
                     <div className="flex items-center justify-between border-b px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
                             <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-semibold">Configurar recurso</span>
+                            <span className="text-xs font-semibold">{t.configureResource}</span>
                         </div>
                         <button
                             onClick={() => deleteNode(selectedNode.id)}
@@ -337,7 +344,7 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
             {!selectedNode && nodes.length > 0 && (
                 <div className="flex w-56 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center">
                     <ChevronRight className="h-6 w-6 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground px-4">Clique em um node para configurá-lo</p>
+                    <p className="text-xs text-muted-foreground px-4">{t.clickNodeToConfigure}</p>
                 </div>
             )}
         </div>

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { translateGovernanceResourceType, translateGovernanceSeverity } from '@/lib/governance-translations';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export const RESOURCE_TYPE_FILTER_ALL = 'all' as const;
@@ -15,14 +16,6 @@ export const SEVERITY_FILTER_ALL = 'all' as const;
 
 export type SeverityFilter = typeof SEVERITY_FILTER_ALL | 'low' | 'medium' | 'high' | 'critical';
 export type ResourceTypeFilter = typeof RESOURCE_TYPE_FILTER_ALL | string;
-
-const SEVERITY_OPTIONS: Array<{ value: SeverityFilter; label: string }> = [
-    { value: 'all', label: 'Todas as criticidades' },
-    { value: 'critical', label: translateGovernanceSeverity('critical') },
-    { value: 'high', label: translateGovernanceSeverity('high') },
-    { value: 'medium', label: translateGovernanceSeverity('medium') },
-    { value: 'low', label: translateGovernanceSeverity('low') },
-];
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -60,11 +53,20 @@ function FilterFields({
     onSeverityChange: (value: SeverityFilter) => void;
     onResourceTypeChange: (value: ResourceTypeFilter) => void;
 }) {
+    const tg = useTranslations('governance');
+    const severityOptions: Array<{ value: SeverityFilter; label: string }> = [
+        { value: 'all', label: tg.allCriticalities },
+        { value: 'critical', label: translateGovernanceSeverity('critical') },
+        { value: 'high', label: translateGovernanceSeverity('high') },
+        { value: 'medium', label: translateGovernanceSeverity('medium') },
+        { value: 'low', label: translateGovernanceSeverity('low') },
+    ];
+
     return (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                 <label htmlFor="governance-findings-search" className="text-xs font-medium text-muted-foreground">
-                    Busca
+                    {tg.searchLabel}
                 </label>
                 <div className="relative">
                     <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -72,13 +74,13 @@ function FilterFields({
                         id="governance-findings-search"
                         value={draftName}
                         onChange={(event) => onDraftNameChange(event.target.value)}
-                        placeholder="Política, tipo ou recurso"
+                        placeholder={tg.searchPlaceholder}
                         className="w-full pr-9 pl-9"
                     />
                     {draftName.trim().length > 0 && (
                         <button
                             type="button"
-                            aria-label="Limpar busca"
+                            aria-label={tg.clearSearch}
                             className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                             onClick={() => onDraftNameChange('')}
                         >
@@ -90,14 +92,14 @@ function FilterFields({
 
             <div className="space-y-1.5">
                 <label htmlFor="governance-findings-severity" className="text-xs font-medium text-muted-foreground">
-                    Criticidade
+                    {tg.criticality}
                 </label>
                 <Select value={severityFilter} onValueChange={(value) => onSeverityChange(value as SeverityFilter)}>
                     <SelectTrigger id="governance-findings-severity" className="w-full">
-                        <SelectValue placeholder="Todas as criticidades" />
+                        <SelectValue placeholder={tg.allCriticalities} />
                     </SelectTrigger>
                     <SelectContent>
-                        {SEVERITY_OPTIONS.map((option) => (
+                        {severityOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                             </SelectItem>
@@ -108,17 +110,17 @@ function FilterFields({
 
             <div className="space-y-1.5">
                 <label htmlFor="governance-findings-resource-type" className="text-xs font-medium text-muted-foreground">
-                    Tipo de recurso
+                    {tg.resourceType}
                 </label>
                 <Select
                     value={resourceTypeFilter}
                     onValueChange={(value) => onResourceTypeChange(value as ResourceTypeFilter)}
                 >
                     <SelectTrigger id="governance-findings-resource-type" className="w-full">
-                        <SelectValue placeholder="Todos os tipos" />
+                        <SelectValue placeholder={tg.allTypes} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={RESOURCE_TYPE_FILTER_ALL}>Todos os tipos</SelectItem>
+                        <SelectItem value={RESOURCE_TYPE_FILTER_ALL}>{tg.allTypes}</SelectItem>
                         {resourceTypeOptions.map((resourceType) => (
                             <SelectItem key={resourceType} value={resourceType}>
                                 {translateGovernanceResourceType(resourceType)}
@@ -147,6 +149,7 @@ export function GovernanceAnalysisFilterBar({
     onClear,
     className,
 }: GovernanceAnalysisFilterBarProps) {
+    const tg = useTranslations('governance');
     const [sheetOpen, setSheetOpen] = useState(false);
     const [draftName, setDraftName] = useState(nameFilter);
     const onNameChangeRef = useRef(onNameChange);
@@ -178,7 +181,7 @@ export function GovernanceAnalysisFilterBar({
     if (nameFilter.trim().length > 0) {
         activeChips.push({
             key: 'name',
-            label: `Busca: ${nameFilter.trim()}`,
+            label: tg.chipSearch.replace('{value}', nameFilter.trim()),
             onClear: () => {
                 setDraftName('');
                 onNameChange('');
@@ -189,7 +192,7 @@ export function GovernanceAnalysisFilterBar({
     if (severityFilter !== SEVERITY_FILTER_ALL) {
         activeChips.push({
             key: 'severity',
-            label: `Criticidade: ${translateGovernanceSeverity(severityFilter)}`,
+            label: tg.chipCriticality.replace('{value}', translateGovernanceSeverity(severityFilter)),
             onClear: () => onSeverityChange(SEVERITY_FILTER_ALL),
         });
     }
@@ -197,7 +200,7 @@ export function GovernanceAnalysisFilterBar({
     if (resourceTypeFilter !== RESOURCE_TYPE_FILTER_ALL) {
         activeChips.push({
             key: 'resourceType',
-            label: `Tipo: ${translateGovernanceResourceType(resourceTypeFilter)}`,
+            label: tg.chipType.replace('{value}', translateGovernanceResourceType(resourceTypeFilter)),
             onClear: () => onResourceTypeChange(RESOURCE_TYPE_FILTER_ALL),
         });
     }
@@ -214,22 +217,22 @@ export function GovernanceAnalysisFilterBar({
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                     <Filter className="size-4 text-muted-foreground" />
-                    Filtros
+                    {tg.filters}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">
-                        {totalFiltered} de {totalFindings} achados
+                        {tg.filteredOfTotal.replace('{filtered}', String(totalFiltered)).replace('{total}', String(totalFindings))}
                     </span>
 
                     <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
-                        <SelectTrigger className="h-8 w-[7.5rem]" aria-label="Itens por página">
+                        <SelectTrigger className="h-8 w-[7.5rem]" aria-label={tg.itemsPerPage}>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             {pageSizeOptions.map((size) => (
                                 <SelectItem key={size} value={String(size)}>
-                                    {size}/pág.
+                                    {tg.perPageOption.replace('{size}', String(size))}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -238,7 +241,7 @@ export function GovernanceAnalysisFilterBar({
                     {hasActiveFilters && (
                         <Button type="button" size="sm" variant="ghost" onClick={handleClear}>
                             <RotateCcw className="size-3.5" />
-                            Limpar
+                            {tg.clear}
                         </Button>
                     )}
 
@@ -246,13 +249,13 @@ export function GovernanceAnalysisFilterBar({
                         <SheetTrigger asChild>
                             <Button type="button" size="sm" variant="outline" className="lg:hidden">
                                 <Filter className="size-3.5" />
-                                Ajustar
+                                {tg.adjust}
                                 {hasActiveFilters ? ` (${activeChips.length})` : ''}
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
                             <SheetHeader>
-                                <SheetTitle>Filtros da análise</SheetTitle>
+                                <SheetTitle>{tg.analysisFiltersTitle}</SheetTitle>
                             </SheetHeader>
                             <div className="mt-4 space-y-4 pb-6">
                                 <FilterFields
@@ -265,7 +268,7 @@ export function GovernanceAnalysisFilterBar({
                                     onResourceTypeChange={onResourceTypeChange}
                                 />
                                 <Button type="button" className="w-full" onClick={() => setSheetOpen(false)}>
-                                    Aplicar
+                                    {tg.apply}
                                 </Button>
                             </div>
                         </SheetContent>
@@ -294,7 +297,7 @@ export function GovernanceAnalysisFilterBar({
                                 type="button"
                                 className="rounded-full p-0.5 hover:bg-muted"
                                 onClick={chip.onClear}
-                                aria-label={`Remover filtro ${chip.label}`}
+                                aria-label={tg.removeFilter.replace('{label}', chip.label)}
                             >
                                 <X className="size-3" />
                             </button>

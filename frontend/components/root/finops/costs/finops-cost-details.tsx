@@ -14,13 +14,14 @@ import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { fetchFinopsCostByService } from '@/app/actions/finops';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useLocale } from '@/components/providers/locale-provider';
+import { useTranslations, toIntlLocale } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
-const MONTH_NAMES = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
+function formatMonthName(year: number, monthIndex: number, intlLocale: string, style: 'long' | 'short') {
+    return new Intl.DateTimeFormat(intlLocale, { month: style }).format(new Date(year, monthIndex, 1));
+}
 
 // ─── Service name shortcuts ───────────────────────────────────────────────────
 
@@ -104,11 +105,12 @@ function shortenServiceName(name: string): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function TrendBadge({ trend, changePercentage }: { trend: 'up' | 'down' | 'stable'; changePercentage: number }) {
+    const tf = useTranslations('finops');
     if (trend === 'stable') {
         return (
             <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
                 <Minus className="size-3 shrink-0" />
-                <span className="hidden sm:inline">estável</span>
+                <span className="hidden sm:inline">{tf.trendStable}</span>
             </span>
         );
     }
@@ -141,6 +143,10 @@ function SkeletonRow() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FinopsCostDetails() {
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
+    const { locale } = useLocale();
+    const intlLocale = toIntlLocale(locale);
     const router = useRouter();
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -166,7 +172,7 @@ export function FinopsCostDetails() {
             try {
                 const res = await fetchFinopsCostByService(orgId, cloudId, y, m);
                 if (res.status === 401) {
-                    toast.error('Sua sessão expirou.');
+                    toast.error(tc.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
@@ -178,12 +184,12 @@ export function FinopsCostDetails() {
                 const data = await res.json().catch(() => []);
                 setItems(Array.isArray(data) ? data : []);
             } catch {
-                toast.error('Não foi possível carregar os dados de custo.');
+                toast.error(tf.costDataLoadError);
             } finally {
                 setLoading(false);
             }
         },
-        [router],
+        [router, tf.costDataLoadError],
     );
 
     useEffect(() => {
@@ -227,7 +233,7 @@ export function FinopsCostDetails() {
 
     const chartConfig = {
         currentMonthCost: {
-            label: 'Custo do mês',
+            label: tf.monthCost,
             color: 'var(--chart-1)',
         },
     } satisfies ChartConfig;
@@ -236,18 +242,20 @@ export function FinopsCostDetails() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Detalhes de Custos</CardTitle>
+                    <CardTitle>{tf.costDetailsTitle}</CardTitle>
                     <CardDescription>
-                        Selecione uma organização e uma conta cloud na sidebar para visualizar os custos por serviço.
+                        {tf.selectOrgAndAccountForCosts}
                     </CardDescription>
                 </CardHeader>
             </Card>
         );
     }
 
-    const prevMonthLabel = month === 1
-        ? `Dez ${year - 1}`
-        : `${MONTH_NAMES[month - 2].slice(0, 3)} ${year}`;
+    const prevMonthIndex = month === 1 ? 11 : month - 2;
+    const prevMonthYear = month === 1 ? year - 1 : year;
+    const prevMonthLabel = `${formatMonthName(prevMonthYear, prevMonthIndex, intlLocale, 'short')} ${prevMonthYear}`;
+    const serviceCountLabel = (serviceItems.length === 1 ? tf.costServiceOne : tf.costServiceMany).replace('{count}', String(serviceItems.length));
+    const creditCountLabel = (creditItems.length === 1 ? tf.costCreditOne : tf.costCreditMany).replace('{count}', String(creditItems.length));
 
     return (
         <div className="flex flex-col gap-4">
@@ -256,10 +264,10 @@ export function FinopsCostDetails() {
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Custos por Serviço</p>
+                        <p className="text-sm font-medium">{tf.costByServiceTitle}</p>
                         <p className="text-xs text-muted-foreground">
-                            {MONTH_NAMES[month - 1]} {year}
-                            {!loading && ` — ${serviceItems.length} serviço${serviceItems.length !== 1 ? 's' : ''}${hasCredits ? `, ${creditItems.length} crédito${creditItems.length !== 1 ? 's' : ''}` : ''}`}
+                            {formatMonthName(year, month - 1, intlLocale, 'long')} {year}
+                            {!loading && ` — ${serviceCountLabel}${hasCredits ? `, ${creditCountLabel}` : ''}`}
                         </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -267,7 +275,7 @@ export function FinopsCostDetails() {
                             <ChevronLeft className="size-4" />
                         </Button>
                         <span className="min-w-27.5 text-center text-sm font-medium tabular-nums">
-                            {MONTH_NAMES[month - 1].slice(0, 3)} {year}
+                            {formatMonthName(year, month - 1, intlLocale, 'short')} {year}
                         </span>
                         <Button variant="outline" size="icon" className="size-8" onClick={goNextMonth} disabled={isCurrentMonth}>
                             <ChevronRight className="size-4" />
@@ -278,30 +286,30 @@ export function FinopsCostDetails() {
                 {/* ── Summary cards ── */}
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">{hasCredits ? 'Custo bruto' : 'Total do mês'}</p>
+                        <p className="text-xs text-muted-foreground">{hasCredits ? tf.costGross : tf.costMonthTotal}</p>
                         <p className="mt-1 text-xl font-bold">
                             {loading ? <span className="text-muted-foreground">—</span> : formatCurrency(hasCredits ? grossCost : totalCost, currency)}
                         </p>
                         {!loading && hasCredits && (
                             <p className="mt-0.5 text-xs text-muted-foreground">
-                                líquido: <span className="font-medium text-foreground">{formatCurrency(totalCost, currency)}</span>
+                                <span className="font-medium text-foreground">{tf.costNet.replace('{amount}', formatCurrency(totalCost, currency))}</span>
                             </p>
                         )}
                     </div>
 
                     {hasCredits ? (
                         <div className="rounded-lg border border-green-200 bg-green-50/60 p-3 dark:border-green-900 dark:bg-green-950/30">
-                            <p className="text-xs text-green-700 dark:text-green-400">Créditos aplicados</p>
+                            <p className="text-xs text-green-700 dark:text-green-400">{tf.costCreditsApplied}</p>
                             <p className="mt-1 text-xl font-bold text-green-700 dark:text-green-400">
                                 {loading ? '—' : formatCurrency(totalCredits, currency)}
                             </p>
                             <p className="mt-0.5 text-xs text-green-600/70 dark:text-green-500/70">
-                                {creditItems.length} item{creditItems.length !== 1 ? 's' : ''}
+                                {(creditItems.length === 1 ? tf.costCreditItemsOne : tf.costCreditItemsMany).replace('{count}', String(creditItems.length))}
                             </p>
                         </div>
                     ) : (
                         <div className="rounded-lg border p-3">
-                            <p className="text-xs text-muted-foreground">Em alta (&gt;10%)</p>
+                            <p className="text-xs text-muted-foreground">{tf.costRising}</p>
                             <p className={cn('mt-1 text-xl font-bold', !loading && increasingServices.length > 0 ? 'text-destructive' : '')}>
                                 {loading ? '—' : increasingServices.length}
                             </p>
@@ -315,7 +323,7 @@ export function FinopsCostDetails() {
                     )}
 
                     <div className="col-span-2 rounded-lg border p-3 sm:col-span-1">
-                        <p className="text-xs text-muted-foreground">Maior serviço</p>
+                        <p className="text-xs text-muted-foreground">{tf.costTopService}</p>
                         {!loading && serviceItems.length > 0 ? (
                             <>
                                 <p className="mt-1 truncate text-base font-bold">
@@ -337,9 +345,11 @@ export function FinopsCostDetails() {
             {!loading && chartItems.length > 0 && (
                 <div className="rounded-xl border">
                     <div className="border-b px-4 py-3">
-                        <p className="text-sm font-medium">Top {chartItems.length} serviços</p>
+                        <p className="text-sm font-medium">{tf.costTopServices.replace('{count}', String(chartItems.length))}</p>
                         <p className="text-xs text-muted-foreground">
-                            Em <span className="text-destructive font-medium">vermelho</span>: aumento &gt;10% vs {prevMonthLabel}
+                            {tf.costIncreaseHint.replace('{month}', prevMonthLabel).split(tf.costIncreaseWord)[0]}
+                            <span className="text-destructive font-medium">{tf.costIncreaseWord}</span>
+                            {tf.costIncreaseHint.replace('{month}', prevMonthLabel).split(tf.costIncreaseWord)[1]}
                         </p>
                     </div>
                     <div className="p-4">
@@ -408,8 +418,8 @@ export function FinopsCostDetails() {
             {/* ── Table ── */}
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Detalhamento completo</p>
-                    <p className="text-xs text-muted-foreground">Comparação com {prevMonthLabel}</p>
+                    <p className="text-sm font-medium">{tf.costFullBreakdown}</p>
+                    <p className="text-xs text-muted-foreground">{tf.costCompareWith.replace('{month}', prevMonthLabel)}</p>
                 </div>
 
                 {loading ? (
@@ -420,20 +430,22 @@ export function FinopsCostDetails() {
                     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                         <BarChart2 className="size-8 text-muted-foreground" />
                         <p className="text-sm text-muted-foreground">
-                            Nenhum dado para {MONTH_NAMES[month - 1]} {year}.
+                            {tf.noDataForMonth
+                                .replace('{month}', new Date(year, month - 1, 1).toLocaleDateString(intlLocale, { month: 'long' }))
+                                .replace('{year}', String(year))}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            Realize uma sincronização FinOps para coletar dados deste período.
+                            {tf.costSyncPeriodHint}
                         </p>
                     </div>
                 ) : (
                     <>
                         {/* Header row */}
                         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_auto_auto_auto]">
-                            <span>Serviço</span>
-                            <span className="text-right">Mês atual</span>
+                            <span>{tf.reportService}</span>
+                            <span className="text-right">{tf.periodCurrentMonth}</span>
                             <span className="hidden text-right sm:block">{prevMonthLabel}</span>
-                            <span className="text-right">Var.</span>
+                            <span className="text-right">{tf.costColVariation}</span>
                         </div>
 
                         {/* Regular service rows */}
@@ -456,7 +468,7 @@ export function FinopsCostDetails() {
                                             <p className="truncate text-sm font-medium">
                                                 {shortenServiceName(item.service)}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">{share}% do total</p>
+                                            <p className="text-xs text-muted-foreground">{tf.costShareOfTotal.replace('{share}', share)}</p>
                                         </div>
 
                                         <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
@@ -482,7 +494,7 @@ export function FinopsCostDetails() {
                             <>
                                 <div className="flex items-center gap-2 border-t bg-green-50/60 px-4 py-2 dark:bg-green-950/20">
                                     <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                        Créditos &amp; Reembolsos
+                                        {tf.costCreditsRefunds}
                                     </span>
                                     <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
                                         {creditItems.length}
@@ -498,7 +510,7 @@ export function FinopsCostDetails() {
                                                 <p className="truncate text-sm font-medium text-green-800 dark:text-green-300">
                                                     {shortenServiceName(item.service)}
                                                 </p>
-                                                <p className="text-xs text-green-600/70 dark:text-green-500/60">crédito aplicado</p>
+                                                <p className="text-xs text-green-600/70 dark:text-green-500/60">{tf.costCreditApplied}</p>
                                             </div>
 
                                             <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-green-700 dark:text-green-400">
@@ -510,7 +522,7 @@ export function FinopsCostDetails() {
                                             <div className="shrink-0 text-right">
                                                 <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-green-700 dark:text-green-400">
                                                     <TrendingDown className="size-3 shrink-0" />
-                                                    crédito
+                                                    {tf.costCreditBadge}
                                                 </span>
                                             </div>
                                         </div>

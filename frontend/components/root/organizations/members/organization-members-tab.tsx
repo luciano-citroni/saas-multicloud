@@ -272,7 +272,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                         {paginatedMembers.length === 0 ? (
                                             <TableRow>
                                                 <TableCell colSpan={canManage ? 5 : 4} className="h-24 text-center text-muted-foreground">
-                                                    Nenhum membro encontrado para os filtros aplicados.
+                                                    {t.membersFilterEmpty}
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
@@ -326,7 +326,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                             </div>
                             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                    <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                    <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                     <Select value={`${memberPageSize}`} onValueChange={(v) => { setMemberPageSize(Number(v)); setMemberPageIndex(0); }}>
                                         <SelectTrigger className="h-8 min-w-22"><SelectValue /></SelectTrigger>
                                         <SelectContent>
@@ -335,7 +335,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                     </Select>
                                 </div>
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                                    <span className="text-sm font-medium">Página {memberPageIndex + 1} de {memberTotalPages}</span>
+                                    <span className="text-sm font-medium">{tc.pageOf.replace('{page}', String(memberPageIndex + 1)).replace('{pages}', String(memberTotalPages))}</span>
                                     <div className="flex items-center gap-1 self-start sm:self-auto">
                                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setMemberPageIndex(0)} disabled={memberPageIndex === 0}>
                                             <ChevronsLeft className="h-4 w-4" />
@@ -396,7 +396,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                         {paginatedInvites.length === 0 ? (
                                             <TableRow>
                                                 <TableCell colSpan={canManage ? 5 : 4} className="h-24 text-center text-muted-foreground">
-                                                    Nenhum convite encontrado para os filtros aplicados.
+                                                    {t.invitesFilterEmpty}
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
@@ -448,7 +448,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                             </div>
                             <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                    <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                    <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                     <Select value={`${invitePageSize}`} onValueChange={(v) => { setInvitePageSize(Number(v)); setInvitePageIndex(0); }}>
                                         <SelectTrigger className="h-8 min-w-22"><SelectValue /></SelectTrigger>
                                         <SelectContent>
@@ -457,7 +457,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                     </Select>
                                 </div>
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                                    <span className="text-sm font-medium">Página {invitePageIndex + 1} de {inviteTotalPages}</span>
+                                    <span className="text-sm font-medium">{tc.pageOf.replace('{page}', String(invitePageIndex + 1)).replace('{pages}', String(inviteTotalPages))}</span>
                                     <div className="flex items-center gap-1 self-start sm:self-auto">
                                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setInvitePageIndex(0)} disabled={invitePageIndex === 0}>
                                             <ChevronsLeft className="h-4 w-4" />

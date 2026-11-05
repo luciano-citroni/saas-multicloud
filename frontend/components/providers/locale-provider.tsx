@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { type AppLocale, DEFAULT_LOCALE, LOCALE_STORAGE_KEY, setLocale } from '@/lib/locale';
+import { toHtmlLang } from '@/lib/i18n/format';
 
 type LocaleContextValue = {
     locale: AppLocale;
@@ -13,6 +14,12 @@ const LocaleContext = createContext<LocaleContextValue>({
     changeLocale: () => {},
 });
 
+function syncDocumentLang(locale: AppLocale) {
+    if (typeof document !== 'undefined') {
+        document.documentElement.lang = toHtmlLang(locale);
+    }
+}
+
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
     const [locale, setLocaleState] = useState<AppLocale>(DEFAULT_LOCALE);
 
@@ -21,12 +28,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
         const resolved: AppLocale = stored === 'en' || stored === 'pt' ? stored : DEFAULT_LOCALE;
         setLocaleState(resolved);
         setLocale(resolved);
+        syncDocumentLang(resolved);
     }, []);
 
     const changeLocale = useCallback((next: AppLocale) => {
         localStorage.setItem(LOCALE_STORAGE_KEY, next);
         setLocale(next);
         setLocaleState(next);
+        syncDocumentLang(next);
     }, []);
 
     return <LocaleContext.Provider value={{ locale, changeLocale }}>{children}</LocaleContext.Provider>;

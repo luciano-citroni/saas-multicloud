@@ -174,7 +174,7 @@ export function MyForm() {
 
     const body = await response.json();
     if (!response.ok) {
-      toast.error(extractErrorMessage(body, 'pt'));
+      toast.error(extractErrorMessage(body));
       return;
     }
 
@@ -211,10 +211,10 @@ All backend error messages must be translated before displaying to the user. Nev
 ```typescript
 import { extractErrorMessage } from "@/lib/error-messages";
 
-// In async handlers:
+// In async handlers — omit language to use the active locale (getLocale()):
 const body = await response.json();
 if (!response.ok) {
-  toast.error(extractErrorMessage(body, "pt"));
+  toast.error(extractErrorMessage(body));
   return;
 }
 ```
@@ -223,7 +223,7 @@ The `extractErrorMessage` function maps backend `ErrorMessages` keys to Portugue
 
 Rules:
 
-- Always call `extractErrorMessage(body, 'pt')` before showing errors in toasts or inline messages.
+- Always call `extractErrorMessage(body)` (or pass the active `locale`) before showing errors in toasts or inline messages. Never hardcode `'pt'`.
 - Never display `body.message` directly in the UI.
 - Use `toast.error()` from `sonner` for non-blocking error feedback.
 - Use `toast.success()` for confirmation of successful mutations.

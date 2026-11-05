@@ -15,13 +15,15 @@ import { fetchFinopsForecast, fetchFinopsForecastNextMonths } from '@/app/action
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { formatCurrency, isTaxService } from '@/components/root/finops/overview/helpers';
 import type { ForecastResult, ForecastMonthProjection } from '@/components/root/finops/overview/types';
+import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
-const CONFIDENCE_CONFIG = {
-    high: { label: 'Alta confiança', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-    medium: { label: 'Média confiança', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    low: { label: 'Baixa confiança', className: 'bg-muted text-muted-foreground' },
+const CONFIDENCE_CLASS = {
+    high: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    low: 'bg-muted text-muted-foreground',
 } as const;
 
 function shortenService(name: string): string {
@@ -36,6 +38,10 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function FinopsForecast() {
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
+    const confidenceLabel = (level: string) =>
+        level === 'high' ? tf.forecastConfidenceHigh : level === 'medium' ? tf.forecastConfidenceMedium : tf.forecastConfidenceLow;
     const router = useRouter();
     const searchParams = useSearchParams();
     const accountFromQuery = searchParams.get('account');
@@ -98,7 +104,7 @@ export function FinopsForecast() {
             try {
                 const [forecastRes, nextRes] = await Promise.all([fetchFinopsForecast(orgId, cloudId), fetchFinopsForecastNextMonths(orgId, cloudId, 3)]);
                 if (forecastRes.status === 401) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tc.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
@@ -114,12 +120,12 @@ export function FinopsForecast() {
                     setNextMonths(Array.isArray(data) ? data : []);
                 }
             } catch {
-                toast.error('Não foi possível carregar o forecast.');
+                toast.error(tf.forecastLoadError);
             } finally {
                 setLoading(false);
             }
         },
-        [router]
+        [router, tf.forecastLoadError]
     );
 
     useEffect(() => {
@@ -134,8 +140,8 @@ export function FinopsForecast() {
         return (
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Forecast de Custos</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma conta cloud na sidebar.</p>
+                    <p className="text-sm font-medium">{tf.forecastPageTitle}</p>
+                    <p className="text-xs text-muted-foreground">{tf.selectCloudAccountSidebar}</p>
                 </div>
             </div>
         );
@@ -162,24 +168,24 @@ export function FinopsForecast() {
                     <div className="space-y-2">
                         <div className="inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             <Cloud className="size-3.5" />
-                            Conta selecionada
+                            {tf.selectedAccountBadge}
                         </div>
                         <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? 'Carregando conta'}</p>
+                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? tf.loadingAccount}</p>
                                 {cloudAccount?.provider ? (
                                     <span className="rounded-full border px-2 py-0.5 text-xs font-medium uppercase text-muted-foreground">
                                         {cloudAccount.provider}
                                     </span>
                                 ) : null}
                             </div>
-                            <p className="text-sm text-muted-foreground">Este forecast usa apenas o histórico e a tendência desta conta cloud.</p>
+                            <p className="text-sm text-muted-foreground">{tf.forecastAccountScope}</p>
                         </div>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href={dashboardHref}>
                             <ArrowLeft className="size-4" />
-                            Voltar ao dashboard
+                            {tf.backToDashboard}
                         </Link>
                     </Button>
                 </div>
@@ -189,8 +195,8 @@ export function FinopsForecast() {
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Forecast de Custos</p>
-                        <p className="text-xs text-muted-foreground">Projeção baseada no consumo atual do mês</p>
+                        <p className="text-sm font-medium">{tf.forecastPageTitle}</p>
+                        <p className="text-xs text-muted-foreground">{tf.forecastBasedOnMonth}</p>
                     </div>
                 </div>
 
@@ -207,40 +213,42 @@ export function FinopsForecast() {
                 ) : !forecast ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                         <Activity className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">Dados insuficientes</p>
-                        <p className="text-xs text-muted-foreground">Realize uma sincronização FinOps para gerar o forecast.</p>
+                        <p className="text-sm font-medium">{tf.forecastInsufficient}</p>
+                        <p className="text-xs text-muted-foreground">{tf.forecastSyncHint}</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                         <div className="rounded-lg border p-3">
                             <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs text-muted-foreground">Forecast do mês</p>
-                                <span className={cn('rounded-full px-1.5 py-0.5 text-xs font-medium', CONFIDENCE_CONFIG[forecast.confidence].className)}>
-                                    {CONFIDENCE_CONFIG[forecast.confidence].label}
+                                <p className="text-xs text-muted-foreground">{tf.forecastMonth}</p>
+                                <span className={cn('rounded-full px-1.5 py-0.5 text-xs font-medium', CONFIDENCE_CLASS[forecast.confidence])}>
+                                    {confidenceLabel(forecast.confidence)}
                                 </span>
                             </div>
                             <p className="mt-1 truncate text-xl font-bold">{formatCurrency(forecast.forecastedCost, currency)}</p>
                             <p className="mt-0.5 text-xs text-muted-foreground">
-                                {forecast.daysElapsed}d decorridos · {forecast.daysRemaining}d restantes
+                                {tf.forecastElapsedRemaining
+                                    .replace('{elapsed}', String(forecast.daysElapsed))
+                                    .replace('{remaining}', String(forecast.daysRemaining))}
                             </p>
                         </div>
                         <div className="rounded-lg border p-3">
-                            <p className="text-xs text-muted-foreground">Custo diário médio</p>
+                            <p className="text-xs text-muted-foreground">{tf.forecastAvgDaily}</p>
                             <p className="mt-1 truncate text-xl font-bold">{formatCurrency(forecast.avgDailyCost, currency)}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">média dos últimos {forecast.daysElapsed}d</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{tf.forecastAvgDailyHint.replace('{days}', String(forecast.daysElapsed))}</p>
                         </div>
                         <div className="col-span-2 rounded-lg border p-3 sm:col-span-1">
-                            <p className="text-xs text-muted-foreground">Período</p>
+                            <p className="text-xs text-muted-foreground">{tf.billingColPeriod}</p>
                             <p className="mt-1 text-sm font-bold">
-                                {new Date(forecast.periodStart + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                                {new Date(forecast.periodStart + 'T12:00:00Z').toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short' })}
                                 {' → '}
-                                {new Date(forecast.periodEnd + 'T12:00:00Z').toLocaleDateString('pt-BR', {
+                                {new Date(forecast.periodEnd + 'T12:00:00Z').toLocaleDateString(toIntlLocale(), {
                                     day: '2-digit',
                                     month: 'short',
                                     year: 'numeric',
                                 })}
                             </p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">mês corrente</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{tf.forecastCurrentMonth}</p>
                         </div>
                     </div>
                 )}
@@ -250,8 +258,8 @@ export function FinopsForecast() {
             {!loading && forecast && chartData.length > 0 && (
                 <div className="rounded-xl border">
                     <div className="border-b px-4 py-3">
-                        <p className="text-sm font-medium">Forecast por serviço</p>
-                        <p className="text-xs text-muted-foreground">Projeção ao final do mês</p>
+                        <p className="text-sm font-medium">{tf.forecastByService}</p>
+                        <p className="text-xs text-muted-foreground">{tf.forecastEndOfMonth}</p>
                     </div>
                     <div className="p-4">
                         <ChartContainer config={chartConfig} style={{ height: chartHeight }} className="w-full">
@@ -280,13 +288,13 @@ export function FinopsForecast() {
             {!loading && nextMonths.length > 0 && (
                 <div className="rounded-xl border">
                     <div className="border-b px-4 py-3">
-                        <p className="text-sm font-medium">Projeção próximos meses</p>
-                        <p className="text-xs text-muted-foreground">Baseado na média dos últimos 3 meses</p>
+                        <p className="text-sm font-medium">{tf.forecastNextMonths}</p>
+                        <p className="text-xs text-muted-foreground">{tf.forecastNextMonthsHint}</p>
                     </div>
                     <div className="divide-y">
                         {nextMonths.map((m) => {
                             const [year, month] = m.month.split('-').map(Number);
-                            const label = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                            const label = new Date(year, month - 1, 1).toLocaleDateString(toIntlLocale(), { month: 'long', year: 'numeric' });
                             return (
                                 <div key={m.month} className="flex items-center justify-between px-4 py-2.5">
                                     <div className="flex items-center gap-2">

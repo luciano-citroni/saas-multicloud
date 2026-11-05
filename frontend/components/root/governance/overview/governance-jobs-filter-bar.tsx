@@ -5,22 +5,23 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { GovernanceJob } from '@/components/root/governance/overview/types';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export const JOB_STATUS_FILTER_ALL = 'all' as const;
 
 export type JobStatusFilter = typeof JOB_STATUS_FILTER_ALL | GovernanceJob['status'];
 
-const STATUS_OPTIONS: Array<{ value: JobStatusFilter; label: string }> = [
-    { value: 'all', label: 'Todos os status' },
-    { value: 'completed', label: 'Concluído' },
-    { value: 'running', label: 'Em andamento' },
-    { value: 'pending', label: 'Aguardando' },
-    { value: 'failed', label: 'Falhou' },
-];
+function useStatusOptions(): Array<{ value: JobStatusFilter; label: string }> {
+    const tg = useTranslations('governance');
 
-function statusLabel(status: JobStatusFilter): string {
-    return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
+    return [
+        { value: 'all', label: tg.statusAll },
+        { value: 'completed', label: tg.statusCompleted },
+        { value: 'running', label: tg.statusRunning },
+        { value: 'pending', label: tg.statusPending },
+        { value: 'failed', label: tg.statusFailed },
+    ];
 }
 
 type GovernanceJobsFilterBarProps = {
@@ -31,6 +32,10 @@ type GovernanceJobsFilterBarProps = {
 };
 
 export function GovernanceJobsFilterBar({ status, onStatusChange, onClear, className }: GovernanceJobsFilterBarProps) {
+    const tg = useTranslations('governance');
+    const tc = useTranslations('common');
+    const statusOptions = useStatusOptions();
+    const statusLabel = (value: JobStatusFilter) => statusOptions.find((option) => option.value === value)?.label ?? value;
     const hasActiveFilters = status !== JOB_STATUS_FILTER_ALL;
 
     return (
@@ -38,13 +43,13 @@ export function GovernanceJobsFilterBar({ status, onStatusChange, onClear, class
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                     <Filter className="size-4 text-muted-foreground" />
-                    Filtros
+                    {tg.filters}
                 </div>
 
                 {hasActiveFilters && (
                     <Button type="button" size="sm" variant="ghost" onClick={onClear}>
                         <RotateCcw className="size-3.5" />
-                        Limpar filtros
+                        {tg.clearFilters}
                     </Button>
                 )}
             </div>
@@ -52,14 +57,14 @@ export function GovernanceJobsFilterBar({ status, onStatusChange, onClear, class
             <div className="grid gap-3 sm:max-w-xs">
                 <div className="space-y-1.5">
                     <label htmlFor="governance-jobs-status" className="text-xs font-medium text-muted-foreground">
-                        Status
+                        {tc.status}
                     </label>
                     <Select value={status} onValueChange={(value) => onStatusChange(value as JobStatusFilter)}>
                         <SelectTrigger id="governance-jobs-status" className="w-full">
-                            <SelectValue placeholder="Todos os status" />
+                            <SelectValue placeholder={tg.statusAll} />
                         </SelectTrigger>
                         <SelectContent>
-                            {STATUS_OPTIONS.map((option) => (
+                            {statusOptions.map((option) => (
                                 <SelectItem key={option.value} value={option.value}>
                                     {option.label}
                                 </SelectItem>
@@ -72,12 +77,12 @@ export function GovernanceJobsFilterBar({ status, onStatusChange, onClear, class
             {hasActiveFilters && (
                 <div className="flex flex-wrap gap-2">
                     <Badge variant="secondary" className="gap-1 pr-1">
-                        Status: {statusLabel(status)}
+                        {tg.statusChip.replace('{status}', statusLabel(status))}
                         <button
                             type="button"
                             className="rounded-full p-0.5 hover:bg-muted"
                             onClick={() => onStatusChange(JOB_STATUS_FILTER_ALL)}
-                            aria-label="Remover filtro de status"
+                            aria-label={tg.removeStatusFilter}
                         >
                             <X className="size-3" />
                         </button>

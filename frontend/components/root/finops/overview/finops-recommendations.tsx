@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, priorityColor, priorityLabel } from '@/components/root/finops/overview/helpers';
 import type { FinopsRecommendation } from '@/components/root/finops/overview/types';
+import { useTranslations } from '@/lib/i18n';
 
 type FinopsRecommendationsProps = {
     recommendations: FinopsRecommendation[];
@@ -74,6 +75,7 @@ const TABLE_HEAD = (
 );
 
 export function FinopsRecommendations({ recommendations, previewLimit, actionHref, actionLabel }: FinopsRecommendationsProps) {
+    const tf = useTranslations('finops');
     const isPreview = typeof previewLimit === 'number';
     const open = recommendations.filter((r) => r.status === 'open');
 
@@ -102,7 +104,7 @@ export function FinopsRecommendations({ recommendations, previewLimit, actionHre
                     <p className="text-xs text-muted-foreground">
                         {open.length > 0
                             ? `${open.length} oportunidade${open.length > 1 ? 's' : ''} de economia identificada${open.length > 1 ? 's' : ''}`
-                            : 'Nenhuma recomendação aberta'}
+                            : tf.noOpenRecommendations}
                     </p>
                 </div>
                 {actionHref && actionLabel ? (
@@ -114,7 +116,7 @@ export function FinopsRecommendations({ recommendations, previewLimit, actionHre
 
             {open.length === 0 ? (
                 <div className="px-4 py-6 text-sm text-muted-foreground">
-                    Nenhuma recomendação de otimização disponível. Sincronize os dados para gerar análises.
+                    {tf.noOptimizationRecommendations}
                 </div>
             ) : isPreview ? (
                 <div className="px-4 py-4">
@@ -152,7 +154,7 @@ export function FinopsRecommendations({ recommendations, previewLimit, actionHre
                                 {paginatedRecs.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                                            Nenhuma recomendação encontrada para os filtros aplicados.
+                                            {tf.noRecommendationsForFilters}
                                         </TableCell>
                                     </TableRow>
                                 ) : (

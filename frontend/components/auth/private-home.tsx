@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LogoutButton } from '@/components/auth/logout-button';
+import { useTranslations } from '@/lib/i18n';
 
 type CurrentUser = {
     id?: string;
@@ -13,6 +14,8 @@ type CurrentUser = {
 };
 
 export function PrivateHome() {
+    const t = useTranslations('auth');
+    const tc = useTranslations('common');
     const [user, setUser] = useState<CurrentUser | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
@@ -48,8 +51,8 @@ export function PrivateHome() {
     return (
         <Card className="w-full max-w-3xl">
             <CardHeader>
-                <CardTitle>Área privada</CardTitle>
-                <CardDescription>Somente usuários autenticados conseguem acessar esta página.</CardDescription>
+                <CardTitle>{t.privateTitle}</CardTitle>
+                <CardDescription>{t.privateDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {loading ? (
@@ -61,13 +64,13 @@ export function PrivateHome() {
                 ) : (
                     <div className="space-y-1 text-sm">
                         <p>
-                            <span className="font-medium">Nome:</span> {user?.name ?? 'Não informado'}
+                            <span className="font-medium">{tc.name}:</span> {user?.name ?? t.notInformed}
                         </p>
                         <p>
-                            <span className="font-medium">E-mail:</span> {user?.email ?? 'Não informado'}
+                            <span className="font-medium">{tc.email}:</span> {user?.email ?? t.notInformed}
                         </p>
                         <p>
-                            <span className="font-medium">ID:</span> {user?.id ?? 'Não informado'}
+                            <span className="font-medium">ID:</span> {user?.id ?? t.notInformed}
                         </p>
                     </div>
                 )}

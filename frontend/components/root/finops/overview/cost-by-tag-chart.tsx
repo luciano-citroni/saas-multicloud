@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslations } from '@/lib/i18n';
 import { formatCurrency } from './helpers';
 import { finopsChartInitialDimension } from './finops-chart-theme';
 
@@ -22,12 +23,14 @@ type CostByTagChartProps = {
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f97316'];
 
 export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isLoading = false }: CostByTagChartProps) {
+    const tf = useTranslations('finops');
+
     if (isLoading) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Custo por {tagKey}</CardTitle>
-                    <CardDescription>Chargeback e alocação de custos</CardDescription>
+                    <CardTitle>{tf.costByTag.replace('{tag}', tagKey)}</CardTitle>
+                    <CardDescription>{tf.tagChargeback}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="h-64 bg-muted rounded-lg animate-pulse" />
@@ -40,12 +43,12 @@ export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isL
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Custo por {tagKey}</CardTitle>
-                    <CardDescription>Chargeback e alocação de custos</CardDescription>
+                    <CardTitle>{tf.costByTag.replace('{tag}', tagKey)}</CardTitle>
+                    <CardDescription>{tf.tagChargeback}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                        Nenhum dado de {tagKey.toLowerCase()} disponível
+                        {tf.noTagData.replace('{tag}', tagKey.toLowerCase())}
                     </div>
                 </CardContent>
             </Card>
@@ -65,8 +68,8 @@ export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isL
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Custo por {tagKey}</CardTitle>
-                <CardDescription>Top 10 para chargeback e alocação</CardDescription>
+                <CardTitle>{tf.costByTag.replace('{tag}', tagKey)}</CardTitle>
+                <CardDescription>{tf.tagTop10}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="h-64">
@@ -76,7 +79,7 @@ export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isL
                             <XAxis dataKey="label" fontSize={12} interval={0} angle={-45} textAnchor="end" height={80} />
                             <YAxis fontSize={12} />
                             <Tooltip formatter={(value) => (typeof value === 'number' ? formatCurrency(value, currency) : '')} />
-                            <Bar dataKey="cost" fill="#3b82f6" name="Custo">
+                            <Bar dataKey="cost" fill="#3b82f6" name={tf.seriesCost}>
                                 {chartData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
@@ -87,7 +90,7 @@ export function CostByTagChart({ data, currency = 'USD', tagKey = 'Project', isL
 
                 {/* Detailed breakdown */}
                 <div className="space-y-2">
-                    <p className="text-sm font-medium">Detalhamento:</p>
+                    <p className="text-sm font-medium">{tf.tagBreakdown}</p>
                     <div className="max-h-64 overflow-y-auto space-y-2">
                         {chartData.map((item, index) => {
                             const percentage = totalCost > 0 ? (item.cost / totalCost) * 100 : 0;

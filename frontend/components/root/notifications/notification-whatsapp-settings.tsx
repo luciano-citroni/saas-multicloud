@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -81,60 +81,88 @@ export type WhatsappGroupItem = {
     updatedAt: string;
 };
 
-const groupSchema = z.object({
-    name: z.string().min(1, 'Nome é obrigatório').max(120),
-    description: z.string().max(255).optional(),
-    isActive: z.boolean(),
-});
-
-const targetSchema = z
-    .object({
-        targetType: z.enum(['phone', 'group']),
-        target: z.string().min(1, 'Destino é obrigatório').max(120),
-        label: z.string().max(120).optional(),
+const createGroupSchema = (t: { nameRequired: string }) =>
+    z.object({
+        name: z.string().min(1, t.nameRequired).max(120),
+        description: z.string().max(255).optional(),
         isActive: z.boolean(),
-    })
-    .superRefine((data, ctx) => {
-        if (data.targetType === 'phone') {
-            const digits = data.target.replace(/[^\d]/g, '');
-            if (!/^\d{10,15}$/.test(digits)) {
+    });
+
+const createTargetSchema = (t: {
+    targetRequired: string;
+    phoneInvalid: string;
+    groupIdInvalid: string;
+}) =>
+    z
+        .object({
+            targetType: z.enum(['phone', 'group']),
+            target: z.string().min(1, t.targetRequired).max(120),
+            label: z.string().max(120).optional(),
+            isActive: z.boolean(),
+        })
+        .superRefine((data, ctx) => {
+            if (data.targetType === 'phone') {
+                const digits = data.target.replace(/[^\d]/g, '');
+                if (!/^\d{10,15}$/.test(digits)) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        path: ['target'],
+                        message: t.phoneInvalid,
+                    });
+                }
+                return;
+            }
+
+            if (!data.target.includes('@g.us')) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     path: ['target'],
-                    message: 'Informe o telefone com DDI (10 a 15 dígitos), ex.: 5511999999999',
+                    message: t.groupIdInvalid,
                 });
             }
-            return;
-        }
+        });
 
-        if (!data.target.includes('@g.us')) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['target'],
-                message: 'ID do grupo deve incluir @g.us',
-            });
-        }
+const createInviteSchema = (t: { inviteRequired: string; inviteInvalid: string }) =>
+    z.object({
+        inviteLink: z
+            .string()
+            .min(8, t.inviteRequired)
+            .max(500)
+            .refine(
+                (value) =>
+                    value.includes('chat.whatsapp.com') ||
+                    value.includes('whatsapp.com/invite') ||
+                    /^[a-zA-Z0-9_-]{10,64}$/.test(value.trim()),
+                t.inviteInvalid,
+            ),
+        label: z.string().max(120).optional(),
+        isActive: z.boolean(),
     });
 
-const inviteSchema = z.object({
-    inviteLink: z
-        .string()
-        .min(8, 'Informe o link ou código de convite')
-        .max(500)
-        .refine(
-            (value) =>
-                value.includes('chat.whatsapp.com') ||
-                value.includes('whatsapp.com/invite') ||
-                /^[a-zA-Z0-9_-]{10,64}$/.test(value.trim()),
-            'Cole o link chat.whatsapp.com/... ou o código do convite',
-        ),
-    label: z.string().max(120).optional(),
-    isActive: z.boolean(),
-});
+type GroupFormData = z.infer<ReturnType<typeof createGroupSchema>>;
+type TargetFormData = z.infer<ReturnType<typeof createTargetSchema>>;
+type InviteFormData = z.infer<ReturnType<typeof createInviteSchema>>;
 
-type GroupFormData = z.infer<typeof groupSchema>;
-type TargetFormData = z.infer<typeof targetSchema>;
-type InviteFormData = z.infer<typeof inviteSchema>;
+/** Renders a translated string containing simple <b>…</b> and <code>…</code> markup. */
+function renderRichText(text: string): ReactNode[] {
+    return text.split(/(<b>.*?<\/b>|<code>.*?<\/code>)/g).map((part, index) => {
+        if (part.startsWith('<b>')) {
+            return (
+                <strong key={index} className="text-foreground">
+                    {part.slice(3, -4)}
+                </strong>
+            );
+        }
+        if (part.startsWith('<code>')) {
+            return (
+                <code key={index} className="text-xs">
+                    {part.slice(6, -7)}
+                </code>
+            );
+        }
+        return part;
+    });
+}
 
 type DeleteTarget =
     | { kind: 'group'; item: WhatsappGroupItem }
@@ -195,6 +223,7 @@ export function NotificationWhatsappSettings({
     organizationId,
     canManage,
 }: NotificationWhatsappSettingsProps) {
+    const t = useTranslations('notifications');
     const tc = useTranslations('common');
     const [groups, setGroups] = useState<WhatsappGroupItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -215,6 +244,10 @@ export function NotificationWhatsappSettings({
     const [deleting, setDeleting] = useState(false);
     const [testingId, setTestingId] = useState<string | null>(null);
     const [testingGroupId, setTestingGroupId] = useState<string | null>(null);
+
+    const groupSchema = useMemo(() => createGroupSchema(t), [t]);
+    const targetSchema = useMemo(() => createTargetSchema(t), [t]);
+    const inviteSchema = useMemo(() => createInviteSchema(t), [t]);
 
     const groupForm = useForm<GroupFormData>({
         resolver: zodResolver(groupSchema),
@@ -243,7 +276,7 @@ export function NotificationWhatsappSettings({
                 });
                 if (!response.ok) {
                     const body = await response.json().catch(() => null);
-                    toast.error(extractErrorMessage(body, 'pt'));
+                    toast.error(extractErrorMessage(body));
                     setGroups([]);
                     setPagination(null);
                     return;
@@ -263,14 +296,14 @@ export function NotificationWhatsappSettings({
                     return merged;
                 });
             } catch {
-                toast.error('Não foi possível carregar os grupos de WhatsApp.');
+                toast.error(t.loadWaGroupsError);
                 setGroups([]);
                 setPagination(null);
             } finally {
                 setLoading(false);
             }
         },
-        [page, pageSize],
+        [page, pageSize, t],
     );
 
     useEffect(() => {
@@ -332,15 +365,15 @@ export function NotificationWhatsappSettings({
                 : await createNotificationGroup(organizationId, payload);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(editingGroup ? 'Grupo atualizado.' : 'Grupo criado.');
+            toast.success(editingGroup ? t.groupUpdated : t.groupCreated);
             setGroupDialogOpen(false);
             if (!editingGroup) setPage(1);
             void load(organizationId, editingGroup ? page : 1, pageSize);
         } catch {
-            toast.error('Não foi possível salvar o grupo.');
+            toast.error(t.saveGroupError);
         }
     };
 
@@ -362,14 +395,14 @@ export function NotificationWhatsappSettings({
                 : await createNotificationWhatsappTarget(organizationId, targetGroupId, payload);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(editingTarget ? 'Destino atualizado.' : 'Destino adicionado.');
+            toast.success(editingTarget ? t.targetUpdated : t.targetAdded);
             setTargetDialogOpen(false);
             void load(organizationId, page, pageSize);
         } catch {
-            toast.error('Não foi possível salvar o destino.');
+            toast.error(t.saveTargetError);
         }
     };
 
@@ -387,18 +420,18 @@ export function NotificationWhatsappSettings({
                 message?: string;
             } | null;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
             toast.success(
                 body?.target
-                    ? `Entrou no grupo e salvou o ID automaticamente (${body.target}).`
-                    : 'Entrou no grupo e salvou o ID automaticamente.',
+                    ? t.joinedGroupWithId.replace('{target}', body.target)
+                    : t.joinedGroup,
             );
             setInviteDialogOpen(false);
             void load(organizationId, page, pageSize);
         } catch {
-            toast.error('Não foi possível entrar no grupo WhatsApp.');
+            toast.error(t.joinGroupError);
         }
     };
 
@@ -413,11 +446,11 @@ export function NotificationWhatsappSettings({
 
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return false;
             }
 
-            toast.success(deleteTarget.kind === 'group' ? 'Grupo removido.' : 'Destino removido.');
+            toast.success(deleteTarget.kind === 'group' ? t.groupRemoved : t.targetRemoved);
             setDeleteTarget(null);
             const shouldGoPrev = deleteTarget.kind === 'group' && groups.length <= 1 && page > 1;
             const nextPage = shouldGoPrev ? page - 1 : page;
@@ -425,7 +458,7 @@ export function NotificationWhatsappSettings({
             void load(organizationId, nextPage, pageSize);
             return true;
         } catch {
-            toast.error('Não foi possível remover.');
+            toast.error(t.removeError);
             return false;
         } finally {
             setDeleting(false);
@@ -438,12 +471,12 @@ export function NotificationWhatsappSettings({
             const response = await sendNotificationWhatsappTargetTest(organizationId, target.id);
             const body = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success(`Mensagem de teste enviada para ${target.target}.`);
+            toast.success(t.waTestMessageSent.replace('{target}', target.target));
         } catch {
-            toast.error('Não foi possível enviar o teste WhatsApp.');
+            toast.error(t.sendWaTestError);
         } finally {
             setTestingId(null);
         }
@@ -458,18 +491,20 @@ export function NotificationWhatsappSettings({
                 failed?: number;
             } | null;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
             const sent = body?.sent ?? 0;
             const failed = body?.failed ?? 0;
             if (failed > 0) {
-                toast.success(`Teste do grupo: ${sent} enviado(s), ${failed} falha(s).`);
+                toast.success(
+                    t.groupTestResult.replace('{sent}', String(sent)).replace('{failed}', String(failed)),
+                );
             } else {
-                toast.success(`Mensagem de teste enviada para ${sent} destino(s).`);
+                toast.success(t.waGroupTestMessageSent.replace('{count}', String(sent)));
             }
         } catch {
-            toast.error('Não foi possível enviar o teste do grupo.');
+            toast.error(t.sendGroupTestError);
         } finally {
             setTestingGroupId(null);
         }
@@ -481,45 +516,21 @@ export function NotificationWhatsappSettings({
                 <div className="space-y-0.5">
                     <p className="flex items-center gap-2 text-sm font-medium">
                         <BookOpen className="size-4" />
-                        Como configurar o WhatsApp
+                        {t.waHowToTitle}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                        Como cadastrar números ou grupos e receber alertas no WhatsApp.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t.waHowToDesc}</p>
                 </div>
                 <Accordion type="single" collapsible defaultValue="howto">
                     <AccordionItem value="howto" className="border-none">
-                        <AccordionTrigger className="py-2 text-sm">Ver passos</AccordionTrigger>
+                        <AccordionTrigger className="py-2 text-sm">{t.waViewSteps}</AccordionTrigger>
                         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
                             <ol className="list-decimal space-y-2 pl-4">
-                                <li>
-                                    O WhatsApp da plataforma já está conectado. Você{' '}
-                                    <strong className="text-foreground">não precisa</strong> escanear QR Code.
-                                </li>
-                                <li>
-                                    Crie um <strong className="text-foreground">grupo de notificação</strong> nesta
-                                    página (ex.: &quot;Alertas FinOps&quot;).
-                                </li>
-                                <li>
-                                    No app do WhatsApp, abra o grupo do time →{' '}
-                                    <strong className="text-foreground">Dados do grupo</strong> →{' '}
-                                    <strong className="text-foreground">Convidar via link</strong> e copie o link.
-                                </li>
-                                <li>
-                                    Volte aqui, clique em{' '}
-                                    <strong className="text-foreground">Entrar com link</strong>, cole o convite e
-                                    confirme. A plataforma entra no grupo e salva o destino automaticamente.
-                                </li>
-                                <li>
-                                    Para avisar uma pessoa específica, use{' '}
-                                    <strong className="text-foreground">Adicionar destino</strong> e informe o
-                                    telefone com DDI (ex.: <code className="text-xs">5511999999999</code>).
-                                </li>
-                                <li>
-                                    Clique em <strong className="text-foreground">Testar</strong> para confirmar o
-                                    envio. Depois, em FinOps, selecione o canal WhatsApp — os alertas vão para os
-                                    destinos ativos desta página.
-                                </li>
+                                <li>{renderRichText(t.waStep1)}</li>
+                                <li>{renderRichText(t.waStep2)}</li>
+                                <li>{renderRichText(t.waStep3)}</li>
+                                <li>{renderRichText(t.waStep4)}</li>
+                                <li>{renderRichText(t.waStep5)}</li>
+                                <li>{renderRichText(t.waStep6)}</li>
                             </ol>
                         </AccordionContent>
                     </AccordionItem>
@@ -530,16 +541,14 @@ export function NotificationWhatsappSettings({
                 <div className="space-y-0.5">
                     <p className="flex items-center gap-2 text-sm font-medium">
                         <MessageCircle className="size-4" />
-                        Grupos WhatsApp
+                        {t.waGroupsTitle}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                        Expanda um grupo para gerenciar destinos (telefone ou ID de grupo).
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t.waGroupsDesc}</p>
                 </div>
                 {canManage && (
                     <Button size="sm" onClick={openCreateGroup}>
                         <Plus className="h-4 w-4" />
-                        Novo grupo
+                        {t.newGroup}
                     </Button>
                 )}
             </div>
@@ -553,11 +562,11 @@ export function NotificationWhatsappSettings({
             ) : groups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground">Nenhum grupo WhatsApp cadastrado.</p>
+                    <p className="text-sm text-muted-foreground">{t.waEmptyGroups}</p>
                     {canManage && (
                         <Button variant="outline" size="sm" onClick={openCreateGroup}>
                             <Plus className="h-3 w-3" />
-                            Criar grupo
+                            {t.createGroup}
                         </Button>
                     )}
                 </div>
@@ -568,10 +577,10 @@ export function NotificationWhatsappSettings({
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="w-10" />
-                                    <TableHead>Grupo</TableHead>
-                                    <TableHead>Destinos</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Ações</TableHead>
+                                    <TableHead>{t.group}</TableHead>
+                                    <TableHead>{t.targets}</TableHead>
+                                    <TableHead>{tc.status}</TableHead>
+                                    <TableHead className="text-right">{tc.actions}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -612,7 +621,7 @@ export function NotificationWhatsappSettings({
                                                 <TableCell>{targets.length}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={group.isActive ? 'default' : 'outline'}>
-                                                        {group.isActive ? 'Ativo' : 'Inativo'}
+                                                        {group.isActive ? t.active : t.inactive}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
@@ -624,7 +633,7 @@ export function NotificationWhatsappSettings({
                                                                     size="icon-sm"
                                                                     isLoading={testingGroupId === group.id}
                                                                     onClick={() => void onSendGroupTest(group)}
-                                                                    title="Testar grupo"
+                                                                    title={t.testGroup}
                                                                 >
                                                                     <Send className="size-3.5" />
                                                                 </Button>
@@ -657,7 +666,7 @@ export function NotificationWhatsappSettings({
                                                     <TableCell colSpan={5} className="bg-muted/20 p-0">
                                                         <div className="space-y-3 p-4">
                                                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                                <p className="text-sm font-medium">Destinos</p>
+                                                                <p className="text-sm font-medium">{t.targets}</p>
                                                                 {canManage && (
                                                                     <div className="flex flex-wrap gap-2">
                                                                         <Button
@@ -667,7 +676,7 @@ export function NotificationWhatsappSettings({
                                                                             }
                                                                         >
                                                                             <MessageCircle className="size-3.5" />
-                                                                            Entrar com link
+                                                                            {t.joinWithLink}
                                                                         </Button>
                                                                         <Button
                                                                             size="sm"
@@ -677,26 +686,26 @@ export function NotificationWhatsappSettings({
                                                                             }
                                                                         >
                                                                             <Plus className="size-3.5" />
-                                                                            Adicionar destino
+                                                                            {t.addTarget}
                                                                         </Button>
                                                                     </div>
                                                                 )}
                                                             </div>
                                                             {targets.length === 0 ? (
                                                                 <p className="text-sm text-muted-foreground">
-                                                                    Nenhum destino neste grupo.
+                                                                    {t.emptyTargets}
                                                                 </p>
                                                             ) : (
                                                                 <div className="overflow-hidden rounded-md border">
                                                                     <Table>
                                                                         <TableHeader>
                                                                             <TableRow>
-                                                                                <TableHead>Tipo</TableHead>
-                                                                                <TableHead>Destino</TableHead>
-                                                                                <TableHead>Label</TableHead>
-                                                                                <TableHead>Status</TableHead>
+                                                                                <TableHead>{t.targetType}</TableHead>
+                                                                                <TableHead>{t.target}</TableHead>
+                                                                                <TableHead>{t.label}</TableHead>
+                                                                                <TableHead>{tc.status}</TableHead>
                                                                                 <TableHead className="text-right">
-                                                                                    Ações
+                                                                                    {tc.actions}
                                                                                 </TableHead>
                                                                             </TableRow>
                                                                         </TableHeader>
@@ -707,8 +716,8 @@ export function NotificationWhatsappSettings({
                                                                                         <Badge variant="outline">
                                                                                             {target.targetType ===
                                                                                             'phone'
-                                                                                                ? 'Telefone'
-                                                                                                : 'Grupo'}
+                                                                                                ? t.phone
+                                                                                                : t.waGroupType}
                                                                                         </Badge>
                                                                                     </TableCell>
                                                                                     <TableCell className="font-mono text-xs">
@@ -726,8 +735,8 @@ export function NotificationWhatsappSettings({
                                                                                             }
                                                                                         >
                                                                                             {target.isActive
-                                                                                                ? 'Ativo'
-                                                                                                : 'Inativo'}
+                                                                                                ? t.active
+                                                                                                : t.inactive}
                                                                                         </Badge>
                                                                                     </TableCell>
                                                                                     <TableCell className="text-right">
@@ -745,7 +754,7 @@ export function NotificationWhatsappSettings({
                                                                                                             target,
                                                                                                         )
                                                                                                     }
-                                                                                                    title="Testar"
+                                                                                                    title={t.test}
                                                                                                 >
                                                                                                     <Send className="size-3.5" />
                                                                                                 </Button>
@@ -797,7 +806,7 @@ export function NotificationWhatsappSettings({
                     {pagination ? (
                         <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                             <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                                 <Select
                                     value={String(pageSize)}
                                     onValueChange={(value) => {
@@ -819,7 +828,7 @@ export function NotificationWhatsappSettings({
                             </div>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                                 <span className="text-sm font-medium">
-                                    Página {pagination.page} de {Math.max(1, pagination.totalPages)}
+                                    {tc.page} {pagination.page} {tc.of} {Math.max(1, pagination.totalPages)}
                                 </span>
                                 <div className="flex items-center gap-1 self-start sm:self-auto">
                                     <Button
@@ -868,10 +877,8 @@ export function NotificationWhatsappSettings({
             <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editingGroup ? 'Editar grupo' : 'Novo grupo WhatsApp'}</DialogTitle>
-                        <DialogDescription>
-                            Grupos organizam destinos WhatsApp de notificação do tenant.
-                        </DialogDescription>
+                        <DialogTitle>{editingGroup ? t.editGroup : t.waNewGroupTitle}</DialogTitle>
+                        <DialogDescription>{t.waGroupDialogDesc}</DialogDescription>
                     </DialogHeader>
                     <Form {...groupForm}>
                         <form onSubmit={groupForm.handleSubmit(onSubmitGroup)} className="space-y-4">
@@ -880,7 +887,7 @@ export function NotificationWhatsappSettings({
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tc.name}</FormLabel>
                                         <FormControl>
                                             <Input placeholder="FinOps WhatsApp" {...field} />
                                         </FormControl>
@@ -893,9 +900,9 @@ export function NotificationWhatsappSettings({
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Descrição (opcional)</FormLabel>
+                                        <FormLabel>{t.descriptionOptional}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Alertas críticos" {...field} />
+                                            <Input placeholder={t.waGroupDescPlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -914,7 +921,7 @@ export function NotificationWhatsappSettings({
                                                 }
                                             />
                                         </FormControl>
-                                        <FormLabel className="font-normal">Grupo ativo</FormLabel>
+                                        <FormLabel className="font-normal">{t.groupActive}</FormLabel>
                                     </FormItem>
                                 )}
                             />
@@ -924,10 +931,10 @@ export function NotificationWhatsappSettings({
                                     variant="outline"
                                     onClick={() => setGroupDialogOpen(false)}
                                 >
-                                    Cancelar
+                                    {tc.cancel}
                                 </Button>
                                 <Button type="submit" isLoading={groupForm.formState.isSubmitting}>
-                                    Salvar
+                                    {t.save}
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -938,11 +945,8 @@ export function NotificationWhatsappSettings({
             <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Entrar no grupo via convite</DialogTitle>
-                        <DialogDescription>
-                            Cole o link do WhatsApp. A plataforma entra no grupo automaticamente e salva o ID
-                            (`...@g.us`) para os alertas.
-                        </DialogDescription>
+                        <DialogTitle>{t.inviteTitle}</DialogTitle>
+                        <DialogDescription>{t.inviteDesc}</DialogDescription>
                     </DialogHeader>
                     <Form {...inviteForm}>
                         <form onSubmit={inviteForm.handleSubmit(onSubmitInvite)} className="space-y-4">
@@ -951,7 +955,7 @@ export function NotificationWhatsappSettings({
                                 name="inviteLink"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Link de convite</FormLabel>
+                                        <FormLabel>{t.inviteLink}</FormLabel>
                                         <FormControl>
                                             <Input
                                                 placeholder="https://chat.whatsapp.com/L3aExanF53C2zIpFzU6B73"
@@ -967,9 +971,9 @@ export function NotificationWhatsappSettings({
                                 name="label"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Label (opcional)</FormLabel>
+                                        <FormLabel>{t.labelOptional}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Time FinOps" {...field} />
+                                            <Input placeholder={t.inviteLabelPlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -988,7 +992,7 @@ export function NotificationWhatsappSettings({
                                                 }
                                             />
                                         </FormControl>
-                                        <FormLabel className="font-normal">Destino ativo</FormLabel>
+                                        <FormLabel className="font-normal">{t.targetActive}</FormLabel>
                                     </FormItem>
                                 )}
                             />
@@ -998,10 +1002,10 @@ export function NotificationWhatsappSettings({
                                     variant="outline"
                                     onClick={() => setInviteDialogOpen(false)}
                                 >
-                                    Cancelar
+                                    {tc.cancel}
                                 </Button>
                                 <Button type="submit" isLoading={inviteForm.formState.isSubmitting}>
-                                    Entrar e salvar
+                                    {t.joinAndSave}
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -1012,11 +1016,8 @@ export function NotificationWhatsappSettings({
             <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editingTarget ? 'Editar destino' : 'Novo destino WhatsApp'}</DialogTitle>
-                        <DialogDescription>
-                            Use telefone com DDI para alertas individuais. Para grupos, prefira{' '}
-                            <strong>Entrar com link</strong> — o destino é salvo automaticamente.
-                        </DialogDescription>
+                        <DialogTitle>{editingTarget ? t.editTargetTitle : t.newTargetTitle}</DialogTitle>
+                        <DialogDescription>{renderRichText(t.targetDialogDesc)}</DialogDescription>
                     </DialogHeader>
                     <Form {...targetForm}>
                         <form onSubmit={targetForm.handleSubmit(onSubmitTarget)} className="space-y-4">
@@ -1025,7 +1026,7 @@ export function NotificationWhatsappSettings({
                                 name="targetType"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Tipo</FormLabel>
+                                        <FormLabel>{t.targetType}</FormLabel>
                                         <Select
                                             value={field.value}
                                             onValueChange={(value) =>
@@ -1038,8 +1039,8 @@ export function NotificationWhatsappSettings({
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                <SelectItem value="phone">Telefone</SelectItem>
-                                                <SelectItem value="group">Grupo WhatsApp</SelectItem>
+                                                <SelectItem value="phone">{t.phone}</SelectItem>
+                                                <SelectItem value="group">{t.waGroupOption}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />
@@ -1052,7 +1053,7 @@ export function NotificationWhatsappSettings({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>
-                                            {watchedTargetType === 'group' ? 'ID do grupo' : 'Número'}
+                                            {watchedTargetType === 'group' ? t.groupIdLabel : t.numberLabel}
                                         </FormLabel>
                                         <FormControl>
                                             <Input
@@ -1073,7 +1074,7 @@ export function NotificationWhatsappSettings({
                                 name="label"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Label (opcional)</FormLabel>
+                                        <FormLabel>{t.labelOptional}</FormLabel>
                                         <FormControl>
                                             <Input placeholder="On-call" {...field} />
                                         </FormControl>
@@ -1094,7 +1095,7 @@ export function NotificationWhatsappSettings({
                                                 }
                                             />
                                         </FormControl>
-                                        <FormLabel className="font-normal">Destino ativo</FormLabel>
+                                        <FormLabel className="font-normal">{t.targetActive}</FormLabel>
                                     </FormItem>
                                 )}
                             />
@@ -1104,10 +1105,10 @@ export function NotificationWhatsappSettings({
                                     variant="outline"
                                     onClick={() => setTargetDialogOpen(false)}
                                 >
-                                    Cancelar
+                                    {tc.cancel}
                                 </Button>
                                 <Button type="submit" isLoading={targetForm.formState.isSubmitting}>
-                                    Salvar
+                                    {t.save}
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -1121,17 +1122,20 @@ export function NotificationWhatsappSettings({
                     if (!open) setDeleteTarget(null);
                 }}
                 title={
-                    deleteTarget?.kind === 'group' ? 'Remover grupo WhatsApp?' : 'Remover destino?'
+                    deleteTarget?.kind === 'group' ? t.removeWaGroupTitle : t.removeTargetTitle
                 }
                 description={
                     deleteTarget?.kind === 'group'
-                        ? `O grupo “${deleteTarget.item.name}” e todos os destinos serão removidos.`
+                        ? t.removeWaGroupDesc.replace('{name}', deleteTarget.item.name)
                         : deleteTarget?.kind === 'target'
-                          ? `O destino “${deleteTarget.item.label?.trim() || deleteTarget.item.target}” será removido.`
-                          : 'Tem certeza que deseja remover?'
+                          ? t.removeTargetDesc.replace(
+                                '{name}',
+                                deleteTarget.item.label?.trim() || deleteTarget.item.target,
+                            )
+                          : t.removeConfirmGeneric
                 }
                 resourceName={tc.deleteConfirmPlaceholder}
-                confirmLabel="Remover"
+                confirmLabel={t.remove}
                 isConfirming={deleting}
                 onConfirm={onDelete}
             />

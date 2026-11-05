@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { FinopsBudgetPayload } from '@/app/actions/finops';
+import { useTranslations, type Translations } from '@/lib/i18n';
 
 export type NotificationGroupOption = {
     id: string;
@@ -22,76 +24,81 @@ export type NotificationGroupOption = {
     isActive: boolean;
 };
 
-export const budgetFormSchema = z
-    .object({
-        name: z.string().min(1, 'Nome é obrigatório').max(255),
-        amount: z.number().positive('Valor deve ser maior que zero'),
-        currency: z.string().length(3, 'Moeda inválida'),
-        period: z.enum(['daily', 'monthly']),
-        scope: z.enum(['organization', 'cloud_account']),
-        cloudAccountId: z.string().uuid().optional().or(z.literal('')),
-        service: z.string().max(255).optional(),
-        resourceId: z.string().max(512).optional(),
-        alertFrequency: z.enum(['daily', 'monthly']),
-        /** resource oculto na UI até ingestão de resourceId nos custos. */
-        alertType: z.enum(['percentage', 'amount']),
-        alertAmount: z.number().positive().optional().nullable(),
-        alertThresholds: z.string().optional(),
-        alertChannelEmail: z.boolean(),
-        alertChannelWhatsapp: z.boolean(),
-        alertEmailGroupIds: z.array(z.string().uuid()),
-        alertWhatsappGroupIds: z.array(z.string().uuid()),
-    })
-    .superRefine((data, ctx) => {
-        if (data.scope === 'cloud_account' && !data.cloudAccountId) {
-            ctx.addIssue({ code: 'custom', message: 'Selecione a conta cloud', path: ['cloudAccountId'] });
-        }
-        if (data.alertType === 'amount' && (data.alertAmount == null || data.alertAmount <= 0)) {
-            ctx.addIssue({ code: 'custom', message: 'Informe o valor do alerta', path: ['alertAmount'] });
-        }
-        if (data.alertType !== 'amount') {
-            const parts = (data.alertThresholds ?? '')
-                .split(',')
-                .map((part) => part.trim())
-                .filter(Boolean);
-            if (
-                parts.length === 0 ||
-                parts.some((part) => {
-                    const n = Number(part);
-                    return !Number.isFinite(n) || n < 1 || n > 200;
-                })
-            ) {
+type FinopsT = Record<keyof Translations['finops'], string>;
+type CommonT = Record<keyof Translations['common'], string>;
+
+export function createBudgetFormSchema(t: FinopsT, tCommon: CommonT) {
+    return z
+        .object({
+            name: z.string().min(1, tCommon.nameRequired).max(255),
+            amount: z.number().positive(t.budgetFormAmountPositive),
+            currency: z.string().length(3, t.budgetFormCurrencyInvalid),
+            period: z.enum(['daily', 'monthly']),
+            scope: z.enum(['organization', 'cloud_account']),
+            cloudAccountId: z.string().uuid().optional().or(z.literal('')),
+            service: z.string().max(255).optional(),
+            resourceId: z.string().max(512).optional(),
+            alertFrequency: z.enum(['daily', 'monthly']),
+            /** resource oculto na UI até ingestão de resourceId nos custos. */
+            alertType: z.enum(['percentage', 'amount']),
+            alertAmount: z.number().positive().optional().nullable(),
+            alertThresholds: z.string().optional(),
+            alertChannelEmail: z.boolean(),
+            alertChannelWhatsapp: z.boolean(),
+            alertEmailGroupIds: z.array(z.string().uuid()),
+            alertWhatsappGroupIds: z.array(z.string().uuid()),
+        })
+        .superRefine((data, ctx) => {
+            if (data.scope === 'cloud_account' && !data.cloudAccountId) {
+                ctx.addIssue({ code: 'custom', message: t.budgetFormSelectAccount, path: ['cloudAccountId'] });
+            }
+            if (data.alertType === 'amount' && (data.alertAmount == null || data.alertAmount <= 0)) {
+                ctx.addIssue({ code: 'custom', message: t.budgetFormAlertAmountRequired, path: ['alertAmount'] });
+            }
+            if (data.alertType !== 'amount') {
+                const parts = (data.alertThresholds ?? '')
+                    .split(',')
+                    .map((part) => part.trim())
+                    .filter(Boolean);
+                if (
+                    parts.length === 0 ||
+                    parts.some((part) => {
+                        const n = Number(part);
+                        return !Number.isFinite(n) || n < 1 || n > 200;
+                    })
+                ) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: t.budgetFormThresholdsInvalid,
+                        path: ['alertThresholds'],
+                    });
+                }
+            }
+            if (!data.alertChannelEmail && !data.alertChannelWhatsapp) {
                 ctx.addIssue({
                     code: 'custom',
-                    message: 'Use percentuais entre 1 e 200, separados por vírgula (ex: 80, 100)',
-                    path: ['alertThresholds'],
+                    message: t.errSelectChannel,
+                    path: ['alertChannelEmail'],
                 });
             }
-        }
-        if (!data.alertChannelEmail && !data.alertChannelWhatsapp) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um canal de alerta',
-                path: ['alertChannelEmail'],
-            });
-        }
-        if (data.alertChannelEmail && data.alertEmailGroupIds.length === 0) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um grupo de e-mail',
-                path: ['alertEmailGroupIds'],
-            });
-        }
-        if (data.alertChannelWhatsapp && data.alertWhatsappGroupIds.length === 0) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um grupo de WhatsApp',
-                path: ['alertWhatsappGroupIds'],
-            });
-        }
-    });
+            if (data.alertChannelEmail && data.alertEmailGroupIds.length === 0) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: t.errSelectEmailGroup,
+                    path: ['alertEmailGroupIds'],
+                });
+            }
+            if (data.alertChannelWhatsapp && data.alertWhatsappGroupIds.length === 0) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: t.errSelectWhatsappGroup,
+                    path: ['alertWhatsappGroupIds'],
+                });
+            }
+        });
+}
 
-export type BudgetFormData = z.infer<typeof budgetFormSchema>;
+export type BudgetFormData = z.infer<ReturnType<typeof createBudgetFormSchema>>;
 
 export function parseThresholds(value: string | undefined): number[] {
     return (value ?? '')
@@ -167,15 +174,17 @@ function GroupChecklist({
     value,
     onChange,
     emptyLabel,
+    t,
 }: {
     groups: NotificationGroupOption[];
     loading: boolean;
     value: string[];
     onChange: (next: string[]) => void;
     emptyLabel: string;
+    t: FinopsT;
 }) {
     if (loading) {
-        return <p className="text-sm text-muted-foreground">Carregando grupos…</p>;
+        return <p className="text-sm text-muted-foreground">{t.loadingGroups}</p>;
     }
 
     if (groups.length === 0) {
@@ -183,7 +192,7 @@ function GroupChecklist({
             <p className="text-sm text-muted-foreground">
                 {emptyLabel}{' '}
                 <Link href="/tenant/notifications" className="underline underline-offset-2">
-                    Gerenciar em Notificações
+                    {t.manageInNotifications}
                 </Link>
             </p>
         );
@@ -226,6 +235,9 @@ export function FinopsBudgetForm({
     backHref,
     onSubmit,
 }: FinopsBudgetFormProps) {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
+    const budgetFormSchema = useMemo(() => createBudgetFormSchema(t, tCommon), [t, tCommon]);
     const form = useForm<BudgetFormData>({
         resolver: zodResolver(budgetFormSchema),
         defaultValues,
@@ -242,18 +254,16 @@ export function FinopsBudgetForm({
                 <div className="space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">
-                            {mode === 'edit' ? 'Editar orçamento' : 'Novo orçamento'}
+                            {mode === 'edit' ? t.editBudget : t.newBudget}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Defina o limite de gasto e quem deve ser notificado quando os limiares forem atingidos.
-                        </p>
+                        <p className="text-sm text-muted-foreground">{t.budgetFormDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" asChild>
-                        <Link href={backHref}>Cancelar</Link>
+                        <Link href={backHref}>{tCommon.cancel}</Link>
                     </Button>
                     <Button
                         size="sm"
@@ -261,7 +271,7 @@ export function FinopsBudgetForm({
                         form="finops-budget-form"
                         isLoading={form.formState.isSubmitting}
                     >
-                        {mode === 'edit' ? 'Salvar' : 'Criar orçamento'}
+                        {mode === 'edit' ? tCommon.save : t.createBudget}
                     </Button>
                 </div>
             </div>
@@ -274,8 +284,8 @@ export function FinopsBudgetForm({
                 >
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Orçamento</CardTitle>
-                            <CardDescription>Nome, escopo, período e valor limite.</CardDescription>
+                            <CardTitle className="text-base">{t.budgetFormCardTitle}</CardTitle>
+                            <CardDescription>{t.budgetFormCardDesc}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <FormField
@@ -283,9 +293,9 @@ export function FinopsBudgetForm({
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Nome</FormLabel>
+                                        <FormLabel>{tCommon.name}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Budget mensal produção" {...field} />
+                                            <Input placeholder={t.budgetFormNamePlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -298,7 +308,7 @@ export function FinopsBudgetForm({
                                     name="scope"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Escopo</FormLabel>
+                                            <FormLabel>{t.scopeLabel}</FormLabel>
                                             <Select
                                                 value={field.value}
                                                 onValueChange={(value) => {
@@ -314,8 +324,8 @@ export function FinopsBudgetForm({
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="organization">Toda a organização</SelectItem>
-                                                    <SelectItem value="cloud_account">Conta cloud</SelectItem>
+                                                    <SelectItem value="organization">{t.budgetScopeWholeOrg}</SelectItem>
+                                                    <SelectItem value="cloud_account">{t.budgetScopeCloudAccount}</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
@@ -328,7 +338,7 @@ export function FinopsBudgetForm({
                                     name="period"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Período do limite</FormLabel>
+                                            <FormLabel>{t.budgetFormLimitPeriod}</FormLabel>
                                             <Select value={field.value} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -336,12 +346,12 @@ export function FinopsBudgetForm({
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="monthly">Mensal</SelectItem>
-                                                    <SelectItem value="daily">Diário</SelectItem>
+                                                    <SelectItem value="monthly">{t.monthly}</SelectItem>
+                                                    <SelectItem value="daily">{t.daily}</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-xs text-muted-foreground">
-                                                Janela de acumulação do gasto comparado ao limite.
+                                                {t.budgetFormLimitPeriodHint}
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -355,11 +365,11 @@ export function FinopsBudgetForm({
                                     name="cloudAccountId"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Conta cloud</FormLabel>
+                                            <FormLabel>{t.budgetScopeCloudAccount}</FormLabel>
                                             <Select value={field.value || undefined} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Selecione a conta" />
+                                                        <SelectValue placeholder={t.selectAccountPlaceholder} />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
@@ -382,7 +392,7 @@ export function FinopsBudgetForm({
                                     name="amount"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Limite</FormLabel>
+                                            <FormLabel>{t.budgetFormLimit}</FormLabel>
                                             <FormControl>
                                                 <Input
                                                     type="number"
@@ -404,7 +414,7 @@ export function FinopsBudgetForm({
                                     name="currency"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Moeda</FormLabel>
+                                            <FormLabel>{t.budgetFormCurrency}</FormLabel>
                                             <FormControl>
                                                 <Input placeholder="USD" maxLength={3} {...field} />
                                             </FormControl>
@@ -419,9 +429,9 @@ export function FinopsBudgetForm({
                                 name="service"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Serviço (opcional)</FormLabel>
+                                        <FormLabel>{t.budgetFormServiceOptional}</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Ex: Amazon EC2 — vazio = todos" {...field} />
+                                            <Input placeholder={t.budgetFormServicePlaceholder} {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -432,10 +442,8 @@ export function FinopsBudgetForm({
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Alertas</CardTitle>
-                            <CardDescription>
-                                Quando e como disparar o alerta em relação ao gasto do período.
-                            </CardDescription>
+                            <CardTitle className="text-base">{t.budgetFormAlertsTitle}</CardTitle>
+                            <CardDescription>{t.budgetFormAlertsDesc}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
@@ -444,7 +452,7 @@ export function FinopsBudgetForm({
                                     name="alertFrequency"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Cadência da notificação</FormLabel>
+                                            <FormLabel>{t.budgetFormCadence}</FormLabel>
                                             <Select value={field.value} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -452,12 +460,12 @@ export function FinopsBudgetForm({
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="daily">Até 2× por dia</SelectItem>
-                                                    <SelectItem value="monthly">Mensal</SelectItem>
+                                                    <SelectItem value="daily">{t.budgetFormCadenceDaily}</SelectItem>
+                                                    <SelectItem value="monthly">{t.monthly}</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-xs text-muted-foreground">
-                                                2× por dia: manhã e noite. Mensal: no máximo um envio por limiar no mês.
+                                                {t.budgetFormCadenceHint}
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -469,7 +477,7 @@ export function FinopsBudgetForm({
                                     name="alertType"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Tipo</FormLabel>
+                                            <FormLabel>{t.budgetFormType}</FormLabel>
                                             <Select value={field.value} onValueChange={field.onChange}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -477,8 +485,8 @@ export function FinopsBudgetForm({
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="percentage">% do orçamento</SelectItem>
-                                                    <SelectItem value="amount">Por valor</SelectItem>
+                                                    <SelectItem value="percentage">{t.budgetFormTypePercentage}</SelectItem>
+                                                    <SelectItem value="amount">{t.budgetAlertTypeAmount}</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
@@ -493,7 +501,7 @@ export function FinopsBudgetForm({
                                     name="alertAmount"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Valor do alerta</FormLabel>
+                                            <FormLabel>{t.budgetFormAlertAmount}</FormLabel>
                                             <FormControl>
                                                 <Input
                                                     type="number"
@@ -514,7 +522,7 @@ export function FinopsBudgetForm({
                                                 />
                                             </FormControl>
                                             <p className="text-xs text-muted-foreground">
-                                                Dispara quando o gasto do período do limite atingir este valor.
+                                                {t.budgetFormAlertAmountHint}
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -528,12 +536,12 @@ export function FinopsBudgetForm({
                                     name="alertThresholds"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Limiares (%)</FormLabel>
+                                            <FormLabel>{t.budgetFormThresholds}</FormLabel>
                                             <FormControl>
                                                 <Input placeholder="80, 100" {...field} />
                                             </FormControl>
                                             <p className="text-xs text-muted-foreground">
-                                                Percentuais separados por vírgula. Ex.: 50, 80, 100
+                                                {t.budgetFormThresholdsHint}
                                             </p>
                                             <FormMessage />
                                         </FormItem>
@@ -545,14 +553,12 @@ export function FinopsBudgetForm({
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Notificações</CardTitle>
-                            <CardDescription>
-                                Escolha os canais e os grupos cadastrados em Tenant → Notificações.
-                            </CardDescription>
+                            <CardTitle className="text-base">{t.notificationsLink}</CardTitle>
+                            <CardDescription>{t.budgetFormNotificationsDesc}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-5">
                             <div className="space-y-3">
-                                <p className="text-sm font-medium">Canais</p>
+                                <p className="text-sm font-medium">{t.channelsLabel}</p>
                                 <div className="flex flex-wrap gap-4">
                                     <FormField
                                         control={form.control}
@@ -567,7 +573,7 @@ export function FinopsBudgetForm({
                                                         }
                                                     />
                                                 </FormControl>
-                                                <FormLabel className="font-normal">E-mail</FormLabel>
+                                                <FormLabel className="font-normal">{tCommon.email}</FormLabel>
                                             </FormItem>
                                         )}
                                     />
@@ -602,13 +608,14 @@ export function FinopsBudgetForm({
                                     name="alertEmailGroupIds"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Grupos de e-mail</FormLabel>
+                                            <FormLabel>{t.emailGroupsLabel}</FormLabel>
                                             <GroupChecklist
                                                 groups={emailGroups}
                                                 loading={loadingGroups}
                                                 value={field.value}
                                                 onChange={field.onChange}
-                                                emptyLabel="Nenhum grupo de e-mail ativo."
+                                                emptyLabel={t.noEmailGroups}
+                                                t={t}
                                             />
                                             <FormMessage />
                                         </FormItem>
@@ -622,13 +629,14 @@ export function FinopsBudgetForm({
                                     name="alertWhatsappGroupIds"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Grupos de WhatsApp</FormLabel>
+                                            <FormLabel>{t.whatsappGroupsLabel}</FormLabel>
                                             <GroupChecklist
                                                 groups={whatsappGroups}
                                                 loading={loadingGroups}
                                                 value={field.value}
                                                 onChange={field.onChange}
-                                                emptyLabel="Nenhum grupo de WhatsApp ativo."
+                                                emptyLabel={t.noWhatsappGroups}
+                                                t={t}
                                             />
                                             <FormMessage />
                                         </FormItem>

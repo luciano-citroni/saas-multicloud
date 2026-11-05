@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslations } from '@/lib/i18n';
 import { formatCurrency } from './helpers';
 import { finopsChartInitialDimension } from './finops-chart-theme';
 
@@ -19,12 +20,14 @@ type CostByRegionChartProps = {
 };
 
 export function CostByRegionChart({ data, currency = 'USD', isLoading = false }: CostByRegionChartProps) {
+    const tf = useTranslations('finops');
+
     if (isLoading) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Custo por Região</CardTitle>
-                    <CardDescription>Distribuição geográfica</CardDescription>
+                    <CardTitle>{tf.costByRegion}</CardTitle>
+                    <CardDescription>{tf.regionDistribution}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="h-64 bg-muted rounded-lg animate-pulse" />
@@ -37,11 +40,11 @@ export function CostByRegionChart({ data, currency = 'USD', isLoading = false }:
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Custo por Região</CardTitle>
-                    <CardDescription>Distribuição geográfica</CardDescription>
+                    <CardTitle>{tf.costByRegion}</CardTitle>
+                    <CardDescription>{tf.regionDistribution}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Nenhum dado de região disponível</div>
+                    <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">{tf.noRegionData}</div>
                 </CardContent>
             </Card>
         );
@@ -52,8 +55,8 @@ export function CostByRegionChart({ data, currency = 'USD', isLoading = false }:
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Custo por Região</CardTitle>
-                <CardDescription>Distribuição geográfica dos gastos</CardDescription>
+                <CardTitle>{tf.costByRegion}</CardTitle>
+                <CardDescription>{tf.regionDistributionFull}</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="h-64">
@@ -64,7 +67,7 @@ export function CostByRegionChart({ data, currency = 'USD', isLoading = false }:
                             <YAxis fontSize={12} />
                             <Tooltip formatter={(value) => (typeof value === 'number' ? formatCurrency(value, currency) : '')} />
                             <Legend />
-                            <Bar dataKey="cost" fill="#8b5cf6" name="Custo" />
+                            <Bar dataKey="cost" fill="#8b5cf6" name={tf.seriesCost} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

@@ -9,20 +9,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { DefaultFramer } from '@/components/ui/frame-motion';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useTranslations } from '@/lib/i18n';
 import { queryKeys } from '@/lib/queries/keys';
 
 type VerifyPhase = 'loading' | 'success' | 'error';
+type VerifyMessageKey = 'verifyEmailPending' | 'verifyEmailInvalidLink' | 'verifyEmailAlreadyVerified' | 'verifyEmailSuccess' | 'verifyEmailNetworkError';
 
 function VerifyEmailContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const t = useTranslations('auth');
     const token = searchParams.get('token')?.trim() ?? '';
 
     const [phase, setPhase] = useState<VerifyPhase>(token ? 'loading' : 'error');
-    const [message, setMessage] = useState(
-        token ? 'Confirmando seu e-mail…' : 'Link de confirmação inválido ou incompleto.',
+    const [messageKey, setMessageKey] = useState<VerifyMessageKey>(
+        token ? 'verifyEmailPending' : 'verifyEmailInvalidLink',
     );
+    const [apiMessage, setApiMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (!token) {
@@ -46,21 +50,19 @@ function VerifyEmailContent() {
 
                 if (!response.ok) {
                     setPhase('error');
-                    setMessage(extractErrorMessage(body, 'pt'));
+                    setApiMessage(extractErrorMessage(body));
                     return;
                 }
 
                 await queryClient.invalidateQueries({ queryKey: queryKeys.sidebarContext });
                 setPhase('success');
-                setMessage(
-                    body?.alreadyVerified
-                        ? 'Seu e-mail já estava confirmado.'
-                        : 'E-mail confirmado com sucesso.',
-                );
+                setApiMessage(null);
+                setMessageKey(body?.alreadyVerified ? 'verifyEmailAlreadyVerified' : 'verifyEmailSuccess');
             } catch {
                 if (!cancelled) {
                     setPhase('error');
-                    setMessage('Não foi possível confirmar o e-mail. Tente novamente.');
+                    setApiMessage(null);
+                    setMessageKey('verifyEmailNetworkError');
                 }
             }
         };
@@ -77,13 +79,13 @@ function VerifyEmailContent() {
             <DefaultFramer className="w-[96%] sm:w-[75%] xl:w-[45%] max-w-xl">
                 <Card>
                     <CardHeader className="mb-2 mt-2">
-                        <CardTitle className="text-xl">Confirmação de e-mail</CardTitle>
+                        <CardTitle className="text-xl">{t.verifyEmailTitle}</CardTitle>
                         <CardDescription>
                             {phase === 'loading'
-                                ? 'Estamos validando o link enviado para o seu e-mail.'
+                                ? t.verifyEmailDesc
                                 : phase === 'success'
-                                  ? 'Sua conta está pronta para uso.'
-                                  : 'Não foi possível concluir a confirmação.'}
+                                  ? t.verifyEmailSuccessDesc
+                                  : t.verifyEmailErrorDesc}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col items-center gap-4 text-center">
@@ -95,15 +97,15 @@ function VerifyEmailContent() {
                             <XCircle className="size-10 text-destructive" />
                         )}
 
-                        <p className="text-sm text-muted-foreground">{message}</p>
+                        <p className="text-sm text-muted-foreground">{apiMessage ?? t[messageKey]}</p>
 
                         {phase !== 'loading' ? (
                             <div className="flex flex-wrap items-center justify-center gap-2">
                                 <Button type="button" onClick={() => router.replace('/')}>
-                                    Ir para o app
+                                    {t.verifyEmailGoToApp}
                                 </Button>
                                 <Button type="button" variant="outline" asChild>
-                                    <Link href="/auth/sign-in">Entrar</Link>
+                                    <Link href="/auth/sign-in">{t.signIn}</Link>
                                 </Button>
                             </div>
                         ) : null}

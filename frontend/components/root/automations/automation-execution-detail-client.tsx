@@ -29,6 +29,8 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { executionStatusClass, provisionedStatusClass } from './status-styles';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations } from '@/lib/i18n';
 
 function getOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -203,6 +205,8 @@ export function AutomationExecutionDetailClient({
     automationId: string;
     executionId: string;
 }) {
+    const t = useTranslations('automation');
+    const tc = useTranslations('common');
     const [execution, setExecution] = useState<ExecutionWithResources | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -229,7 +233,7 @@ export function AutomationExecutionDetailClient({
             const body = await response.json();
             if (cancelled) return;
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 setLoading(false);
                 return;
             }
@@ -287,7 +291,7 @@ export function AutomationExecutionDetailClient({
             const response = await fetchAutomationExecution(automationId, executionId, orgId);
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 return;
             }
             setExecution(body as ExecutionWithResources);
@@ -304,13 +308,13 @@ export function AutomationExecutionDetailClient({
             const response = await rollbackAutomationExecution(automationId, executionId, orgId);
             const body = await response.json();
             if (!response.ok) {
-                toast.error(extractErrorMessage(body as never, 'pt'));
+                toast.error(extractErrorMessage(body as never));
                 const refreshed = await fetchAutomationExecution(automationId, executionId, orgId);
                 if (refreshed.ok) setExecution((await refreshed.json()) as ExecutionWithResources);
                 return false;
             }
             setExecution(body as ExecutionWithResources);
-            toast.success('Rollback enfileirado');
+            toast.success(t.rollbackSuccess);
             return true;
         } finally {
             setRollingBack(false);
@@ -343,10 +347,14 @@ export function AutomationExecutionDetailClient({
         execution.usedParameters ?? execution.flowDefinition?.usedParameters,
     );
     const replayHref = rerunHref(automationId, executionId);
+    const formatResourceCount = (count: number) =>
+        (count === 1 ? t.resourceOne : t.resourceMany).replace('{count}', String(count));
     const progressLabel =
         isRollingBack || execution.status === 'ROLLED_BACK'
-            ? `${progress}% · ${resources.length} recursos`
-            : `${progress}% · ${steps.length} etapas`;
+            ? t.progressResources
+                  .replace('{progress}', String(progress))
+                  .replace('{resources}', formatResourceCount(resources.length))
+            : t.progressSteps.replace('{progress}', String(progress)).replace('{count}', String(steps.length));
 
     return (
         <div className="space-y-6 p-4 md:p-6">
@@ -357,7 +365,7 @@ export function AutomationExecutionDetailClient({
                     </Link>
                 </Button>
                 <div className="min-w-0 flex-1">
-                    <h1 className="text-xl font-bold">Execução do fluxo</h1>
+                    <h1 className="text-xl font-bold">{t.executionFlowTitle}</h1>
                     <p className="font-mono text-xs text-muted-foreground">{execution.id}</p>
                 </div>
                 <Badge className={cn(executionStatusClass(execution.status))}>{execution.status}</Badge>
@@ -366,8 +374,8 @@ export function AutomationExecutionDetailClient({
                     size="icon"
                     onClick={() => void refreshExecution()}
                     disabled={refreshing}
-                    aria-label="Atualizar execução"
-                    title="Atualizar"
+                    aria-label={t.refreshExecution}
+                    title={tc.refresh}
                 >
                     <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
                 </Button>
@@ -375,34 +383,34 @@ export function AutomationExecutionDetailClient({
                     <Button asChild>
                         <Link href={replayHref}>
                             <RefreshCw className="mr-2 h-4 w-4" />
-                            Rodar novamente
+                            {t.rerun}
                         </Link>
                     </Button>
                 )}
                 {canRollback && (
                     <Button variant="destructive" onClick={() => setRollbackOpen(true)} disabled={rollingBack}>
                         <RotateCcw className="mr-2 h-4 w-4" />
-                        {isRollingBack ? 'Retentar rollback' : 'Rollback'}
+                        {isRollingBack ? t.retryRollback : t.rollback}
                     </Button>
                 )}
                 {isRollingBack && (
-                    <Badge className={cn(executionStatusClass('ROLLING_BACK'))}>Excluindo recursos…</Badge>
+                    <Badge className={cn(executionStatusClass('ROLLING_BACK'))}>{t.deletingResources}</Badge>
                 )}
             </div>
 
             <ConfirmDeleteDialog
                 open={rollbackOpen}
                 onOpenChange={setRollbackOpen}
-                title="Confirmar rollback"
-                confirmLabel={`Excluir ${rollbackTargets.length} recurso${rollbackTargets.length === 1 ? '' : 's'}`}
+                title={t.confirmRollbackTitle}
+                confirmLabel={t.deleteResourcesLabel.replace('{resources}', formatResourceCount(rollbackTargets.length))}
                 isConfirming={rollingBack}
                 onConfirm={confirmRollback}
                 contentProps={{ className: 'sm:max-w-lg' }}
-                description="Somente os recursos criados por esta execução serão excluídos na conta cloud. Revise a lista abaixo antes de confirmar."
+                description={t.rollbackDescription}
             >
                 <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border p-3">
                     {rollbackTargets.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhum recurso provisionado para excluir.</p>
+                        <p className="text-sm text-muted-foreground">{t.noProvisionedToDelete}</p>
                     ) : (
                         rollbackTargets.map((resource) => (
                             <div key={resource.id} className="rounded-md border bg-muted/20 px-3 py-2">
@@ -416,13 +424,13 @@ export function AutomationExecutionDetailClient({
                     )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    {rollbackTargets.length} recurso{rollbackTargets.length === 1 ? '' : 's'} · ação irreversível
+                    {t.rollbackIrreversible.replace('{resources}', formatResourceCount(rollbackTargets.length))}
                 </p>
             </ConfirmDeleteDialog>
 
             <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-3 lg:grid-cols-6">
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Executado por</p>
+                    <p className="text-[11px] text-muted-foreground">{t.executedBy}</p>
                     <p className="truncate text-sm font-medium">
                         {execution.triggeredByName ?? execution.triggeredByEmail ?? '—'}
                     </p>
@@ -431,7 +439,7 @@ export function AutomationExecutionDetailClient({
                     )}
                 </div>
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Conta cloud</p>
+                    <p className="text-[11px] text-muted-foreground">{t.cloudAccountLabel}</p>
                     <p className="truncate text-sm font-medium">{execution.cloudAccountAlias ?? '—'}</p>
                     {execution.cloudAccountProvider && (
                         <p className="truncate text-[11px] uppercase text-muted-foreground">
@@ -440,21 +448,21 @@ export function AutomationExecutionDetailClient({
                     )}
                 </div>
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Versão</p>
+                    <p className="text-[11px] text-muted-foreground">{t.version}</p>
                     <p className="text-sm font-medium">v{execution.automationVersion ?? '?'}</p>
                 </div>
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Duração</p>
+                    <p className="text-[11px] text-muted-foreground">{t.duration}</p>
                     <p className="text-sm font-medium">{formatDuration(execution.durationMs)}</p>
                 </div>
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Início</p>
+                    <p className="text-[11px] text-muted-foreground">{t.startLabel}</p>
                     <p className="text-sm font-medium">
-                        {execution.startedAt ? new Date(execution.startedAt).toLocaleString('pt-BR') : '—'}
+                        {execution.startedAt ? new Date(execution.startedAt).toLocaleString(toIntlLocale()) : '—'}
                     </p>
                 </div>
                 <div>
-                    <p className="text-[11px] text-muted-foreground">Progresso</p>
+                    <p className="text-[11px] text-muted-foreground">{t.progress}</p>
                     <p className="text-sm font-medium">{progressLabel}</p>
                 </div>
                 <div className="sm:col-span-3 lg:col-span-6">
@@ -472,7 +480,7 @@ export function AutomationExecutionDetailClient({
 
             {steps.length > 0 && (
                 <div className="overflow-x-auto rounded-xl border p-4">
-                    <h2 className="mb-3 font-semibold">Visão das etapas</h2>
+                    <h2 className="mb-3 font-semibold">{t.stepsOverview}</h2>
                     <ol className="flex min-w-max items-stretch gap-0">
                         {steps.map((step, position) => {
                             const status = step.executionNode?.status ?? 'PENDING';
@@ -516,14 +524,14 @@ export function AutomationExecutionDetailClient({
             {execution.errorMessage && (
                 <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
                     <div className="min-w-0">
-                        <p className="font-semibold">Falha na execução</p>
+                        <p className="font-semibold">{t.executionFailed}</p>
                         <p className="mt-1 whitespace-pre-wrap">{execution.errorMessage}</p>
                     </div>
                     {execution.status === 'FAILED' && (
                         <Button variant="outline" className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10" asChild>
                             <Link href={replayHref}>
                                 <RefreshCw className="mr-2 h-4 w-4" />
-                                Rodar novamente
+                                {t.rerun}
                             </Link>
                         </Button>
                     )}
@@ -533,12 +541,12 @@ export function AutomationExecutionDetailClient({
             {envEntries.length > 0 && (
                 <div className="space-y-3 rounded-xl border p-4">
                     <div>
-                        <h2 className="font-semibold">Variáveis (envs)</h2>
+                        <h2 className="font-semibold">{t.envVariables}</h2>
                         <p className="text-xs text-muted-foreground">
                             {execution.usedParameters
-                                ? 'Valores enviados nesta execução'
-                                : 'Variáveis do fluxo nesta versão'}
-                            {execution.canReplayParameters ? ' · disponíveis para reexecução' : ''}
+                                ? t.envValuesSent
+                                : t.envFlowVariables}
+                            {execution.canReplayParameters ? ` · ${t.envReplayable}` : ''}
                         </p>
                     </div>
                     <dl className="grid gap-2 sm:grid-cols-2">
@@ -546,7 +554,7 @@ export function AutomationExecutionDetailClient({
                             <div key={env.name} className="rounded-lg border bg-muted/20 px-3 py-2">
                                 <dt className="font-mono text-[11px] text-muted-foreground">
                                     {env.name}
-                                    {env.sensitive ? ' · sensível' : ''}
+                                    {env.sensitive ? ` · ${t.sensitiveLabel}` : ''}
                                 </dt>
                                 {env.description && (
                                     <p className="mt-0.5 text-[11px] text-muted-foreground">{env.description}</p>
@@ -560,12 +568,12 @@ export function AutomationExecutionDetailClient({
 
             <div className="space-y-3 rounded-xl border p-4">
                 <div className="flex items-center justify-between gap-3">
-                    <h2 className="font-semibold">Detalhe por etapa</h2>
-                    <p className="text-xs text-muted-foreground">Clique para expandir entrada/saída</p>
+                    <h2 className="font-semibold">{t.stepDetailTitle}</h2>
+                    <p className="text-xs text-muted-foreground">{t.stepDetailHint}</p>
                 </div>
 
                 {steps.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma etapa registrada nesta execução.</p>
+                    <p className="text-sm text-muted-foreground">{t.noStepsRecorded}</p>
                 ) : (
                     <ol className="space-y-0">
                         {steps.map((step, position) => {
@@ -603,7 +611,7 @@ export function AutomationExecutionDetailClient({
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="text-[10px] font-semibold text-muted-foreground">
-                                                        Etapa {step.index}
+                                                        {t.stepLabel.replace('{index}', String(step.index))}
                                                     </span>
                                                     <Badge className={cn('text-[10px]', executionStatusClass(status))}>{status}</Badge>
                                                 </div>
@@ -637,7 +645,7 @@ export function AutomationExecutionDetailClient({
                                                 )}
                                                 {step.executionNode.input && (
                                                     <div>
-                                                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Entrada</p>
+                                                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">{t.stepInput}</p>
                                                         <pre className="overflow-x-auto rounded-md bg-muted p-2 text-[11px]">
                                                             {JSON.stringify(step.executionNode.input, null, 2)}
                                                         </pre>
@@ -645,7 +653,7 @@ export function AutomationExecutionDetailClient({
                                                 )}
                                                 {step.executionNode.output && (
                                                     <div>
-                                                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Saída</p>
+                                                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">{t.stepOutput}</p>
                                                         <pre className="overflow-x-auto rounded-md bg-muted p-2 text-[11px]">
                                                             {JSON.stringify(step.executionNode.output, null, 2)}
                                                         </pre>
@@ -666,21 +674,21 @@ export function AutomationExecutionDetailClient({
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <h2 className="font-semibold">
-                                {isRollingBack ? 'Rollback em andamento' : 'Recursos provisionados'}
+                                {isRollingBack ? t.rollbackInProgress : t.provisionedResources}
                             </h2>
                             <p className="text-xs text-muted-foreground">
                                 {isRollingBack
-                                    ? 'Acompanhe a exclusão de cada recurso criado por esta execução'
-                                    : 'Somente recursos desta execução'}
+                                    ? t.rollbackProgressHint
+                                    : t.onlyThisExecution}
                             </p>
                         </div>
                         {isRollingBack && (
-                            <p className="text-xs text-muted-foreground">Atualiza a cada 3s</p>
+                            <p className="text-xs text-muted-foreground">{t.refreshesEvery3s}</p>
                         )}
                     </div>
 
                     {resources.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhum recurso registrado nesta execução.</p>
+                        <p className="text-sm text-muted-foreground">{t.noResourcesRecorded}</p>
                     ) : (
                         <>
                             <div className="overflow-x-auto">
@@ -757,7 +765,7 @@ export function AutomationExecutionDetailClient({
                                                     <div className="min-w-0">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <span className="text-[10px] font-semibold text-muted-foreground">
-                                                                Recurso {position + 1}
+                                                                {t.resourceLabel.replace('{index}', String(position + 1))}
                                                             </span>
                                                             <Badge
                                                                 className={cn('text-[10px]', provisionedStatusClass(resource.status))}
@@ -797,7 +805,7 @@ export function AutomationExecutionDetailClient({
                                                             </p>
                                                         )}
                                                         <p className="text-[11px] text-muted-foreground">
-                                                            Região: {resource.region}
+                                                            {t.regionLabel.replace('{region}', resource.region)}
                                                         </p>
                                                     </div>
                                                 )}

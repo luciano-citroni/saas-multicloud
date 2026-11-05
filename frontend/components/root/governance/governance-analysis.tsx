@@ -26,6 +26,7 @@ import {
     translateGovernanceSeverity,
 } from '@/lib/governance-translations';
 import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 type GovernanceJob = {
     id: string;
@@ -123,7 +124,7 @@ function normalizeFindingsResponse(payload: unknown): { items: GovernanceFinding
 function formatDate(dateStr: string | null): string {
     if (!dateStr) return '-';
 
-    return new Date(dateStr).toLocaleString('pt-BR', {
+    return new Date(dateStr).toLocaleString(toIntlLocale(), {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -378,7 +379,7 @@ export function GovernanceAnalysis() {
                     }
 
                     const sorted = Array.from(next).sort((left, right) =>
-                        translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), 'pt-BR')
+                        translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), toIntlLocale())
                     );
 
                     if (sorted.length === previous.length && sorted.every((value, index) => value === previous[index])) {
@@ -442,7 +443,7 @@ export function GovernanceAnalysis() {
         }
 
         return Array.from(merged).sort((left, right) =>
-            translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), 'pt-BR')
+            translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), toIntlLocale())
         );
     }, [job?.provider, resourceTypeFilter, seenResourceTypes]);
 
@@ -456,14 +457,14 @@ export function GovernanceAnalysis() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ClipboardList className="h-4 w-4" />
-                        Análise indisponível
+                        {tg.analysisUnavailable}
                     </CardTitle>
-                    <CardDescription>Selecione uma varredura concluída no histórico para abrir os detalhes.</CardDescription>
+                    <CardDescription>{tg.analysisUnavailableDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" onClick={() => router.push('/governance')}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Voltar para governança
+                        {tg.backToGovernance}
                     </Button>
                 </CardContent>
             </Card>
@@ -476,9 +477,9 @@ export function GovernanceAnalysis() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ShieldAlert className="h-4 w-4" />
-                        Contexto não selecionado
+                        {tg.contextNotSelected}
                     </CardTitle>
-                    <CardDescription>Selecione uma organização e uma conta cloud na barra lateral para visualizar a análise.</CardDescription>
+                    <CardDescription>{tg.contextNotSelectedDesc}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -504,18 +505,18 @@ export function GovernanceAnalysis() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                         <ShieldAlert className="h-4 w-4 text-destructive" />
-                        Falha ao carregar análise
+                        {tg.analysisLoadFailed}
                     </CardTitle>
                     <CardDescription className="text-foreground/90">{jobError}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" onClick={() => setJobRetryNonce((value) => value + 1)}>
                         <RefreshCcw className="mr-2 h-4 w-4" />
-                        Tentar novamente
+                        {tg.tryAgain}
                     </Button>
                     <Button variant="ghost" onClick={() => router.push('/governance')}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Voltar para governança
+                        {tg.backToGovernance}
                     </Button>
                 </CardContent>
             </Card>
@@ -529,10 +530,10 @@ export function GovernanceAnalysis() {
                     <div className="space-y-1">
                         <p className="flex items-center gap-2 text-sm font-medium">
                             <ShieldCheck className="h-4 w-4 text-primary" />
-                            Achados da varredura
+                            {tg.scanFindingsTitle}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            {job ? `Executada em ${formatDate(job.createdAt)}.` : 'Detalhes da varredura selecionada.'}
+                            {job ? tg.executedAt.replace('{date}', formatDate(job.createdAt)) : tg.selectedScanDetails}
                         </p>
                     </div>
                 </div>
@@ -540,7 +541,7 @@ export function GovernanceAnalysis() {
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     <Card className="border-muted/70 bg-background/80">
                         <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground">Score de governança</p>
+                            <p className="text-xs text-muted-foreground">{tg.governanceScoreLower}</p>
                             <p className={`text-2xl font-semibold ${typeof job?.score === 'number' ? scoreColor(job.score) : 'text-muted-foreground'}`}>
                                 {job?.score ?? '--'}
                             </p>
@@ -548,13 +549,13 @@ export function GovernanceAnalysis() {
                     </Card>
                     <Card className="border-muted/70 bg-background/80">
                         <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground">Achados</p>
+                            <p className="text-xs text-muted-foreground">{tg.findings}</p>
                             <p className="text-2xl font-semibold">{job?.totalFindings ?? findings.length}</p>
                         </CardContent>
                     </Card>
                     <Card className="border-muted/70 bg-background/80">
                         <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground">Verificações</p>
+                            <p className="text-xs text-muted-foreground">{tg.checks}</p>
                             <p className="text-2xl font-semibold">{job?.totalChecks ?? '--'}</p>
                         </CardContent>
                     </Card>
@@ -565,17 +566,17 @@ export function GovernanceAnalysis() {
                 <Card>
                     <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
                         <CheckCircle2 className="h-8 w-8 text-green-500" />
-                        <p className="text-sm font-medium">Nenhum achado não-conforme</p>
+                        <p className="text-sm font-medium">{tg.noNonCompliantTitle}</p>
                         <p className="max-w-xl text-xs text-muted-foreground">
-                            Todos os recursos avaliados estão em conformidade com as políticas desta varredura.
+                            {tg.noNonCompliantDesc}
                         </p>
                     </CardContent>
                 </Card>
             ) : (
                 <div className="rounded-xl border bg-card">
                     <div className="border-b px-4 py-3">
-                        <p className="text-sm font-medium">Análise detalhada</p>
-                        <p className="text-xs text-muted-foreground">Exibindo achados não-conformes e avisos com recomendações.</p>
+                        <p className="text-sm font-medium">{tg.detailedAnalysisTitle}</p>
+                        <p className="text-xs text-muted-foreground">{tg.detailedAnalysisDesc}</p>
                     </div>
 
                     <GovernanceAnalysisFilterBar
@@ -639,12 +640,12 @@ export function GovernanceAnalysis() {
                             <Card className="border-destructive/35 bg-destructive/5">
                                 <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
-                                        <p className="text-sm font-medium">Erro ao carregar achados</p>
+                                        <p className="text-sm font-medium">{tg.findingsLoadErrorTitle}</p>
                                         <p className="text-xs text-muted-foreground">{findingsError}</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => setFindingsRetryNonce((value) => value + 1)}>
                                         <RefreshCcw className="mr-2 h-4 w-4" />
-                                        Recarregar
+                                        {tg.reload}
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -681,7 +682,7 @@ export function GovernanceAnalysis() {
                                     )}
 
                                     <p className="mt-3 text-xs text-muted-foreground">
-                                        Recurso: <span className="font-mono break-all">{finding.resourceId}</span>
+                                        {tg.resourceLabel}: <span className="font-mono break-all">{finding.resourceId}</span>
                                     </p>
                                 </CardContent>
                             </Card>
@@ -691,9 +692,9 @@ export function GovernanceAnalysis() {
                         {!loadingFindings && findings.length === 0 && (
                             <Card className="border-dashed">
                                 <CardContent className="py-10 text-center">
-                                    <p className="text-sm font-medium">Nenhum achado corresponde aos filtros</p>
+                                    <p className="text-sm font-medium">{tg.noFindingsMatchTitle}</p>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Ajuste a busca, a criticidade ou o tipo de recurso para refinar a análise.
+                                        {tg.noFindingsMatchDesc}
                                     </p>
                                 </CardContent>
                             </Card>
@@ -702,7 +703,7 @@ export function GovernanceAnalysis() {
 
                     <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-muted-foreground">
-                            Página {currentPage} de {totalPages}
+                            {tc.page} {currentPage} {tc.of} {totalPages}
                         </p>
 
                         <div className="flex items-center gap-2">
@@ -721,7 +722,7 @@ export function GovernanceAnalysis() {
                                 disabled={!pagination?.hasPreviousPage}
                             >
                                 <ChevronLeft className="h-4 w-4" />
-                                Anterior
+                                {tg.previous}
                             </Button>
                             <Button
                                 variant="outline"
@@ -737,7 +738,7 @@ export function GovernanceAnalysis() {
                                 }
                                 disabled={!pagination?.hasNextPage}
                             >
-                                Próxima
+                                {tg.next}
                                 <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>

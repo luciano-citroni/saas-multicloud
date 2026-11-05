@@ -16,6 +16,7 @@ import {
     periodLabel,
 } from '@/components/root/finops/finops-filter-utils';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 type FinopsFilterBarProps = {
     period: DashboardPeriod;
@@ -58,10 +59,13 @@ function FilterFields({
     onProviderChange: (provider: string | null) => void;
     onServiceChange: (service: string | null) => void;
 }) {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
+
     return (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Período</label>
+                <label className="text-xs font-medium text-muted-foreground">{t.budgetPeriod}</label>
                 <Select value={period} onValueChange={(value) => onPeriodChange(value as DashboardPeriod)}>
                     <SelectTrigger className="w-full">
                         <SelectValue />
@@ -77,16 +81,16 @@ function FilterFields({
             </div>
 
             <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Conta</label>
+                <label className="text-xs font-medium text-muted-foreground">{t.accountScope}</label>
                 <Select
                     value={accountId ?? ACCOUNT_FILTER_ALL}
                     onValueChange={(value) => onAccountChange(value === ACCOUNT_FILTER_ALL ? null : value)}
                 >
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Todas as contas" />
+                        <SelectValue placeholder={t.allAccounts} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={ACCOUNT_FILTER_ALL}>Todas as contas</SelectItem>
+                        <SelectItem value={ACCOUNT_FILTER_ALL}>{t.allAccounts}</SelectItem>
                         {cloudAccounts.map((account) => (
                             <SelectItem key={account.id} value={account.id}>
                                 {`${account.alias} (${account.provider.toUpperCase()})`}
@@ -97,16 +101,16 @@ function FilterFields({
             </div>
 
             <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Provedor</label>
+                <label className="text-xs font-medium text-muted-foreground">{t.providerLabel}</label>
                 <Select
                     value={provider ?? PROVIDER_FILTER_ALL}
                     onValueChange={(value) => onProviderChange(value === PROVIDER_FILTER_ALL ? null : value)}
                 >
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Todos" />
+                        <SelectValue placeholder={tCommon.all} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={PROVIDER_FILTER_ALL}>Todos os provedores</SelectItem>
+                        <SelectItem value={PROVIDER_FILTER_ALL}>{t.filterAllProviders}</SelectItem>
                         {providers.map((item) => (
                             <SelectItem key={item} value={item}>
                                 {item.toUpperCase()}
@@ -117,16 +121,16 @@ function FilterFields({
             </div>
 
             <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Serviço</label>
+                <label className="text-xs font-medium text-muted-foreground">{t.filterService}</label>
                 <Select
                     value={service ?? SERVICE_FILTER_ALL}
                     onValueChange={(value) => onServiceChange(value === SERVICE_FILTER_ALL ? null : value)}
                 >
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Todos" />
+                        <SelectValue placeholder={tCommon.all} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={SERVICE_FILTER_ALL}>Todos os serviços</SelectItem>
+                        <SelectItem value={SERVICE_FILTER_ALL}>{t.filterAllServices}</SelectItem>
                         {serviceOptions.map((item) => (
                             <SelectItem key={item} value={item}>
                                 {item}
@@ -154,6 +158,7 @@ export function FinopsFilterBar({
     onClear,
     className,
 }: FinopsFilterBarProps) {
+    const t = useTranslations('finops');
     const [sheetOpen, setSheetOpen] = useState(false);
 
     const providers = useMemo(() => {
@@ -174,17 +179,17 @@ export function FinopsFilterBar({
         activeChips.push({ key: 'period', label: periodLabel(period), onClear: () => onPeriodChange('lastmonth') });
     }
     if (accountId) {
-        activeChips.push({ key: 'account', label: `Conta: ${accountAlias}`, onClear: () => onAccountChange(null) });
+        activeChips.push({ key: 'account', label: t.filterChipAccount.replace('{value}', accountAlias ?? ''), onClear: () => onAccountChange(null) });
     }
     if (provider) {
         activeChips.push({
             key: 'provider',
-            label: `Provedor: ${provider.toUpperCase()}`,
+            label: t.filterChipProvider.replace('{value}', provider.toUpperCase()),
             onClear: () => onProviderChange(null),
         });
     }
     if (service) {
-        activeChips.push({ key: 'service', label: `Serviço: ${service}`, onClear: () => onServiceChange(null) });
+        activeChips.push({ key: 'service', label: t.filterChipService.replace('{value}', service), onClear: () => onServiceChange(null) });
     }
 
     const hasActiveFilters = activeChips.length > 0;
@@ -198,7 +203,7 @@ export function FinopsFilterBar({
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                     <Filter className="size-4 text-muted-foreground" />
-                    Filtros
+                    {t.filtersTitle}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -209,14 +214,14 @@ export function FinopsFilterBar({
                             variant="outline"
                             onClick={() => onAccountChange(sidebarAccount.id)}
                         >
-                            Usar conta da sidebar
+                            {t.filterUseSidebarAccount}
                         </Button>
                     )}
 
                     {hasActiveFilters && (
                         <Button type="button" size="sm" variant="ghost" onClick={onClear}>
                             <RotateCcw className="size-3.5" />
-                            Limpar filtros
+                            {t.clearFilters}
                         </Button>
                     )}
 
@@ -224,13 +229,13 @@ export function FinopsFilterBar({
                         <SheetTrigger asChild>
                             <Button type="button" size="sm" variant="outline" className="lg:hidden">
                                 <Filter className="size-3.5" />
-                                Ajustar
+                                {t.filterAdjust}
                                 {hasActiveFilters ? ` (${activeChips.length})` : ''}
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
                             <SheetHeader>
-                                <SheetTitle>Filtros FinOps</SheetTitle>
+                                <SheetTitle>{t.filterSheetTitle}</SheetTitle>
                             </SheetHeader>
                             <div className="mt-4 space-y-4 pb-6">
                                 <FilterFields
@@ -249,7 +254,7 @@ export function FinopsFilterBar({
                                     onServiceChange={onServiceChange}
                                 />
                                 <Button type="button" className="w-full" onClick={() => setSheetOpen(false)}>
-                                    Aplicar
+                                    {t.filterApply}
                                 </Button>
                             </div>
                         </SheetContent>
@@ -282,7 +287,7 @@ export function FinopsFilterBar({
                                 type="button"
                                 className="rounded-full p-0.5 hover:bg-muted"
                                 onClick={chip.onClear}
-                                aria-label={`Remover filtro ${chip.label}`}
+                                aria-label={t.filterRemove.replace('{label}', chip.label)}
                             >
                                 <X className="size-3" />
                             </button>

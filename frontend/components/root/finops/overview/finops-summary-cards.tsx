@@ -1,4 +1,7 @@
+'use client';
+
 import { FileText, Loader2, PlayCircle, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { useTranslations } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate, isTaxService, scoreColor, scoreLabel } from '@/components/root/finops/overview/helpers';
@@ -31,6 +34,8 @@ export function FinopsSummaryCards({
     onAcceptTerms,
     onRefresh,
 }: FinopsSummaryCardsProps) {
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
     const trendPercentage = Number.isFinite(dashboard?.trend?.growthPercentage)
         ? dashboard?.trend?.growthPercentage ?? 0
         : 0;
@@ -54,7 +59,7 @@ export function FinopsSummaryCards({
                 </p>
             );
         }
-        return <p className="text-xs text-muted-foreground">Nenhuma sincronização realizada</p>;
+        return <p className="text-xs text-muted-foreground">{tf.noSyncYet}</p>;
     }
 
     function renderActionButton() {
@@ -88,7 +93,7 @@ export function FinopsSummaryCards({
                     {renderActionButton()}
                     <Button variant="outline" size="sm" onClick={onRefresh} isLoading={refreshing} disabled={refreshing || isBusy}>
                         <RefreshCw className="size-4" />
-                        Atualizar
+                        {tc.refresh}
                     </Button>
                 </div>
             </div>

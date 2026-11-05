@@ -13,12 +13,15 @@ import { fetchFinopsInsights } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccountById, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { OptimizationInsight } from '@/components/root/finops/overview/types';
+import { useTranslations } from '@/lib/i18n';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
 const RANK_COLORS = ['text-yellow-500', 'text-gray-400', 'text-amber-600'] as const;
 
 export function FinopsInsights() {
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
     const router = useRouter();
     const searchParams = useSearchParams();
     const accountFromQuery = searchParams.get('account');
@@ -80,7 +83,7 @@ export function FinopsInsights() {
             try {
                 const res = await fetchFinopsInsights(orgId, cloudId);
                 if (res.status === 401) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tc.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
@@ -92,12 +95,12 @@ export function FinopsInsights() {
                 const data = await res.json().catch(() => null);
                 setInsights(data as OptimizationInsight | null);
             } catch {
-                toast.error('Não foi possível carregar os insights.');
+                toast.error(tf.insightsLoadError);
             } finally {
                 setLoading(false);
             }
         },
-        [router]
+        [router, tf.insightsLoadError]
     );
 
     useEffect(() => {
@@ -112,8 +115,8 @@ export function FinopsInsights() {
         return (
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Insights de Otimização</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma conta cloud na sidebar.</p>
+                    <p className="text-sm font-medium">{tf.insightsTitle}</p>
+                    <p className="text-xs text-muted-foreground">{tf.selectCloudAccountSidebar}</p>
                 </div>
             </div>
         );
@@ -150,24 +153,24 @@ export function FinopsInsights() {
                     <div className="space-y-2">
                         <div className="inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             <Cloud className="size-3.5" />
-                            Conta selecionada
+                            {tf.selectedAccountBadge}
                         </div>
                         <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? 'Conta atual'}</p>
+                                <p className="text-lg font-semibold">{cloudAccount?.alias ?? tf.insightsCurrentAccount}</p>
                                 {cloudAccount?.provider ? (
                                     <span className="rounded-full border px-2 py-0.5 text-xs font-medium uppercase text-muted-foreground">
                                         {cloudAccount.provider}
                                     </span>
                                 ) : null}
                             </div>
-                            <p className="text-sm text-muted-foreground">Os insights abaixo refletem somente o comportamento desta conta cloud.</p>
+                            <p className="text-sm text-muted-foreground">{tf.insightsAccountScope}</p>
                         </div>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href={dashboardHref}>
                             <ArrowLeft className="size-4" />
-                            Voltar ao dashboard
+                            {tf.backToDashboard}
                         </Link>
                     </Button>
                 </div>
@@ -177,22 +180,22 @@ export function FinopsInsights() {
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Insights de Otimização</p>
-                        <p className="text-xs text-muted-foreground">Análise avançada do mês corrente</p>
+                        <p className="text-sm font-medium">{tf.insightsTitle}</p>
+                        <p className="text-xs text-muted-foreground">{tf.insightsCurrentMonthAnalysis}</p>
                     </div>
                 </div>
 
                 {!insights ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                         <Lightbulb className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">Dados insuficientes</p>
-                        <p className="text-xs text-muted-foreground">Realize uma sincronização FinOps para gerar os insights.</p>
+                        <p className="text-sm font-medium">{tf.forecastInsufficient}</p>
+                        <p className="text-xs text-muted-foreground">{tf.insightsSyncHint}</p>
                     </div>
                 ) : (
                     /* KPI summary row */
                     <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                         <div className="rounded-lg border p-3">
-                            <p className="text-xs text-muted-foreground">Top serviço</p>
+                            <p className="text-xs text-muted-foreground">{tf.topService}</p>
                             {insights.topExpensiveServices[0] ? (
                                 <>
                                     <p className="mt-1 truncate text-base font-bold">
@@ -207,7 +210,7 @@ export function FinopsInsights() {
                             )}
                         </div>
                         <div className="rounded-lg border p-3">
-                            <p className="text-xs text-muted-foreground">Maior crescimento</p>
+                            <p className="text-xs text-muted-foreground">{tf.insightsHighestGrowth}</p>
                             {insights.highestGrowthService ? (
                                 <>
                                     <p className="mt-1 truncate text-base font-bold text-destructive">
@@ -222,9 +225,9 @@ export function FinopsInsights() {
                             )}
                         </div>
                         <div className="col-span-2 rounded-lg border p-3 sm:col-span-1">
-                            <p className="text-xs text-muted-foreground">Economia potencial</p>
+                            <p className="text-xs text-muted-foreground">{tf.potentialSavings}</p>
                             <p className="mt-1 truncate text-xl font-bold">{formatCurrency(Number(insights.totalWaste), currency)}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">via recomendações abertas</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{tf.insightsViaRecs}</p>
                         </div>
                     </div>
                 )}
@@ -235,14 +238,14 @@ export function FinopsInsights() {
                     {/* Top 3 services */}
                     <div className="rounded-xl border">
                         <div className="border-b px-4 py-3">
-                            <p className="text-sm font-medium">Top serviços mais caros</p>
-                            <p className="text-xs text-muted-foreground">Mês corrente</p>
+                            <p className="text-sm font-medium">{tf.insightsTopServices}</p>
+                            <p className="text-xs text-muted-foreground">{tf.insightsCurrentMonth}</p>
                         </div>
                         <div className="divide-y">
                             {insights.topExpensiveServices.length === 0 ? (
                                 <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                                     <Award className="h-8 w-8 text-muted-foreground" />
-                                    <p className="text-xs text-muted-foreground">Sem dados disponíveis</p>
+                                    <p className="text-xs text-muted-foreground">{tf.insightsNoData}</p>
                                 </div>
                             ) : (
                                 insights.topExpensiveServices.map((svc, idx) => (
@@ -269,16 +272,16 @@ export function FinopsInsights() {
                                 <div className="border-b px-4 py-3">
                                     <p className="text-sm font-medium flex items-center gap-2">
                                         <TrendingUp className="size-4 text-destructive" />
-                                        Maior crescimento
+                                        {tf.insightsHighestGrowth}
                                     </p>
                                 </div>
                                 <div className="p-4">
                                     <p className="truncate text-base font-bold">{insights.highestGrowthService.service}</p>
                                     <p className="mt-0.5 text-xs font-medium text-destructive">
-                                        +{Number(insights.highestGrowthService.growthPercentage).toFixed(1)}% vs mês anterior
+                                        {tf.insightsVsPreviousMonth.replace('{percent}', Number(insights.highestGrowthService.growthPercentage).toFixed(1))}
                                     </p>
                                     <p className="mt-0.5 text-xs text-muted-foreground">
-                                        {formatCurrency(insights.highestGrowthService.cost, currency)} no mês atual
+                                        {tf.insightsCostThisMonth.replace('{amount}', formatCurrency(insights.highestGrowthService.cost, currency))}
                                     </p>
                                 </div>
                             </div>
@@ -287,12 +290,12 @@ export function FinopsInsights() {
                             <div className="border-b px-4 py-3">
                                 <p className="text-sm font-medium flex items-center gap-2">
                                     <Zap className="size-4 text-yellow-500" />
-                                    Economia potencial
+                                    {tf.potentialSavings}
                                 </p>
                             </div>
                             <div className="p-4">
                                 <p className="text-xl font-bold">{formatCurrency(Number(insights.totalWaste), currency)}</p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">via recomendações abertas</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{tf.insightsViaRecs}</p>
                             </div>
                         </div>
                     </div>
@@ -301,7 +304,7 @@ export function FinopsInsights() {
                     {insights.costIncreaseReasons.length > 0 && (
                         <div className="rounded-xl border sm:col-span-2">
                             <div className="border-b px-4 py-3">
-                                <p className="text-sm font-medium">Causas de aumento identificadas</p>
+                                <p className="text-sm font-medium">{tf.insightsIncreaseReasons}</p>
                             </div>
                             <div className="divide-y">
                                 {insights.costIncreaseReasons.map((reason, idx) => (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
@@ -30,6 +30,7 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import { cn } from '@/lib/utils';
+import { useTranslations, type Translations } from '@/lib/i18n';
 
 type NotificationGroupOption = {
     id: string;
@@ -38,48 +39,58 @@ type NotificationGroupOption = {
     isActive: boolean;
 };
 
-const schema = z
-    .object({
-        enabled: z.boolean(),
-        alertChannelEmail: z.boolean(),
-        alertChannelWhatsapp: z.boolean(),
-        alertEmailGroupIds: z.array(z.string().uuid()),
-        alertWhatsappGroupIds: z.array(z.string().uuid()),
-        minSeverity: z.enum(['low', 'medium', 'high', 'critical']),
-    })
-    .superRefine((data, ctx) => {
-        if (!data.enabled) return;
-        if (!data.alertChannelEmail && !data.alertChannelWhatsapp) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um canal',
-                path: ['alertChannelEmail'],
-            });
-        }
-        if (data.alertChannelEmail && data.alertEmailGroupIds.length === 0) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um grupo de e-mail',
-                path: ['alertEmailGroupIds'],
-            });
-        }
-        if (data.alertChannelWhatsapp && data.alertWhatsappGroupIds.length === 0) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'Selecione ao menos um grupo de WhatsApp',
-                path: ['alertWhatsappGroupIds'],
-            });
-        }
-    });
+type FinopsT = Record<keyof Translations['finops'], string>;
 
-type FormData = z.infer<typeof schema>;
+function createSchema(t: FinopsT) {
+    return z
+        .object({
+            enabled: z.boolean(),
+            alertChannelEmail: z.boolean(),
+            alertChannelWhatsapp: z.boolean(),
+            alertEmailGroupIds: z.array(z.string().uuid()),
+            alertWhatsappGroupIds: z.array(z.string().uuid()),
+            minSeverity: z.enum(['low', 'medium', 'high', 'critical']),
+        })
+        .superRefine((data, ctx) => {
+            if (!data.enabled) return;
+            if (!data.alertChannelEmail && !data.alertChannelWhatsapp) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: t.errSelectChannel,
+                    path: ['alertChannelEmail'],
+                });
+            }
+            if (data.alertChannelEmail && data.alertEmailGroupIds.length === 0) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: t.errSelectEmailGroup,
+                    path: ['alertEmailGroupIds'],
+                });
+            }
+            if (data.alertChannelWhatsapp && data.alertWhatsappGroupIds.length === 0) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: t.errSelectWhatsappGroup,
+                    path: ['alertWhatsappGroupIds'],
+                });
+            }
+        });
+}
 
-const SEVERITY_LABEL: Record<FormData['minSeverity'], string> = {
-    critical: 'crítica',
-    high: 'alta',
-    medium: 'média',
-    low: 'todas',
-};
+type FormData = z.infer<ReturnType<typeof createSchema>>;
+
+function severityNoteLabel(t: FinopsT, severity: FormData['minSeverity']): string {
+    switch (severity) {
+        case 'critical':
+            return t.severityCritical.toLowerCase();
+        case 'high':
+            return t.severityHigh.toLowerCase();
+        case 'medium':
+            return t.severityMedium.toLowerCase();
+        default:
+            return t.alertsMinSeverityAll.toLowerCase();
+    }
+}
 
 function parseGroups(payload: unknown): NotificationGroupOption[] {
     const items = Array.isArray(payload)
@@ -131,6 +142,7 @@ function GroupChecklist({
     onChange,
     emptyLabel,
     disabled,
+    t,
 }: {
     groups: NotificationGroupOption[];
     loading: boolean;
@@ -138,9 +150,10 @@ function GroupChecklist({
     onChange: (next: string[]) => void;
     emptyLabel: string;
     disabled?: boolean;
+    t: FinopsT;
 }) {
     if (loading) {
-        return <p className="text-sm text-muted-foreground">Carregando grupos…</p>;
+        return <p className="text-sm text-muted-foreground">{t.loadingGroups}</p>;
     }
 
     if (groups.length === 0) {
@@ -148,7 +161,7 @@ function GroupChecklist({
             <p className="text-sm text-muted-foreground">
                 {emptyLabel}{' '}
                 <Link href="/tenant/notifications" className="underline underline-offset-2">
-                    Gerenciar em Notificações
+                    {t.manageInNotifications}
                 </Link>
             </p>
         );
@@ -185,6 +198,9 @@ type FinopsAnomalyAlertsCardProps = {
 };
 
 export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsCardProps) {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
+    const schema = useMemo(() => createSchema(t), [t]);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
     const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
@@ -246,7 +262,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
             setWhatsappGroups(whatsapps);
 
             if (!settingsRes.ok) {
-                toast.error(extractErrorMessage(settingsBody, 'pt'));
+                toast.error(extractErrorMessage(settingsBody));
                 return;
             }
 
@@ -255,12 +271,12 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
             setStatusReady(true);
             form.reset(settingsToForm(settings, emails, whatsapps));
         } catch {
-            toast.error('Não foi possível carregar os alertas de anomalia.');
+            toast.error(t.alertsLoadError);
         } finally {
             setLoading(false);
             setLoadingGroups(false);
         }
-    }, [organizationId, form]);
+    }, [organizationId, form, t]);
 
     useEffect(() => {
         setStatusReady(false);
@@ -291,7 +307,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
 
         const body = await response.json().catch(() => null);
         if (!response.ok) {
-            toast.error(extractErrorMessage(body, 'pt'));
+            toast.error(extractErrorMessage(body));
             return;
         }
 
@@ -299,11 +315,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
         form.reset(settingsToForm(saved, emailGroups, whatsappGroups));
         setAlertsEnabled(Boolean(saved.enabled));
         setOpen(false);
-        toast.success(
-            saved.enabled
-                ? 'Alerta diário de anomalias ativado.'
-                : 'Alerta diário de anomalias desativado.',
-        );
+        toast.success(saved.enabled ? t.alertsEnabledToast : t.alertsDisabledToast);
     };
 
     return (
@@ -316,7 +328,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                 className="gap-2"
             >
                 <Bell className="size-4" />
-                Alertas
+                {t.alertsButton}
                 {statusReady ? (
                     <span
                         className={cn(
@@ -326,7 +338,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                 : 'bg-muted text-muted-foreground',
                         )}
                     >
-                        {alertsEnabled ? 'Ativo' : 'Off'}
+                        {alertsEnabled ? t.alertsOn : t.alertsOff}
                     </span>
                 ) : null}
             </Button>
@@ -337,17 +349,16 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                     className="flex max-h-[min(90vh,720px)] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
                 >
                     <DialogHeader className="shrink-0 border-b px-4 py-4">
-                        <DialogTitle>Alertas diários de anomalia</DialogTitle>
+                        <DialogTitle>{t.alertsDialogTitle}</DialogTitle>
                         <DialogDescription>
-                            Digest com anomalias abertas dos últimos 7 dias, enviado às 04:00 UTC para os
-                            grupos de{' '}
-                            <Link href="/tenant/notifications">Notificações</Link>.
+                            {t.alertsDialogDescPrefix}{' '}
+                            <Link href="/tenant/notifications">{t.notificationsLink}</Link>.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
                         {loading ? (
-                            <p className="text-sm text-muted-foreground">Carregando preferências…</p>
+                            <p className="text-sm text-muted-foreground">{t.alertsLoadingPrefs}</p>
                         ) : (
                             <Form {...form}>
                                 <form
@@ -372,12 +383,10 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                                 </FormControl>
                                                 <div className="space-y-0.5">
                                                     <FormLabel className="text-sm font-medium">
-                                                        Ativar digest diário
+                                                        {t.alertsEnableDigest}
                                                     </FormLabel>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {canManage
-                                                            ? 'Um resumo por canal, sem repetir no mesmo dia.'
-                                                            : 'Somente OWNER/ADMIN podem alterar.'}
+                                                        {canManage ? t.alertsDigestHint : t.alertsAdminOnly}
                                                     </p>
                                                 </div>
                                             </FormItem>
@@ -389,7 +398,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                         name="minSeverity"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Severidade mínima</FormLabel>
+                                                <FormLabel>{t.alertsMinSeverityLabel}</FormLabel>
                                                 <Select
                                                     value={field.value}
                                                     onValueChange={field.onChange}
@@ -401,15 +410,17 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                                         </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        <SelectItem value="critical">Crítica</SelectItem>
-                                                        <SelectItem value="high">Alta e acima</SelectItem>
-                                                        <SelectItem value="medium">Média e acima</SelectItem>
-                                                        <SelectItem value="low">Todas</SelectItem>
+                                                        <SelectItem value="critical">{t.alertsMinSeverityCritical}</SelectItem>
+                                                        <SelectItem value="high">{t.alertsMinSeverityHigh}</SelectItem>
+                                                        <SelectItem value="medium">{t.alertsMinSeverityMedium}</SelectItem>
+                                                        <SelectItem value="low">{t.alertsMinSeverityAll}</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                                 <p className="text-xs text-muted-foreground">
-                                                    Inclui anomalias com severidade ≥{' '}
-                                                    {SEVERITY_LABEL[field.value]}.
+                                                    {t.alertsSeverityNote.replace(
+                                                        '{severity}',
+                                                        severityNoteLabel(t, field.value),
+                                                    )}
                                                 </p>
                                                 <FormMessage />
                                             </FormItem>
@@ -420,7 +431,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                         <>
                                             <Separator />
                                             <div className="space-y-3">
-                                                <p className="text-sm font-medium">Canais</p>
+                                                <p className="text-sm font-medium">{t.channelsLabel}</p>
                                                 <div className="flex flex-wrap gap-4">
                                                     <FormField
                                                         control={form.control}
@@ -437,7 +448,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                                                     />
                                                                 </FormControl>
                                                                 <FormLabel className="font-normal">
-                                                                    E-mail
+                                                                    {tCommon.email}
                                                                 </FormLabel>
                                                             </FormItem>
                                                         )}
@@ -474,14 +485,15 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                                     name="alertEmailGroupIds"
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel>Grupos de e-mail</FormLabel>
+                                                            <FormLabel>{t.emailGroupsLabel}</FormLabel>
                                                             <GroupChecklist
                                                                 groups={emailGroups}
                                                                 loading={loadingGroups}
                                                                 value={field.value}
                                                                 onChange={field.onChange}
-                                                                emptyLabel="Nenhum grupo de e-mail ativo."
+                                                                emptyLabel={t.noEmailGroups}
                                                                 disabled={!canManage}
+                                                                t={t}
                                                             />
                                                             <FormMessage />
                                                         </FormItem>
@@ -495,14 +507,15 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                                     name="alertWhatsappGroupIds"
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel>Grupos de WhatsApp</FormLabel>
+                                                            <FormLabel>{t.whatsappGroupsLabel}</FormLabel>
                                                             <GroupChecklist
                                                                 groups={whatsappGroups}
                                                                 loading={loadingGroups}
                                                                 value={field.value}
                                                                 onChange={field.onChange}
-                                                                emptyLabel="Nenhum grupo de WhatsApp ativo."
+                                                                emptyLabel={t.noWhatsappGroups}
                                                                 disabled={!canManage}
+                                                                t={t}
                                                             />
                                                             <FormMessage />
                                                         </FormItem>
@@ -518,7 +531,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
 
                     <DialogFooter className="mx-0 mb-0 shrink-0">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                            Cancelar
+                            {tCommon.cancel}
                         </Button>
                         {canManage ? (
                             <Button
@@ -527,7 +540,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                 isLoading={form.formState.isSubmitting}
                                 disabled={loading}
                             >
-                                Salvar
+                                {tCommon.save}
                             </Button>
                         ) : null}
                     </DialogFooter>

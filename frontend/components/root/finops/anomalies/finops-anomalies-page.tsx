@@ -45,6 +45,10 @@ import {
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { FinopsAnomalyAlertsCard } from '@/components/root/finops/anomalies/finops-anomaly-alerts-card';
 import { cn } from '@/lib/utils';
+import { toIntlLocale } from '@/lib/i18n/format';
+import { useTranslations, type Translations } from '@/lib/i18n';
+
+type FinopsT = Record<keyof Translations['finops'], string>;
 
 type AnomalyRow = FinopsAnomaly & { cloudAccountId: string };
 
@@ -72,21 +76,21 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
 const DEFAULT_PERIOD = 'last7days';
 const PERIOD_OPTIONS = [
-    { value: 'last7days', label: 'Últimos 7 dias' },
-    { value: 'currentmonth', label: 'Mês atual' },
-    { value: 'lastmonth', label: 'Mês passado' },
-    { value: 'last30days', label: 'Últimos 30 dias' },
-    { value: 'last90days', label: 'Últimos 90 dias' },
-    { value: 'last180days', label: 'Últimos 180 dias' },
-] as const;
+    { value: 'last7days', labelKey: 'periodLast7days' },
+    { value: 'currentmonth', labelKey: 'periodCurrentMonth' },
+    { value: 'lastmonth', labelKey: 'periodLastMonth' },
+    { value: 'last30days', labelKey: 'periodLast30days' },
+    { value: 'last90days', labelKey: 'periodLast90days' },
+    { value: 'last180days', labelKey: 'periodLast180days' },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: keyof FinopsT }>;
 type PeriodOption = (typeof PERIOD_OPTIONS)[number]['value'];
 
 const DEFAULT_SORT = 'severity';
 const SORT_OPTIONS = [
-    { value: 'severity', label: 'Severidade' },
-    { value: 'cost', label: 'Custo (maior → menor)' },
-    { value: 'date', label: 'Data (mais recente)' },
-] as const;
+    { value: 'severity', labelKey: 'severity' },
+    { value: 'cost', labelKey: 'sortCost' },
+    { value: 'date', labelKey: 'sortDate' },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: keyof FinopsT }>;
 type SortOption = (typeof SORT_OPTIONS)[number]['value'];
 
 function isPeriodOption(value: string | null): value is PeriodOption {
@@ -106,7 +110,7 @@ function daysSinceAnomaly(anomalyDate: string | Date): number {
     return Math.floor((utcToday.getTime() - target.getTime()) / 86_400_000);
 }
 
-function contributorsEmptyMessage(anomaly: AnomalyRow): string {
+function contributorsEmptyMessage(anomaly: AnomalyRow, t: FinopsT): string {
     const age = daysSinceAnomaly(anomaly.anomalyDate);
     const service = anomaly.service.toLowerCase();
     const hasInventoryCauses =
@@ -118,47 +122,45 @@ function contributorsEmptyMessage(anomaly: AnomalyRow): string {
         service.includes('compute engine');
 
     if (age > 14) {
-        return (
-            `Não foi possível identificar o recurso desta anomalia. ` +
-            `A AWS só disponibiliza o detalhe por recurso nos últimos 14 dias ` +
-            `(esta anomalia tem ${age} dias). Esse histórico não pode ser recuperado depois.`
-        );
+        return t.contributorsTooOld.replace('{days}', String(age));
     }
     if (!hasInventoryCauses) {
-        return (
-            `Não encontramos o detalhe por recurso neste dia. ` +
-            `Execute um sync FinOps nos próximos dias enquanto a anomalia ainda estiver recente (até 14 dias). ` +
-            `Em serviços como Lambda, o sistema mostra apenas o custo da função — não há evento de inventário ` +
-            `(como troca de tipo de instância na EC2) para explicar a causa.`
-        );
+        return t.contributorsMissingDetail;
     }
-    return 'Não encontramos recursos vinculados a esta anomalia.';
+    return t.contributorsNone;
 }
 
 const SEVERITY_CONFIG = {
-    critical: { label: 'Crítica', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-    high: { label: 'Alta', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-    medium: { label: 'Média', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    low: { label: 'Baixa', className: 'bg-muted text-muted-foreground' },
-} as const;
+    critical: { labelKey: 'severityCritical', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+    high: { labelKey: 'severityHigh', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    medium: { labelKey: 'severityMedium', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    low: { labelKey: 'severityLow', className: 'bg-muted text-muted-foreground' },
+} as const satisfies Record<string, { labelKey: keyof FinopsT; className: string }>;
 
-const STATUS_LABELS: Record<string, string> = {
-    open: 'Abertas',
-    acknowledged: 'Reconhecidas',
-    resolved: 'Resolvidas',
-    all: 'Todas',
-};
+const STATUS_LABEL_KEYS = {
+    open: 'statusOpen',
+    acknowledged: 'statusAcknowledged',
+    resolved: 'statusResolved',
+    all: 'statusAll',
+} as const satisfies Record<string, keyof FinopsT>;
 
-function SeverityBadge({ severity }: { severity: string }) {
+function statusLabel(t: FinopsT, status: string): string {
+    const key = STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS];
+    return key ? t[key] : status;
+}
+
+function SeverityBadge({ severity, t }: { severity: string; t: FinopsT }) {
     const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.low;
     return (
         <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cfg.className)}>
-            {cfg.label}
+            {t[cfg.labelKey]}
         </span>
     );
 }
 
 export function FinopsAnomaliesPage() {
+    const t = useTranslations('finops');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -333,19 +335,19 @@ export function FinopsAnomaliesPage() {
                     limit: pageSize,
                 });
                 if (response.status === 401) {
-                    toast.error('Sessão expirada.');
+                    toast.error(tCommon.sessionExpired);
                     router.replace('/auth/sign-in');
                     return;
                 }
                 const payload = await response.json().catch(() => null);
                 if (!response.ok) {
-                    toast.error(extractErrorMessage(payload, 'pt'));
+                    toast.error(extractErrorMessage(payload));
                     setData(null);
                     return;
                 }
                 setData(payload as AnomaliesListResponse);
             } catch {
-                toast.error('Não foi possível carregar as anomalias.');
+                toast.error(t.loadAnomaliesError);
                 setData(null);
             } finally {
                 setLoading(false);
@@ -359,6 +361,8 @@ export function FinopsAnomaliesPage() {
             severityFilter,
             sortFilter,
             statusFilter,
+            t,
+            tCommon,
             urlFilters.accountId,
             urlFilters.provider,
         ],
@@ -407,13 +411,13 @@ export function FinopsAnomaliesPage() {
             const response = await acknowledgeFinopsAnomaly(organizationId, anomaly.cloudAccountId, anomaly.id);
             if (!response.ok && response.status !== 204) {
                 const body = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
-            toast.success('Anomalia reconhecida.');
+            toast.success(t.acknowledgeSuccess);
             void loadAnomalies(organizationId, scopedAccountIds);
         } catch {
-            toast.error('Não foi possível reconhecer a anomalia.');
+            toast.error(t.acknowledgeError);
         } finally {
             setAcknowledging(null);
         }
@@ -438,7 +442,7 @@ export function FinopsAnomaliesPage() {
             );
             const payload = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 setContributorsById((prev) => ({ ...prev, [anomaly.id]: [] }));
                 return;
             }
@@ -447,7 +451,7 @@ export function FinopsAnomaliesPage() {
                 [anomaly.id]: Array.isArray(payload) ? (payload as AnomalyResourceContributor[]) : [],
             }));
         } catch {
-            toast.error('Não foi possível carregar os recursos.');
+            toast.error(t.resourcesLoadError);
             setContributorsById((prev) => ({ ...prev, [anomaly.id]: [] }));
         } finally {
             setLoadingContributorsId(null);
@@ -467,8 +471,8 @@ export function FinopsAnomaliesPage() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Anomalias</CardTitle>
-                    <CardDescription>Selecione uma organização na sidebar.</CardDescription>
+                    <CardTitle>{t.subnavAnomalies}</CardTitle>
+                    <CardDescription>{t.selectOrgSidebar}</CardDescription>
                 </CardHeader>
             </Card>
         );
@@ -503,10 +507,8 @@ export function FinopsAnomaliesPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Anomalias de custo</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Desvios detectados por serviço — filtre, pagine e investigue o recurso que causou o spike.
-                        </p>
+                        <h1 className="text-xl font-semibold tracking-tight">{t.anomaliesTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{t.anomaliesDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
@@ -522,7 +524,7 @@ export function FinopsAnomaliesPage() {
                         disabled={loading || !accountsReady}
                     >
                         <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-                        Atualizar
+                        {tCommon.refresh}
                     </Button>
                 </div>
             </div>
@@ -530,13 +532,13 @@ export function FinopsAnomaliesPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Abertas</CardDescription>
+                        <CardDescription>{t.statusOpen}</CardDescription>
                         <CardTitle className="text-2xl tabular-nums">{totals?.open ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Críticas / altas</CardDescription>
+                        <CardDescription>{t.anomaliesCriticalHigh}</CardDescription>
                         <CardTitle className="text-2xl tabular-nums">
                             {(totals?.critical ?? 0) + (totals?.high ?? 0)}
                         </CardTitle>
@@ -544,13 +546,13 @@ export function FinopsAnomaliesPage() {
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Reconhecidas</CardDescription>
+                        <CardDescription>{t.statusAcknowledged}</CardDescription>
                         <CardTitle className="text-2xl tabular-nums">{totals?.acknowledged ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Resultados filtrados</CardDescription>
+                        <CardDescription>{t.filteredResults}</CardDescription>
                         <CardTitle className="text-2xl tabular-nums">{pagination?.totalItems ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
@@ -560,20 +562,20 @@ export function FinopsAnomaliesPage() {
                 <CardHeader className="gap-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                            <CardTitle className="text-base">Filtros</CardTitle>
-                            <CardDescription>Persistidos na URL — compartilháveis e com histórico</CardDescription>
+                            <CardTitle className="text-base">{t.filtersTitle}</CardTitle>
+                            <CardDescription>{t.filtersUrlHint}</CardDescription>
                         </div>
                         {hasActiveFilters ? (
                             <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" onClick={clearFilters}>
                                 <RotateCcw className="size-3.5" />
-                                Limpar filtros
+                                {t.clearFilters}
                             </Button>
                         ) : null}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                         <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                             <label htmlFor="anomalies-cloud-account" className="text-xs font-medium text-muted-foreground">
-                                Cloud account
+                                {t.cloudAccountLabel}
                             </label>
                             <Select
                                 value={
@@ -593,10 +595,10 @@ export function FinopsAnomaliesPage() {
                                 disabled={!accountsReady}
                             >
                                 <SelectTrigger id="anomalies-cloud-account" className="w-full">
-                                    <SelectValue placeholder="Selecione a conta" />
+                                    <SelectValue placeholder={t.selectAccountPlaceholder} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={ACCOUNT_FILTER_ALL}>Todas as contas</SelectItem>
+                                    <SelectItem value={ACCOUNT_FILTER_ALL}>{t.allAccounts}</SelectItem>
                                     {cloudAccounts.map((account) => (
                                         <SelectItem key={account.id} value={account.id}>
                                             {account.alias}
@@ -609,19 +611,19 @@ export function FinopsAnomaliesPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="anomalies-status" className="text-xs font-medium text-muted-foreground">
-                                Status
+                                {tCommon.status}
                             </label>
                             <Select
                                 value={statusFilter}
                                 onValueChange={(value) => syncUrlState({ status: value, page: null })}
                             >
                                 <SelectTrigger id="anomalies-status" className="w-full">
-                                    <SelectValue placeholder="Status" />
+                                    <SelectValue placeholder={tCommon.status} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {(['open', 'acknowledged', 'resolved', 'all'] as const).map((s) => (
                                         <SelectItem key={s} value={s}>
-                                            {STATUS_LABELS[s]}
+                                            {statusLabel(t, s)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -630,40 +632,40 @@ export function FinopsAnomaliesPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="anomalies-severity" className="text-xs font-medium text-muted-foreground">
-                                Severidade
+                                {t.severity}
                             </label>
                             <Select
                                 value={severityFilter}
                                 onValueChange={(value) => syncUrlState({ severity: value, page: null })}
                             >
                                 <SelectTrigger id="anomalies-severity" className="w-full">
-                                    <SelectValue placeholder="Severidade" />
+                                    <SelectValue placeholder={t.severity} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Todas severidades</SelectItem>
-                                    <SelectItem value="critical">Crítica</SelectItem>
-                                    <SelectItem value="high">Alta</SelectItem>
-                                    <SelectItem value="medium">Média</SelectItem>
-                                    <SelectItem value="low">Baixa</SelectItem>
+                                    <SelectItem value="all">{t.allSeverities}</SelectItem>
+                                    <SelectItem value="critical">{t.severityCritical}</SelectItem>
+                                    <SelectItem value="high">{t.severityHigh}</SelectItem>
+                                    <SelectItem value="medium">{t.severityMedium}</SelectItem>
+                                    <SelectItem value="low">{t.severityLow}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
                             <label htmlFor="anomalies-period" className="text-xs font-medium text-muted-foreground">
-                                Período
+                                {t.budgetPeriod}
                             </label>
                             <Select
                                 value={periodFilter}
                                 onValueChange={(value) => syncUrlState({ period: value, page: null })}
                             >
                                 <SelectTrigger id="anomalies-period" className="w-full">
-                                    <SelectValue placeholder="Período" />
+                                    <SelectValue placeholder={t.budgetPeriod} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {PERIOD_OPTIONS.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
+                                            {t[option.labelKey]}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -672,7 +674,7 @@ export function FinopsAnomaliesPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="anomalies-provider" className="text-xs font-medium text-muted-foreground">
-                                Provedor
+                                {t.providerLabel}
                             </label>
                             <Select
                                 value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
@@ -684,10 +686,10 @@ export function FinopsAnomaliesPage() {
                                 }
                             >
                                 <SelectTrigger id="anomalies-provider" className="w-full">
-                                    <SelectValue placeholder="Provedor" />
+                                    <SelectValue placeholder={t.providerLabel} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={PROVIDER_FILTER_ALL}>Todos provedores</SelectItem>
+                                    <SelectItem value={PROVIDER_FILTER_ALL}>{t.allProviders}</SelectItem>
                                     <SelectItem value="aws">AWS</SelectItem>
                                     <SelectItem value="azure">Azure</SelectItem>
                                     <SelectItem value="gcp">GCP</SelectItem>
@@ -697,19 +699,19 @@ export function FinopsAnomaliesPage() {
 
                         <div className="space-y-1.5">
                             <label htmlFor="anomalies-sort" className="text-xs font-medium text-muted-foreground">
-                                Ordenar por
+                                {t.sortByLabel}
                             </label>
                             <Select
                                 value={sortFilter}
                                 onValueChange={(value) => syncUrlState({ sort: value, page: null })}
                             >
                                 <SelectTrigger id="anomalies-sort" className="w-full">
-                                    <SelectValue placeholder="Ordenação" />
+                                    <SelectValue placeholder={t.sortPlaceholder} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {SORT_OPTIONS.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
+                                            {t[option.labelKey]}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -721,11 +723,14 @@ export function FinopsAnomaliesPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">Lista de anomalias</CardTitle>
+                    <CardTitle className="text-base">{t.anomaliesListTitle}</CardTitle>
                     <CardDescription>
                         {pagination
-                            ? `${pagination.totalItems} resultado(s) · página ${currentPage} de ${totalPages}`
-                            : 'Carregando…'}
+                            ? t.resultsPageSummary
+                                  .replace('{total}', String(pagination.totalItems))
+                                  .replace('{page}', String(currentPage))
+                                  .replace('{pages}', String(totalPages))
+                            : tCommon.loading}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -744,10 +749,8 @@ export function FinopsAnomaliesPage() {
                     ) : items.length === 0 ? (
                         <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                            <p className="text-sm font-medium">Nenhuma anomalia encontrada</p>
-                            <p className="text-xs text-muted-foreground">
-                                Ajuste os filtros ou aguarde o próximo sync diário FinOps.
-                            </p>
+                            <p className="text-sm font-medium">{t.anomaliesEmptyTitle}</p>
+                            <p className="text-xs text-muted-foreground">{t.anomaliesEmptyHint}</p>
                         </div>
                     ) : (
                         <div className="divide-y">
@@ -764,7 +767,7 @@ export function FinopsAnomaliesPage() {
                                             <div className="min-w-0 flex-1 space-y-1">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <AlertTriangle className="size-4 text-amber-500" />
-                                                    <SeverityBadge severity={anomaly.severity} />
+                                                    <SeverityBadge severity={anomaly.severity} t={t} />
                                                     <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] uppercase text-muted-foreground">
                                                         {anomaly.cloudProvider}
                                                     </span>
@@ -772,13 +775,13 @@ export function FinopsAnomaliesPage() {
                                                         {alias}
                                                     </span>
                                                     <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] capitalize text-muted-foreground">
-                                                        {STATUS_LABELS[anomaly.status] ?? anomaly.status}
+                                                        {statusLabel(t, anomaly.status)}
                                                     </span>
                                                 </div>
                                                 <p className="truncate text-sm font-medium">{anomaly.service}</p>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {anomaly.region || 'global'} ·{' '}
-                                                    {new Date(anomaly.anomalyDate).toLocaleDateString('pt-BR')}
+                                                    {anomaly.region || t.globalRegion} ·{' '}
+                                                    {new Date(anomaly.anomalyDate).toLocaleDateString(toIntlLocale())}
                                                     {anomaly.description ? ` · ${anomaly.description}` : ''}
                                                 </p>
                                             </div>
@@ -786,14 +789,27 @@ export function FinopsAnomaliesPage() {
                                             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
                                                 <div className="text-right text-xs">
                                                     <p className="text-muted-foreground">
-                                                        Esperado {formatCurrency(anomaly.expectedCost, anomaly.currency)}
+                                                        {t.anomalyExpected.replace(
+                                                            '{amount}',
+                                                            formatCurrency(anomaly.expectedCost, anomaly.currency),
+                                                        )}
                                                     </p>
                                                     <p className="font-semibold tabular-nums text-destructive">
-                                                        Real {formatCurrency(anomaly.actualCost, anomaly.currency)}
+                                                        {t.anomalyActual.replace(
+                                                            '{amount}',
+                                                            formatCurrency(anomaly.actualCost, anomaly.currency),
+                                                        )}
                                                     </p>
                                                     <p className="tabular-nums text-destructive">
-                                                        +{Number(anomaly.deviationPercentage).toFixed(1)}% · impacto{' '}
-                                                        {formatCurrency(anomaly.financialImpact, anomaly.currency)}
+                                                        {t.anomalyDeviationImpact
+                                                            .replace(
+                                                                '{percent}',
+                                                                Number(anomaly.deviationPercentage).toFixed(1),
+                                                            )
+                                                            .replace(
+                                                                '{amount}',
+                                                                formatCurrency(anomaly.financialImpact, anomaly.currency),
+                                                            )}
                                                     </p>
                                                 </div>
                                                 <Button
@@ -808,7 +824,7 @@ export function FinopsAnomaliesPage() {
                                                     ) : (
                                                         <ChevronDown className="size-4" />
                                                     )}
-                                                    Recursos
+                                                    {t.resourcesButton}
                                                 </Button>
                                                 {anomaly.status === 'open' && (
                                                     <Button
@@ -820,7 +836,7 @@ export function FinopsAnomaliesPage() {
                                                         disabled={acknowledging !== null}
                                                         onClick={() => void handleAcknowledge(anomaly)}
                                                     >
-                                                        OK
+                                                        {t.acknowledgeShort}
                                                     </Button>
                                                 )}
                                             </div>
@@ -831,11 +847,11 @@ export function FinopsAnomaliesPage() {
                                                 {loadingContributors ? (
                                                     <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                                                         <Loader2 className="size-4 animate-spin" />
-                                                        Carregando recursos…
+                                                        {t.resourcesLoading}
                                                     </div>
                                                 ) : !contributors || contributors.length === 0 ? (
                                                     <p className="text-xs text-muted-foreground">
-                                                        {contributorsEmptyMessage(anomaly)}
+                                                        {contributorsEmptyMessage(anomaly, t)}
                                                     </p>
                                                 ) : (
                                                     <div className="space-y-2">
@@ -853,8 +869,10 @@ export function FinopsAnomaliesPage() {
                                                                             {shortResourceId(row.resourceId)}
                                                                         </p>
                                                                         <p className="text-[11px] text-muted-foreground">
-                                                                            delta{' '}
-                                                                            {formatCurrency(row.delta, row.currency)}
+                                                                            {t.contributorDelta.replace(
+                                                                                '{amount}',
+                                                                                formatCurrency(row.delta, row.currency),
+                                                                            )}
                                                                         </p>
                                                                     </div>
                                                                     <p className="text-xs font-semibold tabular-nums">
@@ -874,7 +892,7 @@ export function FinopsAnomaliesPage() {
                                                                     </p>
                                                                 ) : (
                                                                     <p className="mt-1 text-[11px] text-muted-foreground">
-                                                                        Sem mudança de configuração no período
+                                                                        {t.noConfigChange}
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -892,7 +910,7 @@ export function FinopsAnomaliesPage() {
                     {pagination && pagination.totalItems > 0 ? (
                         <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8 sm:pr-32 md:pr-36">
                             <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                                <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                                <span className="shrink-0 whitespace-nowrap">{tCommon.rowsPerPage}</span>
                                 <Select
                                     value={String(pageSize)}
                                     onValueChange={(value) => syncUrlState({ limit: Number(value), page: null })}
@@ -911,7 +929,9 @@ export function FinopsAnomaliesPage() {
                             </div>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                                 <span className="text-sm font-medium">
-                                    Página {currentPage} de {totalPages}
+                                    {t.pageOfPages
+                                        .replace('{page}', String(currentPage))
+                                        .replace('{pages}', String(totalPages))}
                                 </span>
                                 <div className="flex items-center gap-1 self-start sm:self-auto">
                                     <Button
@@ -921,7 +941,7 @@ export function FinopsAnomaliesPage() {
                                         className="h-8 w-8"
                                         disabled={!hasPreviousPage || loading}
                                         onClick={() => syncUrlState({ page: 1 })}
-                                        aria-label="Primeira página"
+                                        aria-label={t.firstPage}
                                     >
                                         <ChevronsLeft className="h-4 w-4" />
                                     </Button>
@@ -932,7 +952,7 @@ export function FinopsAnomaliesPage() {
                                         className="h-8 w-8"
                                         disabled={!hasPreviousPage || loading}
                                         onClick={() => syncUrlState({ page: Math.max(1, currentPage - 1) })}
-                                        aria-label="Página anterior"
+                                        aria-label={t.previousPage}
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
@@ -943,7 +963,7 @@ export function FinopsAnomaliesPage() {
                                         className="h-8 w-8"
                                         disabled={!hasNextPage || loading}
                                         onClick={() => syncUrlState({ page: currentPage + 1 })}
-                                        aria-label="Próxima página"
+                                        aria-label={t.nextPage}
                                     >
                                         <ChevronRight className="h-4 w-4" />
                                     </Button>
@@ -954,7 +974,7 @@ export function FinopsAnomaliesPage() {
                                         className="h-8 w-8"
                                         disabled={!hasNextPage || loading}
                                         onClick={() => syncUrlState({ page: totalPages })}
-                                        aria-label="Última página"
+                                        aria-label={t.lastPage}
                                     >
                                         <ChevronsRight className="h-4 w-4" />
                                     </Button>

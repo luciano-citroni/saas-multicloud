@@ -4,6 +4,7 @@ import { TrendingDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { CostEstimateResponse } from '@/app/actions/automation';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 function formatCost(value: number): string {
@@ -22,6 +23,7 @@ type Props = {
 };
 
 export function CostEstimationPanel({ estimate }: Props) {
+    const t = useTranslations('automation');
     const { resources, totals, savingsPercent } = estimate;
     const isHighCost = totals.onDemand > 500;
 
@@ -31,9 +33,9 @@ export function CostEstimationPanel({ estimate }: Props) {
                 <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <div>
-                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Custo elevado detectado</p>
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">{t.highCostDetected}</p>
                         <p className="text-xs text-amber-700 dark:text-amber-400">
-                            Essa configuração pode gerar custos elevados ({formatCost(totals.onDemand)}/mês). Considere usar Savings Plan para reduzir até {savingsPercent}%.
+                            {t.highCostHint.replace('{cost}', formatCost(totals.onDemand)).replace('{percent}', String(savingsPercent))}
                         </p>
                     </div>
                 </div>
@@ -43,10 +45,10 @@ export function CostEstimationPanel({ estimate }: Props) {
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
                 <div>
                     <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                        Você economiza {savingsPercent}% usando Savings Plan
+                        {t.savingsPlanSave.replace('{percent}', String(savingsPercent))}
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400">
-                        {formatCost(totals.onDemand - totals.savings)}/mês de economia em relação ao On-Demand
+                        {t.savingsVsOnDemand.replace('{amount}', formatCost(totals.onDemand - totals.savings))}
                     </p>
                 </div>
             </div>
@@ -59,7 +61,7 @@ export function CostEstimationPanel({ estimate }: Props) {
                     </CardHeader>
                     <CardContent className="px-4 pb-3">
                         <p className="text-xl font-bold">{formatCost(totals.onDemand)}</p>
-                        <p className="text-[10px] text-muted-foreground">por mês</p>
+                        <p className="text-[10px] text-muted-foreground">{t.perMonth}</p>
                     </CardContent>
                 </Card>
                 <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
@@ -71,7 +73,7 @@ export function CostEstimationPanel({ estimate }: Props) {
                     </CardHeader>
                     <CardContent className="px-4 pb-3">
                         <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{formatCost(totals.reserved)}</p>
-                        <p className="text-[10px] text-muted-foreground">por mês</p>
+                        <p className="text-[10px] text-muted-foreground">{t.perMonth}</p>
                     </CardContent>
                 </Card>
                 <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20">
@@ -83,7 +85,7 @@ export function CostEstimationPanel({ estimate }: Props) {
                     </CardHeader>
                     <CardContent className="px-4 pb-3">
                         <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatCost(totals.savings)}</p>
-                        <p className="text-[10px] text-muted-foreground">por mês</p>
+                        <p className="text-[10px] text-muted-foreground">{t.perMonth}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -91,7 +93,7 @@ export function CostEstimationPanel({ estimate }: Props) {
             {/* Per-resource breakdown */}
             <div className="rounded-xl border">
                 <div className="border-b bg-muted/30 px-4 py-2.5">
-                    <p className="text-xs font-semibold text-muted-foreground">Detalhamento por recurso</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{t.costBreakdown}</p>
                 </div>
                 <div className="divide-y">
                     {resources.map((r) => (
@@ -119,7 +121,7 @@ export function CostEstimationPanel({ estimate }: Props) {
                     ))}
                 </div>
                 <div className="flex justify-between border-t bg-muted/30 px-4 py-2.5">
-                    <p className="text-sm font-semibold">Total mensal estimado</p>
+                    <p className="text-sm font-semibold">{t.estimatedMonthlyTotal}</p>
                     <div className="flex gap-6 text-right">
                         <p className="text-sm font-bold">{formatCost(totals.onDemand)}</p>
                         <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{formatCost(totals.reserved)}</p>
@@ -130,7 +132,7 @@ export function CostEstimationPanel({ estimate }: Props) {
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <TrendingDown className="h-3.5 w-3.5" />
-                Valores estimados. Reserved aplica −30% e Savings Plan aplica −40% sobre o On-Demand.
+                {t.estimateDisclaimer}
             </div>
         </div>
     );

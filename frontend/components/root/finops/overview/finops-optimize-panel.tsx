@@ -11,6 +11,8 @@ import { formatResourceChange, shortResourceId } from '@/components/root/finops/
 import type { AnomalyResourceContributor, OrgOptimizeItem } from '@/components/root/finops/overview/types';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 type FinopsOptimizePanelProps = {
     organizationId: string;
@@ -27,6 +29,7 @@ export function FinopsOptimizePanel({
     isLoading = false,
     onChanged,
 }: FinopsOptimizePanelProps) {
+    const tf = useTranslations('finops');
     const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [contributorsById, setContributorsById] = useState<Record<string, AnomalyResourceContributor[]>>({});
@@ -46,7 +49,7 @@ export function FinopsOptimizePanel({
             toast.success('Anomalia reconhecida');
             onChanged?.();
         } catch {
-            toast.error('Não foi possível reconhecer a anomalia.');
+            toast.error(tf.acknowledgeError);
         } finally {
             setAcknowledgingId(null);
         }
@@ -78,7 +81,7 @@ export function FinopsOptimizePanel({
                 [item.id]: Array.isArray(payload) ? (payload as AnomalyResourceContributor[]) : [],
             }));
         } catch {
-            toast.error('Não foi possível carregar os recursos da anomalia.');
+            toast.error(tf.anomalyResourcesLoadError);
             setContributorsById((prev) => ({ ...prev, [item.id]: [] }));
         } finally {
             setLoadingContributorsId(null);
@@ -247,15 +250,14 @@ export function FinopsOptimizePanel({
                                                                             cause.newValue,
                                                                         )}{' '}
                                                                         ·{' '}
-                                                                        {new Date(cause.detectedAt).toLocaleDateString(
-                                                                            'pt-BR',
+                                                                        {new Date(cause.detectedAt).toLocaleDateString(toIntlLocale(),
                                                                         )}
                                                                     </li>
                                                                 ))}
                                                             </ul>
                                                         ) : (
                                                             <p className="mt-1 text-[11px] text-muted-foreground">
-                                                                Nenhuma mudança de configuração detectada no período
+                                                                {tf.noConfigChangeDetected}
                                                             </p>
                                                         )}
                                                     </div>

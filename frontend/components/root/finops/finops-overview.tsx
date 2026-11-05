@@ -410,7 +410,7 @@ export function FinopsOverview() {
             const response = await revokeFinopsConsent(organizationId, revokeTarget.id, revokeTarget.provider);
             if (!response.ok) {
                 const payload = await response.json().catch(() => null);
-                toast.error(extractErrorMessage(payload, 'pt'));
+                toast.error(extractErrorMessage(payload));
                 return;
             }
 
@@ -433,7 +433,7 @@ export function FinopsOverview() {
 
     const handleSyncClick = async () => {
         if (!organizationId || !syncTargetAccount) {
-            toast.error('Selecione uma conta cloud para sincronizar.');
+            toast.error(tf.selectAccountToSync);
             return;
         }
 
@@ -563,8 +563,8 @@ export function FinopsOverview() {
     const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
     const hasNoData = overview != null && filteredTotals.cost === 0 && overview.costTrend.length === 0;
     const subtitle = selectedAccount
-        ? `Gastos e otimizações de ${selectedAccount.alias}`
-        : 'Consolidação financeira das contas do tenant';
+        ? tf.spendOfAccount.replace('{alias}', selectedAccount.alias)
+        : tf.tenantConsolidation;
 
     if (!organizationId) {
         return (
@@ -596,7 +596,7 @@ export function FinopsOverview() {
                     <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
                             <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                            Atualizar
+                            {tc.refresh}
                         </Button>
 
                         {canSync && (

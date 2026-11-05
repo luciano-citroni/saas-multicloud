@@ -40,6 +40,7 @@ import {
 import { useTranslations } from '@/lib/i18n';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
@@ -131,7 +132,7 @@ function areFilterSetsEqual(a: Set<ResourceVisibilityFilterId>, b: Set<ResourceV
 }
 
 function formatExportTimestamp(date: Date): string {
-    return new Intl.DateTimeFormat('pt-BR', {
+    return new Intl.DateTimeFormat(toIntlLocale(), {
         dateStyle: 'short',
         timeStyle: 'short',
     }).format(date);
@@ -232,7 +233,7 @@ async function loadImage(source: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
         const image = new Image();
         image.onload = () => resolve(image);
-        image.onerror = () => reject(new Error('Falha ao carregar imagem.'));
+        image.onerror = () => reject(new Error('Failed to load image.'));
         image.src = source;
     });
 }
@@ -241,7 +242,7 @@ async function buildLogoObjectUrl(useBlackLogo: boolean): Promise<string> {
     const response = await fetch('/logo.svg', { cache: 'force-cache' });
 
     if (!response.ok) {
-        throw new Error('Falha ao carregar logo.');
+        throw new Error('Failed to load logo.');
     }
 
     let svgMarkup = await response.text();
@@ -273,7 +274,7 @@ async function composeExportWithLogo(
         const context = canvas.getContext('2d');
 
         if (!context) {
-            throw new Error('Falha ao preparar canvas para exportação.');
+            throw new Error('Failed to prepare canvas for export.');
         }
 
         context.fillStyle = backgroundColor;
@@ -354,7 +355,7 @@ function formatDateTime(value?: string): string {
         return '-';
     }
 
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
+    return new Intl.DateTimeFormat(toIntlLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
 }
 
 function hasExcelExpired(expiresAt?: string): boolean {
@@ -886,7 +887,12 @@ export function AssessmentPageClient() {
     );
 
     const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
-    const groupingModeLabel = getGroupingModeLabel(groupingModes);
+    const groupingModeLabel = getGroupingModeLabel(groupingModes, {
+        resourceType: ta.groupByType,
+        vpc: ta.groupByNetwork,
+        region: ta.groupByRegion,
+        none: ta.noGroups,
+    });
 
     if (!contextReady) {
         return null;

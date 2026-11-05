@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -16,15 +16,19 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { computeFinopsBilling, fetchFinopsBillingHistory } from '@/app/actions/finops';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { BillingRecord } from '@/components/root/finops/overview/types';
+import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
 
-const billingSchema = z.object({
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD'),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD'),
-    markupPercentage: z.number().min(0, 'Mínimo 0%').max(500, 'Máximo 500%'),
-});
-type BillingFormData = z.infer<typeof billingSchema>;
+function createBillingSchema(messages: { date: string; min: string; max: string }) {
+    return z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, messages.date),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, messages.date),
+        markupPercentage: z.number().min(0, messages.min).max(500, messages.max),
+    });
+}
+type BillingFormData = z.infer<ReturnType<typeof createBillingSchema>>;
 
 function getDefaultDates() {
     const now = new Date();
@@ -35,6 +39,12 @@ function getDefaultDates() {
 }
 
 export function FinopsBilling() {
+    const tf = useTranslations('finops');
+    const tc = useTranslations('common');
+    const billingSchema = useMemo(
+        () => createBillingSchema({ date: tf.billingDateFormat, min: tf.billingMarkupMin, max: tf.billingMarkupMax }),
+        [tf],
+    );
     const router = useRouter();
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
@@ -44,7 +54,7 @@ export function FinopsBilling() {
     const defaults = getDefaultDates();
 
     const form = useForm<BillingFormData>({
-        resolver: zodResolver(billingSchema),
+        resolver: (values, context, options) => zodResolver(billingSchema)(values, context, options),
         defaultValues: { startDate: defaults.startDate, endDate: defaults.endDate, markupPercentage: 20 },
     });
 
@@ -57,12 +67,12 @@ export function FinopsBilling() {
         setLoading(true);
         try {
             const res = await fetchFinopsBillingHistory(orgId, cloudId, 12);
-            if (res.status === 401) { toast.error('Sessão expirada.'); router.replace('/auth/sign-in'); return; }
+            if (res.status === 401) { toast.error(tc.sessionExpired); router.replace('/auth/sign-in'); return; }
             if (!res.ok) return;
             const data = await res.json().catch(() => []);
             setHistory(Array.isArray(data) ? data : (data as { items?: BillingRecord[] })?.items ?? []);
         } finally { setLoading(false); }
-    }, [router]);
+    }, [router, tc.sessionExpired]);
 
     useEffect(() => {
         if (!organizationId || !cloudAccountId) { setLoading(false); return; }
@@ -75,17 +85,17 @@ export function FinopsBilling() {
             const res = await computeFinopsBilling(organizationId, cloudAccountId, data.startDate, data.endDate, data.markupPercentage);
             const body = await res.json().catch(() => null);
             if (!res.ok) { toast.error(extractErrorMessage(body)); return; }
-            toast.success('Billing calculado e salvo!');
+            toast.success(tf.billingSaved);
             void loadHistory(organizationId, cloudAccountId);
-        } catch { toast.error('Não foi possível calcular o billing.'); }
+        } catch { toast.error(tf.billingComputeError); }
     };
 
     if (!organizationId || !cloudAccountId) {
         return (
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">Billing & Monetização</p>
-                    <p className="text-xs text-muted-foreground">Selecione uma conta cloud na sidebar.</p>
+                    <p className="text-sm font-medium">{tf.billingMonetizationTitle}</p>
+                    <p className="text-xs text-muted-foreground">{tf.selectCloudAccountSidebar}</p>
                 </div>
             </div>
         );
@@ -97,13 +107,13 @@ export function FinopsBilling() {
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Billing & Monetização</p>
-                        <p className="text-xs text-muted-foreground">Calcule o preço final com markup e margem</p>
+                        <p className="text-sm font-medium">{tf.billingMonetizationTitle}</p>
+                        <p className="text-xs text-muted-foreground">{tf.billingMonetizationDesc}</p>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/finops">
                             <ArrowLeft className="size-4" />
-                            Voltar
+                            {tc.back}
                         </Link>
                     </Button>
                 </div>
@@ -111,7 +121,7 @@ export function FinopsBilling() {
                 <div className="border-b px-4 py-3">
                     <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                         <Calculator className="size-3.5" />
-                        Calcular billing
+                        {tf.billingCalculate}
                     </p>
                 </div>
                 <div className="p-4">
@@ -119,21 +129,21 @@ export function FinopsBilling() {
                         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
                             <FormField control={form.control} name="startDate" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-xs">Data início</FormLabel>
+                                    <FormLabel className="text-xs">{tf.billingStartDate}</FormLabel>
                                     <FormControl><Input type="date" className="w-40" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-xs">Data fim</FormLabel>
+                                    <FormLabel className="text-xs">{tf.billingEndDate}</FormLabel>
                                     <FormControl><Input type="date" className="w-40" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={form.control} name="markupPercentage" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-xs">Markup (%)</FormLabel>
+                                    <FormLabel className="text-xs">{tf.billingMarkup}</FormLabel>
                                     <FormControl>
                                         <Input
                                             type="number"
@@ -150,7 +160,7 @@ export function FinopsBilling() {
                             )} />
                             <Button type="submit" size="sm" isLoading={form.formState.isSubmitting} disabled={form.formState.isSubmitting}>
                                 <DollarSign className="size-4" />
-                                Calcular
+                                {tf.billingCalculateAction}
                             </Button>
                         </form>
                     </Form>
@@ -161,10 +171,10 @@ export function FinopsBilling() {
             <div className="rounded-xl border">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Histórico de billing</p>
+                        <p className="text-sm font-medium">{tf.billingHistoryTitle}</p>
                         <p className="text-xs text-muted-foreground">
-                            Últimos 12 períodos calculados
-                            {!loading && history.length > 0 && ` — ${history.length} registro${history.length !== 1 ? 's' : ''}`}
+                            {tf.billingHistoryDesc}
+                            {!loading && history.length > 0 && ` — ${(history.length === 1 ? tf.billingHistoryCountOne : tf.billingHistoryCountMany).replace('{count}', String(history.length))}`}
                         </p>
                     </div>
                 </div>
@@ -187,24 +197,24 @@ export function FinopsBilling() {
                 ) : history.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
                         <DollarSign className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">Nenhum billing calculado</p>
-                        <p className="text-xs text-muted-foreground">Use o formulário acima para calcular o primeiro período.</p>
+                        <p className="text-sm font-medium">{tf.noBillingCalculated}</p>
+                        <p className="text-xs text-muted-foreground">{tf.billingEmptyHint}</p>
                     </div>
                 ) : (
                     <>
                         <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
-                            <span>Período</span>
-                            <span className="text-right">Custo cloud</span>
-                            <span className="text-right">Markup</span>
-                            <span className="text-right">Preço final</span>
-                            <span className="text-right">Margem</span>
+                            <span>{tf.billingColPeriod}</span>
+                            <span className="text-right">{tf.billingColCloudCost}</span>
+                            <span className="text-right">{tf.billingColMarkup}</span>
+                            <span className="text-right">{tf.billingColFinalPrice}</span>
+                            <span className="text-right">{tf.billingColMargin}</span>
                         </div>
                         <div className="divide-y">
                             {history.map((record) => {
                                 const markup = Number(record.markupPercentage);
                                 const marginPct = Number(record.marginPercentage);
-                                const start = new Date(record.periodStart + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-                                const end = new Date(record.periodEnd + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+                                const start = new Date(record.periodStart + 'T12:00:00Z').toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short' });
+                                const end = new Date(record.periodEnd + 'T12:00:00Z').toLocaleDateString(toIntlLocale(), { day: '2-digit', month: 'short', year: 'numeric' });
                                 return (
                                     <div key={`${record.periodStart}-${record.periodEnd}`} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 px-4 py-2.5">
                                         <div>

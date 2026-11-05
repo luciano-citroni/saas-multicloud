@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { VariableMap } from './variable-editor';
 
@@ -110,6 +111,7 @@ export function ExecutionCloudAccountField({
     onChange: (cloudAccountId: string) => void;
     loading?: boolean;
 }) {
+    const t = useTranslations('automation');
     const selected = accounts.find((account) => account.id === value) ?? null;
     const selectedProvider = getProviderStyle(selected?.provider);
 
@@ -120,9 +122,9 @@ export function ExecutionCloudAccountField({
                     <Cloud className="size-4" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold">Conta cloud</p>
+                    <p className="text-sm font-semibold">{t.cloudAccountLabel}</p>
                     <p className="text-xs text-muted-foreground">
-                        Conta usada para provisionar e validar permissões IAM nesta execução.
+                        {t.cloudAccountDesc}
                     </p>
                 </div>
             </div>
@@ -139,7 +141,7 @@ export function ExecutionCloudAccountField({
                         id="execution-cloud-account"
                         className="h-auto w-full min-h-11 py-2"
                     >
-                        <SelectValue placeholder="Selecione a conta">
+                        <SelectValue placeholder={t.selectAccountPlaceholder}>
                             {selected ? (
                                 <span className="flex min-w-0 items-center gap-2.5">
                                     <Badge
@@ -175,7 +177,7 @@ export function ExecutionCloudAccountField({
             )}
 
             {accounts.length === 0 && !loading ? (
-                <p className="text-xs text-destructive">Nenhuma conta cloud disponível nesta organização.</p>
+                <p className="text-xs text-destructive">{t.noCloudAccounts}</p>
             ) : null}
         </div>
     );
@@ -192,15 +194,17 @@ export function ExecutionParametersForm({
     onChange: (name: string, value: string) => void;
     errors?: Record<string, string>;
 }) {
+    const t = useTranslations('automation');
+    const tc = useTranslations('common');
     const entries = Object.entries(variables);
     if (entries.length === 0) return null;
 
     return (
         <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
             <div>
-                <p className="text-sm font-semibold">Parâmetros da execução</p>
+                <p className="text-sm font-semibold">{t.executionParamsTitle}</p>
                 <p className="text-xs text-muted-foreground">
-                    Valores usados pelos blocos com binding de variável. Campos marcados com * são obrigatórios.
+                    {t.executionParamsDesc}
                 </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -223,14 +227,14 @@ export function ExecutionParametersForm({
                                     onValueChange={(next) => onChange(name, next)}
                                 >
                                     <SelectTrigger id={`exec-param-${name}`} className="h-9 text-xs">
-                                        <SelectValue placeholder="Selecione" />
+                                        <SelectValue placeholder={t.selectPlaceholder} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="true" className="text-xs">
-                                            Sim (true)
+                                            {tc.yes} (true)
                                         </SelectItem>
                                         <SelectItem value="false" className="text-xs">
-                                            Não (false)
+                                            {tc.no} (false)
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -242,8 +246,8 @@ export function ExecutionParametersForm({
                                     value={values[name] ?? ''}
                                     placeholder={
                                         variable.default != null
-                                            ? `Padrão: ${String(variable.default)}`
-                                            : 'Informe o valor'
+                                            ? t.defaultValue.replace('{value}', String(variable.default))
+                                            : t.enterValue
                                     }
                                     onChange={(event) => onChange(name, event.target.value)}
                                     aria-invalid={Boolean(error)}

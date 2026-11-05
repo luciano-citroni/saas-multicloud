@@ -7,10 +7,12 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { queryKeys } from '@/lib/queries/keys';
+import { useTranslations } from '@/lib/i18n';
 import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 export function EmailVerificationBanner() {
     const queryClient = useQueryClient();
+    const t = useTranslations('auth');
     const { data } = useSidebarContext();
     const [isResending, setIsResending] = useState(false);
 
@@ -31,19 +33,19 @@ export function EmailVerificationBanner() {
             const body = await response.json().catch(() => ({}));
 
             if (!response.ok) {
-                toast.error(extractErrorMessage(body, 'pt'));
+                toast.error(extractErrorMessage(body));
                 return;
             }
 
             if (body?.alreadyVerified) {
                 await queryClient.invalidateQueries({ queryKey: queryKeys.sidebarContext });
-                toast.success('E-mail já confirmado.');
+                toast.success(t.emailBannerAlreadyVerified);
                 return;
             }
 
-            toast.success('E-mail de confirmação reenviado. Verifique sua caixa de entrada.');
+            toast.success(t.emailBannerResent);
         } catch {
-            toast.error('Não foi possível reenviar o e-mail de confirmação.');
+            toast.error(t.emailBannerResendError);
         } finally {
             setIsResending(false);
         }
@@ -55,14 +57,15 @@ export function EmailVerificationBanner() {
                 <div className="flex items-start gap-3 text-sm text-amber-950 dark:text-amber-100">
                     <MailWarning className="mt-0.5 size-4 shrink-0" aria-hidden />
                     <p>
-                        Confirme seu e-mail
+                        <span className="font-medium">{t.emailBannerTitle}</span>
                         {email ? (
                             <>
                                 {' '}
-                                <span className="font-medium">{email}</span>
+                                <span>({email})</span>
                             </>
-                        ) : null}{' '}
-                        para manter sua conta segura. Enviamos um link de confirmação para você.
+                        ) : null}
+                        {'. '}
+                        {t.emailBannerDesc}
                     </p>
                 </div>
                 <Button
@@ -73,7 +76,7 @@ export function EmailVerificationBanner() {
                     isLoading={isResending}
                     onClick={handleResend}
                 >
-                    Reenviar e-mail
+                    {t.emailBannerResend}
                 </Button>
             </div>
         </div>

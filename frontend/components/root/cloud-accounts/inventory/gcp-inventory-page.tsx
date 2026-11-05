@@ -30,6 +30,8 @@ import {
     type GcpGkeCluster,
 } from '@/app/actions/gcp-inventory';
 import { AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Server, Network, HardDrive, Database, Shield, Boxes } from 'lucide-react';
+import { useTranslations } from '@/lib/i18n';
+import { toIntlLocale } from '@/lib/i18n/format';
 
 type Tab = 'compute' | 'networks' | 'subnetworks' | 'firewall' | 'storage' | 'sql' | 'iam' | 'gke';
 
@@ -71,7 +73,7 @@ function formatDate(value: string | null | undefined) {
     if (!value) return '—';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '—';
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(d);
+    return new Intl.DateTimeFormat(toIntlLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(d);
 }
 
 function normalizeItems<T>(payload: unknown): T[] {
@@ -82,10 +84,11 @@ function normalizeItems<T>(payload: unknown): T[] {
 }
 
 function EmptyState({ label }: { label: string }) {
+    const tgi = useTranslations('gcpInventory');
     return (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
             <AlertCircle className="size-8" />
-            <span className="text-sm">Nenhum {label} encontrado. Execute um sync para popular o inventário.</span>
+            <span className="text-sm">{tgi.emptyState.replace('{label}', label)}</span>
         </div>
     );
 }
@@ -101,19 +104,21 @@ function LoadingSkeleton() {
 }
 
 function ComputeTable({ data }: { data: GcpVmInstance[] }) {
-    if (data.length === 0) return <EmptyState label="VM" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelVm} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Zona</TableHead>
-                        <TableHead className="px-4 font-medium">Tipo de máquina</TableHead>
-                        <TableHead className="px-4 font-medium">Status</TableHead>
-                        <TableHead className="px-4 font-medium">IP interno</TableHead>
-                        <TableHead className="px-4 font-medium">IP externo</TableHead>
-                        <TableHead className="px-4 font-medium">Criado em</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colZone}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colMachineType}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.status}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colInternalIp}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colExternalIp}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colCreatedAt}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -137,16 +142,18 @@ function ComputeTable({ data }: { data: GcpVmInstance[] }) {
 }
 
 function NetworksTable({ data }: { data: GcpVpcNetwork[] }) {
-    if (data.length === 0) return <EmptyState label="VPC" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelVpc} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Modo de roteamento</TableHead>
-                        <TableHead className="px-4 font-medium">Sub-redes automáticas</TableHead>
-                        <TableHead className="px-4 font-medium">Criado em</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colRoutingMode}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colAutoSubnets}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colCreatedAt}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -156,7 +163,7 @@ function NetworksTable({ data }: { data: GcpVpcNetwork[] }) {
                             <TableCell className="px-4 text-muted-foreground">{net.routingMode ?? '—'}</TableCell>
                             <TableCell className="px-4">
                                 <Badge variant={net.autoCreateSubnetworks ? 'secondary' : 'outline'}>
-                                    {net.autoCreateSubnetworks ? 'Sim' : 'Não'}
+                                    {net.autoCreateSubnetworks ? tc.yes : tc.no}
                                 </Badge>
                             </TableCell>
                             <TableCell className="px-4 text-muted-foreground">{formatDate(net.creationTimestamp)}</TableCell>
@@ -169,17 +176,19 @@ function NetworksTable({ data }: { data: GcpVpcNetwork[] }) {
 }
 
 function SubnetworksTable({ data }: { data: GcpSubnetwork[] }) {
-    if (data.length === 0) return <EmptyState label="sub-rede" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelSubnetwork} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Região</TableHead>
-                        <TableHead className="px-4 font-medium">CIDR</TableHead>
-                        <TableHead className="px-4 font-medium">VPC</TableHead>
-                        <TableHead className="px-4 font-medium">Acesso privado Google</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colRegion}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colCidr}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colVpc}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colPrivateGoogleAccess}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -191,7 +200,7 @@ function SubnetworksTable({ data }: { data: GcpSubnetwork[] }) {
                             <TableCell className="px-4 text-muted-foreground">{sub.networkName ?? '—'}</TableCell>
                             <TableCell className="px-4">
                                 <Badge variant={sub.privateIpGoogleAccess ? 'secondary' : 'outline'}>
-                                    {sub.privateIpGoogleAccess ? 'Sim' : 'Não'}
+                                    {sub.privateIpGoogleAccess ? tc.yes : tc.no}
                                 </Badge>
                             </TableCell>
                         </TableRow>
@@ -203,18 +212,20 @@ function SubnetworksTable({ data }: { data: GcpSubnetwork[] }) {
 }
 
 function FirewallTable({ data }: { data: GcpFirewallRule[] }) {
-    if (data.length === 0) return <EmptyState label="regra de firewall" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelFirewall} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Direção</TableHead>
-                        <TableHead className="px-4 font-medium">Prioridade</TableHead>
-                        <TableHead className="px-4 font-medium">VPC</TableHead>
-                        <TableHead className="px-4 font-medium">Status</TableHead>
-                        <TableHead className="px-4 font-medium">Origens</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colDirection}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colPriority}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colVpc}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.status}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colSources}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -227,7 +238,7 @@ function FirewallTable({ data }: { data: GcpFirewallRule[] }) {
                             <TableCell className="px-4 text-muted-foreground">{rule.priority}</TableCell>
                             <TableCell className="px-4 text-muted-foreground">{rule.networkName ?? '—'}</TableCell>
                             <TableCell className="px-4">
-                                <Badge variant={rule.disabled ? 'outline' : 'secondary'}>{rule.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
+                                <Badge variant={rule.disabled ? 'outline' : 'secondary'}>{rule.disabled ? tgi.ruleDisabled : tgi.ruleActive}</Badge>
                             </TableCell>
                             <TableCell className="px-4 font-mono text-xs text-muted-foreground">
                                 {rule.sourceRanges?.slice(0, 2).join(', ') ?? '—'}
@@ -242,18 +253,20 @@ function FirewallTable({ data }: { data: GcpFirewallRule[] }) {
 }
 
 function StorageTable({ data }: { data: GcpStorageBucket[] }) {
-    if (data.length === 0) return <EmptyState label="bucket" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelBucket} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Localização</TableHead>
-                        <TableHead className="px-4 font-medium">Classe</TableHead>
-                        <TableHead className="px-4 font-medium">Versionamento</TableHead>
-                        <TableHead className="px-4 font-medium">Acesso público</TableHead>
-                        <TableHead className="px-4 font-medium">Criado em</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colLocation}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colClass}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colVersioning}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colPublicAccess}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colCreatedAt}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -264,7 +277,7 @@ function StorageTable({ data }: { data: GcpStorageBucket[] }) {
                             <TableCell className="px-4 text-muted-foreground">{bucket.storageClass}</TableCell>
                             <TableCell className="px-4">
                                 <Badge variant={bucket.versioningEnabled ? 'secondary' : 'outline'}>
-                                    {bucket.versioningEnabled ? 'Ativo' : 'Inativo'}
+                                    {bucket.versioningEnabled ? tgi.enabled : tgi.disabled}
                                 </Badge>
                             </TableCell>
                             <TableCell className="px-4 text-muted-foreground">{bucket.publicAccessPrevention ?? '—'}</TableCell>
@@ -278,19 +291,21 @@ function StorageTable({ data }: { data: GcpStorageBucket[] }) {
 }
 
 function SqlTable({ data }: { data: GcpSqlInstance[] }) {
-    if (data.length === 0) return <EmptyState label="instância SQL" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelSql} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Versão</TableHead>
-                        <TableHead className="px-4 font-medium">Região</TableHead>
-                        <TableHead className="px-4 font-medium">Status</TableHead>
-                        <TableHead className="px-4 font-medium">Tier</TableHead>
-                        <TableHead className="px-4 font-medium">Backup</TableHead>
-                        <TableHead className="px-4 font-medium">Disponibilidade</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colVersion}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colRegion}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.status}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colTier}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colBackup}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colAvailability}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -305,7 +320,7 @@ function SqlTable({ data }: { data: GcpSqlInstance[] }) {
                             <TableCell className="px-4 text-muted-foreground">{inst.tier ?? '—'}</TableCell>
                             <TableCell className="px-4">
                                 <Badge variant={inst.backupEnabled ? 'secondary' : 'outline'}>
-                                    {inst.backupEnabled ? 'Ativo' : 'Inativo'}
+                                    {inst.backupEnabled ? tgi.enabled : tgi.disabled}
                                 </Badge>
                             </TableCell>
                             <TableCell className="px-4 text-muted-foreground">{inst.availabilityType ?? '—'}</TableCell>
@@ -318,15 +333,17 @@ function SqlTable({ data }: { data: GcpSqlInstance[] }) {
 }
 
 function IamTable({ data }: { data: GcpServiceAccount[] }) {
-    if (data.length === 0) return <EmptyState label="service account" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelServiceAccount} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">E-mail</TableHead>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Status</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.email}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.status}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -335,7 +352,7 @@ function IamTable({ data }: { data: GcpServiceAccount[] }) {
                             <TableCell className="px-4 font-mono text-xs font-medium">{sa.email}</TableCell>
                             <TableCell className="px-4 text-muted-foreground">{sa.displayName ?? '—'}</TableCell>
                             <TableCell className="px-4">
-                                <Badge variant={sa.disabled ? 'outline' : 'secondary'}>{sa.disabled ? 'Desabilitada' : 'Ativa'}</Badge>
+                                <Badge variant={sa.disabled ? 'outline' : 'secondary'}>{sa.disabled ? tgi.ruleDisabled : tgi.ruleActive}</Badge>
                             </TableCell>
                         </TableRow>
                     ))}
@@ -346,18 +363,20 @@ function IamTable({ data }: { data: GcpServiceAccount[] }) {
 }
 
 function GkeTable({ data }: { data: GcpGkeCluster[] }) {
-    if (data.length === 0) return <EmptyState label="cluster GKE" />;
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
+    if (data.length === 0) return <EmptyState label={tgi.labelGke} />;
     return (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="px-4 font-medium">Nome</TableHead>
-                        <TableHead className="px-4 font-medium">Localização</TableHead>
-                        <TableHead className="px-4 font-medium">Status</TableHead>
-                        <TableHead className="px-4 font-medium">Nós</TableHead>
-                        <TableHead className="px-4 font-medium">Versão master</TableHead>
-                        <TableHead className="px-4 font-medium">Criado em</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.name}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colLocation}</TableHead>
+                        <TableHead className="px-4 font-medium">{tc.status}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colNodes}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colMasterVersion}</TableHead>
+                        <TableHead className="px-4 font-medium">{tgi.colCreatedAt}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -385,6 +404,8 @@ type GcpInventoryPageProps = {
 };
 
 export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryPageProps) {
+    const tgi = useTranslations('gcpInventory');
+    const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('compute');
     const [nameFilter, setNameFilter] = useState('');
@@ -460,12 +481,12 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                     pagination: normalizePagination(body),
                 } as LoadState<never>);
             } catch {
-                const message = 'Erro ao carregar recursos GCP';
+                const message = tgi.loadError;
                 setters[tab]({ status: 'error', message } as LoadState<never>);
                 toast.error(message);
             }
         },
-        [cloudAccountId]
+        [cloudAccountId, tgi.loadError]
     );
 
     useEffect(() => {
@@ -496,13 +517,13 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                     <Input
                         value={nameFilter}
                         onChange={(e) => { setNameFilter(e.target.value); }}
-                        placeholder="Filtrar na página..."
+                        placeholder={tgi.filterPlaceholder}
                         className="h-8 w-50"
                     />
                 </div>
                 {q !== '' && filtered.length === 0 ? (
                     <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                        Nenhum resultado para o filtro aplicado.
+                        {tgi.noFilterResults}
                     </div>
                 ) : (
                     renderTable(filtered)
@@ -510,7 +531,7 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                 {totalItems > 0 && (
                     <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
-                            <span className="shrink-0 whitespace-nowrap">Linhas por página</span>
+                            <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                             <Select value={`${pageSize}`} onValueChange={(v) => { setPageSize(Number(v)); setPageIndex(0); }}>
                                 <SelectTrigger className="h-8 min-w-22"><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -519,7 +540,7 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
                             </Select>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-                            <span className="text-sm font-medium">Página {pageIndex + 1} de {totalPages}</span>
+                            <span className="text-sm font-medium">{tc.page} {pageIndex + 1} {tc.of} {totalPages}</span>
                             <div className="flex items-center gap-1 self-start sm:self-auto">
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>
                                     <ChevronsLeft className="h-4 w-4" />
@@ -546,42 +567,42 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
             <div className="rounded-xl border">
                 <div className="border-b px-4 py-3">
                     <p className="text-sm font-medium">{accountAlias}</p>
-                    <p className="text-xs text-muted-foreground">Inventário de recursos GCP</p>
+                    <p className="text-xs text-muted-foreground">{tgi.title}</p>
                 </div>
                 <div className="px-4 py-4">
             <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as Tab); setNameFilter(''); setPageIndex(0); }}>
                 <TabsList className="flex-wrap h-auto gap-1">
                     <TabsTrigger value="compute" className="gap-1.5">
                         <Server className="size-3.5" />
-                        Compute
+                        {tgi.tabCompute}
                     </TabsTrigger>
                     <TabsTrigger value="networks" className="gap-1.5">
                         <Network className="size-3.5" />
-                        VPCs
+                        {tgi.tabNetworks}
                     </TabsTrigger>
                     <TabsTrigger value="subnetworks" className="gap-1.5">
                         <Network className="size-3.5" />
-                        Sub-redes
+                        {tgi.tabSubnetworks}
                     </TabsTrigger>
                     <TabsTrigger value="firewall" className="gap-1.5">
                         <Shield className="size-3.5" />
-                        Firewall
+                        {tgi.tabFirewall}
                     </TabsTrigger>
                     <TabsTrigger value="storage" className="gap-1.5">
                         <HardDrive className="size-3.5" />
-                        Storage
+                        {tgi.tabStorage}
                     </TabsTrigger>
                     <TabsTrigger value="sql" className="gap-1.5">
                         <Database className="size-3.5" />
-                        Cloud SQL
+                        {tgi.tabSql}
                     </TabsTrigger>
                     <TabsTrigger value="iam" className="gap-1.5">
                         <Shield className="size-3.5" />
-                        IAM
+                        {tgi.tabIam}
                     </TabsTrigger>
                     <TabsTrigger value="gke" className="gap-1.5">
                         <Boxes className="size-3.5" />
-                        GKE
+                        {tgi.tabGke}
                     </TabsTrigger>
                 </TabsList>
 

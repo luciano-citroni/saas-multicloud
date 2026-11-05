@@ -1,4 +1,6 @@
 import type { DashboardPeriod } from '@/components/root/finops/overview/types';
+import { getLocale } from '@/lib/locale';
+import { translations } from '@/lib/i18n/translations';
 
 export const ACCOUNT_FILTER_ALL = 'all';
 export const PROVIDER_FILTER_ALL = 'all';
@@ -30,12 +32,13 @@ export function isFinopsTab(value: string | null): value is FinopsTab {
 }
 
 export function periodLabel(period: DashboardPeriod): string {
-    if (period === 'last7days') return 'Últimos 7 dias';
-    if (period === 'last30days') return 'Últimos 30 dias';
-    if (period === 'last90days') return 'Últimos 90 dias';
-    if (period === 'currentmonth') return 'Mês atual';
-    if (period === 'lastmonth') return 'Mês passado';
-    return 'Ano até hoje';
+    const t = translations[getLocale()].finops;
+    if (period === 'last7days') return t.periodLast7days;
+    if (period === 'last30days') return t.periodLast30days;
+    if (period === 'last90days') return t.periodLast90days;
+    if (period === 'currentmonth') return t.periodCurrentMonth;
+    if (period === 'lastmonth') return t.periodLastMonth;
+    return t.periodYtd;
 }
 
 export const DASHBOARD_PERIODS: DashboardPeriod[] = [
