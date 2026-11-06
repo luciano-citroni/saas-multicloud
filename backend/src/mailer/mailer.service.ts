@@ -285,4 +285,35 @@ export class MailerService {
             }),
         });
     }
+
+    async sendCommercialReport(params: {
+        to: string[];
+        organizationName: string;
+        monthLabel: string;
+        month: string;
+        bodyHtml: string;
+        pdf: { filename: string; content: Buffer };
+    }): Promise<void> {
+        const reportUrl = `${this.frontendUrl}/finops/reports/commercial?month=${encodeURIComponent(params.month)}`;
+        await this.transporter.sendMail({
+            from: this.fromAddress,
+            to: params.to.join(', '),
+            subject: `Relatório comercial ${params.monthLabel} · ${params.organizationName}`,
+            html: renderEmailLayout({
+                title: 'Relatório comercial de custos',
+                preheader: `${params.organizationName} · ${params.monthLabel}`,
+                bodyHtml: params.bodyHtml,
+                frontendUrl: this.frontendUrl,
+                cta: { label: 'Abrir relatório', href: reportUrl },
+                footerNote: 'Você recebe este relatório porque está na lista de envio mensal do FinOps. O PDF segue em anexo.',
+            }),
+            attachments: [
+                {
+                    filename: params.pdf.filename,
+                    content: params.pdf.content,
+                    contentType: 'application/pdf',
+                },
+            ],
+        });
+    }
 }

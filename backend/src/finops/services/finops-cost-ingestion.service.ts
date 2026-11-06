@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
-import type { FinopsCostEntry } from '../providers/finops-provider.interface';
+import { dedupeCostEntries, type FinopsCostEntry } from '../providers/finops-provider.interface';
 
 export interface IngestionResult {
     recordsUpserted: number;
@@ -80,11 +80,12 @@ export class FinopsCostIngestionService {
             const BATCH_SIZE = 200;
             const grain = granularity.toLowerCase() as 'daily' | 'monthly';
             const isMonthlyClose = triggerType === 'scheduled_monthly_close';
+            const rows = dedupeCostEntries(entries);
 
             await this.costRecordRepo.manager.transaction(async (manager) => {
                 const repo = manager.getRepository(FinopsCostRecord);
 
-                if (isMonthlyClose && entries.length > 0) {
+                if (isMonthlyClose && rows.length > 0) {
                     const removed = await repo
                         .createQueryBuilder()
                         .delete()
@@ -99,8 +100,8 @@ export class FinopsCostIngestionService {
                     );
                 }
 
-                for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-                    const batch = entries.slice(i, i + BATCH_SIZE);
+                for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+                    const batch = rows.slice(i, i + BATCH_SIZE);
 
                     await repo.upsert(
                         batch.map((entry) => ({

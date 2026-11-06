@@ -17,6 +17,7 @@ import { AzureAssessmentJob } from '../../db/entites/azure-assessment-job.entity
 import { FinopsService } from './finops.service';
 import { FinopsBudgetService } from './finops-budget.service';
 import { FinopsAnomalyAlertService } from './finops-anomaly-alert.service';
+import { FinopsCommercialReportService } from './finops-commercial-report.service';
 
 import { GENERAL_SYNC_QUEUE, GENERAL_SYNC_JOB_NAME } from '../../aws/assessment/constants';
 import { GCP_GENERAL_SYNC_QUEUE, GCP_GENERAL_SYNC_JOB_NAME } from '../../gcp/assessment/constants';
@@ -30,6 +31,8 @@ const DAILY_COST_LOOKBACK_DAYS = 90;
  *
  * - Sync diário: 02:00 UTC — inventário + custos incrementais (sobreposição de 3 dias; o primeiro sync ainda cobre 90d) + anomalias nos últimos 7d.
  * - Fechamento mensal: dia 6 às 04:00 — substitui só o mês anterior. Os demais períodos não são apagados.
+ * - Relatório comercial: dias 7 a 10 às 11:00 UTC — e-mail do mês fechado para quem ligou o envio.
+ * - Cotação USD-BRL: todo dia às 09:00 America/Sao_Paulo — grava o bid do dia.
  * - Digest de anomalias: 07:00 America/Sao_Paulo — e-mail/WhatsApp via grupos de Notificações.
  * - Alertas de orçamento: 2× ao dia (11:00 e 23:00 UTC).
  */
@@ -59,6 +62,7 @@ export class FinopsSchedulerService {
         private readonly finopsService: FinopsService,
         private readonly finopsBudgetService: FinopsBudgetService,
         private readonly finopsAnomalyAlertService: FinopsAnomalyAlertService,
+        private readonly finopsCommercialReportService: FinopsCommercialReportService,
     ) {}
 
     @Cron('0 2 * * *')
@@ -150,6 +154,28 @@ export class FinopsSchedulerService {
         );
 
         this.logger.log(`[FinOps Scheduler] Fechamento mensal concluído: ${success} enfileirado(s), ${failed} falha(s).`);
+    }
+
+    @Cron('0 9 * * *', { timeZone: 'America/Sao_Paulo' })
+    async runDailyUsdQuote(): Promise<void> {
+        this.logger.log('[FinOps Scheduler] Atualizando cotação USD-BRL das 09:00...');
+        try {
+            await this.finopsCommercialReportService.refreshDailyUsdQuote();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[FinOps Scheduler] Falha na cotação USD-BRL: ${message}`);
+        }
+    }
+
+    @Cron('0 11 7 * *', { timeZone: 'America/Sao_Paulo' })
+    async runCommercialReportEmail(): Promise<void> {
+        this.logger.log('[FinOps Scheduler] Enviando relatório comercial do mês fechado (dia 7)...');
+        try {
+            await this.finopsCommercialReportService.sendScheduledReports();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[FinOps Scheduler] Falha no relatório comercial: ${message}`);
+        }
     }
 
     private async findActiveConsents(): Promise<FinopsConsent[]> {

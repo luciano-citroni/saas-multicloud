@@ -141,6 +141,8 @@ export type ForecastResult = {
     daysRemaining: number;
     currency: string;
     confidence: 'low' | 'medium' | 'high';
+    source?: 'provider' | 'linear';
+    provider?: 'aws' | 'azure' | 'gcp' | null;
     byService: Array<{ service: string; forecastedCost: number }>;
 };
 
@@ -148,6 +150,7 @@ export type ForecastMonthProjection = {
     month: string;
     forecastedCost: number;
     currency: string;
+    source?: 'provider' | 'linear';
 };
 
 export type OptimizationInsight = {

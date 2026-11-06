@@ -1,4 +1,14 @@
 import { formatCurrency, formatDate } from '@/components/root/finops/overview/helpers';
+import {
+    addFinopsPdfFooter,
+    createFinopsPdf,
+    drawFinopsPdfHeader,
+    drawKpiRow,
+    drawMetaLines,
+    drawSectionTitle,
+    FINOPS_PDF_TABLE,
+    getTableEndY,
+} from '@/components/root/finops/finops-pdf-layout';
 import { translations } from '@/lib/i18n/translations';
 import { getLocale } from '@/lib/locale';
 import type {
@@ -24,94 +34,8 @@ export type ExportFinopsReportPdfInput = {
     fileName: string;
 };
 
-type PdfDoc = {
-    internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
-    lastAutoTable?: { finalY?: number };
-    addImage: (...args: unknown[]) => unknown;
-    setFont: (...args: unknown[]) => unknown;
-    setFontSize: (...args: unknown[]) => unknown;
-    setTextColor: (...args: unknown[]) => unknown;
-    text: (...args: unknown[]) => unknown;
-    setDrawColor: (...args: unknown[]) => unknown;
-    line: (...args: unknown[]) => unknown;
-    setFillColor: (...args: unknown[]) => unknown;
-    roundedRect: (...args: unknown[]) => unknown;
-    addPage: () => unknown;
-    getNumberOfPages: () => number;
-    setPage: (page: number) => unknown;
-    save: (fileName: string) => unknown;
-};
-
-function getTableEndY(doc: PdfDoc, fallback: number): number {
-    return doc.lastAutoTable?.finalY ?? fallback;
-}
-
 function finopsCopy() {
     return translations[getLocale()].finops;
-}
-
-async function loadBridgeLogoDataUrl(): Promise<string> {
-    const response = await fetch('/logo.svg', { cache: 'force-cache' });
-    if (!response.ok) {
-        throw new Error(finopsCopy().pdfLogoLoadError);
-    }
-
-    // Logo padrão é clara; no PDF (fundo branco) usamos versão preta.
-    let svgMarkup = await response.text();
-    svgMarkup = svgMarkup.replace(/fill="[^"]+"/gi, 'fill="#111111"');
-
-    const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-    const objectUrl = URL.createObjectURL(blob);
-
-    try {
-        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error(finopsCopy().pdfLogoDecodeError));
-            img.src = objectUrl;
-        });
-
-        const canvas = document.createElement('canvas');
-        const targetWidth = 520;
-        const scale = targetWidth / image.naturalWidth;
-        canvas.width = targetWidth;
-        canvas.height = Math.round(image.naturalHeight * scale);
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            throw new Error(finopsCopy().pdfLogoCanvasError);
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/png');
-    } finally {
-        URL.revokeObjectURL(objectUrl);
-    }
-}
-
-function addFooter(doc: PdfDoc, pageNumber: number, pageCount: number) {
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(120);
-    doc.text('Bridge MultCloud · Relatório FinOps', 14, pageHeight - 8);
-    doc.text(`${pageNumber} / ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
-}
-
-function drawSectionTitle(doc: PdfDoc, title: string, y: number): number {
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let cursorY = y;
-    if (cursorY > pageHeight - 40) {
-        doc.addPage();
-        cursorY = 20;
-    }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(17);
-    doc.text(title, 14, cursorY);
-    return cursorY + 4;
 }
 
 export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): Promise<void> {
@@ -119,65 +43,18 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
         throw new Error('Exportação de PDF disponível apenas no navegador.');
     }
 
-    // Importa explicitamente o build browser (evita jspdf.node.min.js + fflate/node no bundler).
-    const [jspdfModule, autoTableModule] = await Promise.all([
-        import('jspdf/dist/jspdf.es.min.js'),
-        import('jspdf-autotable/es'),
-    ]);
+    const { doc, autoTable } = await createFinopsPdf();
 
-    type JsPdfCtor = new (options: object) => PdfDoc;
-    const jspdfAny = jspdfModule as unknown as {
-        jsPDF?: JsPdfCtor;
-        default?: JsPdfCtor | { jsPDF?: JsPdfCtor };
-    };
-    const jsPDFCtor: JsPdfCtor | undefined =
-        jspdfAny.jsPDF ??
-        (typeof jspdfAny.default === 'function'
-            ? jspdfAny.default
-            : jspdfAny.default?.jsPDF);
+    await drawFinopsPdfHeader(doc, 'Relatório FinOps', `Gerado em ${formatDate(input.generatedAt)}`);
 
-    if (!jsPDFCtor) {
-        throw new Error(finopsCopy().pdfJsPdfLoadError);
-    }
-
-    const autoTable = (autoTableModule as unknown as { default: (doc: PdfDoc, options: object) => void }).default;
-
-    const doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const logoDataUrl = await loadBridgeLogoDataUrl();
-
-    doc.addImage(logoDataUrl, 'PNG', 14, 12, 42, 17);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(17);
-    doc.text('Relatório FinOps', pageWidth - 14, 18, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(90);
-    doc.text('Bridge MultCloud', pageWidth - 14, 24, { align: 'right' });
-    doc.text(`Gerado em ${formatDate(input.generatedAt)}`, pageWidth - 14, 29, { align: 'right' });
-
-    doc.setDrawColor(220);
-    doc.line(14, 34, pageWidth - 14, 34);
-
-    let y = 40;
-    doc.setFontSize(9);
-    doc.setTextColor(40);
-    const metaLines = [
+    let y = drawMetaLines(doc, [
         `Período: ${input.periodLabel} (${input.overview.period.startDate} → ${input.overview.period.endDate})`,
         `Conta: ${input.accountLabel}`,
         `Provedor: ${input.providerLabel}`,
         `Serviço: ${input.serviceLabel}`,
-    ];
-    for (const line of metaLines) {
-        doc.text(line, 14, y);
-        y += 5;
-    }
+    ]);
 
-    y += 4;
-    const boxW = (pageWidth - 28 - 9) / 4;
-    const boxH = 18;
-    const kpis = [
+    y = drawKpiRow(doc, y + 4, [
         { label: 'Custo total', value: formatCurrency(input.totalCost, input.currency) },
         { label: 'Variação MoM', value: `${Number(input.overview.totals.momGrowth).toFixed(1)}%` },
         {
@@ -191,25 +68,10 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
             label: 'Economia potencial',
             value: formatCurrency(input.overview.totals.potentialSavings, input.currency),
         },
-    ];
+    ]);
 
-    kpis.forEach((kpi, index) => {
-        const x = 14 + index * (boxW + 3);
-        doc.setDrawColor(230);
-        doc.setFillColor(248, 248, 248);
-        doc.roundedRect(x, y, boxW, boxH, 2, 2, 'FD');
-        doc.setFontSize(7);
-        doc.setTextColor(110);
-        doc.text(kpi.label, x + 2.5, y + 5.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(20);
-        doc.text(kpi.value, x + 2.5, y + 12.5, { maxWidth: boxW - 5 });
-        doc.setFont('helvetica', 'normal');
-    });
-
-    y = drawSectionTitle(doc, 'Por conta', y + boxH + 10);
-    autoTable(doc as never, {
+    y = drawSectionTitle(doc, 'Por conta', y + 10);
+    autoTable(doc, {
         startY: y,
         head: [['Conta', 'Provedor', 'Custo', '% do total']],
         body:
@@ -224,10 +86,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
                           `${share.toFixed(1)}%`,
                       ];
                   }),
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [250, 250, 250] },
-        margin: { left: 14, right: 14 },
+        ...FINOPS_PDF_TABLE,
         columnStyles: {
             2: { halign: 'right' },
             3: { halign: 'right' },
@@ -235,7 +94,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
     });
 
     y = drawSectionTitle(doc, `Por serviço (${input.services.length})`, getTableEndY(doc, y) + 10);
-    autoTable(doc as never, {
+    autoTable(doc, {
         startY: y,
         head: [['Serviço', 'Atual', 'Anterior', 'Variação %']],
         body:
@@ -247,10 +106,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
                       formatCurrency(item.previousMonthCost, item.currency || input.currency),
                       `${Number(item.changePercentage).toFixed(1)}%`,
                   ]),
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [250, 250, 250] },
-        margin: { left: 14, right: 14 },
+        ...FINOPS_PDF_TABLE,
         columnStyles: {
             1: { halign: 'right' },
             2: { halign: 'right' },
@@ -259,7 +115,7 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
     });
 
     y = drawSectionTitle(doc, 'Oportunidades e anomalias', getTableEndY(doc, y) + 10);
-    autoTable(doc as never, {
+    autoTable(doc, {
         startY: y,
         head: [['Tipo', 'Conta', 'Título', 'Provedor', 'Impacto']],
         body:
@@ -272,20 +128,12 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
                       item.cloudProvider.toUpperCase(),
                       formatCurrency(item.impact, item.currency || input.currency),
                   ]),
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [250, 250, 250] },
-        margin: { left: 14, right: 14 },
+        ...FINOPS_PDF_TABLE,
         columnStyles: {
             4: { halign: 'right' },
         },
     });
 
-    const pageCount = doc.getNumberOfPages();
-    for (let page = 1; page <= pageCount; page += 1) {
-        doc.setPage(page);
-        addFooter(doc, page, pageCount);
-    }
-
+    addFinopsPdfFooter(doc, 'Bridge MultCloud · Relatório FinOps');
     doc.save(input.fileName);
 }

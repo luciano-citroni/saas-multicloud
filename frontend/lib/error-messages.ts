@@ -518,6 +518,22 @@ export const ErrorMessages = {
             en: 'Select at least one service covered by the credit grant.',
             pt: 'Selecione ao menos um serviço coberto pela concessão de crédito.',
         },
+        COMMERCIAL_REPORT_MONTH_OPEN: {
+            en: 'Commercial report is available only for a closed month.',
+            pt: 'O relatório comercial só fica disponível para um mês já fechado.',
+        },
+        COMMERCIAL_REPORT_RATE_INVALID: {
+            en: 'Invoice exchange rate must be greater than zero.',
+            pt: 'A taxa de câmbio da fatura precisa ser maior que zero.',
+        },
+        COMMERCIAL_REPORT_EMAILS_REQUIRED: {
+            en: 'Add at least one recipient email to send the commercial report.',
+            pt: 'Informe ao menos um e-mail para enviar o relatório comercial.',
+        },
+        COMMERCIAL_REPORT_RECIPIENTS_REQUIRED: {
+            en: 'Select a notification group with at least one active recipient.',
+            pt: 'Selecione um grupo de notificação com ao menos um destinatário ativo.',
+        },
     },
 
     // General (mapeado por HTTP status code)

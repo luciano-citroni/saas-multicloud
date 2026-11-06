@@ -9,8 +9,10 @@ import type {
     FinopsCostCollectionResult,
     FinopsCreditConsumptionEntry,
     FinopsProviderCredentials,
+    ProviderCostForecast,
 } from './finops-provider.interface';
 import { capResourceEntriesByDay } from './finops-provider.interface';
+import { readForecastCache, writeForecastCache } from './forecast-cache';
 
 interface AzureCostQueryColumn {
     name: string;
@@ -637,6 +639,74 @@ export class AzureFinopsProvider implements IFinopsProvider {
             );
             return [];
         }
+    }
+
+    /**
+     * Fim do mês como no portal: soma das linhas Actual + Forecast do Cost Management.
+     * A API só cobre o mês corrente; meses seguintes continuam na projeção linear.
+     */
+    async forecastMonthEnd(creds: FinopsProviderCredentials): Promise<ProviderCostForecast> {
+        const today = new Date().toISOString().slice(0, 10);
+        const cacheKey = `${creds.cloudAccountId}:${today}:month-end`;
+        const cached = readForecastCache<ProviderCostForecast>(cacheKey);
+        if (cached) return cached;
+
+        const { tenantId, clientId, clientSecret, subscriptionId } = creds.credentials as {
+            tenantId?: string;
+            clientId?: string;
+            clientSecret?: string;
+            subscriptionId?: string;
+        };
+        if (!tenantId || !clientId || !clientSecret || !subscriptionId) {
+            throw new Error('[Azure FinOps] Credencial incompleta para o forecast.');
+        }
+
+        const token = await this.getAccessToken(tenantId, clientId, clientSecret);
+        const [year, month] = today.split('-').map(Number);
+        const monthStart = `${today.slice(0, 7)}-01`;
+        const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        const monthEnd = `${today.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`;
+        const url = `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/forecast?api-version=2023-11-01`;
+        const body = {
+            type: 'ActualCost',
+            timeframe: 'Custom',
+            timePeriod: { from: `${monthStart}T00:00:00Z`, to: `${monthEnd}T23:59:59Z` },
+            dataset: {
+                granularity: 'Daily',
+                aggregation: { totalCost: { name: 'Cost', function: 'Sum' } },
+            },
+            includeActualCost: true,
+            includeFreshPartialCost: true,
+        };
+
+        const pages = await this.fetchAllCostPages(url, token, body);
+        let amount = 0;
+        let currency = 'USD';
+        let sawCost = false;
+        for (const data of pages) {
+            const columns = data.properties?.columns ?? [];
+            const rows = data.properties?.rows ?? [];
+            const colIndex = (name: string) => columns.findIndex((column) => column.name.toLowerCase() === name.toLowerCase());
+            const costIdx = colIndex('Cost') >= 0 ? colIndex('Cost') : colIndex('PreTaxCost');
+            const currencyIdx = colIndex('Currency');
+            if (costIdx < 0) continue;
+            sawCost = true;
+            for (const row of rows) {
+                const cost = Number(row[costIdx] ?? 0);
+                if (!Number.isFinite(cost)) continue;
+                amount += cost;
+                if (currencyIdx >= 0 && row[currencyIdx]) currency = String(row[currencyIdx]);
+            }
+        }
+
+        if (!sawCost || !Number.isFinite(amount)) {
+            throw new Error('[Azure FinOps] Forecast sem coluna de custo.');
+        }
+
+        const forecast = { amount: Math.round(amount * 100) / 100, currency: currency.toUpperCase() };
+        writeForecastCache(cacheKey, forecast);
+        this.logger.log(`[Azure FinOps] Forecast de ${creds.cloudAccountId}: ${forecast.amount.toFixed(2)} ${forecast.currency}`);
+        return forecast;
     }
 
     private async getAccessToken(tenantId: string, clientId: string, clientSecret: string): Promise<string> {

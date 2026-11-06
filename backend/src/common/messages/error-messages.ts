@@ -197,6 +197,14 @@ export const ErrorMessages = {
         CREDIT_GRANT_INVALID_AMOUNT: 'Credit grant total amount must be greater than zero.',
 
         CREDIT_GRANT_SERVICES_REQUIRED: 'Select at least one service covered by the credit grant.',
+
+        COMMERCIAL_REPORT_MONTH_OPEN: 'Commercial report is available only for a closed month.',
+
+        COMMERCIAL_REPORT_RATE_INVALID: 'Invoice exchange rate must be greater than zero.',
+
+        COMMERCIAL_REPORT_EMAILS_REQUIRED: 'Add at least one recipient email to send the commercial report.',
+
+        COMMERCIAL_REPORT_RECIPIENTS_REQUIRED: 'Select a notification group with at least one active recipient.',
     },
 
     // Governance

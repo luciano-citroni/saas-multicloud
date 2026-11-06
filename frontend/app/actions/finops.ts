@@ -553,3 +553,39 @@ export async function deleteFinopsCreditGrant(organizationId: string, grantId: s
         { method: 'DELETE' },
     );
 }
+
+export async function fetchCommercialReport(organizationId: string, month: string) {
+    const params = new URLSearchParams({ organizationId, month });
+    return fetch(`/api/finops/commercial-report?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function saveCommercialExchangeRate(organizationId: string, month: string, brlPerUsd: number) {
+    return fetch(`/api/finops/commercial-report/exchange-rate?organizationId=${encodeURIComponent(organizationId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, brlPerUsd }),
+    });
+}
+
+export async function saveCommercialDelivery(
+    organizationId: string,
+    payload: {
+        enabled: boolean;
+        alertChannels: Array<'email' | 'whatsapp'>;
+        alertNotificationGroupIds: string[];
+    },
+) {
+    return fetch(`/api/finops/commercial-report/delivery?organizationId=${encodeURIComponent(organizationId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function sendCommercialReport(organizationId: string, month: string) {
+    return fetch(`/api/finops/commercial-report/send?organizationId=${encodeURIComponent(organizationId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month }),
+    });
+}

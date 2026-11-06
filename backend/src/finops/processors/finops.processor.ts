@@ -109,23 +109,32 @@ export class FinopsProcessor extends WorkerHost {
 
             const { entries } = await provider.collectCosts(providerCreds, collectStart, endDate, granularity);
 
-            // ── 3. Coletar custos por recurso (AWS CE WithResources ≤ 14d) ───
+            // ── 3. Recurso: fechamento AWS usa usage type do mês; o dia a dia usa RESOURCE_ID ───
             this.logger.log(`[${jobId}] Fase 3/7: Coletando custos por recurso...`);
             await job.updateProgress(30);
 
             let resourceEntries: typeof entries = [];
             try {
-                const resourceStartDate = this.clampResourceCostStart(collectStart, endDate);
-                const resourceResult = await provider.collectResourceCosts(
-                    providerCreds,
-                    resourceStartDate,
-                    endDate,
-                    granularity,
-                );
-                resourceEntries = resourceResult.entries;
+                if (isMonthlyClose && cloudProvider === 'aws') {
+                    this.logger.log(`[${jobId}] Fechamento AWS: usage types de ${startDate} → ${endDate}`);
+                    resourceEntries = (await this.awsProvider.collectUsageTypeCosts(providerCreds, startDate, endDate)).entries;
+                } else {
+                    const resourceWindow = this.resolveResourceWindow(cloudProvider, collectStart, endDate);
+                    if (resourceWindow) {
+                        const resourceResult = await provider.collectResourceCosts(
+                            providerCreds,
+                            resourceWindow.start,
+                            resourceWindow.end,
+                            granularity,
+                        );
+                        resourceEntries = resourceResult.entries;
+                    } else {
+                        this.logger.log(`[${jobId}] Custo por recurso fora da janela disponível para ${cloudProvider}.`);
+                    }
+                }
             } catch (error) {
                 this.logger.warn(
-                    `[${jobId}] collectResourceCosts falhou (seguindo só com serviço): ${
+                    `[${jobId}] Custo por recurso falhou (seguindo só com serviço): ${
                         error instanceof Error ? error.message : String(error)
                     }`,
                 );
@@ -234,14 +243,25 @@ export class FinopsProcessor extends WorkerHost {
         }
     }
 
-    /** AWS Cost Explorer WithResources só cobre ~14 dias — evita falhar o range inteiro. */
-    private clampResourceCostStart(startDate: string, endDate: string): string {
-        const end = new Date(`${endDate}T00:00:00Z`);
-        const minStart = new Date(end);
-        minStart.setUTCDate(end.getUTCDate() - 13);
-        const start = new Date(`${startDate}T00:00:00Z`);
-        const clamped = start > minStart ? start : minStart;
-        return clamped.toISOString().slice(0, 10);
+    /**
+     * AWS Cost Explorer WithResources só aceita os últimos 14 dias a partir de hoje.
+     * Azure e GCP consultam o período pedido inteiro.
+     */
+    private resolveResourceWindow(
+        cloudProvider: string,
+        startDate: string,
+        endDate: string,
+    ): { start: string; end: string } | null {
+        if (cloudProvider !== 'aws') return { start: startDate, end: endDate };
+
+        const today = new Date();
+        const minStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+        minStart.setUTCDate(minStart.getUTCDate() - 13);
+        const minIso = minStart.toISOString().slice(0, 10);
+        if (endDate < minIso) return null;
+        const start = startDate > minIso ? startDate : minIso;
+        if (start > endDate) return null;
+        return { start, end: endDate };
     }
 
     private resolveProvider(cloudProvider: string): IFinopsProvider {

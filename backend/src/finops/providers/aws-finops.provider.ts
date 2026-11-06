@@ -11,6 +11,7 @@ import {
     CostExplorerClient,
     GetCostAndUsageCommand,
     GetCostAndUsageWithResourcesCommand,
+    GetCostForecastCommand,
     GetReservationUtilizationCommand,
     GetSavingsPlansCoverageCommand,
     GetSavingsPlansPurchaseRecommendationCommand,
@@ -20,6 +21,7 @@ import {
     type SavingsPlansUtilization,
     type GetCostAndUsageCommandInput,
     type GetCostAndUsageWithResourcesCommandInput,
+    type GetCostForecastCommandOutput,
     type SavingsPlansPurchaseRecommendationSummary,
 } from '@aws-sdk/client-cost-explorer';
 
@@ -31,8 +33,12 @@ import type {
     FinopsCreditConsumptionEntry,
     FinopsCreditGrantEntry,
     FinopsProviderCredentials,
+    ProviderCostForecast,
+    ProviderMonthForecast,
 } from './finops-provider.interface';
-import { capResourceEntriesByDay } from './finops-provider.interface';
+import { readForecastCache, writeForecastCache } from './forecast-cache';
+import { capResourceEntriesByDay, dedupeCostEntries } from './finops-provider.interface';
+import { describeAwsUsageType } from './aws-usage-type';
 
 @Injectable()
 export class AwsFinopsProvider implements IFinopsProvider {
@@ -249,6 +255,72 @@ export class AwsFinopsProvider implements IFinopsProvider {
         );
 
         return { entries: capped, currency };
+    }
+
+    /**
+     * Mês fechado por usage type. RESOURCE_ID no Cost Explorer só existe nos últimos
+     * 14 dias; o fechamento do relatório usa o mês inteiro.
+     */
+    async collectUsageTypeCosts(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+    ): Promise<FinopsCostCollectionResult> {
+        const { credentials, cloudAccountId } = creds;
+        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+
+        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const exclusiveEndDate = this.toExclusiveEndDate(endDate);
+        const baseInput: GetCostAndUsageCommandInput = {
+            TimePeriod: { Start: startDate, End: exclusiveEndDate },
+            Granularity: 'MONTHLY',
+            Metrics: ['AmortizedCost'],
+            GroupBy: [
+                { Type: 'DIMENSION', Key: 'USAGE_TYPE' },
+                { Type: 'DIMENSION', Key: 'SERVICE' },
+            ],
+        };
+
+        const entries: FinopsCostCollectionResult['entries'] = [];
+        let nextPageToken: string | undefined;
+
+        do {
+            const response = await awsClient.send(
+                new GetCostAndUsageCommand({
+                    ...baseInput,
+                    ...(nextPageToken ? { NextPageToken: nextPageToken } : {}),
+                }),
+            );
+            for (const result of response.ResultsByTime ?? []) {
+                const periodStart = result.TimePeriod?.Start ?? startDate;
+                for (const group of result.Groups ?? []) {
+                    const [usageType, service] = group.Keys ?? ['', 'Unknown'];
+                    const amount = Number(group.Metrics?.['AmortizedCost']?.Amount ?? '0');
+                    const described = describeAwsUsageType(usageType ?? '');
+                    if (!described.resourceId || amount === 0) continue;
+                    entries.push({
+                        service: service ?? 'Unknown',
+                        resourceId: described.resourceId,
+                        region: described.region || null,
+                        usageType: usageType ?? '',
+                        operation: '',
+                        cost: amount,
+                        currency: 'USD',
+                        usageQuantity: 0,
+                        usageUnit: '',
+                        date: periodStart,
+                    });
+                }
+            }
+            nextPageToken = response.NextPageToken;
+        } while (nextPageToken);
+
+        const deduped = dedupeCostEntries(entries);
+        this.logger.log(`[AWS FinOps] ${deduped.length} usage types para conta ${cloudAccountId} (${startDate} → ${endDate})`);
+        return { entries: deduped, currency: 'USD' };
     }
 
     async collectCreditConsumption(
@@ -776,6 +848,116 @@ export class AwsFinopsProvider implements IFinopsProvider {
         return [...merged.values()];
     }
 
+    /**
+     * Fim do mês no mesmo número do console (Forecasted month-end):
+     * Unblended realizado de hoje inclusive + forecast de amanhã até o dia 1 do mês seguinte.
+     * O resto do mês usa DAILY: MONTHLY só aceita o dia 1, e esse dia já passou.
+     */
+    async forecastMonthEnd(creds: FinopsProviderCredentials): Promise<ProviderCostForecast> {
+        const today = utcDay();
+        const cacheKey = `${creds.cloudAccountId}:${today}:month-end`;
+        const cached = readForecastCache<ProviderCostForecast>(cacheKey);
+        if (cached) return cached;
+
+        const forecast = await this.loadMonthEndForecast(creds, today);
+        writeForecastCache(cacheKey, forecast);
+        return forecast;
+    }
+
+    /**
+     * Próximos meses fechados. O início é o dia 1, então a granularidade MONTHLY vale.
+     */
+    async forecastUpcomingMonths(creds: FinopsProviderCredentials, months = 3): Promise<ProviderMonthForecast[]> {
+        const count = Math.min(Math.max(Math.trunc(months) || 3, 1), 12);
+        const today = utcDay();
+        const cacheKey = `${creds.cloudAccountId}:${today}:next:${count}`;
+        const cached = readForecastCache<ProviderMonthForecast[]>(cacheKey);
+        if (cached) return cached;
+
+        const forecast = await this.loadUpcomingForecast(creds, today, count);
+        writeForecastCache(cacheKey, forecast);
+        return forecast;
+    }
+
+    private async loadMonthEndForecast(creds: FinopsProviderCredentials, today: string): Promise<ProviderCostForecast> {
+        const client = await this.costExplorerFor(creds);
+        const monthStart = `${today.slice(0, 7)}-01`;
+        const tomorrow = addUtcDays(today, 1);
+        const nextMonth = firstOfNextMonth(today);
+
+        const actualResponse = await client.send(
+            new GetCostAndUsageCommand({
+                TimePeriod: { Start: monthStart, End: tomorrow },
+                Granularity: 'MONTHLY',
+                Metrics: ['UnblendedCost'],
+            }),
+        );
+        const actual = sumUnblended(actualResponse);
+
+        let forecastAmount = 0;
+        let forecastCurrency = actual.currency;
+        if (tomorrow < nextMonth) {
+            const forecastResponse = await client.send(
+                new GetCostForecastCommand({
+                    TimePeriod: { Start: tomorrow, End: nextMonth },
+                    Metric: 'UNBLENDED_COST',
+                    Granularity: 'DAILY',
+                }),
+            );
+            const forecast = readForecastTotal(forecastResponse);
+            forecastAmount = forecast.amount;
+            forecastCurrency = forecast.currency;
+        }
+
+        const amount = roundMoney(actual.amount + forecastAmount);
+        if (!Number.isFinite(amount)) {
+            throw new BadRequestException('Cost Explorer devolveu um forecast inválido.');
+        }
+
+        return {
+            amount,
+            currency: (actual.amount !== 0 ? actual.currency : forecastCurrency).toUpperCase(),
+        };
+    }
+
+    private async loadUpcomingForecast(
+        creds: FinopsProviderCredentials,
+        today: string,
+        months: number,
+    ): Promise<ProviderMonthForecast[]> {
+        const client = await this.costExplorerFor(creds);
+        const start = firstOfNextMonth(today);
+        const end = firstOfMonthOffset(start, months);
+        const response = await client.send(
+            new GetCostForecastCommand({
+                TimePeriod: { Start: start, End: end },
+                Metric: 'UNBLENDED_COST',
+                Granularity: 'MONTHLY',
+            }),
+        );
+        const currency = (response.Total?.Unit ?? 'USD').toUpperCase();
+        const rows = (response.ForecastResultsByTime ?? [])
+            .map((row) => ({
+                month: (row.TimePeriod?.Start ?? '').slice(0, 7),
+                amount: roundMoney(Number(row.MeanValue ?? 0)),
+                currency,
+            }))
+            .filter((row) => /^\d{4}-\d{2}$/.test(row.month));
+
+        if (rows.length === 0) {
+            throw new BadRequestException('Cost Explorer não devolveu previsão para os próximos meses.');
+        }
+        return rows;
+    }
+
+    private async costExplorerFor(creds: FinopsProviderCredentials): Promise<CostExplorerClient> {
+        const { roleArn, externalId } = creds.credentials as { roleArn?: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+        return this.buildCostExplorerClient(roleArn, externalId);
+    }
+
     private async buildCostExplorerClient(roleArn: string, externalId?: string): Promise<CostExplorerClient> {
         const temporary = await this.assumeRole(roleArn, externalId);
 
@@ -880,6 +1062,49 @@ export class AwsFinopsProvider implements IFinopsProvider {
             `Falha AWS FinOps em ${stage} para role "${roleArn}". Detalhe: ${message}`
         );
     }
+}
+
+function utcDay(now = new Date()): string {
+    return now.toISOString().slice(0, 10);
+}
+
+function addUtcDays(iso: string, days: number): string {
+    const [year, month, day] = iso.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function firstOfNextMonth(iso: string): string {
+    const [year, month] = iso.split('-').map(Number);
+    return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+}
+
+function firstOfMonthOffset(monthStart: string, offset: number): string {
+    const [year, month] = monthStart.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 10);
+}
+
+function sumUnblended(response: { ResultsByTime?: Array<{ Total?: { UnblendedCost?: { Amount?: string; Unit?: string } } }> }): {
+    amount: number;
+    currency: string;
+} {
+    let amount = 0;
+    let currency = 'USD';
+    for (const result of response.ResultsByTime ?? []) {
+        const metric = result.Total?.UnblendedCost;
+        amount += Number(metric?.Amount ?? 0);
+        if (metric?.Unit) currency = metric.Unit;
+    }
+    return { amount, currency: currency.toUpperCase() };
+}
+
+function readForecastTotal(response: GetCostForecastCommandOutput): { amount: number; currency: string } {
+    const raw = response.Total?.Amount;
+    const currency = (response.Total?.Unit ?? 'USD').toUpperCase();
+    if (raw != null && raw !== '' && Number.isFinite(Number(raw))) {
+        return { amount: Number(raw), currency };
+    }
+    const amount = (response.ForecastResultsByTime ?? []).reduce((sum, row) => sum + Number(row.MeanValue ?? 0), 0);
+    return { amount, currency };
 }
 
 function accountIdFromRoleArn(roleArn: string): string | null {

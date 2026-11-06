@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
@@ -332,6 +333,9 @@ export function FinopsReports() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" asChild>
+                        <Link href="/finops/reports/commercial">{tf.commercialOpen}</Link>
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"

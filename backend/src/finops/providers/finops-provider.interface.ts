@@ -25,6 +25,19 @@ export interface FinopsProviderCredentials {
     cloudAccountId: string;
 }
 
+/** Previsão de fim de mês devolvida pelo provedor (não é projeção linear). */
+export interface ProviderCostForecast {
+    amount: number;
+    currency: string;
+}
+
+/** Previsão de um mês futuro fechado, no calendário do provedor. */
+export interface ProviderMonthForecast {
+    month: string;
+    amount: number;
+    currency: string;
+}
+
 /** Consumo de crédito diário (valor positivo = crédito usado). */
 export interface FinopsCreditConsumptionEntry {
     date: string;
@@ -175,4 +188,26 @@ export function capResourceEntriesByDay(
         capped.push(...list.slice(0, topN));
     }
     return capped;
+}
+
+/** Une linhas que cairiam na mesma chave única antes do upsert. */
+export function dedupeCostEntries(entries: FinopsCostEntry[]): FinopsCostEntry[] {
+    const merged = new Map<string, FinopsCostEntry>();
+    for (const entry of entries) {
+        const resourceId = (entry.resourceId ?? '').trim();
+        const region = (entry.region ?? '').trim();
+        const key = [entry.service, resourceId, region, entry.date].join('\u0000');
+        const current = merged.get(key);
+        if (!current) {
+            merged.set(key, {
+                ...entry,
+                resourceId,
+                region: region || null,
+            });
+            continue;
+        }
+        current.cost += entry.cost;
+        current.usageQuantity = (current.usageQuantity ?? 0) + (entry.usageQuantity ?? 0);
+    }
+    return [...merged.values()];
 }

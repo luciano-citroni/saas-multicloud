@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 
 // Controller
 import { FinopsController } from './controllers/finops.controller';
+import { FinopsCommercialReportController } from './controllers/finops-commercial-report.controller';
 
 // Services
 import { FinopsService } from './services/finops.service';
@@ -20,6 +21,7 @@ import { FinopsOrgOverviewService } from './services/finops-org-overview.service
 import { FinopsResourceCostService } from './services/finops-resource-cost.service';
 import { FinopsAnomalyAlertService } from './services/finops-anomaly-alert.service';
 import { FinopsCommitmentsService } from './services/finops-commitments.service';
+import { FinopsCommercialReportService } from './services/finops-commercial-report.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -49,10 +51,15 @@ import { FinopsCreditGrant } from '../db/entites/finops-credit-grant.entity';
 import { FinopsCreditConsumption } from '../db/entites/finops-credit-consumption.entity';
 import { FinopsCommitmentSnapshot } from '../db/entites/finops-commitment-snapshot.entity';
 import { FinopsCommitmentRecommendation } from '../db/entites/finops-commitment-recommendation.entity';
+import { FinopsExchangeRate } from '../db/entites/finops-exchange-rate.entity';
+import { FinopsUsdQuote } from '../db/entites/finops-usd-quote.entity';
+import { FinopsCommercialReportSettings } from '../db/entites/finops-commercial-report-settings.entity';
+import { FinopsCommercialReportSend } from '../db/entites/finops-commercial-report-send.entity';
 
 // Supporting entities
 import { CloudAccount } from '../db/entites/cloud-account.entity';
 import { Organization } from '../db/entites/organization.entity';
+import { Tenant } from '../db/entites/tenant.entity';
 import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 import { AwsEc2Instance } from '../db/entites/aws-ec2.entity';
 import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
@@ -101,8 +108,13 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
             FinopsCreditConsumption,
             FinopsCommitmentSnapshot,
             FinopsCommitmentRecommendation,
+            FinopsExchangeRate,
+            FinopsUsdQuote,
+            FinopsCommercialReportSettings,
+            FinopsCommercialReportSend,
             CloudAccount,
             Organization,
+            Tenant,
             AzureAssessmentJob,
             AwsEc2Instance,
             AwsRdsInstance,
@@ -120,7 +132,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
         MailerModule,
         FinopsResourceChangeModule,
     ],
-    controllers: [FinopsController],
+    controllers: [FinopsController, FinopsCommercialReportController],
     providers: [
         PlanModuleGuard,
         FinopsService,
@@ -137,6 +149,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
         FinopsResourceCostService,
         FinopsAnomalyAlertService,
         FinopsCommitmentsService,
+        FinopsCommercialReportService,
         FinopsProcessor,
         AwsFinopsProvider,
         AzureFinopsProvider,

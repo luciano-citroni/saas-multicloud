@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/messages/error-messages';
 
 const EVOLUTION_TIMEOUT_MS = 20_000;
+const EVOLUTION_MEDIA_TIMEOUT_MS = 60_000;
 
 @Injectable()
 export class EvolutionApiService {
@@ -15,7 +16,7 @@ export class EvolutionApiService {
         return Boolean(this.baseUrl && this.apiKey && this.instance);
     }
 
-    async sendText(params: { number: string; text: string }): Promise<void> {
+    async sendText(params: { number: string; text: string; linkPreview?: boolean }): Promise<void> {
         if (!this.isConfigured()) {
             throw new ServiceUnavailableException(ErrorMessages.NOTIFICATIONS.EVOLUTION_NOT_CONFIGURED);
         }
@@ -28,9 +29,40 @@ export class EvolutionApiService {
             body: {
                 number: params.number,
                 text: params.text,
+                ...(params.linkPreview ? { linkPreview: true } : {}),
             },
             errorMessage: ErrorMessages.NOTIFICATIONS.WHATSAPP_TEST_SEND_FAILED,
             context: `sendText number=${params.number}`,
+        });
+    }
+
+    /** Envia um documento (PDF) com legenda. Evolution: POST /message/sendMedia/{instance}. */
+    async sendDocument(params: {
+        number: string;
+        caption: string;
+        filename: string;
+        mimetype: string;
+        content: Buffer;
+    }): Promise<void> {
+        if (!this.isConfigured()) {
+            throw new ServiceUnavailableException(ErrorMessages.NOTIFICATIONS.EVOLUTION_NOT_CONFIGURED);
+        }
+
+        const url = `${this.baseUrl}/message/sendMedia/${encodeURIComponent(this.instance)}`;
+        await this.requestJson({
+            url,
+            method: 'POST',
+            timeoutMs: EVOLUTION_MEDIA_TIMEOUT_MS,
+            body: {
+                number: params.number,
+                mediatype: 'document',
+                mimetype: params.mimetype,
+                caption: params.caption,
+                fileName: params.filename,
+                media: params.content.toString('base64'),
+            },
+            errorMessage: ErrorMessages.NOTIFICATIONS.WHATSAPP_TEST_SEND_FAILED,
+            context: `sendMedia number=${params.number} file=${params.filename}`,
         });
     }
 
@@ -122,9 +154,10 @@ export class EvolutionApiService {
         body?: Record<string, unknown>;
         errorMessage: string;
         context: string;
+        timeoutMs?: number;
     }): Promise<T> {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), EVOLUTION_TIMEOUT_MS);
+        const timeout = setTimeout(() => controller.abort(), params.timeoutMs ?? EVOLUTION_TIMEOUT_MS);
 
         try {
             const response = await fetch(params.url, {

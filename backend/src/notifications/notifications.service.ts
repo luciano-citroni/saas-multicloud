@@ -519,6 +519,57 @@ export class NotificationsService {
         return this.sendWhatsappAlertToTargets(organizationId, text, targets);
     }
 
+    /**
+     * Mensagem de texto (link clicável) e, em seguida, o PDF.
+     * O WhatsApp não transforma URL em link quando ela fica só na legenda do documento.
+     */
+    async sendWhatsappDocumentToGroups(
+        organizationId: string,
+        groupIds: string[],
+        document: { text?: string; linkPreview?: boolean; caption: string; filename: string; mimetype: string; content: Buffer },
+    ): Promise<{ sent: number; failed: number }> {
+        const targets = await this.listActiveWhatsappTargetsFromGroups(organizationId, groupIds);
+        if (targets.length === 0) {
+            return { sent: 0, failed: 0 };
+        }
+
+        let sent = 0;
+        let failed = 0;
+        const caption = document.caption.length > 1024 ? `${document.caption.slice(0, 1021)}...` : document.caption;
+
+        for (const target of targets) {
+            try {
+                if (document.text) {
+                    await this.evolutionApiService.sendText({
+                        number: target.target,
+                        text: document.text,
+                        linkPreview: document.linkPreview === true,
+                    });
+                }
+                await this.evolutionApiService.sendDocument({
+                    number: target.target,
+                    caption,
+                    filename: document.filename,
+                    mimetype: document.mimetype,
+                    content: document.content,
+                });
+                sent += 1;
+            } catch (error) {
+                failed += 1;
+                const message = error instanceof Error ? error.message : String(error);
+                this.logger.error(
+                    `notification.whatsapp.document.failed org=${organizationId} target=${target.target}: ${message}`,
+                );
+            }
+        }
+
+        this.logger.log(
+            `notification.whatsapp.document org=${organizationId} sent=${sent} failed=${failed} file=${document.filename}`,
+        );
+
+        return { sent, failed };
+    }
+
     private async sendTestGroupEmails(
         group: OrganizationNotificationGroup,
     ): Promise<{ sent: number; failed: number; emails: string[] }> {

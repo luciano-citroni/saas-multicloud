@@ -34,6 +34,7 @@ export function SiteHeader() {
         multicloud: finops.subnavMulticloud,
         budgets: finops.subnavBudgets,
         reports: finops.subnavReports,
+        commercial: finops.commercialOpen,
         accounts: finops.subnavAccountDetail,
         tenant: nav.tenants,
         users: nav.users,

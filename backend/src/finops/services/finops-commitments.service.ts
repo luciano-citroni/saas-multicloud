@@ -480,7 +480,7 @@ export class FinopsCommitmentsService {
                 totalRemaining,
                 consumedInPeriod,
                 expiringSoon,
-                currency: enrichedGrants[0]?.currency ?? consumptions[0]?.currency ?? 'USD',
+                currency: String(enrichedGrants[0]?.currency ?? consumptions[0]?.currency ?? 'USD'),
             },
         };
     }

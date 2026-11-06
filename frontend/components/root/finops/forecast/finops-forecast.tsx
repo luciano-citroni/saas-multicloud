@@ -179,7 +179,9 @@ export function FinopsForecast() {
                                     </span>
                                 ) : null}
                             </div>
-                            <p className="text-sm text-muted-foreground">{tf.forecastAccountScope}</p>
+                            <p className="text-sm text-muted-foreground">
+                                {forecast?.source === 'provider' ? tf.forecastAccountScopeProvider : tf.forecastAccountScope}
+                            </p>
                         </div>
                     </div>
                     <Button variant="outline" size="sm" asChild>
@@ -196,7 +198,15 @@ export function FinopsForecast() {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                     <div className="space-y-0.5">
                         <p className="text-sm font-medium">{tf.forecastPageTitle}</p>
-                        <p className="text-xs text-muted-foreground">{tf.forecastBasedOnMonth}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {forecast?.source === 'provider'
+                                ? forecast.provider === 'aws'
+                                    ? tf.forecastFromAws
+                                    : forecast.provider === 'azure'
+                                      ? tf.forecastFromAzure
+                                      : tf.forecastFromProvider
+                                : tf.forecastBasedOnMonth}
+                        </p>
                     </div>
                 </div>
 
@@ -235,7 +245,11 @@ export function FinopsForecast() {
                         <div className="rounded-lg border p-3">
                             <p className="text-xs text-muted-foreground">{tf.forecastAvgDaily}</p>
                             <p className="mt-1 truncate text-xl font-bold">{formatCurrency(forecast.avgDailyCost, currency)}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">{tf.forecastAvgDailyHint.replace('{days}', String(forecast.daysElapsed))}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                {forecast.source === 'provider'
+                                    ? tf.forecastAvgDailyProvider
+                                    : tf.forecastAvgDailyHint.replace('{days}', String(forecast.daysElapsed))}
+                            </p>
                         </div>
                         <div className="col-span-2 rounded-lg border p-3 sm:col-span-1">
                             <p className="text-xs text-muted-foreground">{tf.billingColPeriod}</p>
@@ -289,7 +303,9 @@ export function FinopsForecast() {
                 <div className="rounded-xl border">
                     <div className="border-b px-4 py-3">
                         <p className="text-sm font-medium">{tf.forecastNextMonths}</p>
-                        <p className="text-xs text-muted-foreground">{tf.forecastNextMonthsHint}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {nextMonths.every((month) => month.source === 'provider') ? tf.forecastNextMonthsProvider : tf.forecastNextMonthsHint}
+                        </p>
                     </div>
                     <div className="divide-y">
                         {nextMonths.map((m) => {
