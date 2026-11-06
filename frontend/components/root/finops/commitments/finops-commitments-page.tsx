@@ -303,11 +303,10 @@ function formatCalendarDate(value: string | null | undefined, locale: AppLocale)
 }
 
 const CREDIT_PAGE_SIZES = [5, 10, 20, 30] as const;
-type CreditListTab = 'active' | 'exhausted' | 'expired';
+type CreditListTab = 'active' | 'history';
 
 function parseCreditTab(value: string | null): CreditListTab {
-    if (value === 'exhausted' || value === 'expired') return value;
-    return 'active';
+    return value === 'history' ? 'history' : 'active';
 }
 
 function creditPageSize(value: string | null): (typeof CREDIT_PAGE_SIZES)[number] {
@@ -317,9 +316,7 @@ function creditPageSize(value: string | null): (typeof CREDIT_PAGE_SIZES)[number
         : 10;
 }
 
-function grantMatchesTab(status: CreditGrant['status'], tab: CreditListTab): boolean {
-    if (tab === 'expired') return status === 'expired';
-    if (tab === 'exhausted') return status === 'exhausted';
+function isOpenGrant(status: CreditGrant['status']): boolean {
     return status === 'active' || status === 'expiring';
 }
 
@@ -408,7 +405,10 @@ export function FinopsCommitmentsPage() {
     );
 
     const visibleGrants = useMemo(
-        () => grants.filter((grant) => grantMatchesTab(grant.status, creditTab)),
+        () =>
+            grants.filter((grant) =>
+                creditTab === 'history' ? !isOpenGrant(grant.status) : isOpenGrant(grant.status),
+            ),
         [creditTab, grants],
     );
     const creditTotalPages = Math.max(1, Math.ceil(visibleGrants.length / creditsLimit));
@@ -702,17 +702,17 @@ export function FinopsCommitmentsPage() {
                             <CardTitle className="text-base">{t.creditsGrantsTitle}</CardTitle>
                             <Tabs
                                 value={creditTab}
-                                onValueChange={(value) =>
+                                onValueChange={(value) => {
+                                    setExpandedGrantId(null);
                                     setCreditList({
-                                        tab: value === 'exhausted' || value === 'expired' ? value : 'active',
+                                        tab: value === 'history' ? 'history' : 'active',
                                         page: null,
-                                    })
-                                }
+                                    });
+                                }}
                             >
                                 <TabsList>
                                     <TabsTrigger value="active">{t.creditsTabActive}</TabsTrigger>
-                                    <TabsTrigger value="exhausted">{t.creditsTabExhausted}</TabsTrigger>
-                                    <TabsTrigger value="expired">{t.creditsTabExpired}</TabsTrigger>
+                                    <TabsTrigger value="history">{t.creditsTabHistory}</TabsTrigger>
                                 </TabsList>
                             </Tabs>
                         </div>
@@ -724,13 +724,11 @@ export function FinopsCommitmentsPage() {
                     <CardContent>
                         {visibleGrants.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
-                                {grants.length === 0
-                                    ? t.creditsNoGrants
-                                    : creditTab === 'expired'
-                                      ? t.creditsNoExpiredGrants
-                                      : creditTab === 'exhausted'
-                                        ? t.creditsNoExhaustedGrants
-                                        : t.creditsNoActiveGrants}
+                                {creditTab === 'history'
+                                    ? t.creditsNoHistoryGrants
+                                    : grants.length === 0
+                                      ? t.creditsNoGrants
+                                      : t.creditsNoActiveGrants}
                             </p>
                         ) : (
                             <Table>

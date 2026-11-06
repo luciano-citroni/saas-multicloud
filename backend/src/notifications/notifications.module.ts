@@ -5,6 +5,7 @@ import { OrganizationNotificationEmail } from '../db/entites/organization-notifi
 import { OrganizationNotificationGroup } from '../db/entites/organization-notification-group.entity';
 import { OrganizationNotificationWhatsappTarget } from '../db/entites/organization-notification-whatsapp-target.entity';
 import { Organization } from '../db/entites/organization.entity';
+import { Tenant } from '../db/entites/tenant.entity';
 import { MailerModule } from '../mailer/mailer.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -19,6 +20,7 @@ import { EvolutionApiService } from './evolution-api.service';
             OrganizationNotificationEmail,
             OrganizationNotificationWhatsappTarget,
             Organization,
+            Tenant,
         ]),
         MailerModule,
         TenantModule,

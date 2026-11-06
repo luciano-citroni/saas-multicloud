@@ -14,7 +14,6 @@ import {
     AnomalySeverity,
     FinopsCostAnomaly,
 } from '../../db/entites/finops-cost-anomaly.entity';
-import { Organization } from '../../db/entites/organization.entity';
 import { MailerService } from '../../mailer/mailer.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
@@ -71,9 +70,6 @@ export class FinopsAnomalyAlertService {
 
         @InjectRepository(FinopsCostAnomaly)
         private readonly anomalyRepo: Repository<FinopsCostAnomaly>,
-
-        @InjectRepository(Organization)
-        private readonly organizationRepo: Repository<Organization>,
 
         private readonly notificationsService: NotificationsService,
         private readonly mailerService: MailerService,
@@ -391,7 +387,7 @@ export class FinopsAnomalyAlertService {
         minSeverity: AnomalySeverity,
         anomalies: FinopsCostAnomaly[],
     ): Promise<string> {
-        const context = await this.loadOrganizationContext(organizationId);
+        const context = await this.notificationsService.resolveWhatsappAlertContext(organizationId);
         const shown = anomalies.slice(0, 15);
         const items = shown
             .map((anomaly, index) => this.formatAnomalyWhatsappItem(anomaly, index))
@@ -440,20 +436,6 @@ export class FinopsAnomalyAlertService {
         const [year, month, day] = key.split('-');
         if (!year || !month || !day) return key;
         return `${day}/${month}/${year}`;
-    }
-
-    private async loadOrganizationContext(
-        organizationId: string,
-    ): Promise<{ tenantName: string; organizationName: string }> {
-        const organization = await this.organizationRepo.findOne({
-            where: { id: organizationId },
-            relations: ['tenant'],
-        });
-
-        return {
-            tenantName: organization?.tenant?.name?.trim() || '—',
-            organizationName: organization?.name?.trim() || '—',
-        };
     }
 
     private formatPtBr(value: number, fractionDigits: number): string {

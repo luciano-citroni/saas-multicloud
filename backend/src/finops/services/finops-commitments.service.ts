@@ -195,6 +195,10 @@ export class FinopsCommitmentsService {
                 where: { organizationId, cloudAccountId, externalId },
             });
 
+            // Crédito que já chegou esgotado ou vencido não entra. O que já
+            // acompanhávamos continua gravado e passa para o histórico.
+            if (!existing && !isOpenCreditWithBalance(entry)) continue;
+
             const payload = {
                 organizationId,
                 cloudAccountId,
@@ -446,19 +450,19 @@ export class FinopsCommitmentsService {
         });
 
         const enrichedGrants = await Promise.all(grants.map((g) => this.enrichGrant(g)));
+        const openGrants = enrichedGrants.filter(
+            (grant) => grant.status === 'active' || grant.status === 'expiring',
+        );
 
-        const totalGranted = enrichedGrants.reduce((s, g) => s + Number(g.totalAmount), 0);
-        const totalRemaining = enrichedGrants.reduce((sum, grant) => {
-            if (grant.status !== 'active' && grant.status !== 'expiring') return sum;
-            return sum + Number(grant.remainingAmount);
-        }, 0);
-        const consumedInPeriod = enrichedGrants.reduce((sum, grant) => {
+        const totalGranted = openGrants.reduce((s, g) => s + Number(g.totalAmount), 0);
+        const totalRemaining = openGrants.reduce((sum, grant) => sum + Number(grant.remainingAmount), 0);
+        const consumedInPeriod = openGrants.reduce((sum, grant) => {
             if (!grantOverlapsPeriod(String(grant.startsAt ?? ''), grant.expiresAt as string | null, periodStart, periodEnd)) {
                 return sum;
             }
             return sum + Number(grant.consumedAmount);
         }, 0);
-        const expiringSoon = enrichedGrants.filter((g) => g.status === 'expiring').length;
+        const expiringSoon = openGrants.filter((g) => g.status === 'expiring').length;
 
         return {
             grants: enrichedGrants,
@@ -833,6 +837,15 @@ function calendarDate(value: string | Date | null | undefined): string | null {
     }
     const match = /^(\d{4}-\d{2}-\d{2})/.exec(String(value));
     return match ? match[1] : null;
+}
+
+function isOpenCreditWithBalance(entry: FinopsCreditGrantEntry): boolean {
+    if (entry.reportedRemaining <= 0) return false;
+    if (entry.notes?.split(' · ').includes('DISABLED')) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    if (entry.startsAt > today) return false;
+    if (entry.expiresAt && entry.expiresAt < today) return false;
+    return true;
 }
 
 function grantOverlapsPeriod(

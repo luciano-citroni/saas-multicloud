@@ -16,6 +16,7 @@ import {
 } from '../db/entites/organization-notification-group.entity';
 import { OrganizationNotificationWhatsappTarget } from '../db/entites/organization-notification-whatsapp-target.entity';
 import { Organization } from '../db/entites/organization.entity';
+import { Tenant } from '../db/entites/tenant.entity';
 import { ErrorMessages } from '../common/messages/error-messages';
 import { MailerService } from '../mailer/mailer.service';
 import type {
@@ -48,6 +49,8 @@ export class NotificationsService {
         private readonly whatsappTargetRepo: Repository<OrganizationNotificationWhatsappTarget>,
         @InjectRepository(Organization)
         private readonly organizationRepo: Repository<Organization>,
+        @InjectRepository(Tenant)
+        private readonly tenantRepo: Repository<Tenant>,
         private readonly mailerService: MailerService,
         private readonly evolutionApiService: EvolutionApiService,
     ) {}
@@ -358,7 +361,7 @@ export class NotificationsService {
             await this.evolutionApiService.sendText({
                 number: entity.target,
                 text: this.formatWhatsappTestMessage(
-                    await this.loadOrganizationContext(organizationId),
+                    await this.resolveWhatsappAlertContext(organizationId),
                     group.name,
                     entity.label,
                 ),
@@ -571,7 +574,7 @@ export class NotificationsService {
         let sent = 0;
         let failed = 0;
         const targets: string[] = [];
-        const context = await this.loadOrganizationContext(group.organizationId);
+        const context = await this.resolveWhatsappAlertContext(group.organizationId);
 
         for (const recipient of recipients) {
             try {
@@ -601,18 +604,63 @@ export class NotificationsService {
         return { sent, failed, targets };
     }
 
-    private async loadOrganizationContext(
-        organizationId: string,
+    /**
+     * Nomes para alertas de WhatsApp.
+     * `tenantId` é o contexto do header `x-organization-id` (tabela tenants),
+     * gravado como organization_id em budgets e grupos.
+     * `organizationId` é a mid-org (tabela organizations), quando o alerta
+     * é de uma conta cloud. Sem ela, lista as organizações do tenant.
+     */
+    async resolveWhatsappAlertContext(
+        tenantId: string,
+        organizationId?: string | null,
     ): Promise<{ tenantName: string; organizationName: string }> {
-        const organization = await this.organizationRepo.findOne({
-            where: { id: organizationId },
-            relations: ['tenant'],
+        const tenant = await this.tenantRepo.findOne({
+            where: { id: tenantId },
+            select: ['id', 'name'],
         });
 
+        if (!tenant) {
+            const organization = await this.organizationRepo.findOne({
+                where: { id: tenantId },
+                relations: ['tenant'],
+            });
+
+            return {
+                tenantName: organization?.tenant?.name?.trim() || '—',
+                organizationName: organization?.name?.trim() || '—',
+            };
+        }
+
         return {
-            tenantName: organization?.tenant?.name?.trim() || '—',
-            organizationName: organization?.name?.trim() || '—',
+            tenantName: tenant.name?.trim() || '—',
+            organizationName: await this.resolveOrganizationLabel(tenant.id, organizationId),
         };
+    }
+
+    private async resolveOrganizationLabel(
+        tenantId: string,
+        organizationId?: string | null,
+    ): Promise<string> {
+        if (organizationId) {
+            const organization = await this.organizationRepo.findOne({
+                where: { id: organizationId, tenantId },
+                select: ['id', 'name'],
+            });
+            return organization?.name?.trim() || '—';
+        }
+
+        const organizations = await this.organizationRepo.find({
+            where: { tenantId },
+            select: ['id', 'name'],
+            order: { name: 'ASC' },
+        });
+        const names = organizations
+            .map((organization) => organization.name?.trim())
+            .filter((name): name is string => Boolean(name));
+
+        if (names.length === 0) return '—';
+        return names.join(', ');
     }
 
     private formatWhatsappTestMessage(

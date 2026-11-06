@@ -4,9 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { STSClient, AssumeRoleCommand, type AssumeRoleCommandInput } from '@aws-sdk/client-sts';
 import {
     BillingClient,
-    GetCreditAllocationHistoryCommand,
     GetCreditsCommand,
-    type CreditAllocationHistoryEntry,
     type CreditData,
 } from '@aws-sdk/client-billing';
 import {
@@ -344,12 +342,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
             const client = await this.buildBillingClient(roleArn, externalId);
             const startDate = new Date(Date.now() - 364 * 24 * 60 * 60 * 1000);
             const credits = await this.fetchCredits(client, accountId, startDate);
-
-            const usageByCredit = await this.collectCreditAllocation(client, accountId, startDate);
             const grants: FinopsCreditGrantEntry[] = [];
 
             for (const credit of credits) {
-                const mapped = mapAwsCredit(credit, usageByCredit);
+                const mapped = mapAwsCredit(credit);
                 if (mapped) grants.push(mapped);
             }
 
@@ -780,56 +776,6 @@ export class AwsFinopsProvider implements IFinopsProvider {
         return [...merged.values()];
     }
 
-    private async collectCreditAllocation(
-        client: BillingClient,
-        accountId: string,
-        startDate: Date,
-    ): Promise<Map<string, Map<string, number>>> {
-        const byCredit = new Map<string, Map<string, number>>();
-        const chosen = new Map<string, { amount: number; estimated: boolean }>();
-        let nextToken: string | undefined;
-        let pages = 0;
-
-        try {
-            do {
-                pages += 1;
-                const response = await client.send(
-                    new GetCreditAllocationHistoryCommand(
-                        nextToken
-                            ? { nextToken }
-                            : {
-                                  accountId,
-                                  startDate,
-                                  endDate: new Date(Date.now() - 60_000),
-                                  maxResults: 1000,
-                              },
-                    ),
-                );
-
-                for (const entry of response.creditAllocationHistoryList ?? []) {
-                    rememberAllocation(chosen, entry);
-                }
-
-                nextToken = response.nextToken;
-            } while (nextToken && pages < 20);
-        } catch (error) {
-            this.logger.warn(
-                `[AWS FinOps] GetCreditAllocationHistory falhou: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return byCredit;
-        }
-
-        for (const [key, row] of chosen) {
-            const [creditId, service] = key.split('\u0000');
-            if (!creditId || !service) continue;
-            const services = byCredit.get(creditId) ?? new Map<string, number>();
-            services.set(service, (services.get(service) ?? 0) + row.amount);
-            byCredit.set(creditId, services);
-        }
-
-        return byCredit;
-    }
-
     private async buildCostExplorerClient(roleArn: string, externalId?: string): Promise<CostExplorerClient> {
         const temporary = await this.assumeRole(roleArn, externalId);
 
@@ -941,10 +887,7 @@ function accountIdFromRoleArn(roleArn: string): string | null {
     return match?.[1] ?? null;
 }
 
-function mapAwsCredit(
-    credit: CreditData,
-    usageByCredit: Map<string, Map<string, number>>,
-): FinopsCreditGrantEntry | null {
+function mapAwsCredit(credit: CreditData): FinopsCreditGrantEntry | null {
     const externalId = credit.creditId?.trim();
     const startsAt = toIsoDate(credit.startDate);
     const initial = parseAmount(credit.initialAmount);
@@ -960,7 +903,6 @@ function mapAwsCredit(
           ? estimated.value
           : initial.value;
     const services = (credit.applicableProductNames ?? []).map((name) => name.trim()).filter(Boolean).slice(0, 200);
-    const usage = usageByCredit.get(externalId);
     const notes = [credit.creditType, credit.creditStatus === 'DISABLED' ? 'DISABLED' : null]
         .filter(Boolean)
         .join(' · ');
@@ -976,30 +918,8 @@ function mapAwsCredit(
         services,
         appliesToAllServices: services.length === 0,
         notes: notes || null,
-        usageByService: usage
-            ? [...usage.entries()]
-                  .map(([service, amount]) => ({ service, amount: roundMoney(amount) }))
-                  .filter((row) => row.amount > 0)
-                  .sort((left, right) => right.amount - left.amount)
-            : [],
+        usageByService: [],
     };
-}
-
-function rememberAllocation(
-    chosen: Map<string, { amount: number; estimated: boolean }>,
-    entry: CreditAllocationHistoryEntry,
-): void {
-    const creditId = entry.creditId?.trim();
-    const service = entry.appliedServiceName?.trim();
-    const amount = Math.abs(parseAmount(entry.creditAmount)?.value ?? 0);
-    if (!creditId || !service || amount <= 0) return;
-
-    const key = `${creditId}\u0000${service}\u0000${entry.billingMonth ?? ''}\u0000${entry.accountId ?? ''}`;
-    const estimated = entry.isEstimatedBill === true;
-    const current = chosen.get(key);
-    if (!current || (current.estimated && !estimated)) {
-        chosen.set(key, { amount, estimated });
-    }
 }
 
 function creditBalance(credit: CreditData): number {

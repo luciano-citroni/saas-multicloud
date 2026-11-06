@@ -13,7 +13,6 @@ import type {
 import { FinopsBudgetAlertEvent } from '../../db/entites/finops-budget-alert-event.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
-import { Organization } from '../../db/entites/organization.entity';
 import { ErrorMessages } from '../../common/messages/error-messages';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { MailerService } from '../../mailer/mailer.service';
@@ -74,9 +73,6 @@ export class FinopsBudgetService {
 
         @InjectRepository(CloudAccount)
         private readonly cloudAccountRepo: Repository<CloudAccount>,
-
-        @InjectRepository(Organization)
-        private readonly organizationRepo: Repository<Organization>,
 
         private readonly notificationsService: NotificationsService,
         private readonly mailerService: MailerService,
@@ -797,7 +793,7 @@ export class FinopsBudgetService {
         budget: FinopsBudget,
         payload: AlertPayload,
     ): Promise<string> {
-        const context = await this.loadOrganizationContext(budget.organizationId);
+        const context = await this.loadOrganizationContext(budget);
         const titleEmoji =
             payload.usagePercentage >= 100 ? '🚨' : payload.usagePercentage >= 80 ? '⚠️' : '📊';
         const periodLabel = budget.period === 'daily' ? 'diário' : 'mensal';
@@ -848,17 +844,27 @@ export class FinopsBudgetService {
     }
 
     private async loadOrganizationContext(
-        organizationId: string,
+        budget: FinopsBudget,
     ): Promise<{ tenantName: string; organizationName: string }> {
-        const organization = await this.organizationRepo.findOne({
-            where: { id: organizationId },
-            relations: ['tenant'],
+        const organizationId = await this.resolveBudgetOrganizationId(budget);
+        return this.notificationsService.resolveWhatsappAlertContext(
+            budget.organizationId,
+            organizationId,
+        );
+    }
+
+    /** Mid-org da conta, quando o orçamento não é do tenant inteiro. */
+    private async resolveBudgetOrganizationId(budget: FinopsBudget): Promise<string | null> {
+        if (budget.scope !== 'cloud_account' || !budget.cloudAccountId) {
+            return null;
+        }
+
+        const account = await this.cloudAccountRepo.findOne({
+            where: { id: budget.cloudAccountId },
+            select: ['id', 'organizationId'],
         });
 
-        return {
-            tenantName: organization?.tenant?.name?.trim() || '—',
-            organizationName: organization?.name?.trim() || '—',
-        };
+        return account?.organizationId ?? null;
     }
 
     private formatPtBr(value: number, fractionDigits: number): string {
