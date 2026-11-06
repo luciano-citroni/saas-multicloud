@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
 
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
+import { Organization } from '../../db/entites/organization.entity';
 import { FinopsCommercialReportSend } from '../../db/entites/finops-commercial-report-send.entity';
 import { FinopsCommercialReportSettings } from '../../db/entites/finops-commercial-report-settings.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
@@ -69,7 +70,9 @@ export type CommercialCredits = {
 };
 
 export type CommercialReportResponse = CommercialReportModel & {
+    tenantName: string;
     organizationName: string;
+    organizationNames: string[];
     generatedAt: string;
     anomalies: CommercialAnomalies;
     credits: CommercialCredits;
@@ -78,6 +81,7 @@ export type CommercialReportResponse = CommercialReportModel & {
         emails: string[];
         alertChannels: Array<'email' | 'whatsapp'>;
         alertNotificationGroupIds: string[];
+        currency: 'USD' | 'BRL';
         lastSentAt: string | null;
     };
 };
@@ -93,6 +97,8 @@ export class FinopsCommercialReportService implements OnModuleInit {
         private readonly cloudAccountRepo: Repository<CloudAccount>,
         @InjectRepository(Tenant)
         private readonly tenantRepo: Repository<Tenant>,
+        @InjectRepository(Organization)
+        private readonly organizationRepo: Repository<Organization>,
         @InjectRepository(FinopsExchangeRate)
         private readonly exchangeRateRepo: Repository<FinopsExchangeRate>,
         @InjectRepository(FinopsUsdQuote)
@@ -159,17 +165,22 @@ export class FinopsCommercialReportService implements OnModuleInit {
     async getReport(organizationId: string, month?: string): Promise<CommercialReportResponse> {
         const referenceMonth = this.resolveMonth(month);
         const report = await this.compose(organizationId, referenceMonth);
-        const [settings, lastSend, tenant, anomalies, credits] = await Promise.all([
+        const [settings, lastSend, tenant, organizations, anomalies, credits] = await Promise.all([
             this.settingsRepo.findOne({ where: { organizationId } }),
             this.sendRepo.findOne({ where: { organizationId, month: referenceMonth } }),
             this.tenantRepo.findOne({ where: { id: organizationId } }),
+            this.organizationRepo.find({ where: { tenantId: organizationId }, order: { name: 'ASC' } }),
             this.loadMonthAnomalies(organizationId, report),
             this.loadCredits(organizationId, report),
         ]);
+        const tenantName = tenant?.name?.trim() ?? '';
+        const organizationNames = [...new Set(organizations.map((organization) => organization.name.trim()).filter(Boolean))];
 
         return {
             ...report,
-            organizationName: tenant?.name ?? '',
+            tenantName,
+            organizationName: tenantName,
+            organizationNames,
             generatedAt: new Date().toISOString(),
             anomalies,
             credits,
@@ -178,6 +189,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
                 emails: settings?.emails ?? [],
                 alertChannels: settings?.alertChannels ?? [],
                 alertNotificationGroupIds: settings?.alertNotificationGroupIds ?? [],
+                currency: settings?.currency === 'USD' ? 'USD' : 'BRL',
                 lastSentAt: lastSend?.sentAt?.toISOString() ?? null,
             },
         };
@@ -206,22 +218,24 @@ export class FinopsCommercialReportService implements OnModuleInit {
             emails?: string[];
             alertChannels?: Array<'email' | 'whatsapp'>;
             alertNotificationGroupIds?: string[];
+            currency?: 'USD' | 'BRL';
         },
-    ): Promise<{ enabled: boolean; emails: string[]; alertChannels: Array<'email' | 'whatsapp'>; alertNotificationGroupIds: string[] }> {
+    ): Promise<{ enabled: boolean; emails: string[]; alertChannels: Array<'email' | 'whatsapp'>; alertNotificationGroupIds: string[]; currency: 'USD' | 'BRL' }> {
         const channels = normalizeChannels(input.alertChannels ?? []);
         const usesGroups = input.alertNotificationGroupIds != null || channels.length > 0;
         const groupIds = usesGroups
             ? await this.normalizeGroups(organizationId, enabled, channels, input.alertNotificationGroupIds ?? [])
             : [];
         const emails = usesGroups ? [] : normalizeEmails(input.emails ?? []);
+        const currency: 'USD' | 'BRL' = input.currency === 'USD' ? 'USD' : 'BRL';
         if (enabled && !usesGroups && emails.length === 0) {
             throw new BadRequestException(ErrorMessages.FINOPS.COMMERCIAL_REPORT_EMAILS_REQUIRED);
         }
         await this.settingsRepo.upsert(
-            { organizationId, enabled, emails, alertChannels: channels, alertNotificationGroupIds: groupIds },
+            { organizationId, enabled, emails, alertChannels: channels, alertNotificationGroupIds: groupIds, currency },
             { conflictPaths: ['organizationId'] },
         );
-        return { enabled, emails, alertChannels: channels, alertNotificationGroupIds: groupIds };
+        return { enabled, emails, alertChannels: channels, alertNotificationGroupIds: groupIds, currency };
     }
 
     async renderPdf(
@@ -242,7 +256,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
         if (recipients.emails.length === 0 && !recipients.whatsapp) {
             throw new BadRequestException(ErrorMessages.FINOPS.COMMERCIAL_REPORT_RECIPIENTS_REQUIRED);
         }
-        await this.deliver(organizationId, referenceMonth, recipients);
+        await this.deliver(organizationId, referenceMonth, recipients, settings?.currency);
         return { month: referenceMonth, recipients: recipients.emails };
     }
 
@@ -257,7 +271,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
             const already = await this.sendRepo.findOne({ where: { organizationId: setting.organizationId, month } });
             if (already) continue;
             try {
-                await this.deliver(setting.organizationId, month, recipients);
+                await this.deliver(setting.organizationId, month, recipients, setting.currency);
             } catch (error: unknown) {
                 const message = error instanceof Error ? error.message : String(error);
                 this.logger.error(`[FinOps Comercial] Falha ao enviar ${month} para ${setting.organizationId}: ${message}`);
@@ -269,16 +283,18 @@ export class FinopsCommercialReportService implements OnModuleInit {
         organizationId: string,
         month: string,
         recipients: { emails: string[]; whatsapp: boolean; groupIds: string[] },
+        preferredCurrency?: string | null,
     ): Promise<void> {
         const report = await this.getReport(organizationId, month);
-        const summary = renderReportSummary(report);
-        const pdf = await buildCommercialReportPdf(report);
+        const currency = resolveDeliveryCurrency(report, preferredCurrency);
+        const summary = renderReportSummary(report, currency);
+        const pdf = await buildCommercialReportPdf(report, { currency });
         const filename = commercialReportPdfFileName(report.organizationName, month);
         let delivered = false;
         if (recipients.emails.length > 0) {
             await this.mailerService.sendCommercialReport({
                 to: recipients.emails,
-                organizationName: report.organizationName,
+                organizationName: report.tenantName || report.organizationName,
                 monthLabel: monthLabel(month),
                 month,
                 bodyHtml: renderReportEmail(summary),
@@ -292,7 +308,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
                 organizationId,
                 recipients.groupIds,
                 {
-                    text: renderWhatsappReport(report, reportUrl),
+                    text: renderWhatsappReport(report, reportUrl, currency),
                     linkPreview: isPublicReportUrl(reportUrl),
                     caption: '📎 *PDF do relatório de FinOps*',
                     filename,
@@ -725,6 +741,33 @@ function formatMoney(value: number, currency: string): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
 }
 
+type ReportCurrency = 'USD' | 'BRL';
+
+function sourceCurrency(report: CommercialReportResponse): ReportCurrency {
+    return report.displayCurrency === 'USD' ? 'USD' : 'BRL';
+}
+
+function resolveDeliveryCurrency(report: CommercialReportResponse, preferred?: string | null): ReportCurrency {
+    const source = sourceCurrency(report);
+    const wanted: ReportCurrency = preferred === 'USD' ? 'USD' : preferred === 'BRL' ? 'BRL' : source;
+    if (wanted === source) return wanted;
+    return report.exchangeRate != null && report.exchangeRate > 0 ? wanted : source;
+}
+
+function convertAmount(value: number, report: CommercialReportResponse, target: ReportCurrency): number {
+    const source = sourceCurrency(report);
+    const rate = report.exchangeRate;
+    if (!Number.isFinite(value)) return 0;
+    if (source === target || rate == null || rate <= 0) return value;
+    if (source === 'USD' && target === 'BRL') return value * rate;
+    if (source === 'BRL' && target === 'USD') return value / rate;
+    return value;
+}
+
+function moneyIn(report: CommercialReportResponse, value: number, target: ReportCurrency): string {
+    return formatMoney(convertAmount(value, report, target), target);
+}
+
 function projectionOrigin(source: CommercialReportModel['kpis']['projectionSource']): string {
     if (source === 'provider') return 'previsão do provedor';
     if (source === 'mixed') return 'parte linear';
@@ -753,9 +796,8 @@ function whatsappPlain(value: string): string {
     return value.replace(/[*_~`]/g, '').trim();
 }
 
-function renderWhatsappReport(report: CommercialReportResponse, link: string): string {
-    const currency = report.displayCurrency;
-    const money = (value: number) => formatMoney(value, currency);
+function renderWhatsappReport(report: CommercialReportResponse, link: string, currency: ReportCurrency): string {
+    const money = (value: number) => moneyIn(report, value, currency);
     const projectionMonth = monthLabel(report.kpis.projectionMonth);
     const projection =
         report.kpis.projection != null
@@ -765,14 +807,18 @@ function renderWhatsappReport(report: CommercialReportResponse, link: string): s
         ? [`💳 *Créditos*`, `• Consumido: *${money(report.credits.consumed)}*`, `• Saldo: *${money(report.credits.remaining)}*`].join('\n')
         : '💳 *Créditos:* nenhum crédito ativo';
     const exchange =
-        report.exchangeRate != null
+        currency === 'BRL' && report.exchangeRate != null
             ? `💱 *Cotação:* ${report.exchangeRate.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} BRL/USD`
             : '';
 
     return [
         '📊 *Relatório de FinOps*',
-        `🏢 *Organização:* ${whatsappPlain(report.organizationName)}`,
+        `🏢 *Tenant:* ${whatsappPlain(report.tenantName || report.organizationName)}`,
+        ...(report.organizationNames.length > 0
+            ? [`🏬 *Organização:* ${whatsappPlain(report.organizationNames.join(', '))}`]
+            : []),
         `🗓️ *Período:* ${whatsappPlain(monthLabel(report.referenceMonth))}`,
+        `💵 *Moeda:* ${currency === 'BRL' ? 'Real' : 'Dólar'}`,
         '',
         `💰 *Custo total:* ${money(report.kpis.totalCost)}`,
         `📅 *Média diária:* ${money(report.kpis.avgDailyCost)}`,
@@ -793,24 +839,27 @@ function renderWhatsappReport(report: CommercialReportResponse, link: string): s
     ].join('\n');
 }
 
-function renderReportSummary(report: CommercialReportResponse): string {
-    const currency = report.displayCurrency;
+function renderReportSummary(report: CommercialReportResponse, currency: ReportCurrency): string {
+    const money = (value: number) => moneyIn(report, value, currency);
     const month = monthLabel(report.referenceMonth);
+    const tenantName = report.tenantName || report.organizationName;
+    const organizations = report.organizationNames.filter(Boolean);
+    const organizationSentence = organizations.length > 0 ? ` Organizações: ${organizations.join(', ')}.` : '';
     const projection =
         report.kpis.projection != null
-            ? `A projeção de ${monthLabel(report.kpis.projectionMonth)} (${projectionOrigin(report.kpis.projectionSource)}) é de ${formatMoney(report.kpis.projection, currency)}.`
+            ? `A projeção de ${monthLabel(report.kpis.projectionMonth)} (${projectionOrigin(report.kpis.projectionSource)}) é de ${money(report.kpis.projection)}.`
             : `Ainda não há base suficiente para projetar ${monthLabel(report.kpis.projectionMonth)}.`;
     const credits = report.credits.hasCredits
-        ? `Nos créditos, já foram consumidos ${formatMoney(report.credits.consumed, currency)} e o saldo restante é de ${formatMoney(report.credits.remaining, currency)}.`
+        ? `Nos créditos, já foram consumidos ${money(report.credits.consumed)} e o saldo restante é de ${money(report.credits.remaining)}.`
         : 'Não há créditos ativos neste período.';
     const exchange =
-        report.exchangeRate != null
+        currency === 'BRL' && report.exchangeRate != null
             ? `A cotação usada foi de ${report.exchangeRate.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} BRL por USD.`
             : '';
 
     return [
-        `Relatório de FinOps de ${report.organizationName}, referente a ${month}.`,
-        `O custo total do mês foi de ${formatMoney(report.kpis.totalCost, currency)}, com média diária de ${formatMoney(report.kpis.avgDailyCost, currency)}. ${report.kpis.accountsWithSpend} de ${report.kpis.accountsTotal} assinaturas tiveram consumo.`,
+        `Relatório de FinOps do tenant ${tenantName}, referente a ${month}.${organizationSentence} Os valores estão em ${currency === 'BRL' ? 'real' : 'dólar'}.`,
+        `O custo total do mês foi de ${money(report.kpis.totalCost)}, com média diária de ${money(report.kpis.avgDailyCost)}. ${report.kpis.accountsWithSpend} de ${report.kpis.accountsTotal} assinaturas tiveram consumo.`,
         projection,
         `No mês foram registradas ${report.anomalies.total} anomalias de custo, das quais ${report.anomalies.acknowledged} já foram reconhecidas.`,
         credits,
@@ -820,6 +869,7 @@ function renderReportSummary(report: CommercialReportResponse): string {
         .filter((line) => line.length > 0)
         .join('\n\n');
 }
+
 
 function renderReportEmail(summary: string): string {
     const paragraphs = summary

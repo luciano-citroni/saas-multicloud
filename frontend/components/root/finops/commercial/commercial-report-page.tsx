@@ -133,6 +133,7 @@ export type CommercialReport = {
         emails: string[];
         alertChannels?: Array<'email' | 'whatsapp'>;
         alertNotificationGroupIds?: string[];
+        currency?: 'USD' | 'BRL';
         lastSentAt: string | null;
     };
 };
@@ -421,7 +422,13 @@ export function CommercialReportPage() {
                         <CardDescription>{tf.commercialEmailsHint}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
-                        <CommercialReportDelivery organizationId={organizationId} delivery={report?.delivery} onSaved={load} />
+                        <CommercialReportDelivery
+                            organizationId={organizationId}
+                            delivery={report?.delivery}
+                            sourceCurrency={report?.displayCurrency === 'USD' ? 'USD' : 'BRL'}
+                            canConvert={report?.exchangeRate != null && report.exchangeRate > 0}
+                            onSaved={load}
+                        />
                         <Button
                             type="button"
                             size="sm"
@@ -548,11 +555,13 @@ function ReportBody({
                 />
                 <Kpi title={copy.commercialKpiAccounts} value={String(report.kpis.accountsWithSpend)} detail={copy.commercialAccountsOf.replace('{used}', String(report.kpis.accountsWithSpend)).replace('{total}', String(report.kpis.accountsTotal))} />
                 <Kpi title={copy.commercialKpiProjection.replace('{month}', labelOf(report.kpis.projectionMonth))} value={report.kpis.projection != null ? money(report.kpis.projection) : '—'} detail={commercialProjectionDetail(report.kpis.projectionSource, report.providers, report.kpis.projectionBaseDays, copy)} />
-                <Kpi
-                    title={copy.commercialKpiFx}
-                    value={report.exchangeRate != null ? report.exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
-                    detail={report.exchangeRate != null ? `${copy.commercialFxUnit} · ${formatPct(report.exchangeRateChangePct)} · ${formatCurrency(toCurrency(report.kpis.totalCost, otherCurrency), otherCurrency)}` : copy.commercialNoRate}
-                />
+                {viewCurrency === 'BRL' ? (
+                    <Kpi
+                        title={copy.commercialKpiFx}
+                        value={report.exchangeRate != null ? report.exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
+                        detail={report.exchangeRate != null ? `${copy.commercialFxUnit} · ${formatPct(report.exchangeRateChangePct)} · ${formatCurrency(toCurrency(report.kpis.totalCost, otherCurrency), otherCurrency)}` : copy.commercialNoRate}
+                    />
+                ) : null}
             </div>
 
             <div className="flex flex-col gap-3">

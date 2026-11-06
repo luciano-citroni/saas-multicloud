@@ -21,6 +21,9 @@ export class FinopsCommercialReportSettings {
     @Column({ type: 'jsonb', name: 'alert_notification_group_ids', default: () => "'[]'" })
     alertNotificationGroupIds!: string[];
 
+    @Column({ type: 'varchar', length: 3, default: 'BRL' })
+    currency!: 'USD' | 'BRL';
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 

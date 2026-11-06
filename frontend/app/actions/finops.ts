@@ -573,6 +573,7 @@ export async function saveCommercialDelivery(
         enabled: boolean;
         alertChannels: Array<'email' | 'whatsapp'>;
         alertNotificationGroupIds: string[];
+        currency: 'USD' | 'BRL';
     },
 ) {
     return fetch(`/api/finops/commercial-report/delivery?organizationId=${encodeURIComponent(organizationId)}`, {

@@ -41,7 +41,10 @@ type DeliverySettings = {
     enabled: boolean;
     alertChannels?: Array<'email' | 'whatsapp'>;
     alertNotificationGroupIds?: string[];
+    currency?: 'USD' | 'BRL';
 };
+
+type ReportCurrency = 'USD' | 'BRL';
 
 function createSchema(t: FinopsT) {
     return z
@@ -51,6 +54,7 @@ function createSchema(t: FinopsT) {
             alertChannelWhatsapp: z.boolean(),
             alertEmailGroupIds: z.array(z.string().uuid()),
             alertWhatsappGroupIds: z.array(z.string().uuid()),
+            currency: z.enum(['USD', 'BRL']),
         })
         .superRefine((data, ctx) => {
             if (!data.enabled) return;
@@ -91,17 +95,25 @@ function parseGroups(payload: unknown): NotificationGroupOption[] {
         .filter((group): group is NotificationGroupOption => group != null && group.isActive);
 }
 
-function settingsToForm(settings: DeliverySettings | undefined, emailGroups: NotificationGroupOption[], whatsappGroups: NotificationGroupOption[]): FormData {
+function settingsToForm(
+    settings: DeliverySettings | undefined,
+    emailGroups: NotificationGroupOption[],
+    whatsappGroups: NotificationGroupOption[],
+    sourceCurrency: ReportCurrency,
+    canConvert: boolean,
+): FormData {
     const emailIds = new Set(emailGroups.map((group) => group.id));
     const whatsappIds = new Set(whatsappGroups.map((group) => group.id));
     const groupIds = settings?.alertNotificationGroupIds ?? [];
     const channels = settings?.alertChannels ?? [];
+    const saved = settings?.currency === 'USD' || settings?.currency === 'BRL' ? settings.currency : sourceCurrency;
     return {
         enabled: settings?.enabled ?? false,
         alertChannelEmail: channels.includes('email'),
         alertChannelWhatsapp: channels.includes('whatsapp'),
         alertEmailGroupIds: groupIds.filter((id) => emailIds.has(id)),
         alertWhatsappGroupIds: groupIds.filter((id) => whatsappIds.has(id)),
+        currency: !canConvert && saved !== sourceCurrency ? sourceCurrency : saved,
     };
 }
 
@@ -163,10 +175,14 @@ function GroupChecklist({
 export function CommercialReportDelivery({
     organizationId,
     delivery,
+    sourceCurrency = 'BRL',
+    canConvert = false,
     onSaved,
 }: {
     organizationId: string;
     delivery?: DeliverySettings;
+    sourceCurrency?: ReportCurrency;
+    canConvert?: boolean;
     onSaved: () => Promise<void> | void;
 }) {
     const t = useTranslations('finops');
@@ -187,6 +203,7 @@ export function CommercialReportDelivery({
             alertChannelWhatsapp: false,
             alertEmailGroupIds: [],
             alertWhatsappGroupIds: [],
+            currency: 'BRL',
         },
     });
     const enabled = useWatch({ control: form.control, name: 'enabled' });
@@ -206,13 +223,13 @@ export function CommercialReportDelivery({
             const whatsapps = whatsappRes.ok ? parseGroups(whatsappBody) : [];
             setEmailGroups(emails);
             setWhatsappGroups(whatsapps);
-            form.reset(settingsToForm(delivery, emails, whatsapps));
+            form.reset(settingsToForm(delivery, emails, whatsapps, sourceCurrency, canConvert));
         } catch {
             toast.error(t.alertsLoadError);
         } finally {
             setLoadingGroups(false);
         }
-    }, [delivery, form, organizationId, t.alertsLoadError]);
+    }, [canConvert, delivery, form, organizationId, sourceCurrency, t.alertsLoadError]);
 
     const onSubmit = async (data: FormData) => {
         if (!canManage) return;
@@ -226,6 +243,7 @@ export function CommercialReportDelivery({
                 ...(data.alertChannelEmail ? data.alertEmailGroupIds : []),
                 ...(data.alertChannelWhatsapp ? data.alertWhatsappGroupIds : []),
             ],
+            currency: data.currency,
         });
         const body = await response.json().catch(() => null);
         if (!response.ok) {
@@ -291,6 +309,33 @@ export function CommercialReportDelivery({
                                                 <FormLabel className="text-sm font-medium">{t.commercialAlertsEnable}</FormLabel>
                                                 <p className="text-xs text-muted-foreground">{canManage ? t.commercialAlertsHint : t.alertsAdminOnly}</p>
                                             </div>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="currency"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>{t.commercialCurrencyLabel}</FormLabel>
+                                            <div className="flex h-8 w-fit overflow-hidden rounded-lg border">
+                                                {(['BRL', 'USD'] as const).map((option) => (
+                                                    <button
+                                                        key={option}
+                                                        type="button"
+                                                        className={cn(
+                                                            'px-3 text-sm',
+                                                            option === 'USD' && 'border-l',
+                                                            field.value === option ? 'bg-primary text-primary-foreground' : 'bg-background',
+                                                        )}
+                                                        disabled={!canManage || (!canConvert && option !== sourceCurrency)}
+                                                        onClick={() => field.onChange(option)}
+                                                    >
+                                                        {option === 'BRL' ? t.commercialCurrencyBrl : t.commercialCurrencyUsd}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">{t.commercialAlertsCurrencyHint}</p>
                                         </FormItem>
                                     )}
                                 />

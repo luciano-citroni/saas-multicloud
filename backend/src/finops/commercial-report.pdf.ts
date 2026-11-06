@@ -144,7 +144,8 @@ export async function buildCommercialReportPdf(
         `${copy.commercialCurrencyLabel}: ${currencyName}`,
         copy.commercialSource,
     ];
-    if (rate != null) {
+    const showExchangeRate = viewCurrency !== 'USD' && rate != null;
+    if (showExchangeRate) {
         meta.push(`${copy.commercialKpiFx}: ${rate.toLocaleString(intl, { maximumFractionDigits: 4 })}`);
     }
 
@@ -178,7 +179,9 @@ export async function buildCommercialReportPdf(
             value: report.kpis.projection != null ? money(report.kpis.projection) : '—',
             detail: projectionDetail(report.kpis.projectionSource, report.providers, report.kpis.projectionBaseDays, copy),
         },
-        { label: copy.commercialKpiFx, value: rate != null ? rate.toLocaleString(intl, { maximumFractionDigits: 4 }) : '—' },
+        ...(showExchangeRate
+            ? [{ label: copy.commercialKpiFx, value: rate.toLocaleString(intl, { maximumFractionDigits: 4 }) }]
+            : []),
     ]);
     y = drawSectionTitle(pdf, copy.commercialCreditsTitle, y);
     y = drawKpiRow(pdf, y, [

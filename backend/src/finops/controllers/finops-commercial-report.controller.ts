@@ -25,6 +25,7 @@ const deliverySchema = z.object({
     emails: z.array(z.string().email()).max(50).optional(),
     alertChannels: z.array(z.enum(['email', 'whatsapp'])).max(2).optional(),
     alertNotificationGroupIds: z.array(z.string().uuid()).max(50).optional(),
+    currency: z.enum(['USD', 'BRL']).optional(),
 });
 const sendSchema = z.object({
     month: monthSchema.optional(),
@@ -100,6 +101,7 @@ export class FinopsCommercialReportController {
             emails: body.emails,
             alertChannels: body.alertChannels,
             alertNotificationGroupIds: body.alertNotificationGroupIds,
+            currency: body.currency,
         });
     }
 
