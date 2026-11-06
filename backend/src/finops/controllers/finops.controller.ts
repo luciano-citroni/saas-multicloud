@@ -35,6 +35,7 @@ import { FinopsOptimizationService } from '../services/finops-optimization.servi
 import { FinopsOrgOverviewService } from '../services/finops-org-overview.service';
 import { FinopsResourceCostService } from '../services/finops-resource-cost.service';
 import { FinopsAnomalyAlertService } from '../services/finops-anomaly-alert.service';
+import { FinopsCommitmentsService } from '../services/finops-commitments.service';
 
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
 
@@ -61,6 +62,10 @@ import {
     BudgetStatusDto,
     AnomalyAlertSettingsDto,
     UpdateAnomalyAlertSettingsRequestDto,
+    CreateCreditGrantRequestDto,
+    UpdateCreditGrantRequestDto,
+    CreditGrantDto,
+    CommitmentsOverviewDto,
 } from '../dto/swagger.dto';
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
@@ -102,6 +107,40 @@ const budgetBaseSchema = z.object({
     alertChannels: z.array(z.enum(['email', 'whatsapp'])).optional(),
     alertEmails: z.array(z.string().email()).optional(),
     alertNotificationGroupIds: z.array(z.string().uuid()).optional(),
+});
+
+const creditGrantServicesSchema = z.array(z.string().trim().min(1).max(255)).min(1).max(50);
+
+const creditGrantSchema = z.object({
+    cloudAccountId: z.string().uuid(),
+    name: z.string().min(1).max(255),
+    totalAmount: z.number().positive(),
+    currency: z.string().min(3).max(10).optional(),
+    startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD'),
+    expiresAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD')
+        .nullable()
+        .optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    services: creditGrantServicesSchema,
+});
+
+const creditGrantUpdateSchema = z.object({
+    name: z.string().min(1).max(255).optional(),
+    totalAmount: z.number().positive().optional(),
+    currency: z.string().min(3).max(10).optional(),
+    startsAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD')
+        .optional(),
+    expiresAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD')
+        .nullable()
+        .optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    services: creditGrantServicesSchema.optional(),
 });
 
 const budgetSchema = budgetBaseSchema.superRefine((data, ctx) => {
@@ -166,6 +205,7 @@ export class FinopsController {
         private readonly orgOverviewService: FinopsOrgOverviewService,
         private readonly resourceCostService: FinopsResourceCostService,
         private readonly anomalyAlertService: FinopsAnomalyAlertService,
+        private readonly commitmentsService: FinopsCommitmentsService,
 
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>
@@ -326,6 +366,157 @@ export class FinopsController {
             sort,
             page,
             limit,
+        });
+    }
+
+    // =========================================================================
+    // Credits & Commitments (SP / Reservations / CUDs)
+    // =========================================================================
+
+    @Get('commitments/overview')
+    @ApiOperation({
+        summary: 'Overview de créditos e compromissos',
+        description:
+            'KPIs de créditos (concedido/consumido/restante) e compromissos (utilization, coverage, pode reservar mais).',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'periodStart', required: false, description: 'YYYY-MM-DD' })
+    @ApiQuery({ name: 'periodEnd', required: false, description: 'YYYY-MM-DD' })
+    @ApiResponse({ status: 200, type: CommitmentsOverviewDto })
+    async getCommitmentsOverview(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('provider') provider: string,
+        @Query('periodStart') periodStart: string,
+        @Query('periodEnd') periodEnd: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.getOverview(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            provider: provider || undefined,
+            periodStart: periodStart || undefined,
+            periodEnd: periodEnd || undefined,
+        });
+    }
+
+    @Get('commitments/credits')
+    @ApiOperation({
+        summary: 'Lista grants de crédito + consumo',
+        description: 'Grants manuais com saldo restante e linhas de consumo sincronizadas.',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'periodStart', required: false })
+    @ApiQuery({ name: 'periodEnd', required: false })
+    @ApiResponse({ status: 200, description: 'Grants + consumptions + totals' })
+    async getCommitmentsCredits(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('provider') provider: string,
+        @Query('periodStart') periodStart: string,
+        @Query('periodEnd') periodEnd: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.listCredits(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            provider: provider || undefined,
+            periodStart: periodStart || undefined,
+            periodEnd: periodEnd || undefined,
+        });
+    }
+
+    @Get('commitments/credits/services')
+    @ApiOperation({
+        summary: 'Serviços disponíveis para uma concessão de crédito',
+        description: 'Nomes distintos sincronizados nos custos da conta, no nível de serviço.',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: true, type: String, format: 'uuid' })
+    @ApiResponse({ status: 200, description: 'Lista de serviços' })
+    async listCreditGrantServices(
+        @Query('cloudAccountId', ParseUUIDPipe) cloudAccountId: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.listAccountServices(org.id, cloudAccountId);
+    }
+
+    @Post('commitments/credits/grants')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @HttpCode(201)
+    @ApiOperation({ summary: 'Criar grant de crédito (manual)' })
+    @ApiBody({ type: CreateCreditGrantRequestDto })
+    @ApiResponse({ status: 201, type: CreditGrantDto })
+    @ApiResponse({ status: 400, description: 'Validation error' })
+    @ApiResponse({ status: 403, description: 'Insufficient role' })
+    async createCreditGrant(
+        @Body(new ZodValidationPipe(creditGrantSchema)) body: z.infer<typeof creditGrantSchema>,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.createGrant(org.id, body);
+    }
+
+    @Patch('commitments/credits/grants/:grantId')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @ApiOperation({ summary: 'Atualizar grant de crédito' })
+    @ApiParam({ name: 'grantId', type: String, format: 'uuid' })
+    @ApiBody({ type: UpdateCreditGrantRequestDto })
+    @ApiResponse({ status: 200, type: CreditGrantDto })
+    @ApiResponse({ status: 404, description: 'Grant not found' })
+    async updateCreditGrant(
+        @Param('grantId', ParseUUIDPipe) grantId: string,
+        @Body(new ZodValidationPipe(creditGrantUpdateSchema)) body: z.infer<typeof creditGrantUpdateSchema>,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.updateGrant(org.id, grantId, body);
+    }
+
+    @Delete('commitments/credits/grants/:grantId')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @HttpCode(204)
+    @ApiOperation({ summary: 'Remover grant de crédito' })
+    @ApiParam({ name: 'grantId', type: String, format: 'uuid' })
+    @ApiResponse({ status: 204, description: 'Deleted' })
+    @ApiResponse({ status: 404, description: 'Grant not found' })
+    async deleteCreditGrant(
+        @Param('grantId', ParseUUIDPipe) grantId: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        await this.commitmentsService.deleteGrant(org.id, grantId);
+    }
+
+    @Get('commitments/utilization')
+    @ApiOperation({
+        summary: 'Snapshots de utilização de compromissos',
+        description: 'Savings Plans (AWS), Reservations (Azure), CUDs (GCP).',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiResponse({ status: 200, description: 'Utilization snapshots' })
+    async getCommitmentsUtilization(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('provider') provider: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.listUtilization(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            provider: provider || undefined,
+        });
+    }
+
+    @Get('commitments/recommendations')
+    @ApiOperation({
+        summary: 'Sugestões de compra de compromissos',
+        description: 'Inclui eligible / ineligibleReason (o que pode ou não reservar).',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiResponse({ status: 200, description: 'Purchase recommendations' })
+    async getCommitmentsRecommendations(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('provider') provider: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.commitmentsService.listRecommendations(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            provider: provider || undefined,
         });
     }
 

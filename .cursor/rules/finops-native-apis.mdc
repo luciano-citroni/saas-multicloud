@@ -1,0 +1,14 @@
+---
+description: No FinOps, usar a API ou o SDK do provedor em vez de recalcular métricas no backend
+globs: "{backend/src/finops/**,frontend/components/root/finops/**,frontend/app/**/finops/**}"
+alwaysApply: false
+---
+
+# FinOps: API nativa primeiro
+
+Saldo de crédito, uso, utilização, cobertura e economia vêm do SDK ou da API do provedor (AWS Billing, Cost Explorer, Azure Cost Management, GCP Billing). Não reconstruir esses números somando `finops_cost_records` ou aplicando regra própria quando o provedor já devolve o valor.
+
+- Persistir e exibir o campo da API (`remainingAmount`, `estimatedAmount`, utilization, coverage). Agregar entre contas é permitido. Recalcular a métrica não.
+- Crédito AWS: `billing:GetCredits` e `billing:GetCreditAllocationHistory`. Cost Explorer só entra para o que essa API não cobre.
+- Cálculo local só quando não existe endpoint para aquele dado, como uma concessão cadastrada à mão. Nesse caso, deixar explícito na UI que o número não veio do provedor.
+- Sync diário e manual é incremental: faz upsert do trecho novo e não apaga histórico. A substituição de um período só acontece no fechamento mensal (`scheduled_monthly_close`), e apenas naquele mês.

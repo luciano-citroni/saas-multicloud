@@ -28,10 +28,10 @@ const DAILY_COST_LOOKBACK_DAYS = 90;
 /**
  * Agenda rotinas automáticas de sincronização de custos FinOps, inventário e orçamentos.
  *
- * - Sync diário: 02:00 UTC — inventário + custos lookback 90d + anomalias nos últimos 7d.
- * - Digest de anomalias: 04:00 UTC — e-mail/WhatsApp via grupos de Notificações.
+ * - Sync diário: 02:00 UTC — inventário + custos incrementais (sobreposição de 3 dias; o primeiro sync ainda cobre 90d) + anomalias nos últimos 7d.
+ * - Fechamento mensal: dia 6 às 04:00 — substitui só o mês anterior. Os demais períodos não são apagados.
+ * - Digest de anomalias: 07:00 America/Sao_Paulo — e-mail/WhatsApp via grupos de Notificações.
  * - Alertas de orçamento: 2× ao dia (11:00 e 23:00 UTC).
- * - Fechamento mensal: dia 6 às 04:00 — mês anterior completo.
  */
 @Injectable()
 export class FinopsSchedulerService {
@@ -94,7 +94,7 @@ export class FinopsSchedulerService {
         this.logger.log(`[FinOps Scheduler] Sync diário concluído: ${success} enfileirado(s), ${failed} falha(s).`);
     }
 
-    @Cron('0 4 * * *')
+    @Cron('0 7 * * *', { timeZone: 'America/Sao_Paulo' })
     async runAnomalyAlertDigest(): Promise<void> {
         this.logger.log('[FinOps Scheduler] Iniciando digest diário de anomalias...');
 

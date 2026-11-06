@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -130,14 +131,26 @@ export function FinopsBilling() {
                             <FormField control={form.control} name="startDate" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel className="text-xs">{tf.billingStartDate}</FormLabel>
-                                    <FormControl><Input type="date" className="w-40" {...field} /></FormControl>
+                                    <DatePicker
+                                        className="w-40"
+                                        name={field.name}
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        onBlur={field.onBlur}
+                                    />
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel className="text-xs">{tf.billingEndDate}</FormLabel>
-                                    <FormControl><Input type="date" className="w-40" {...field} /></FormControl>
+                                    <DatePicker
+                                        className="w-40"
+                                        name={field.name}
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        onBlur={field.onBlur}
+                                    />
                                     <FormMessage />
                                 </FormItem>
                             )} />

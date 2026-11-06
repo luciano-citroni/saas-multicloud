@@ -191,6 +191,12 @@ export const ErrorMessages = {
         ANOMALY_NOT_FOUND: 'FinOps anomaly not found.',
 
         BILLING_NOT_FOUND: 'FinOps billing record not found.',
+
+        CREDIT_GRANT_NOT_FOUND: 'FinOps credit grant not found.',
+
+        CREDIT_GRANT_INVALID_AMOUNT: 'Credit grant total amount must be greater than zero.',
+
+        CREDIT_GRANT_SERVICES_REQUIRED: 'Select at least one service covered by the credit grant.',
     },
 
     // Governance

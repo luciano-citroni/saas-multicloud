@@ -507,6 +507,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                             label="Permissions Policy (Assessment / FinOps) — cole como inline policy"
                                             json={PERMISSIONS_POLICY}
                                         />
+                                        <p className="text-xs text-muted-foreground">{tca.finopsPolicyNote}</p>
 
                                         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
                                             <div className="flex items-start gap-2">
@@ -699,6 +700,13 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                     <li>
                                                         Selecione o papel <strong>Reader</strong>, avance para a aba <strong>Members</strong> →{' '}
                                                         <strong>Select members</strong> → busque pelo nome do app criado no Passo 1 e adicione.
+                                                    </li>
+                                                    <li>
+                                                        Para a tabela <strong>Utilização por conta</strong> e as sugestões de reserva, atribua também a
+                                                        role <strong>Reservations Reader</strong> ao mesmo app. Faça isso no pedido de reserva (
+                                                        <strong>Reservations</strong> → reservation order → <strong>Access control (IAM)</strong>) ou em
+                                                        um escopo acima, como o tenant. A role <strong>Reader</strong> da subscription não lê{' '}
+                                                        <code className="bg-muted px-1 rounded">Microsoft.Consumption</code>.
                                                     </li>
                                                 </ol>
                                             </div>
@@ -954,6 +962,33 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                     </li>
                                                     <li>
                                                         Clique em <strong>Save</strong>.
+                                                    </li>
+                                                </ol>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                                                    Passo 5 — FinOps: utilização de CUDs
+                                                </p>
+                                                <p className="text-sm text-muted-foreground mb-2">
+                                                    A tabela <strong>Utilização por conta</strong> lê o export de billing no BigQuery. Conceda estas roles
+                                                    à Service Account do Passo 2, <strong>sem</strong> a condição CEL do Passo 3 (essa condição bloqueia
+                                                    BigQuery e o Recommender).
+                                                </p>
+                                                <ol className="flex flex-col gap-2 text-sm text-muted-foreground list-decimal list-inside">
+                                                    <li>
+                                                        No projeto do export, <strong>IAM → Grant Access</strong>: role{' '}
+                                                        <code className="bg-muted px-1 rounded">BigQuery Job User</code> (
+                                                        <code className="bg-muted px-1 rounded">roles/bigquery.jobUser</code>).
+                                                    </li>
+                                                    <li>
+                                                        No dataset do Cloud Billing export, <strong>Sharing → Permissions</strong>: role{' '}
+                                                        <code className="bg-muted px-1 rounded">BigQuery Data Viewer</code> (
+                                                        <code className="bg-muted px-1 rounded">roles/bigquery.dataViewer</code>).
+                                                    </li>
+                                                    <li>
+                                                        No projeto, role <code className="bg-muted px-1 rounded">Recommender Viewer</code> (
+                                                        <code className="bg-muted px-1 rounded">roles/recommender.viewer</code>) para as sugestões de CUD.
                                                     </li>
                                                 </ol>
                                             </div>

@@ -22,6 +22,7 @@ import { FinopsCostIngestionService } from '../services/finops-cost-ingestion.se
 import { FinopsCostAggregationService } from '../services/finops-cost-aggregation.service';
 import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detection.service';
 import { FinopsOptimizationService } from '../services/finops-optimization.service';
+import { FinopsCommitmentsService } from '../services/finops-commitments.service';
 
 import { FINOPS_QUEUE, FINOPS_WORKER_CONCURRENCY } from '../constants';
 import { findCloudAccountForTenant } from '../utils/find-cloud-account';
@@ -47,6 +48,7 @@ export class FinopsProcessor extends WorkerHost {
         private readonly aggregationService: FinopsCostAggregationService,
         private readonly anomalyService: FinopsAnomalyDetectionService,
         private readonly optimizationService: FinopsOptimizationService,
+        private readonly commitmentsService: FinopsCommitmentsService,
     ) {
         super();
     }
@@ -69,7 +71,7 @@ export class FinopsProcessor extends WorkerHost {
 
         try {
             // ── 1. Carregar credenciais ───────────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 1/6: Carregando credenciais...`);
+            this.logger.log(`[${jobId}] Fase 1/7: Carregando credenciais...`);
             await job.updateProgress(8);
 
             const cloudAccount = await findCloudAccountForTenant(this.cloudAccountRepo, cloudAccountId, organizationId, {
@@ -81,22 +83,39 @@ export class FinopsProcessor extends WorkerHost {
             }
 
             // ── 2. Coletar custos via provider (serviço + região) ─────────────
-            this.logger.log(`[${jobId}] Fase 2/6: Coletando custos via ${cloudProvider}...`);
+            this.logger.log(`[${jobId}] Fase 2/7: Coletando custos via ${cloudProvider}...`);
             await job.updateProgress(20);
 
             const provider = this.resolveProvider(cloudProvider);
             const decryptedCredentials = this.decryptCloudCredentials(cloudAccount.credentialsEncrypted);
             const providerCreds = { credentials: decryptedCredentials, cloudAccountId };
 
-            const { entries } = await provider.collectCosts(providerCreds, startDate, endDate, granularity);
+            const isMonthlyClose = triggerType === 'scheduled_monthly_close';
+            const collectStart = isMonthlyClose
+                ? startDate
+                : await this.ingestionService.resolveIncrementalStart(
+                      organizationId,
+                      cloudAccountId,
+                      granularity === 'MONTHLY' ? 'monthly' : 'daily',
+                      startDate,
+                      endDate,
+                  );
+
+            if (collectStart !== startDate) {
+                this.logger.log(
+                    `[${jobId}] Sync incremental: ${collectStart} → ${endDate} (pedido ${startDate} → ${endDate}, histórico anterior preservado)`,
+                );
+            }
+
+            const { entries } = await provider.collectCosts(providerCreds, collectStart, endDate, granularity);
 
             // ── 3. Coletar custos por recurso (AWS CE WithResources ≤ 14d) ───
-            this.logger.log(`[${jobId}] Fase 3/6: Coletando custos por recurso...`);
-            await job.updateProgress(35);
+            this.logger.log(`[${jobId}] Fase 3/7: Coletando custos por recurso...`);
+            await job.updateProgress(30);
 
             let resourceEntries: typeof entries = [];
             try {
-                const resourceStartDate = this.clampResourceCostStart(startDate, endDate);
+                const resourceStartDate = this.clampResourceCostStart(collectStart, endDate);
                 const resourceResult = await provider.collectResourceCosts(
                     providerCreds,
                     resourceStartDate,
@@ -116,15 +135,15 @@ export class FinopsProcessor extends WorkerHost {
 
             // ── 4. Ingestão (normalize + persist) ────────────────────────────
             this.logger.log(
-                `[${jobId}] Fase 4/6: Persistindo ${allEntries.length} registros (serviço=${entries.length}, recurso=${resourceEntries.length})...`,
+                `[${jobId}] Fase 4/7: Persistindo ${allEntries.length} registros (serviço=${entries.length}, recurso=${resourceEntries.length})...`,
             );
-            await job.updateProgress(50);
+            await job.updateProgress(45);
 
             const { recordsUpserted } = await this.ingestionService.ingest(
                 organizationId,
                 cloudAccountId,
                 cloudProvider,
-                startDate,
+                collectStart,
                 endDate,
                 granularity,
                 allEntries,
@@ -132,10 +151,10 @@ export class FinopsProcessor extends WorkerHost {
             );
 
             // ── 5. Agregar (atualiza cost_aggregates) ─────────────────────────
-            this.logger.log(`[${jobId}] Fase 5/6: Calculando agregados mensais...`);
-            await job.updateProgress(70);
+            this.logger.log(`[${jobId}] Fase 5/7: Calculando agregados mensais...`);
+            await job.updateProgress(60);
 
-            const start = new Date(startDate + 'T00:00:00Z');
+            const start = new Date(collectStart + 'T00:00:00Z');
             const end = new Date(endDate + 'T00:00:00Z');
 
             const months = new Set<string>();
@@ -155,20 +174,42 @@ export class FinopsProcessor extends WorkerHost {
                 );
             }
 
-            // ── 6. Detecção de anomalias + recomendações ──────────────────────
-            // Baseline: custo diário ~3 meses; marca só anomalias dos últimos 7 dias.
-            this.logger.log(`[${jobId}] Fase 6/6: Detectando anomalias (últimos 7d) e gerando recomendações...`);
-            await job.updateProgress(85);
+            // ── 6. Créditos + compromissos (SP / RI / CUD) — soft-fail ────────
+            this.logger.log(`[${jobId}] Fase 6/7: Coletando créditos e compromissos...`);
+            await job.updateProgress(75);
 
-            if (granularity === 'DAILY') {
-                await this.anomalyService.detectRecentWindow(
+            try {
+                await this.commitmentsService.syncFromProvider(
                     organizationId,
                     cloudAccountId,
                     cloudProvider,
+                    provider,
+                    providerCreds,
+                    collectStart,
                     endDate,
-                    7,
+                    30,
+                    isMonthlyClose,
+                );
+            } catch (error) {
+                this.logger.warn(
+                    `[${jobId}] sync créditos/compromissos falhou (seguindo): ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
                 );
             }
+
+            // ── 7. Detecção de anomalias + recomendações ──────────────────────
+            // Sempre recalcula os últimos 7 dias a partir do custo diário já gravado.
+            this.logger.log(`[${jobId}] Fase 7/7: Recalculando anomalias (últimos 7d) e gerando recomendações...`);
+            await job.updateProgress(88);
+
+            await this.anomalyService.detectRecentWindow(
+                organizationId,
+                cloudAccountId,
+                cloudProvider,
+                endDate,
+                7,
+            );
 
             await this.optimizationService.generateCrossModuleRecommendations(
                 cloudAccountId,

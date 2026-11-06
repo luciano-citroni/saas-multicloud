@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { AlertTriangle, BarChart3, Cloud, FileText, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
+import { AlertTriangle, BarChart3, Cloud, FileText, Landmark, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -10,6 +10,7 @@ type SubnavLabelKey =
     | 'subnavOverview'
     | 'subnavAnomalies'
     | 'subnavSavings'
+    | 'subnavCommitments'
     | 'subnavMulticloud'
     | 'subnavBudgets'
     | 'subnavReports';
@@ -32,6 +33,12 @@ const LINKS: ReadonlyArray<{
         labelKey: 'subnavSavings',
         icon: PiggyBank,
         match: (path) => path.startsWith('/finops/savings'),
+    },
+    {
+        href: '/finops/commitments',
+        labelKey: 'subnavCommitments',
+        icon: Landmark,
+        match: (path) => path.startsWith('/finops/commitments'),
     },
     {
         href: '/finops/multicloud',

@@ -506,6 +506,18 @@ export const ErrorMessages = {
             en: 'Select at least one alert channel when daily anomaly alerts are enabled.',
             pt: 'Selecione ao menos um canal quando o alerta diário de anomalias estiver ativo.',
         },
+        CREDIT_GRANT_NOT_FOUND: {
+            en: 'FinOps credit grant not found.',
+            pt: 'Concessão de créditos FinOps não encontrada.',
+        },
+        CREDIT_GRANT_INVALID_AMOUNT: {
+            en: 'Credit grant total amount must be greater than zero.',
+            pt: 'O valor total da concessão de créditos deve ser maior que zero.',
+        },
+        CREDIT_GRANT_SERVICES_REQUIRED: {
+            en: 'Select at least one service covered by the credit grant.',
+            pt: 'Selecione ao menos um serviço coberto pela concessão de crédito.',
+        },
     },
 
     // General (mapeado por HTTP status code)

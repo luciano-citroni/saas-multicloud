@@ -590,3 +590,142 @@ export class UpdateAnomalyAlertSettingsRequestDto {
     @ApiPropertyOptional({ example: 'high', enum: ['low', 'medium', 'high', 'critical'] })
     minSeverity?: 'low' | 'medium' | 'high' | 'critical';
 }
+
+// ─── Credits & Commitments ────────────────────────────────────────────────────
+
+export class CreateCreditGrantRequestDto {
+    @ApiProperty({ format: 'uuid' })
+    cloudAccountId!: string;
+
+    @ApiProperty({ example: 'AWS promotional credits Q1' })
+    name!: string;
+
+    @ApiProperty({ example: 5000 })
+    totalAmount!: number;
+
+    @ApiPropertyOptional({ example: 'USD' })
+    currency?: string;
+
+    @ApiProperty({ example: '2026-01-01' })
+    startsAt!: string;
+
+    @ApiPropertyOptional({ example: '2026-12-31', nullable: true })
+    expiresAt?: string | null;
+
+    @ApiPropertyOptional({ nullable: true })
+    notes?: string | null;
+
+    @ApiProperty({ type: [String], example: ['Amazon Elastic Compute Cloud - Compute'] })
+    services!: string[];
+}
+
+export class UpdateCreditGrantRequestDto {
+    @ApiPropertyOptional()
+    name?: string;
+
+    @ApiPropertyOptional({ example: 5000 })
+    totalAmount?: number;
+
+    @ApiPropertyOptional({ example: 'USD' })
+    currency?: string;
+
+    @ApiPropertyOptional({ example: '2026-01-01' })
+    startsAt?: string;
+
+    @ApiPropertyOptional({ example: '2026-12-31', nullable: true })
+    expiresAt?: string | null;
+
+    @ApiPropertyOptional({ nullable: true })
+    notes?: string | null;
+
+    @ApiPropertyOptional({ type: [String] })
+    services?: string[];
+}
+
+export class CreditGrantServiceUsageDto {
+    @ApiProperty({ example: 'Amazon Elastic Compute Cloud - Compute' })
+    service!: string;
+
+    @ApiProperty({ example: 120.5 })
+    amount!: number;
+}
+
+export class CreditGrantDto {
+    @ApiProperty({ format: 'uuid' })
+    id!: string;
+
+    @ApiProperty({ format: 'uuid' })
+    cloudAccountId!: string;
+
+    @ApiProperty({ example: 'aws' })
+    provider!: string;
+
+    @ApiProperty()
+    name!: string;
+
+    @ApiProperty({ example: 5000 })
+    totalAmount!: number;
+
+    @ApiProperty({ example: 1200 })
+    consumedAmount!: number;
+
+    @ApiProperty({ example: 3800 })
+    remainingAmount!: number;
+
+    @ApiProperty({ example: 1400, description: 'Custo elegível antes do teto da concessão' })
+    eligibleSpend!: number;
+
+    @ApiProperty({ type: [CreditGrantServiceUsageDto] })
+    usageByService!: CreditGrantServiceUsageDto[];
+
+    @ApiProperty({ example: 'services', enum: ['services', 'credits', 'provider'] })
+    usageSource!: 'services' | 'credits' | 'provider';
+
+    @ApiProperty({ example: false })
+    appliesToAllServices!: boolean;
+
+    @ApiProperty({ type: [String] })
+    services!: string[];
+
+    @ApiProperty({ example: 'USD' })
+    currency!: string;
+
+    @ApiProperty({ example: '2026-01-01' })
+    startsAt!: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    expiresAt!: string | null;
+
+    @ApiPropertyOptional({ nullable: true })
+    notes!: string | null;
+
+    @ApiProperty({ example: 'manual' })
+    source!: string;
+
+    @ApiProperty({ example: 'active', enum: ['active', 'expiring', 'expired', 'exhausted'] })
+    status!: string;
+}
+
+export class CommitmentsOverviewDto {
+    @ApiProperty()
+    credits!: {
+        totalGranted: number;
+        totalRemaining: number;
+        consumedInPeriod: number;
+        expiringSoon: number;
+        currency: string;
+    };
+
+    @ApiProperty()
+    commitments!: {
+        avgUtilizationPercent: number | null;
+        avgCoveragePercent: number | null;
+        unusedCommitment: number;
+        potentialMonthlySavings: number;
+        canReserveMore: boolean;
+        shouldNotReserveMore: boolean;
+        eligibleRecommendations: number;
+        snapshotCount: number;
+        currency: string;
+    };
+}

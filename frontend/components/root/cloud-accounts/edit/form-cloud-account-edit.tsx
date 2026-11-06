@@ -629,6 +629,7 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
                                         <PolicyBlock label={tca.trustPolicy} json={buildTrustPolicy(roleTutorialExternalId)} />
                                         <PolicyBlock label={tca.permissionsPolicy} json={PERMISSIONS_POLICY} />
+                                        <p className="text-xs text-muted-foreground">{tca.finopsPolicyNote}</p>
 
                                         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
                                             <div>
@@ -748,6 +749,14 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                                     </FormItem>
                                 )}
                             />
+
+                            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3">
+                                <p className="text-xs text-blue-700 dark:text-blue-400">
+                                    Além de <strong>Reader</strong> na subscription, a utilização de reservations exige{' '}
+                                    <strong>Reservations Reader</strong> no pedido de reserva (ou em um escopo acima). Sem essa role, a tabela
+                                    Utilização por conta fica vazia.
+                                </p>
+                            </div>
                         </div>
                     )}
 
@@ -789,6 +798,14 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                                     </FormItem>
                                 )}
                             />
+
+                            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3">
+                                <p className="text-xs text-blue-700 dark:text-blue-400">
+                                    Para a utilização de CUDs, conceda à service account{' '}
+                                    <strong>BigQuery Job User</strong> no projeto do export e <strong>BigQuery Data Viewer</strong> no dataset,
+                                    sem a condição CEL da role de assessment. Sugestões de CUD usam <strong>Recommender Viewer</strong>.
+                                </p>
+                            </div>
                         </div>
                     )}
 

@@ -3,14 +3,37 @@ import { ConfigService } from '@nestjs/config';
 
 import { STSClient, AssumeRoleCommand, type AssumeRoleCommandInput } from '@aws-sdk/client-sts';
 import {
+    BillingClient,
+    GetCreditAllocationHistoryCommand,
+    GetCreditsCommand,
+    type CreditAllocationHistoryEntry,
+    type CreditData,
+} from '@aws-sdk/client-billing';
+import {
     CostExplorerClient,
     GetCostAndUsageCommand,
     GetCostAndUsageWithResourcesCommand,
+    GetReservationUtilizationCommand,
+    GetSavingsPlansCoverageCommand,
+    GetSavingsPlansPurchaseRecommendationCommand,
+    GetSavingsPlansUtilizationCommand,
+    type ReservationAggregates,
+    type SavingsPlansCoverage,
+    type SavingsPlansUtilization,
     type GetCostAndUsageCommandInput,
     type GetCostAndUsageWithResourcesCommandInput,
+    type SavingsPlansPurchaseRecommendationSummary,
 } from '@aws-sdk/client-cost-explorer';
 
-import type { IFinopsProvider, FinopsCostCollectionResult, FinopsProviderCredentials } from './finops-provider.interface';
+import type {
+    IFinopsProvider,
+    FinopsCommitmentRecommendationEntry,
+    FinopsCommitmentUtilizationEntry,
+    FinopsCostCollectionResult,
+    FinopsCreditConsumptionEntry,
+    FinopsCreditGrantEntry,
+    FinopsProviderCredentials,
+} from './finops-provider.interface';
 import { capResourceEntriesByDay } from './finops-provider.interface';
 
 @Injectable()
@@ -230,6 +253,448 @@ export class AwsFinopsProvider implements IFinopsProvider {
         return { entries: capped, currency };
     }
 
+    async collectCreditConsumption(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+    ): Promise<FinopsCreditConsumptionEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+
+        this.logger.log(
+            `[AWS FinOps] Coletando consumo de créditos para conta ${cloudAccountId} (${startDate} → ${endDate})`,
+        );
+
+        try {
+            const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+            const exclusiveEndDate = this.toExclusiveEndDate(endDate);
+            const baseInput: GetCostAndUsageCommandInput = {
+                TimePeriod: { Start: startDate, End: exclusiveEndDate },
+                Granularity: 'DAILY',
+                Metrics: ['UnblendedCost'],
+                Filter: {
+                    Dimensions: {
+                        Key: 'RECORD_TYPE',
+                        Values: ['Credit', 'Refund'],
+                    },
+                },
+                GroupBy: [{ Type: 'DIMENSION', Key: 'RECORD_TYPE' }],
+            };
+
+            const entries: FinopsCreditConsumptionEntry[] = [];
+            let nextPageToken: string | undefined;
+
+            do {
+                const response = await awsClient.send(
+                    new GetCostAndUsageCommand({
+                        ...baseInput,
+                        ...(nextPageToken ? { NextPageToken: nextPageToken } : {}),
+                    }),
+                );
+
+                for (const result of response.ResultsByTime ?? []) {
+                    const periodStart = result.TimePeriod?.Start ?? startDate;
+                    for (const group of result.Groups ?? []) {
+                        const label = group.Keys?.[0] ?? 'Credit';
+                        const rawAmount = Number(group.Metrics?.['UnblendedCost']?.Amount ?? '0');
+                        if (rawAmount === 0) continue;
+                        // CE returns credits as negative; store as positive consumption.
+                        entries.push({
+                            date: periodStart,
+                            amount: Math.abs(rawAmount),
+                            currency: group.Metrics?.['UnblendedCost']?.Unit ?? 'USD',
+                            label,
+                            rawMetadata: { recordType: label, rawAmount },
+                        });
+                    }
+                }
+
+                nextPageToken = response.NextPageToken;
+            } while (nextPageToken);
+
+            this.logger.log(`[AWS FinOps] ${entries.length} entradas de crédito coletadas para ${cloudAccountId}`);
+            return entries;
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] collectCreditConsumption falhou: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return [];
+        }
+    }
+
+    async collectCreditGrants(creds: FinopsProviderCredentials): Promise<FinopsCreditGrantEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+
+        const accountId = accountIdFromRoleArn(roleArn);
+        if (!accountId) {
+            this.logger.warn(`[AWS FinOps] Não foi possível extrair o account id de ${roleArn}`);
+            return [];
+        }
+
+        this.logger.log(`[AWS FinOps] Coletando concessões de crédito (Billing) para ${cloudAccountId}`);
+
+        try {
+            const client = await this.buildBillingClient(roleArn, externalId);
+            const startDate = new Date(Date.now() - 364 * 24 * 60 * 60 * 1000);
+            const credits = await this.fetchCredits(client, accountId, startDate);
+
+            const usageByCredit = await this.collectCreditAllocation(client, accountId, startDate);
+            const grants: FinopsCreditGrantEntry[] = [];
+
+            for (const credit of credits) {
+                const mapped = mapAwsCredit(credit, usageByCredit);
+                if (mapped) grants.push(mapped);
+            }
+
+            this.logger.log(`[AWS FinOps] ${grants.length} concessões de crédito importadas para ${cloudAccountId}`);
+            return grants;
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] collectCreditGrants falhou (a role precisa de billing:GetCredits e aws-portal:ViewBilling): ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            return [];
+        }
+    }
+
+    async collectCommitmentUtilization(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentUtilizationEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+
+        const { startDate, endDate } = this.lookbackRange(lookbackDays);
+        this.logger.log(
+            `[AWS FinOps] Coletando utilização de Savings Plans para ${cloudAccountId} (${startDate} → ${endDate})`,
+        );
+
+        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const exclusiveEnd = this.toExclusiveEndDate(endDate);
+        const timePeriod = { Start: startDate, End: exclusiveEnd };
+        const entries: FinopsCommitmentUtilizationEntry[] = [];
+
+        let utilization: SavingsPlansUtilization | null = null;
+        try {
+            const response = await awsClient.send(
+                new GetSavingsPlansUtilizationCommand({
+                    TimePeriod: timePeriod,
+                    // DAILY aceita qualquer início. MONTHLY exige o dia 1 do mês e falha no lookback atual.
+                    Granularity: 'DAILY',
+                }),
+            );
+            utilization = response.Total?.Utilization ?? this.sumSavingsPlanUtilization(response.SavingsPlansUtilizationsByTime);
+        } catch (error) {
+            this.logger.warn(`[AWS FinOps] GetSavingsPlansUtilization indisponível: ${this.awsErrorDetail(error)}`);
+        }
+
+        let coveragePct: number | null = null;
+        try {
+            const coverage = await awsClient.send(
+                new GetSavingsPlansCoverageCommand({
+                    TimePeriod: timePeriod,
+                    Granularity: 'DAILY',
+                    Metrics: ['SpendCoveredBySavingsPlans'],
+                }),
+            );
+            coveragePct = this.averageSavingsPlanCoverage(coverage.SavingsPlansCoverages ?? []);
+        } catch (error) {
+            this.logger.warn(`[AWS FinOps] GetSavingsPlansCoverage falhou: ${this.awsErrorDetail(error)}`);
+        }
+
+        const utilPct = this.parseAwsAmount(utilization?.UtilizationPercentage);
+        const used = this.parseAwsAmount(utilization?.UsedCommitment);
+        const unused = this.parseAwsAmount(utilization?.UnusedCommitment);
+        const totalCommitment = this.parseAwsAmount(utilization?.TotalCommitment);
+
+        if (utilPct != null || coveragePct != null || used != null || unused != null || totalCommitment != null) {
+            entries.push({
+                commitmentType: 'savings_plan',
+                externalId: `sp-aggregate-${cloudAccountId}`,
+                name: 'Savings Plans (aggregate)',
+                utilizationPercent: utilPct,
+                coveragePercent: coveragePct,
+                usedCommitment: used,
+                unusedCommitment: unused,
+                hourlyCommitment: totalCommitment != null ? totalCommitment / (lookbackDays * 24) : null,
+                monthlyCommitment: totalCommitment,
+                term: null,
+                currency: 'USD',
+                lookbackDays,
+                rawMetadata: { utilization, coveragePercent: coveragePct, startDate, endDate },
+            });
+        }
+
+        try {
+            const reservation = await awsClient.send(
+                new GetReservationUtilizationCommand({
+                    TimePeriod: timePeriod,
+                    Granularity: 'DAILY',
+                }),
+            );
+            const reservationEntry = this.mapReservationUtilization(reservation.Total, cloudAccountId, lookbackDays, startDate, endDate);
+            if (reservationEntry) entries.push(reservationEntry);
+        } catch (error) {
+            this.logger.warn(`[AWS FinOps] GetReservationUtilization indisponível: ${this.awsErrorDetail(error)}`);
+        }
+
+        this.logger.log(`[AWS FinOps] ${entries.length} snapshot(s) de compromisso para ${cloudAccountId}`);
+        return entries;
+    }
+
+    async collectCommitmentRecommendations(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentRecommendationEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
+        if (!roleArn) {
+            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
+        }
+
+        this.logger.log(`[AWS FinOps] Coletando recomendações de Savings Plans para ${cloudAccountId}`);
+
+        const lookbackOption =
+            lookbackDays >= 60 ? 'SIXTY_DAYS' : lookbackDays >= 30 ? 'THIRTY_DAYS' : 'SEVEN_DAYS';
+
+        const configs: Array<{ term: 'ONE_YEAR' | 'THREE_YEARS'; payment: 'NO_UPFRONT' | 'PARTIAL_UPFRONT' | 'ALL_UPFRONT' }> =
+            [
+                { term: 'ONE_YEAR', payment: 'NO_UPFRONT' },
+                { term: 'ONE_YEAR', payment: 'PARTIAL_UPFRONT' },
+                { term: 'THREE_YEARS', payment: 'NO_UPFRONT' },
+            ];
+
+        try {
+            const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+            const entries: FinopsCommitmentRecommendationEntry[] = [];
+            let lastError = '';
+
+            for (const cfg of configs) {
+                try {
+                    const summary = await this.fetchSavingsPlanRecommendation(awsClient, {
+                        term: cfg.term,
+                        payment: cfg.payment,
+                        lookback: lookbackOption,
+                    });
+                    const hourly = summary?.HourlyCommitmentToPurchase
+                        ? Number(summary.HourlyCommitmentToPurchase)
+                        : null;
+                    const monthlySavings = summary?.EstimatedMonthlySavingsAmount
+                        ? Number(summary.EstimatedMonthlySavingsAmount)
+                        : null;
+                    const savingsPct = summary?.EstimatedSavingsPercentage
+                        ? Number(summary.EstimatedSavingsPercentage)
+                        : null;
+
+                    const eligible = (hourly ?? 0) > 0 && (monthlySavings ?? 0) > 0;
+                    const key = `compute_sp:${cfg.term}:${cfg.payment}:${lookbackOption}`;
+
+                    entries.push({
+                        commitmentType: 'savings_plan',
+                        recommendationKey: key,
+                        lookbackDays,
+                        term: cfg.term,
+                        paymentOption: cfg.payment,
+                        estimatedMonthlySavings: monthlySavings,
+                        estimatedSavingsPercentage: savingsPct,
+                        recommendedHourlyCommitment: hourly,
+                        eligible,
+                        ineligibleReason: eligible
+                            ? null
+                            : 'Sem compromisso elegível adicional para este lookback/termo — cobertura já alta ou uso fora do escopo de Savings Plans.',
+                        summary: eligible
+                            ? `Compute SP ${cfg.term} / ${cfg.payment}: ~$${monthlySavings?.toFixed(2) ?? '0'}/mês`
+                            : 'Nenhuma compra adicional recomendada',
+                        currency: 'USD',
+                        rawMetadata: { summary: summary ?? null },
+                    });
+                } catch (inner) {
+                    lastError = this.awsErrorDetail(inner);
+                    this.logger.warn(
+                        `[AWS FinOps] SP recommendation ${cfg.term}/${cfg.payment} falhou: ${lastError}`,
+                    );
+                }
+            }
+
+            if (entries.length === 0) {
+                entries.push({
+                    commitmentType: 'savings_plan',
+                    recommendationKey: `compute_sp:none:${lookbackOption}`,
+                    lookbackDays,
+                    term: null,
+                    paymentOption: null,
+                    estimatedMonthlySavings: null,
+                    estimatedSavingsPercentage: null,
+                    recommendedHourlyCommitment: null,
+                    eligible: false,
+                    ineligibleReason: lastError
+                        ? `Cost Explorer recusou a recomendação de Savings Plans: ${lastError}`
+                        : 'Cost Explorer não retornou recomendações de Savings Plans.',
+                    summary: 'Sem recomendações disponíveis',
+                    currency: 'USD',
+                });
+            }
+
+            return entries;
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] collectCommitmentRecommendations falhou: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Conta payer aceita AccountScope=PAYER. Conta vinculada só aceita LINKED.
+     */
+    private async fetchSavingsPlanRecommendation(
+        client: CostExplorerClient,
+        input: {
+            term: 'ONE_YEAR' | 'THREE_YEARS';
+            payment: 'NO_UPFRONT' | 'PARTIAL_UPFRONT' | 'ALL_UPFRONT';
+            lookback: 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'SIXTY_DAYS';
+        },
+    ): Promise<SavingsPlansPurchaseRecommendationSummary | undefined> {
+        const send = (accountScope: 'PAYER' | 'LINKED') =>
+            client.send(
+                new GetSavingsPlansPurchaseRecommendationCommand({
+                    SavingsPlansType: 'COMPUTE_SP',
+                    TermInYears: input.term,
+                    PaymentOption: input.payment,
+                    LookbackPeriodInDays: input.lookback,
+                    AccountScope: accountScope,
+                }),
+            );
+
+        try {
+            const response = await send('PAYER');
+            return response.SavingsPlansPurchaseRecommendation?.SavingsPlansPurchaseRecommendationSummary;
+        } catch (error) {
+            const detail = this.awsErrorDetail(error);
+            if (!/can only be LINKED/i.test(detail)) throw error;
+            this.logger.log(
+                `[AWS FinOps] Conta vinculada — repetindo recomendação SP ${input.term}/${input.payment} com AccountScope=LINKED`,
+            );
+            const response = await send('LINKED');
+            return response.SavingsPlansPurchaseRecommendation?.SavingsPlansPurchaseRecommendationSummary;
+        }
+    }
+
+    private awsErrorDetail(error: unknown): string {
+        const name = error && typeof error === 'object' && 'name' in error ? String((error as { name?: string }).name ?? '') : '';
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message || message === 'UnknownError') return name || message || 'erro desconhecido';
+        return name && !message.includes(name) ? `${name}: ${message}` : message;
+    }
+
+    private parseAwsAmount(value: string | number | null | undefined): number | null {
+        if (value == null || value === '') return null;
+        const amount = typeof value === 'number' ? value : Number(value);
+        return Number.isFinite(amount) ? amount : null;
+    }
+
+    private sumSavingsPlanUtilization(
+        points: Array<{ Utilization?: SavingsPlansUtilization }> | undefined,
+    ): SavingsPlansUtilization | null {
+        let used = 0;
+        let unused = 0;
+        let total = 0;
+        let seen = false;
+        for (const point of points ?? []) {
+            const row = point.Utilization;
+            const rowTotal = this.parseAwsAmount(row?.TotalCommitment);
+            const rowUsed = this.parseAwsAmount(row?.UsedCommitment);
+            const rowUnused = this.parseAwsAmount(row?.UnusedCommitment);
+            if (rowTotal == null && rowUsed == null && rowUnused == null) continue;
+            seen = true;
+            total += rowTotal ?? 0;
+            used += rowUsed ?? 0;
+            unused += rowUnused ?? 0;
+        }
+        if (!seen || total <= 0) return null;
+        return {
+            TotalCommitment: String(total),
+            UsedCommitment: String(used),
+            UnusedCommitment: String(unused),
+            UtilizationPercentage: String((used / total) * 100),
+        };
+    }
+
+    private averageSavingsPlanCoverage(points: SavingsPlansCoverage[]): number | null {
+        let weighted = 0;
+        let weight = 0;
+        const plain: number[] = [];
+        for (const point of points) {
+            const percent = this.parseAwsAmount(point.Coverage?.CoveragePercentage);
+            if (percent == null) continue;
+            const cost = this.parseAwsAmount(point.Coverage?.TotalCost);
+            if (cost != null && cost > 0) {
+                weighted += percent * cost;
+                weight += cost;
+            } else {
+                plain.push(percent);
+            }
+        }
+        if (weight > 0) return weighted / weight;
+        if (plain.length === 0) return null;
+        return plain.reduce((sum, value) => sum + value, 0) / plain.length;
+    }
+
+    private mapReservationUtilization(
+        total: ReservationAggregates | undefined,
+        cloudAccountId: string,
+        lookbackDays: number,
+        startDate: string,
+        endDate: string,
+    ): FinopsCommitmentUtilizationEntry | null {
+        const utilizationPercent = this.parseAwsAmount(total?.UtilizationPercentage);
+        const unusedCommitment = this.parseAwsAmount(total?.RICostForUnusedHours);
+        const usedCommitment = this.parseAwsAmount(total?.TotalAmortizedFee);
+        if (utilizationPercent == null && unusedCommitment == null && usedCommitment == null) return null;
+        return {
+            commitmentType: 'reservation',
+            externalId: `ri-aggregate-${cloudAccountId}`,
+            name: 'Reserved Instances (aggregate)',
+            utilizationPercent,
+            coveragePercent: null,
+            usedCommitment,
+            unusedCommitment,
+            hourlyCommitment: null,
+            monthlyCommitment: usedCommitment,
+            term: null,
+            currency: 'USD',
+            lookbackDays,
+            rawMetadata: { total: total ?? null, startDate, endDate },
+        };
+    }
+
+    private lookbackRange(lookbackDays: number): { startDate: string; endDate: string } {
+        const end = new Date();
+        end.setUTCHours(0, 0, 0, 0);
+        // Cost Explorer exclusive end = today; inclusive end = yesterday
+        const inclusiveEnd = new Date(end);
+        inclusiveEnd.setUTCDate(inclusiveEnd.getUTCDate() - 1);
+        const start = new Date(inclusiveEnd);
+        start.setUTCDate(start.getUTCDate() - (lookbackDays - 1));
+        return {
+            startDate: start.toISOString().slice(0, 10),
+            endDate: inclusiveEnd.toISOString().slice(0, 10),
+        };
+    }
+
     private inferServiceFromResourceId(resourceId: string): string {
         const id = resourceId.toLowerCase();
         if (id.includes(':instance/') || id.startsWith('i-')) return 'Amazon Elastic Compute Cloud - Compute';
@@ -259,6 +724,110 @@ export class AwsFinopsProvider implements IFinopsProvider {
         const [yearStr, monthStr, dayStr] = endDate.split('-');
         const nextDay = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr) + 1));
         return nextDay.toISOString().slice(0, 10);
+    }
+
+    private async buildBillingClient(roleArn: string, externalId?: string): Promise<BillingClient> {
+        const temporary = await this.assumeRole(roleArn, externalId);
+        return new BillingClient({
+            region: 'us-east-1',
+            credentials: temporary,
+        });
+    }
+
+    private async fetchCredits(client: BillingClient, accountId: string, startDate: Date): Promise<CreditData[]> {
+        const merged = new Map<string, CreditData>();
+        const absorb = (credits: CreditData[] | undefined) => {
+            for (const credit of credits ?? []) {
+                const id = credit.creditId?.trim();
+                if (!id) continue;
+                const current = merged.get(id);
+                if (!current || creditBalance(credit) > creditBalance(current)) merged.set(id, credit);
+            }
+        };
+
+        try {
+            const own = await client.send(
+                new GetCreditsCommand({
+                    accountId,
+                    startDate,
+                    payerAccountFlag: false,
+                }),
+            );
+            absorb(own.credits);
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] GetCredits da conta falhou: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+
+        try {
+            const family = await client.send(
+                new GetCreditsCommand({
+                    accountId,
+                    startDate,
+                    payerAccountFlag: true,
+                }),
+            );
+            absorb(family.credits);
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] GetCredits com payerAccountFlag falhou: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        }
+
+        return [...merged.values()];
+    }
+
+    private async collectCreditAllocation(
+        client: BillingClient,
+        accountId: string,
+        startDate: Date,
+    ): Promise<Map<string, Map<string, number>>> {
+        const byCredit = new Map<string, Map<string, number>>();
+        const chosen = new Map<string, { amount: number; estimated: boolean }>();
+        let nextToken: string | undefined;
+        let pages = 0;
+
+        try {
+            do {
+                pages += 1;
+                const response = await client.send(
+                    new GetCreditAllocationHistoryCommand(
+                        nextToken
+                            ? { nextToken }
+                            : {
+                                  accountId,
+                                  startDate,
+                                  endDate: new Date(Date.now() - 60_000),
+                                  maxResults: 1000,
+                              },
+                    ),
+                );
+
+                for (const entry of response.creditAllocationHistoryList ?? []) {
+                    rememberAllocation(chosen, entry);
+                }
+
+                nextToken = response.nextToken;
+            } while (nextToken && pages < 20);
+        } catch (error) {
+            this.logger.warn(
+                `[AWS FinOps] GetCreditAllocationHistory falhou: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return byCredit;
+        }
+
+        for (const [key, row] of chosen) {
+            const [creditId, service] = key.split('\u0000');
+            if (!creditId || !service) continue;
+            const services = byCredit.get(creditId) ?? new Map<string, number>();
+            services.set(service, (services.get(service) ?? 0) + row.amount);
+            byCredit.set(creditId, services);
+        }
+
+        return byCredit;
     }
 
     private async buildCostExplorerClient(roleArn: string, externalId?: string): Promise<CostExplorerClient> {
@@ -365,4 +934,94 @@ export class AwsFinopsProvider implements IFinopsProvider {
             `Falha AWS FinOps em ${stage} para role "${roleArn}". Detalhe: ${message}`
         );
     }
+}
+
+function accountIdFromRoleArn(roleArn: string): string | null {
+    const match = roleArn.match(/:iam::(\d{12}):role\//);
+    return match?.[1] ?? null;
+}
+
+function mapAwsCredit(
+    credit: CreditData,
+    usageByCredit: Map<string, Map<string, number>>,
+): FinopsCreditGrantEntry | null {
+    const externalId = credit.creditId?.trim();
+    const startsAt = toIsoDate(credit.startDate);
+    const initial = parseAmount(credit.initialAmount);
+    if (!externalId || !startsAt || !initial || initial.value <= 0) return null;
+
+    const estimated = parseAmount(credit.estimatedAmount);
+    const remaining = parseAmount(credit.remainingAmount);
+    // A coluna de saldo da página de créditos da AWS é remainingAmount.
+    // estimatedAmount 0 (sem conta em aberto) não pode zerar esse saldo.
+    const reportedRemaining = remaining
+        ? remaining.value
+        : estimated && estimated.value > 0
+          ? estimated.value
+          : initial.value;
+    const services = (credit.applicableProductNames ?? []).map((name) => name.trim()).filter(Boolean).slice(0, 200);
+    const usage = usageByCredit.get(externalId);
+    const notes = [credit.creditType, credit.creditStatus === 'DISABLED' ? 'DISABLED' : null]
+        .filter(Boolean)
+        .join(' · ');
+
+    return {
+        externalId: externalId.slice(0, 128),
+        name: (credit.description?.trim() || externalId).slice(0, 255),
+        totalAmount: initial.value,
+        reportedRemaining: Math.min(initial.value, roundMoney(reportedRemaining)),
+        currency: initial.currency,
+        startsAt,
+        expiresAt: toIsoDate(credit.endDate),
+        services,
+        appliesToAllServices: services.length === 0,
+        notes: notes || null,
+        usageByService: usage
+            ? [...usage.entries()]
+                  .map(([service, amount]) => ({ service, amount: roundMoney(amount) }))
+                  .filter((row) => row.amount > 0)
+                  .sort((left, right) => right.amount - left.amount)
+            : [],
+    };
+}
+
+function rememberAllocation(
+    chosen: Map<string, { amount: number; estimated: boolean }>,
+    entry: CreditAllocationHistoryEntry,
+): void {
+    const creditId = entry.creditId?.trim();
+    const service = entry.appliedServiceName?.trim();
+    const amount = Math.abs(parseAmount(entry.creditAmount)?.value ?? 0);
+    if (!creditId || !service || amount <= 0) return;
+
+    const key = `${creditId}\u0000${service}\u0000${entry.billingMonth ?? ''}\u0000${entry.accountId ?? ''}`;
+    const estimated = entry.isEstimatedBill === true;
+    const current = chosen.get(key);
+    if (!current || (current.estimated && !estimated)) {
+        chosen.set(key, { amount, estimated });
+    }
+}
+
+function creditBalance(credit: CreditData): number {
+    const remaining = parseAmount(credit.remainingAmount);
+    if (remaining) return remaining.value;
+    const estimated = parseAmount(credit.estimatedAmount);
+    if (estimated && estimated.value > 0) return estimated.value;
+    return 0;
+}
+
+function parseAmount(amount: { currencyAmount?: string; currencyCode?: string } | undefined): { value: number; currency: string } | null {
+    if (!amount?.currencyAmount) return null;
+    const value = Number(amount.currencyAmount);
+    if (!Number.isFinite(value)) return null;
+    return { value: roundMoney(Math.abs(value)), currency: (amount.currencyCode || 'USD').toUpperCase() };
+}
+
+function roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+function toIsoDate(value: Date | undefined): string | null {
+    if (!value || Number.isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 10);
 }

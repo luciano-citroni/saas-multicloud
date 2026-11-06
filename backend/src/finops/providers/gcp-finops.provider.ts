@@ -3,7 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleAuth, Impersonated } from 'google-auth-library';
 import { google, bigquery_v2 } from 'googleapis';
 
-import type { IFinopsProvider, FinopsCostCollectionResult, FinopsCostEntry, FinopsProviderCredentials } from './finops-provider.interface';
+import type {
+    IFinopsProvider,
+    FinopsCommitmentRecommendationEntry,
+    FinopsCommitmentUtilizationEntry,
+    FinopsCostCollectionResult,
+    FinopsCostEntry,
+    FinopsCreditConsumptionEntry,
+    FinopsProviderCredentials,
+} from './finops-provider.interface';
 import { capResourceEntriesByDay } from './finops-provider.interface';
 
 type GcpFinopsCredentials = {
@@ -213,6 +221,285 @@ export class GcpFinopsProvider implements IFinopsProvider {
         );
 
         return { entries: capped, currency };
+    }
+
+    async collectCreditConsumption(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+    ): Promise<FinopsCreditConsumptionEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const gcpCreds = credentials as GcpFinopsCredentials;
+        if (!gcpCreds.projectId || !gcpCreds.serviceAccountEmail) {
+            throw new BadRequestException('Credenciais GCP inválidas: projectId e serviceAccountEmail são obrigatórios.');
+        }
+
+        this.logger.log(
+            `[GCP FinOps] Coletando consumo de créditos para conta ${cloudAccountId} (${startDate} → ${endDate})`,
+        );
+
+        try {
+            const auth = await this.buildImpersonatedAuth(gcpCreds.serviceAccountEmail);
+            const bigquery = google.bigquery({ version: 'v2', auth: auth as never });
+            const exportProjectId = gcpCreds.billingExportProjectId || gcpCreds.projectId;
+            const { datasetId, tableId } = await this.resolveBillingExportTable(bigquery, exportProjectId, gcpCreds);
+            const exclusiveEndDate = this.toExclusiveEndDate(endDate);
+
+            const query = `
+                SELECT
+                  FORMAT_DATE('%Y-%m-%d', DATE(usage_start_time)) AS usage_date,
+                  COALESCE(credit.type, credit.name, 'Credit') AS credit_label,
+                  SUM(ABS(IFNULL(credit.amount, 0))) AS amount,
+                  COALESCE(ANY_VALUE(currency), 'USD') AS currency
+                FROM \`${exportProjectId}.${datasetId}.${tableId}\`,
+                UNNEST(IFNULL(credits, [])) AS credit
+                WHERE DATE(usage_start_time) >= @startDate
+                  AND DATE(usage_start_time) < @endDate
+                  AND project.id = @projectId
+                  AND IFNULL(credit.amount, 0) != 0
+                GROUP BY usage_date, credit_label
+                HAVING amount > 0
+                ORDER BY usage_date ASC
+            `;
+
+            const rows = await this.runQuery(bigquery, exportProjectId, query, {
+                startDate: { type: 'STRING', value: startDate },
+                endDate: { type: 'STRING', value: exclusiveEndDate },
+                projectId: { type: 'STRING', value: gcpCreds.projectId },
+            });
+
+            const entries: FinopsCreditConsumptionEntry[] = rows.map((row) => ({
+                date: String(row.usage_date),
+                amount: Number(row.amount ?? 0),
+                currency: String(row.currency || 'USD'),
+                label: String(row.credit_label || 'Credit'),
+                rawMetadata: { source: 'billing_export_credits' },
+            }));
+
+            this.logger.log(`[GCP FinOps] ${entries.length} entradas de crédito para ${cloudAccountId}`);
+            return entries;
+        } catch (error) {
+            this.logger.warn(
+                `[GCP FinOps] collectCreditConsumption falhou: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            return [];
+        }
+    }
+
+    async collectCommitmentUtilization(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentUtilizationEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const gcpCreds = credentials as GcpFinopsCredentials;
+        if (!gcpCreds.projectId || !gcpCreds.serviceAccountEmail) {
+            throw new BadRequestException('Credenciais GCP inválidas: projectId e serviceAccountEmail são obrigatórios.');
+        }
+
+        const { startDate, endDate } = this.lookbackRange(lookbackDays);
+        this.logger.log(
+            `[GCP FinOps] Coletando utilização de CUDs para ${cloudAccountId} (${startDate} → ${endDate})`,
+        );
+
+        try {
+            const auth = await this.buildImpersonatedAuth(gcpCreds.serviceAccountEmail);
+            const bigquery = google.bigquery({ version: 'v2', auth: auth as never });
+            const exportProjectId = gcpCreds.billingExportProjectId || gcpCreds.projectId;
+            const { datasetId, tableId } = await this.resolveBillingExportTable(bigquery, exportProjectId, gcpCreds);
+            const exclusiveEndDate = this.toExclusiveEndDate(endDate);
+
+            // Approximate CUD utilization from billing credits of type COMMITTED_USAGE_DISCOUNT*
+            const query = `
+                SELECT
+                  COALESCE(credit.type, 'COMMITTED_USAGE_DISCOUNT') AS cud_type,
+                  SUM(ABS(IFNULL(credit.amount, 0))) AS credit_amount,
+                  SUM(IFNULL(cost, 0)) AS total_cost,
+                  COALESCE(ANY_VALUE(currency), 'USD') AS currency
+                FROM \`${exportProjectId}.${datasetId}.${tableId}\`
+                LEFT JOIN UNNEST(IFNULL(credits, [])) AS credit
+                WHERE DATE(usage_start_time) >= @startDate
+                  AND DATE(usage_start_time) < @endDate
+                  AND project.id = @projectId
+                GROUP BY cud_type
+            `;
+
+            const rows = await this.runQuery(bigquery, exportProjectId, query, {
+                startDate: { type: 'STRING', value: startDate },
+                endDate: { type: 'STRING', value: exclusiveEndDate },
+                projectId: { type: 'STRING', value: gcpCreds.projectId },
+            });
+
+            let cudCredits = 0;
+            let totalCost = 0;
+            let currency = 'USD';
+            const cudTypes: string[] = [];
+
+            for (const row of rows) {
+                const type = String(row.cud_type || '');
+                currency = String(row.currency || currency);
+                totalCost += Number(row.total_cost ?? 0);
+                if (/COMMITTED_USAGE_DISCOUNT|SUSTAINED_USAGE_DISCOUNT/i.test(type)) {
+                    cudCredits += Number(row.credit_amount ?? 0);
+                    cudTypes.push(type);
+                }
+            }
+
+            if (cudCredits <= 0 && totalCost <= 0) {
+                return [];
+            }
+
+            // Without explicit commitment hours, treat credit share of spend as coverage proxy.
+            const coveragePercent =
+                totalCost > 0 ? Math.min(100, (cudCredits / Math.abs(totalCost)) * 100) : null;
+
+            return [
+                {
+                    commitmentType: 'cud',
+                    externalId: `cud-aggregate-${cloudAccountId}`,
+                    name: 'Committed Use Discounts (aggregate)',
+                    utilizationPercent: coveragePercent != null && coveragePercent > 0 ? 100 : null,
+                    coveragePercent,
+                    usedCommitment: cudCredits,
+                    unusedCommitment: null,
+                    hourlyCommitment: null,
+                    monthlyCommitment: cudCredits,
+                    term: null,
+                    currency,
+                    lookbackDays,
+                    rawMetadata: { cudTypes, startDate, endDate, totalCost },
+                },
+            ];
+        } catch (error) {
+            this.logger.warn(
+                `[GCP FinOps] collectCommitmentUtilization falhou: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            return [];
+        }
+    }
+
+    async collectCommitmentRecommendations(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentRecommendationEntry[]> {
+        const { credentials, cloudAccountId } = creds;
+        const gcpCreds = credentials as GcpFinopsCredentials;
+        if (!gcpCreds.projectId || !gcpCreds.serviceAccountEmail) {
+            throw new BadRequestException('Credenciais GCP inválidas: projectId e serviceAccountEmail são obrigatórios.');
+        }
+
+        this.logger.log(`[GCP FinOps] Coletando recomendações de CUD (Recommender) para ${cloudAccountId}`);
+
+        try {
+            const auth = await this.buildImpersonatedAuth(gcpCreds.serviceAccountEmail);
+            const recommender = google.recommender({ version: 'v1', auth: auth as never });
+            const parent =
+                `projects/${gcpCreds.projectId}/locations/global/recommenders/` +
+                `google.compute.commitment.UsageCommitmentRecommender`;
+
+            const response = await recommender.projects.locations.recommenders.recommendations.list({
+                parent,
+                pageSize: 50,
+            });
+
+            const recommendations = response.data.recommendations ?? [];
+            const entries: FinopsCommitmentRecommendationEntry[] = [];
+
+            for (const rec of recommendations) {
+                const name = rec.name ?? `cud-rec-${entries.length}`;
+                const key = name.split('/').pop() || name;
+                const primaryImpact = rec.primaryImpact;
+                const costProjection = primaryImpact?.costProjection;
+                const units = Number(costProjection?.cost?.units ?? 0);
+                const nanos = Number(costProjection?.cost?.nanos ?? 0) / 1e9;
+                // Recommender cost impact for savings is typically negative.
+                const monthlySavings = Math.abs(units + nanos);
+                const state = rec.stateInfo?.state ?? null;
+                const eligible = monthlySavings > 0 && (state === 'ACTIVE' || !state);
+
+                entries.push({
+                    commitmentType: 'cud',
+                    recommendationKey: key.slice(0, 250),
+                    lookbackDays,
+                    term: null,
+                    paymentOption: null,
+                    estimatedMonthlySavings: monthlySavings || null,
+                    estimatedSavingsPercentage: null,
+                    recommendedHourlyCommitment: null,
+                    eligible,
+                    ineligibleReason: eligible
+                        ? null
+                        : 'Recomendação inativa ou sem economia estimada — uso pode não ser elegível a CUD.',
+                    summary: rec.description ?? 'CUD recommendation',
+                    currency: costProjection?.cost?.currencyCode ?? 'USD',
+                    rawMetadata: {
+                        state,
+                        recommenderSubtype: rec.recommenderSubtype,
+                        priority: rec.priority,
+                    },
+                });
+            }
+
+            if (entries.length === 0) {
+                entries.push({
+                    commitmentType: 'cud',
+                    recommendationKey: `cud:none:${lookbackDays}`,
+                    lookbackDays,
+                    term: null,
+                    paymentOption: null,
+                    estimatedMonthlySavings: null,
+                    estimatedSavingsPercentage: null,
+                    recommendedHourlyCommitment: null,
+                    eligible: false,
+                    ineligibleReason:
+                        'Nenhuma recomendação CUD ativa (Recommender vazio, sem permissão recommender.viewer, ou uso não elegível).',
+                    summary: 'Sem recomendações disponíveis',
+                    currency: 'USD',
+                });
+            }
+
+            return entries;
+        } catch (error) {
+            this.logger.warn(
+                `[GCP FinOps] collectCommitmentRecommendations falhou: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            return [
+                {
+                    commitmentType: 'cud',
+                    recommendationKey: `cud:error:${lookbackDays}`,
+                    lookbackDays,
+                    term: null,
+                    paymentOption: null,
+                    estimatedMonthlySavings: null,
+                    estimatedSavingsPercentage: null,
+                    recommendedHourlyCommitment: null,
+                    eligible: false,
+                    ineligibleReason: `Falha ao consultar Recommender: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                    summary: 'Sem recomendações disponíveis',
+                    currency: 'USD',
+                },
+            ];
+        }
+    }
+
+    private lookbackRange(lookbackDays: number): { startDate: string; endDate: string } {
+        const end = new Date();
+        end.setUTCHours(0, 0, 0, 0);
+        const inclusiveEnd = new Date(end);
+        inclusiveEnd.setUTCDate(inclusiveEnd.getUTCDate() - 1);
+        const start = new Date(inclusiveEnd);
+        start.setUTCDate(start.getUTCDate() - (lookbackDays - 1));
+        return {
+            startDate: start.toISOString().slice(0, 10),
+            endDate: inclusiveEnd.toISOString().slice(0, 10),
+        };
     }
 
     private async resolveBillingExportTable(

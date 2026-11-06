@@ -31,6 +31,7 @@
     "dependencies": {
         "@aws-sdk/client-amplify": "^3.1158.0",
         "@aws-sdk/client-api-gateway": "^3.1005.0",
+        "@aws-sdk/client-billing": "^3.1163.0",
         "@aws-sdk/client-cloudformation": "^3.1158.0",
         "@aws-sdk/client-cloudfront": "^3.1004.0",
         "@aws-sdk/client-cloudtrail": "^3.1005.0",

@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
-import type { AnomalySeverity } from '../../db/entites/finops-cost-anomaly.entity';
+import type { AnomalySeverity, AnomalyStatus } from '../../db/entites/finops-cost-anomaly.entity';
 import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 const ANOMALY_THRESHOLD = 1.3; // 30% acima da média → anomalia
@@ -30,8 +30,9 @@ export class FinopsAnomalyDetectionService {
     ) {}
 
     /**
-     * Analisa custo diário dos últimos ~3 meses e detecta anomalias
-     * apenas nos últimos 7 dias (até endDate, inclusive).
+     * Recalcula a janela recente a cada sync: apaga as anomalias do intervalo
+     * e grava de novo a partir do custo diário. O que saiu da regra não fica.
+     * Status reconhecido/resolvido da mesma chave é preservado.
      */
     async detectRecentWindow(
         organizationId: string,
@@ -47,13 +48,25 @@ export class FinopsAnomalyDetectionService {
         }
 
         const days = Math.max(1, Math.min(detectionDays, DETECTION_WINDOW_DAYS));
+        const start = new Date(end);
+        start.setUTCDate(end.getUTCDate() - (days - 1));
+        const startDate = start.toISOString().slice(0, 10);
+        const normalizedEnd = end.toISOString().slice(0, 10);
+        const preservedStatus = await this.replaceWindow(organizationId, cloudAccountId, startDate, normalizedEnd);
+
         let detected = 0;
 
         for (let offset = days - 1; offset >= 0; offset--) {
             const day = new Date(end);
             day.setUTCDate(end.getUTCDate() - offset);
             const dateStr = day.toISOString().slice(0, 10);
-            detected += await this.detectForDate(organizationId, cloudAccountId, cloudProvider, dateStr);
+            detected += await this.detectForDate(
+                organizationId,
+                cloudAccountId,
+                cloudProvider,
+                dateStr,
+                preservedStatus,
+            );
         }
 
         this.logger.log(
@@ -74,6 +87,7 @@ export class FinopsAnomalyDetectionService {
         cloudAccountId: string,
         cloudProvider: string,
         targetDate: string,
+        preservedStatus?: Map<string, AnomalyStatus>,
     ): Promise<number> {
         const target = new Date(targetDate + 'T00:00:00Z');
         const baselineStart = new Date(target);
@@ -84,12 +98,14 @@ export class FinopsAnomalyDetectionService {
         oneDayBeforeTarget.setUTCDate(target.getUTCDate() - 1);
         const oneDayBeforeStr = oneDayBeforeTarget.toISOString().slice(0, 10);
 
-        // Custo por serviço no dia alvo
+        // Custo por serviço no dia alvo. Região/serviço nulos viram '' para
+        // bater na unique key (NULL não conflita com NULL no Postgres).
+        // Moedas diferentes do mesmo serviço+região são somadas: a chave não tem moeda.
         const todayQb = this.costRecordRepo
             .createQueryBuilder('cr')
-            .select('cr.service', 'service')
-            .addSelect('cr.region', 'region')
-            .addSelect('cr.currency', 'currency')
+            .select("COALESCE(cr.service, '')", 'service')
+            .addSelect("COALESCE(cr.region, '')", 'region')
+            .addSelect("COALESCE(cr.currency, 'USD')", 'currency')
             .addSelect('SUM(cr.cost)', 'totalCost')
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.cloudAccountId = :cloudAccountId', { cloudAccountId })
@@ -98,22 +114,46 @@ export class FinopsAnomalyDetectionService {
         andWhereServiceLevelCost(todayQb, 'cr');
 
         const todayRows = await todayQb
-            .groupBy('cr.service')
-            .addGroupBy('cr.region')
-            .addGroupBy('cr.currency')
+            .groupBy("COALESCE(cr.service, '')")
+            .addGroupBy("COALESCE(cr.region, '')")
+            .addGroupBy("COALESCE(cr.currency, 'USD')")
             .getRawMany<{ service: string; region: string; currency: string; totalCost: string }>();
+
+        const todayByKey = new Map<string, { service: string; region: string; currency: string; actualCost: number; currencyWeight: number }>();
+        for (const row of todayRows) {
+            const service = row.service ?? '';
+            const region = row.region ?? '';
+            const key = `${service}:${region}`;
+            const actualCost = Number(row.totalCost);
+            const existing = todayByKey.get(key);
+            if (!existing) {
+                todayByKey.set(key, {
+                    service,
+                    region,
+                    currency: row.currency || 'USD',
+                    actualCost,
+                    currencyWeight: actualCost,
+                });
+                continue;
+            }
+            existing.actualCost += actualCost;
+            if (actualCost > existing.currencyWeight) {
+                existing.currency = row.currency || existing.currency;
+                existing.currencyWeight = actualCost;
+            }
+        }
 
         // Média diária nos até 90 dias anteriores por serviço/região
         const avgRows = await this.costRecordRepo
             .createQueryBuilder('cr')
-            .select('cr.service', 'service')
-            .addSelect('cr.region', 'region')
+            .select("COALESCE(cr.service, '')", 'service')
+            .addSelect("COALESCE(cr.region, '')", 'region')
             .addSelect('AVG(daily.daily_cost)', 'avg_cost')
             .from(
                 (qb) => {
                     const subQb = qb
-                        .select('cr2.service', 'service')
-                        .addSelect('cr2.region', 'region')
+                        .select("COALESCE(cr2.service, '')", 'service')
+                        .addSelect("COALESCE(cr2.region, '')", 'region')
                         .addSelect('cr2.date', 'date')
                         .addSelect('SUM(cr2.cost)', 'daily_cost')
                         .from(FinopsCostRecord, 'cr2')
@@ -124,14 +164,17 @@ export class FinopsAnomalyDetectionService {
                         .andWhere('cr2.granularity = :gran', { gran: 'daily' });
                     andWhereServiceLevelCost(subQb, 'cr2');
 
-                    return subQb.groupBy('cr2.service').addGroupBy('cr2.region').addGroupBy('cr2.date');
+                    return subQb
+                        .groupBy("COALESCE(cr2.service, '')")
+                        .addGroupBy("COALESCE(cr2.region, '')")
+                        .addGroupBy('cr2.date');
                 },
                 'daily',
             )
-            .where('cr.service = daily.service')
-            .andWhere('cr.region = daily.region')
-            .groupBy('cr.service')
-            .addGroupBy('cr.region')
+            .where("COALESCE(cr.service, '') = daily.service")
+            .andWhere("COALESCE(cr.region, '') = daily.region")
+            .groupBy("COALESCE(cr.service, '')")
+            .addGroupBy("COALESCE(cr.region, '')")
             .getRawMany<{ service: string; region: string; avg_cost: string }>();
 
         const avgMap = new Map<string, number>();
@@ -141,10 +184,10 @@ export class FinopsAnomalyDetectionService {
 
         let detected = 0;
 
-        for (const today of todayRows) {
+        for (const today of todayByKey.values()) {
             const key = `${today.service}:${today.region}`;
             const avgCost = avgMap.get(key) ?? 0;
-            const actualCost = Number(today.totalCost);
+            const actualCost = today.actualCost;
             const financialImpact = actualCost - avgCost;
 
             if (
@@ -155,6 +198,7 @@ export class FinopsAnomalyDetectionService {
                 const rawDeviation = ((actualCost - avgCost) / avgCost) * 100;
                 const deviationPercentage = Math.min(rawDeviation, MAX_DEVIATION_PERCENTAGE);
                 const severity = this.computeSeverity(deviationPercentage);
+                const status = preservedStatus?.get(`${today.service}:${today.region}:${targetDate}`) ?? 'open';
 
                 await this.anomalyRepo.upsert(
                     {
@@ -163,13 +207,13 @@ export class FinopsAnomalyDetectionService {
                         cloudProvider,
                         service: today.service,
                         region: today.region,
-                        anomalyDate: new Date(targetDate + 'T00:00:00Z'),
+                        anomalyDate: targetDate,
                         expectedCost: avgCost,
                         actualCost,
                         deviationPercentage,
                         financialImpact,
                         severity,
-                        status: 'open',
+                        status,
                         currency: today.currency,
                         description: `Custo de ${today.service} em ${today.region || 'global'} está ${deviationPercentage.toFixed(1)}% acima da média diária dos últimos 3 meses`,
                     } as any,
@@ -228,6 +272,93 @@ export class FinopsAnomalyDetectionService {
             { id, organizationId },
             { status: 'acknowledged' },
         );
+    }
+
+    /**
+     * Apaga a janela e devolve o status já dado pelo usuário (acknowledged/resolved),
+     * para o recálculo não reabrir o que foi reconhecido.
+     */
+    private async replaceWindow(
+        organizationId: string,
+        cloudAccountId: string,
+        startDate: string,
+        endDate: string,
+    ): Promise<Map<string, AnomalyStatus>> {
+        const existing = await this.anomalyRepo
+            .createQueryBuilder('a')
+            .select('a.service', 'service')
+            .addSelect('a.region', 'region')
+            .addSelect('a.anomalyDate', 'anomalyDate')
+            .addSelect('a.status', 'status')
+            .where('a.organizationId = :organizationId', { organizationId })
+            .andWhere('a.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('a.anomalyDate >= :startDate', { startDate })
+            .andWhere('a.anomalyDate <= :endDate', { endDate })
+            .getRawMany<{ service: string; region: string | null; anomalyDate: string | Date; status: AnomalyStatus }>();
+
+        const preserved = new Map<string, AnomalyStatus>();
+        for (const row of existing) {
+            if (row.status === 'open') continue;
+            const rawDate = row.anomalyDate instanceof Date
+                ? row.anomalyDate.toISOString().slice(0, 10)
+                : String(row.anomalyDate);
+            const date = /^(\d{4}-\d{2}-\d{2})/.exec(rawDate)?.[1] ?? rawDate.slice(0, 10);
+            preserved.set(`${row.service}:${row.region ?? ''}:${date}`, row.status);
+        }
+
+        await this.anomalyRepo
+            .createQueryBuilder()
+            .delete()
+            .from(FinopsCostAnomaly)
+            .where('organization_id = :organizationId', { organizationId })
+            .andWhere('cloud_account_id = :cloudAccountId', { cloudAccountId })
+            .andWhere('anomaly_date >= :startDate', { startDate })
+            .andWhere('anomaly_date <= :endDate', { endDate })
+            .execute();
+
+        return preserved;
+    }
+
+    /**
+     * Recalcula a janela recente a partir dos custos diários já gravados.
+     * Não chama o provedor.
+     */
+    async rebuildAllFromStoredCosts(): Promise<{ accounts: number; detected: number }> {
+        const rows = await this.costRecordRepo
+            .createQueryBuilder('cr')
+            .select('cr.organizationId', 'organizationId')
+            .addSelect('cr.cloudAccountId', 'cloudAccountId')
+            .addSelect('cr.cloudProvider', 'cloudProvider')
+            .addSelect('MAX(cr.date)', 'endDate')
+            .where('cr.granularity = :gran', { gran: 'daily' })
+            .groupBy('cr.organizationId')
+            .addGroupBy('cr.cloudAccountId')
+            .addGroupBy('cr.cloudProvider')
+            .getRawMany<{
+                organizationId: string;
+                cloudAccountId: string;
+                cloudProvider: string;
+                endDate: string | Date;
+            }>();
+
+        let detected = 0;
+        for (const row of rows) {
+            const endDate = row.endDate instanceof Date
+                ? row.endDate.toISOString().slice(0, 10)
+                : String(row.endDate).slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) continue;
+            detected += await this.detectRecentWindow(
+                row.organizationId,
+                row.cloudAccountId,
+                row.cloudProvider,
+                endDate,
+            );
+        }
+
+        this.logger.log(
+            `[Anomaly] Recálculo a partir dos custos diários: ${rows.length} conta(s), ${detected} anomalia(s)`,
+        );
+        return { accounts: rows.length, detected };
     }
 
     private computeSeverity(deviationPercentage: number): AnomalySeverity {

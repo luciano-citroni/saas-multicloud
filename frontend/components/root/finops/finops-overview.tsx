@@ -24,7 +24,12 @@ import { FinopsSpendPanel } from '@/components/root/finops/overview/finops-spend
 import { FinopsAccountsStrip } from '@/components/root/finops/overview/finops-accounts-strip';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
-import { FinopsKpiStrip, type FinopsBudgetStatusItem } from '@/components/root/finops/finops-kpi-strip';
+import {
+    FinopsKpiStrip,
+    FinopsPortfolioStrip,
+    type FinopsBudgetStatusItem,
+    type FinopsPortfolioSnapshot,
+} from '@/components/root/finops/finops-kpi-strip';
 import {
     ACCOUNT_FILTER_ALL,
     buildFinopsQuery,
@@ -53,6 +58,7 @@ import {
     fetchFinopsBudgetStatuses,
     fetchFinopsConsent,
     fetchFinopsJobStatus,
+    fetchFinopsCommitmentsOverview,
     fetchFinopsOrgOverview,
     fetchFinopsSyncRuns,
     fetchOrganizationBudgetStatuses,
@@ -84,6 +90,7 @@ export function FinopsOverview() {
     const currentRole = normalizeOrganizationRole(rawRole);
 
     const [overview, setOverview] = useState<OrgFinopsOverview | null>(null);
+    const [portfolio, setPortfolio] = useState<FinopsPortfolioSnapshot | null>(null);
     const [budgetStatuses, setBudgetStatuses] = useState<FinopsBudgetStatusItem[]>([]);
     const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
     const [loadingInitial, setLoadingInitial] = useState(true);
@@ -205,18 +212,36 @@ export function FinopsOverview() {
                     const payload = await response.json().catch(() => null);
                     toast.error(extractErrorMessage(payload));
                     setOverview(null);
+                    setPortfolio(null);
                     return;
                 }
 
                 const payload = (await response.json().catch(() => null)) as OrgFinopsOverview | null;
                 setOverview(payload);
+
+                if (!payload?.period) {
+                    setPortfolio(null);
+                } else {
+                    const portfolioResponse = await fetchFinopsCommitmentsOverview(orgId, {
+                        cloudAccountId: selectedAccountId ?? undefined,
+                        provider: providerFilter ?? undefined,
+                        periodStart: payload.period.startDate,
+                        periodEnd: payload.period.endDate,
+                    });
+                    if (portfolioResponse.ok) {
+                        const portfolioPayload = (await portfolioResponse.json().catch(() => null)) as FinopsPortfolioSnapshot | null;
+                        setPortfolio(portfolioPayload);
+                    } else {
+                        setPortfolio(null);
+                    }
+                }
             } catch {
                 if (!options.silent) toast.error(tf.loadError);
             } finally {
                 if (!options.silent) setLoadingInitial(false);
             }
         },
-        [period, router, selectedAccountId, tc.sessionExpired, tf.loadError]
+        [period, providerFilter, router, selectedAccountId, tc.sessionExpired, tf.loadError]
     );
 
     useEffect(() => {
@@ -711,12 +736,20 @@ export function FinopsOverview() {
                     isLoading={loadingInitial && !overview}
                 />
 
+                <FinopsPortfolioStrip
+                    portfolio={portfolio}
+                    href={`/finops/commitments${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
+                    isLoading={loadingInitial && !portfolio}
+                />
+
                 <FinopsSpendPanel
                     overview={overview}
                     accounts={displayAccounts}
-                    costByService={filteredCostByService}
+                    costByService={overview?.costByService ?? []}
                     isLoading={loadingInitial && !overview}
-                    onServiceClick={(service) => syncUrlState({ service })}
+                    onServiceClick={(service) =>
+                        syncUrlState({ service: serviceFilter === service ? null : service })
+                    }
                     organizationId={organizationId}
                     selectedAccountId={selectedAccountId}
                     selectedService={urlFilters.service}

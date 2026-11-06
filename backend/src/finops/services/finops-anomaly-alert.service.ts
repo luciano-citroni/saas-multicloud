@@ -14,6 +14,7 @@ import {
     AnomalySeverity,
     FinopsCostAnomaly,
 } from '../../db/entites/finops-cost-anomaly.entity';
+import { Organization } from '../../db/entites/organization.entity';
 import { MailerService } from '../../mailer/mailer.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
@@ -22,6 +23,20 @@ const SEVERITY_RANK: Record<AnomalySeverity, number> = {
     high: 3,
     medium: 2,
     low: 1,
+};
+
+const SEVERITY_EMOJI: Record<AnomalySeverity, string> = {
+    critical: '🔴',
+    high: '🟠',
+    medium: '🟡',
+    low: '🔵',
+};
+
+const SEVERITY_LABEL: Record<AnomalySeverity, string> = {
+    critical: 'crítica',
+    high: 'alta',
+    medium: 'média',
+    low: 'baixa',
 };
 
 const DIGEST_LOOKBACK_DAYS = 7;
@@ -56,6 +71,9 @@ export class FinopsAnomalyAlertService {
 
         @InjectRepository(FinopsCostAnomaly)
         private readonly anomalyRepo: Repository<FinopsCostAnomaly>,
+
+        @InjectRepository(Organization)
+        private readonly organizationRepo: Repository<Organization>,
 
         private readonly notificationsService: NotificationsService,
         private readonly mailerService: MailerService,
@@ -171,22 +189,6 @@ export class FinopsAnomalyAlertService {
         }
 
         let sentCount = 0;
-        const summaryLines = anomalies.slice(0, 15).map((a) => {
-            const impact = Number(a.financialImpact).toFixed(2);
-            const deviation = Number(a.deviationPercentage).toFixed(0);
-            return `• [${a.severity}] ${a.service} (${a.cloudProvider}) — impacto ${impact} ${a.currency} (+${deviation}%)`;
-        });
-        if (anomalies.length > 15) {
-            summaryLines.push(`… e mais ${anomalies.length - 15} anomalia(s)`);
-        }
-
-        const text = [
-            `*SaaS MultiCloud* — digest diário de anomalias`,
-            ``,
-            `${anomalies.length} anomalia(s) aberta(s) (últimos ${DIGEST_LOOKBACK_DAYS} dias, ≥ ${settings.minSeverity})`,
-            ``,
-            ...summaryLines,
-        ].join('\n');
 
         if (pendingChannels.includes('email')) {
             const ok = await this.dispatchEmailDigest(settings, anomalies, groupIds);
@@ -198,6 +200,11 @@ export class FinopsAnomalyAlertService {
 
         if (pendingChannels.includes('whatsapp')) {
             try {
+                const text = await this.buildAnomalyWhatsappText(
+                    settings.organizationId,
+                    settings.minSeverity,
+                    anomalies,
+                );
                 const result = await this.notificationsService.sendWhatsappAlertToGroups(
                     settings.organizationId,
                     groupIds,
@@ -286,6 +293,7 @@ export class FinopsAnomalyAlertService {
                 status: 'open',
                 anomalyDate: MoreThanOrEqual(since),
             },
+            relations: ['cloudAccount'],
             order: { financialImpact: 'DESC' },
             take: 200,
         });
@@ -376,6 +384,83 @@ export class FinopsAnomalyAlertService {
     private toDateKey(value: Date | string): string {
         if (value instanceof Date) return value.toISOString().slice(0, 10);
         return String(value).slice(0, 10);
+    }
+
+    private async buildAnomalyWhatsappText(
+        organizationId: string,
+        minSeverity: AnomalySeverity,
+        anomalies: FinopsCostAnomaly[],
+    ): Promise<string> {
+        const context = await this.loadOrganizationContext(organizationId);
+        const shown = anomalies.slice(0, 15);
+        const items = shown
+            .map((anomaly, index) => this.formatAnomalyWhatsappItem(anomaly, index))
+            .join('\n\n');
+        const extra =
+            anomalies.length > shown.length
+                ? `\n\n… e mais ${anomalies.length - shown.length} anomalia(s)`
+                : '';
+
+        return [
+            `🚨 *SaaS MultiCloud* — digest de anomalias`,
+            ``,
+            `🏢 Tenant: ${context.tenantName}`,
+            `🏬 Organização: ${context.organizationName}`,
+            ``,
+            `${anomalies.length} anomalia(s) aberta(s) nos últimos ${DIGEST_LOOKBACK_DAYS} dias`,
+            `Severidade mínima: ${SEVERITY_LABEL[minSeverity] ?? minSeverity}`,
+            ``,
+            `${items}${extra}`,
+        ].join('\n');
+    }
+
+    private formatAnomalyWhatsappItem(anomaly: FinopsCostAnomaly, index: number): string {
+        const emoji = SEVERITY_EMOJI[anomaly.severity] ?? '🟡';
+        const provider = anomaly.cloudProvider.toUpperCase();
+        const account = anomaly.cloudAccount?.alias?.trim() || '—';
+        const date = this.formatDateBr(anomaly.anomalyDate);
+        const region = anomaly.region?.trim();
+        const when = region ? `${date} · ${region}` : date;
+        const deviation = Number(anomaly.deviationPercentage).toFixed(0);
+        const impact = this.formatPtBr(Number(anomaly.financialImpact), 2);
+        const expected = this.formatPtBr(Number(anomaly.expectedCost), 2);
+        const actual = this.formatPtBr(Number(anomaly.actualCost), 2);
+
+        return [
+            `${index + 1}. ${emoji} *${anomaly.service}* · ${provider}`,
+            `   ☁️ Conta: ${account}`,
+            `   📅 ${when}`,
+            `   📈 +${deviation}% · impacto ${impact} ${anomaly.currency}`,
+            `   Esperado ${expected} → real ${actual}`,
+        ].join('\n');
+    }
+
+    private formatDateBr(value: Date | string): string {
+        const key = this.toDateKey(value);
+        const [year, month, day] = key.split('-');
+        if (!year || !month || !day) return key;
+        return `${day}/${month}/${year}`;
+    }
+
+    private async loadOrganizationContext(
+        organizationId: string,
+    ): Promise<{ tenantName: string; organizationName: string }> {
+        const organization = await this.organizationRepo.findOne({
+            where: { id: organizationId },
+            relations: ['tenant'],
+        });
+
+        return {
+            tenantName: organization?.tenant?.name?.trim() || '—',
+            organizationName: organization?.name?.trim() || '—',
+        };
+    }
+
+    private formatPtBr(value: number, fractionDigits: number): string {
+        return new Intl.NumberFormat('pt-BR', {
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits,
+        }).format(value);
     }
 
     private toDto(

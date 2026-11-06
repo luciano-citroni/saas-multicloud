@@ -12,8 +12,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { DatePicker, preventDismissOnDatePicker } from '@/components/ui/date-picker';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTranslations } from '@/lib/i18n';
 
@@ -65,7 +65,13 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && !isLoading) onCancel(); }}>
-            <DialogContent className="sm:max-w-md" showCloseButton={false}>
+            <DialogContent
+                className="sm:max-w-md"
+                showCloseButton={false}
+                onInteractOutside={preventDismissOnDatePicker}
+                onPointerDownOutside={preventDismissOnDatePicker}
+                onFocusOutside={preventDismissOnDatePicker}
+            >
                 <DialogHeader>
                     <DialogTitle>Sincronizar dados de custo</DialogTitle>
                     <DialogDescription>
@@ -104,9 +110,12 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Data de início</FormLabel>
-                                        <FormControl>
-                                            <Input type="date" {...field} />
-                                        </FormControl>
+                                        <DatePicker
+                                            name={field.name}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            onBlur={field.onBlur}
+                                        />
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -118,9 +127,12 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Data de fim</FormLabel>
-                                        <FormControl>
-                                            <Input type="date" {...field} />
-                                        </FormControl>
+                                        <DatePicker
+                                            name={field.name}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            onBlur={field.onBlur}
+                                        />
                                         <FormMessage />
                                     </FormItem>
                                 )}

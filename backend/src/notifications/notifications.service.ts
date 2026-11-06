@@ -15,6 +15,7 @@ import {
     type NotificationChannel,
 } from '../db/entites/organization-notification-group.entity';
 import { OrganizationNotificationWhatsappTarget } from '../db/entites/organization-notification-whatsapp-target.entity';
+import { Organization } from '../db/entites/organization.entity';
 import { ErrorMessages } from '../common/messages/error-messages';
 import { MailerService } from '../mailer/mailer.service';
 import type {
@@ -45,6 +46,8 @@ export class NotificationsService {
         private readonly emailRepo: Repository<OrganizationNotificationEmail>,
         @InjectRepository(OrganizationNotificationWhatsappTarget)
         private readonly whatsappTargetRepo: Repository<OrganizationNotificationWhatsappTarget>,
+        @InjectRepository(Organization)
+        private readonly organizationRepo: Repository<Organization>,
         private readonly mailerService: MailerService,
         private readonly evolutionApiService: EvolutionApiService,
     ) {}
@@ -354,7 +357,11 @@ export class NotificationsService {
         try {
             await this.evolutionApiService.sendText({
                 number: entity.target,
-                text: this.buildWhatsappTestMessage(group.name, entity.label),
+                text: this.formatWhatsappTestMessage(
+                    await this.loadOrganizationContext(organizationId),
+                    group.name,
+                    entity.label,
+                ),
             });
             this.logger.log(
                 `notification.whatsapp.test.sent id=${id} target=${entity.target} type=${entity.targetType}`,
@@ -564,12 +571,13 @@ export class NotificationsService {
         let sent = 0;
         let failed = 0;
         const targets: string[] = [];
+        const context = await this.loadOrganizationContext(group.organizationId);
 
         for (const recipient of recipients) {
             try {
                 await this.evolutionApiService.sendText({
                     number: recipient.target,
-                    text: this.buildWhatsappTestMessage(group.name, recipient.label),
+                    text: this.formatWhatsappTestMessage(context, group.name, recipient.label),
                 });
                 sent += 1;
                 targets.push(recipient.target);
@@ -593,12 +601,33 @@ export class NotificationsService {
         return { sent, failed, targets };
     }
 
-    private buildWhatsappTestMessage(groupName: string, label: string | null): string {
+    private async loadOrganizationContext(
+        organizationId: string,
+    ): Promise<{ tenantName: string; organizationName: string }> {
+        const organization = await this.organizationRepo.findOne({
+            where: { id: organizationId },
+            relations: ['tenant'],
+        });
+
+        return {
+            tenantName: organization?.tenant?.name?.trim() || '—',
+            organizationName: organization?.name?.trim() || '—',
+        };
+    }
+
+    private formatWhatsappTestMessage(
+        context: { tenantName: string; organizationName: string },
+        groupName: string,
+        label: string | null,
+    ): string {
         const destination = label?.trim() ? ` (${label.trim()})` : '';
         return [
-            `*SaaS MultiCloud* — teste de WhatsApp`,
+            `✅ *SaaS MultiCloud* — teste de WhatsApp`,
             ``,
-            `Grupo: ${groupName}${destination}`,
+            `🏢 Tenant: ${context.tenantName}`,
+            `🏬 Organização: ${context.organizationName}`,
+            `👥 Grupo: *${groupName}*${destination}`,
+            ``,
             `Se você recebeu esta mensagem, o canal está configurado corretamente.`,
         ].join('\n');
     }

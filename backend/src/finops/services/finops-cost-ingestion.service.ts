@@ -11,6 +11,9 @@ export interface IngestionResult {
     syncRunId: string;
 }
 
+/** Dias recentes reabertos no sync incremental. O histórico anterior não é regravado. */
+const INCREMENTAL_OVERLAP_DAYS = 3;
+
 @Injectable()
 export class FinopsCostIngestionService {
     private readonly logger = new Logger(FinopsCostIngestionService.name);
@@ -22,6 +25,33 @@ export class FinopsCostIngestionService {
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>,
     ) {}
+
+    /**
+     * Com histórico já gravado, o sync diário/manual começa poucos dias antes do último
+     * registro. O fechamento mensal mantém o período pedido para regravar o mês fechado.
+     */
+    async resolveIncrementalStart(
+        organizationId: string,
+        cloudAccountId: string,
+        granularity: 'daily' | 'monthly',
+        requestedStart: string,
+        requestedEnd: string,
+    ): Promise<string> {
+        const row = await this.costRecordRepo
+            .createQueryBuilder('r')
+            .select('MAX(r.date)', 'maxDate')
+            .where('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.cloudAccountId = :cloudAccountId', { cloudAccountId })
+            .andWhere('r.granularity = :granularity', { granularity })
+            .getRawOne<{ maxDate: string | Date | null }>();
+
+        if (!row?.maxDate) return requestedStart;
+
+        const maxDate = toIsoDate(row.maxDate);
+        const overlapped = addUtcDays(maxDate, -INCREMENTAL_OVERLAP_DAYS);
+        const start = overlapped > requestedStart ? overlapped : requestedStart;
+        return start > requestedEnd ? requestedEnd : start;
+    }
 
     async ingest(
         organizationId: string,
@@ -48,36 +78,57 @@ export class FinopsCostIngestionService {
         try {
             let total = 0;
             const BATCH_SIZE = 200;
+            const grain = granularity.toLowerCase() as 'daily' | 'monthly';
+            const isMonthlyClose = triggerType === 'scheduled_monthly_close';
 
-            for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-                const batch = entries.slice(i, i + BATCH_SIZE);
+            await this.costRecordRepo.manager.transaction(async (manager) => {
+                const repo = manager.getRepository(FinopsCostRecord);
 
-                await this.costRecordRepo.upsert(
-                    batch.map((entry) => ({
-                        organizationId,
-                        cloudAccountId,
-                        cloudProvider,
-                        service: entry.service,
-                        resourceId: entry.resourceId ?? '',
-                        region: entry.region ?? '',
-                        usageType: entry.usageType ?? '',
-                        operation: entry.operation ?? '',
-                        cost: entry.cost,
-                        currency: entry.currency,
-                        usageQuantity: entry.usageQuantity ?? 0,
-                        usageUnit: entry.usageUnit ?? '',
-                        date: entry.date,
-                        granularity: granularity.toLowerCase() as 'daily' | 'monthly',
-                        tags: (entry.tags ?? null) as Record<string, any> | null,
-                    })) as any,
-                    {
-                        conflictPaths: ['cloudAccountId', 'service', 'resourceId', 'region', 'date', 'granularity'],
-                        skipUpdateIfNoValuesChanged: true,
-                    },
-                );
+                if (isMonthlyClose && entries.length > 0) {
+                    const removed = await repo
+                        .createQueryBuilder()
+                        .delete()
+                        .where('organization_id = :organizationId', { organizationId })
+                        .andWhere('cloud_account_id = :cloudAccountId', { cloudAccountId })
+                        .andWhere('granularity = :grain', { grain })
+                        .andWhere('date >= :startDate', { startDate })
+                        .andWhere('date <= :endDate', { endDate })
+                        .execute();
+                    this.logger.log(
+                        `[Ingestion] Fechamento: ${removed.affected ?? 0} registros ${grain} de ${startDate} a ${endDate} substituídos`,
+                    );
+                }
 
-                total += batch.length;
-            }
+                for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+                    const batch = entries.slice(i, i + BATCH_SIZE);
+
+                    await repo.upsert(
+                        batch.map((entry) => ({
+                            organizationId,
+                            cloudAccountId,
+                            cloudProvider,
+                            service: entry.service,
+                            resourceId: entry.resourceId ?? '',
+                            region: entry.region ?? '',
+                            usageType: entry.usageType ?? '',
+                            operation: entry.operation ?? '',
+                            cost: entry.cost,
+                            currency: entry.currency,
+                            usageQuantity: entry.usageQuantity ?? 0,
+                            usageUnit: entry.usageUnit ?? '',
+                            date: entry.date,
+                            granularity: grain,
+                            tags: (entry.tags ?? null) as Record<string, any> | null,
+                        })) as never,
+                        {
+                            conflictPaths: ['cloudAccountId', 'service', 'resourceId', 'region', 'date', 'granularity'],
+                            skipUpdateIfNoValuesChanged: true,
+                        },
+                    );
+
+                    total += batch.length;
+                }
+            });
 
             await this.syncRunRepo.update(savedRun.id, {
                 status: 'completed',
@@ -98,4 +149,15 @@ export class FinopsCostIngestionService {
             throw err;
         }
     }
+}
+
+function toIsoDate(value: string | Date): string {
+    if (typeof value === 'string') return value.slice(0, 10);
+    return value.toISOString().slice(0, 10);
+}
+
+function addUtcDays(isoDate: string, days: number): string {
+    const date = new Date(`${isoDate}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
 }

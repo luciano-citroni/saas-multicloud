@@ -185,7 +185,22 @@ export const PERMISSIONS_POLICY = {
         {
             Sid: 'CostExplorerReadAccess',
             Effect: 'Allow',
-            Action: ['ce:GetCostAndUsage', 'ce:GetCostForecast', 'ce:GetReservationUtilization', 'ce:GetRightsizingRecommendation'],
+            Action: [
+                'ce:GetCostAndUsage',
+                'ce:GetCostAndUsageWithResources',
+                'ce:GetCostForecast',
+                'ce:GetReservationUtilization',
+                'ce:GetRightsizingRecommendation',
+                'ce:GetSavingsPlansUtilization',
+                'ce:GetSavingsPlansCoverage',
+                'ce:GetSavingsPlansPurchaseRecommendation',
+            ],
+            Resource: '*',
+        },
+        {
+            Sid: 'BillingCreditsReadAccess',
+            Effect: 'Allow',
+            Action: ['billing:GetCredits', 'billing:GetCreditAllocationHistory', 'aws-portal:ViewBilling'],
             Resource: '*',
         },
     ],

@@ -444,3 +444,112 @@ export async function fetchFinopsOrgOptimize(
 
     return fetch(`/api/finops/optimize?${params.toString()}`, { cache: 'no-store' });
 }
+
+export type FinopsCommitmentsFilter = {
+    cloudAccountId?: string;
+    provider?: string;
+    periodStart?: string;
+    periodEnd?: string;
+};
+
+function appendCommitmentsFilter(params: URLSearchParams, options?: FinopsCommitmentsFilter) {
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.provider) params.set('provider', options.provider);
+    if (options?.periodStart) params.set('periodStart', options.periodStart);
+    if (options?.periodEnd) params.set('periodEnd', options.periodEnd);
+}
+
+export async function fetchFinopsCommitmentsOverview(
+    organizationId: string,
+    options?: FinopsCommitmentsFilter,
+) {
+    const params = new URLSearchParams({ organizationId });
+    appendCommitmentsFilter(params, options);
+    return fetch(`/api/finops/commitments/overview?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsCommitmentsCredits(
+    organizationId: string,
+    options?: FinopsCommitmentsFilter,
+) {
+    const params = new URLSearchParams({ organizationId });
+    appendCommitmentsFilter(params, options);
+    return fetch(`/api/finops/commitments/credits?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsCommitmentsUtilization(
+    organizationId: string,
+    options?: FinopsCommitmentsFilter,
+) {
+    const params = new URLSearchParams({ organizationId });
+    appendCommitmentsFilter(params, options);
+    return fetch(`/api/finops/commitments/utilization?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsCommitmentsRecommendations(
+    organizationId: string,
+    options?: FinopsCommitmentsFilter,
+) {
+    const params = new URLSearchParams({ organizationId });
+    appendCommitmentsFilter(params, options);
+    return fetch(`/api/finops/commitments/recommendations?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsCreditServices(organizationId: string, cloudAccountId: string) {
+    const params = new URLSearchParams({ organizationId, cloudAccountId });
+    return fetch(`/api/finops/commitments/credits/services?${params.toString()}`, { cache: 'no-store' });
+}
+
+export type CreateCreditGrantPayload = {
+    cloudAccountId: string;
+    name: string;
+    totalAmount: number;
+    currency?: string;
+    startsAt: string;
+    expiresAt?: string | null;
+    notes?: string | null;
+    services: string[];
+};
+
+export type UpdateCreditGrantPayload = {
+    name?: string;
+    totalAmount?: number;
+    currency?: string;
+    startsAt?: string;
+    expiresAt?: string | null;
+    notes?: string | null;
+    services?: string[];
+};
+
+export async function createFinopsCreditGrant(organizationId: string, payload: CreateCreditGrantPayload) {
+    return fetch(
+        `/api/finops/commitments/credits/grants?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function updateFinopsCreditGrant(
+    organizationId: string,
+    grantId: string,
+    payload: UpdateCreditGrantPayload,
+) {
+    return fetch(
+        `/api/finops/commitments/credits/grants/${encodeURIComponent(grantId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function deleteFinopsCreditGrant(organizationId: string, grantId: string) {
+    return fetch(
+        `/api/finops/commitments/credits/grants/${encodeURIComponent(grantId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' },
+    );
+}

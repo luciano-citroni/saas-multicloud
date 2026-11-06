@@ -371,13 +371,10 @@ export class FinopsAnalysisService {
 
     /**
      * Analisa os recursos sincronizados e gera recomendações de otimização.
-     * Persiste as recomendações no banco (remove as antigas antes de inserir).
+     * Não apaga as abertas. A limpeza do período fica no fechamento mensal.
      */
     async generateRecommendations(cloudAccountId: string, organizationId: string, cloudProvider: string): Promise<FinopsRecommendation[]> {
         this.logger.log(`Gerando recomendações para conta ${cloudAccountId} (${cloudProvider})`);
-
-        // Remove recomendações antigas abertas para esta conta
-        await this.recommendationRepo.delete({ cloudAccountId, organizationId, status: 'open' });
 
         const recommendations: Partial<FinopsRecommendation>[] = [];
 

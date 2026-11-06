@@ -49,7 +49,8 @@ function getProviderMeta(cloudProvider: string): ProviderMeta {
             apiLabel: 'Azure Cost Management',
             badgeClass: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
             prerequisites: [
-                'Service principal com permissão de leitura em Cost Management',
+                'Service principal com leitura em Cost Management',
+                'Reader de Reservations / Microsoft.Consumption (utilization e recomendações)',
                 'Subscription vinculada à conta cloud',
             ],
         };
@@ -63,6 +64,7 @@ function getProviderMeta(cloudProvider: string): ProviderMeta {
             prerequisites: [
                 'Export de custos do Cloud Billing habilitado no BigQuery',
                 'Service account com bigquery.jobUser e bigquery.dataViewer',
+                'Role recommender.viewer para sugestões de CUD (opcional)',
             ],
         };
     }
@@ -72,7 +74,7 @@ function getProviderMeta(cloudProvider: string): ProviderMeta {
         apiLabel: 'AWS Cost Explorer',
         badgeClass: 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300',
         prerequisites: [
-            'Role com permissão ce:GetCostAndUsage',
+            'Role com ce:GetCostAndUsage e Savings Plans (Utilization/Coverage/PurchaseRecommendation)',
             'Trust para a conta da plataforma (AssumeRole)',
         ],
     };

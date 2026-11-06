@@ -14,11 +14,12 @@ export function SiteHeader() {
     const pathname = usePathname();
     const nav = useTranslations('nav');
     const finops = useTranslations('finops');
+    const automation = useTranslations('automation');
 
     const routeNames: Record<string, string> = {
         organizations: nav.organizations,
         new: nav.breadcrumbNew,
-        billing: nav.breadcrumbBilling,
+        billing: nav.plans,
         settings: nav.settings,
         notifications: nav.notifications,
         'cloud-accounts': nav.cloudAccounts,
@@ -29,13 +30,17 @@ export function SiteHeader() {
         finops: nav.finops,
         anomalies: finops.subnavAnomalies,
         savings: finops.subnavSavings,
+        commitments: finops.subnavCommitments,
         multicloud: finops.subnavMulticloud,
         budgets: finops.subnavBudgets,
         reports: finops.subnavReports,
-        accounts: nav.breadcrumbAccounts,
-        tenant: nav.tenant,
+        accounts: finops.subnavAccountDetail,
+        tenant: nav.tenants,
         users: nav.users,
         automation: nav.automation,
+        automations: nav.automation,
+        published: automation.published,
+        executions: automation.executions,
         members: nav.members,
     };
 
@@ -60,11 +65,26 @@ export function SiteHeader() {
         }
 
         const url = `/${rawSegments.slice(0, i + 1).join('/')}`;
-        const title = routeNames[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
+        const parent = i > 0 ? rawSegments[i - 1] : undefined;
+        const title = titleForSegment(segment, parent);
 
         breadcrumbs.push({ title, url });
 
         i = endIndex + 1;
+    }
+
+    if (pathname === '/finops') {
+        breadcrumbs.push({ title: finops.subnavOverview, url: '/finops' });
+    }
+
+    function titleForSegment(segment: string, parent: string | undefined): string {
+        if (segment === 'new') {
+            if (parent === 'cloud-accounts') return nav.newCloudAccount;
+            if (parent === 'tenant') return nav.newTenant;
+            if (parent === 'automations') return automation.newAutomation;
+        }
+
+        return routeNames[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
     }
 
     return (
@@ -78,7 +98,7 @@ export function SiteHeader() {
                     {breadcrumbs.length === 0 && <span>{nav.dashboard}</span>}
 
                     {breadcrumbs.map((crumb, index) => (
-                        <span key={crumb.url} className="flex items-center gap-2">
+                        <span key={`${crumb.url}-${index}`} className="flex items-center gap-2">
                             {index > 0 && <span aria-hidden="true">/</span>}
 
                             {index === breadcrumbs.length - 1 ? (

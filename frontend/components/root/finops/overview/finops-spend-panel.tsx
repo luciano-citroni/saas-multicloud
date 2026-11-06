@@ -246,7 +246,11 @@ export function FinopsSpendPanel({
                     <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <CardTitle>Maiores serviços</CardTitle>
-                            <CardDescription>Clique em um serviço para filtrar o dashboard</CardDescription>
+                            <CardDescription>
+                                {selectedService
+                                    ? 'Clique novamente no serviço selecionado para remover o filtro'
+                                    : 'Clique em um serviço para filtrar o dashboard'}
+                            </CardDescription>
                         </div>
                         <ChartViewToggle value={servicesChartType} onChange={setServicesChartType} />
                     </CardHeader>
@@ -291,10 +295,15 @@ export function FinopsSpendPanel({
                                                     if (fullName && onServiceClick) onServiceClick(fullName);
                                                 }}
                                             >
-                                                {topServices.map((_, index) => (
+                                                {topServices.map((item, index) => (
                                                     <Cell
-                                                        key={index}
+                                                        key={item.fullName}
                                                         fill={FINOPS_CHART_COLORS[index % FINOPS_CHART_COLORS.length]}
+                                                        fillOpacity={
+                                                            selectedService && selectedService !== item.fullName
+                                                                ? 0.35
+                                                                : 1
+                                                        }
                                                     />
                                                 ))}
                                             </Bar>
@@ -332,17 +341,30 @@ export function FinopsSpendPanel({
                                                 dataKey="cost"
                                                 stroke={FINOPS_CHART_PRIMARY}
                                                 strokeWidth={2}
-                                                dot={{ r: 4, fill: FINOPS_CHART_PRIMARY, strokeWidth: 0 }}
-                                                activeDot={{
-                                                    r: 6,
-                                                    fill: FINOPS_CHART_PRIMARY,
-                                                    onClick: (_event, payload) => {
-                                                        const fullName = (
-                                                            payload as { payload?: { fullName?: string } }
-                                                        )?.payload?.fullName;
-                                                        if (fullName && onServiceClick) onServiceClick(fullName);
-                                                    },
+                                                dot={(props: {
+                                                    cx?: number;
+                                                    cy?: number;
+                                                    payload?: { fullName?: string };
+                                                }) => {
+                                                    const { cx, cy, payload } = props;
+                                                    if (cx == null || cy == null) return <g />;
+                                                    const fullName = payload?.fullName;
+                                                    const active = !selectedService || selectedService === fullName;
+                                                    return (
+                                                        <circle
+                                                            cx={cx}
+                                                            cy={cy}
+                                                            r={selectedService && active ? 6 : 4}
+                                                            fill={FINOPS_CHART_PRIMARY}
+                                                            fillOpacity={active ? 1 : 0.35}
+                                                            style={{ cursor: onServiceClick ? 'pointer' : 'default' }}
+                                                            onClick={() => {
+                                                                if (fullName && onServiceClick) onServiceClick(fullName);
+                                                            }}
+                                                        />
+                                                    );
                                                 }}
+                                                activeDot={{ r: 6, fill: FINOPS_CHART_PRIMARY }}
                                             />
                                         </LineChart>
                                     )}
@@ -351,17 +373,21 @@ export function FinopsSpendPanel({
                         )}
                         {topServices.length > 0 && onServiceClick && (
                             <div className="mt-3 flex flex-wrap gap-2">
-                                {topServices.slice(0, 4).map((item) => (
-                                    <Button
-                                        key={item.fullName}
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => onServiceClick(item.fullName)}
-                                    >
-                                        {item.name}
-                                    </Button>
-                                ))}
+                                {topServices.slice(0, 4).map((item) => {
+                                    const selected = selectedService === item.fullName;
+                                    return (
+                                        <Button
+                                            key={item.fullName}
+                                            type="button"
+                                            size="sm"
+                                            variant={selected ? 'default' : 'outline'}
+                                            aria-pressed={selected}
+                                            onClick={() => onServiceClick(item.fullName)}
+                                        >
+                                            {item.name}
+                                        </Button>
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>

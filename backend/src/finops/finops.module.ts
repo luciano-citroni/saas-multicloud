@@ -19,6 +19,7 @@ import { FinopsOptimizationService } from './services/finops-optimization.servic
 import { FinopsOrgOverviewService } from './services/finops-org-overview.service';
 import { FinopsResourceCostService } from './services/finops-resource-cost.service';
 import { FinopsAnomalyAlertService } from './services/finops-anomaly-alert.service';
+import { FinopsCommitmentsService } from './services/finops-commitments.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -44,9 +45,14 @@ import { FinopsCostAggregate } from '../db/entites/finops-cost-aggregate.entity'
 import { FinopsCostSyncRun } from '../db/entites/finops-cost-sync-run.entity';
 import { FinopsCostAnomaly } from '../db/entites/finops-cost-anomaly.entity';
 import { FinopsTenantBilling } from '../db/entites/finops-tenant-billing.entity';
+import { FinopsCreditGrant } from '../db/entites/finops-credit-grant.entity';
+import { FinopsCreditConsumption } from '../db/entites/finops-credit-consumption.entity';
+import { FinopsCommitmentSnapshot } from '../db/entites/finops-commitment-snapshot.entity';
+import { FinopsCommitmentRecommendation } from '../db/entites/finops-commitment-recommendation.entity';
 
 // Supporting entities
 import { CloudAccount } from '../db/entites/cloud-account.entity';
+import { Organization } from '../db/entites/organization.entity';
 import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 import { AwsEc2Instance } from '../db/entites/aws-ec2.entity';
 import { AwsRdsInstance } from '../db/entites/aws-rds-instance.entity';
@@ -91,7 +97,12 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
             FinopsCostSyncRun,
             FinopsCostAnomaly,
             FinopsTenantBilling,
+            FinopsCreditGrant,
+            FinopsCreditConsumption,
+            FinopsCommitmentSnapshot,
+            FinopsCommitmentRecommendation,
             CloudAccount,
+            Organization,
             AzureAssessmentJob,
             AwsEc2Instance,
             AwsRdsInstance,
@@ -125,6 +136,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
         FinopsOrgOverviewService,
         FinopsResourceCostService,
         FinopsAnomalyAlertService,
+        FinopsCommitmentsService,
         FinopsProcessor,
         AwsFinopsProvider,
         AzureFinopsProvider,

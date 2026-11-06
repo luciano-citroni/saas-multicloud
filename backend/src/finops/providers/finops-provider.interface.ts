@@ -1,3 +1,5 @@
+import type { FinopsCommitmentType } from '../../db/entites/finops-commitment-snapshot.entity';
+
 export interface FinopsCostEntry {
     service: string;
     resourceId: string;
@@ -21,6 +23,64 @@ export interface FinopsProviderCredentials {
     /** Credenciais descriptografadas da cloud account (JSON parseado). */
     credentials: Record<string, any>;
     cloudAccountId: string;
+}
+
+/** Consumo de crédito diário (valor positivo = crédito usado). */
+export interface FinopsCreditConsumptionEntry {
+    date: string;
+    amount: number;
+    currency: string;
+    label: string;
+    rawMetadata?: Record<string, unknown>;
+}
+
+/** Concessão de crédito lida direto do provedor (ex.: AWS Billing GetCredits). */
+export interface FinopsCreditGrantEntry {
+    externalId: string;
+    name: string;
+    totalAmount: number;
+    reportedRemaining: number;
+    currency: string;
+    startsAt: string;
+    expiresAt: string | null;
+    services: string[];
+    appliesToAllServices: boolean;
+    notes: string | null;
+    usageByService: { service: string; amount: number }[];
+}
+
+/** Snapshot de utilização/coverage de compromisso (SP / RI / CUD). */
+export interface FinopsCommitmentUtilizationEntry {
+    commitmentType: FinopsCommitmentType;
+    externalId: string;
+    name: string | null;
+    utilizationPercent: number | null;
+    coveragePercent: number | null;
+    usedCommitment: number | null;
+    unusedCommitment: number | null;
+    hourlyCommitment: number | null;
+    monthlyCommitment: number | null;
+    term: string | null;
+    currency: string;
+    lookbackDays: number;
+    rawMetadata?: Record<string, unknown>;
+}
+
+/** Sugestão de compra / elegibilidade de compromisso. */
+export interface FinopsCommitmentRecommendationEntry {
+    commitmentType: FinopsCommitmentType;
+    recommendationKey: string;
+    lookbackDays: number | null;
+    term: string | null;
+    paymentOption: string | null;
+    estimatedMonthlySavings: number | null;
+    estimatedSavingsPercentage: number | null;
+    recommendedHourlyCommitment: number | null;
+    eligible: boolean;
+    ineligibleReason: string | null;
+    summary: string | null;
+    currency: string;
+    rawMetadata?: Record<string, unknown>;
 }
 
 /**
@@ -55,6 +115,38 @@ export interface IFinopsProvider {
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
     ): Promise<FinopsCostCollectionResult>;
+
+    /**
+     * Coleta consumo de créditos/ajustes no período.
+     * Soft-fail: providers podem retornar [] se a API falhar ou não houver dados.
+     */
+    collectCreditConsumption(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+    ): Promise<FinopsCreditConsumptionEntry[]>;
+
+    /**
+     * Lista concessões de crédito do provedor (saldo, validade e serviços).
+     * Opcional: só a AWS expõe isso hoje.
+     */
+    collectCreditGrants?(creds: FinopsProviderCredentials): Promise<FinopsCreditGrantEntry[]>;
+
+    /**
+     * Coleta utilização/coverage de compromissos (SP / Reservations / CUDs).
+     */
+    collectCommitmentUtilization(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentUtilizationEntry[]>;
+
+    /**
+     * Coleta recomendações de compra / elegibilidade.
+     */
+    collectCommitmentRecommendations(
+        creds: FinopsProviderCredentials,
+        lookbackDays: number,
+    ): Promise<FinopsCommitmentRecommendationEntry[]>;
 }
 
 /** Limites compartilhados da ingestão por recurso. */

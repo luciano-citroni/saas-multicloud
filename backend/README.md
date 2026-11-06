@@ -187,9 +187,16 @@ Cost Explorer **não** está coberto só com `ReadOnlyAccess` em todos os casos.
       "Effect": "Allow",
       "Action": [
         "ce:GetCostAndUsage",
+        "ce:GetCostAndUsageWithResources",
         "ce:GetCostForecast",
         "ce:GetDimensionValues",
-        "ce:GetTags"
+        "ce:GetTags",
+        "ce:GetSavingsPlansUtilization",
+        "ce:GetSavingsPlansCoverage",
+        "ce:GetSavingsPlansPurchaseRecommendation",
+        "billing:GetCredits",
+        "billing:GetCreditAllocationHistory",
+        "aws-portal:ViewBilling"
       ],
       "Resource": "*"
     }
@@ -197,7 +204,7 @@ Cost Explorer **não** está coberto só com `ReadOnlyAccess` em todos os casos.
 }
 ```
 
-Mínimo absoluto para o sync atual: `ce:GetCostAndUsage`.
+Mínimo absoluto para o sync de custos: `ce:GetCostAndUsage`. Para créditos/compromissos (aba Créditos & Compromissos), inclua também as ações `ce:GetSavingsPlans*`. `billing:GetCredits` importa as concessões da página de créditos da AWS (saldo, validade e serviços).
 
 ##### Automation (opcional)
 
