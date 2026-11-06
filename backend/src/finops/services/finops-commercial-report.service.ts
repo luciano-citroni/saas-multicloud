@@ -287,7 +287,8 @@ export class FinopsCommercialReportService implements OnModuleInit {
     ): Promise<void> {
         const report = await this.getReport(organizationId, month);
         const currency = resolveDeliveryCurrency(report, preferredCurrency);
-        const summary = renderReportSummary(report, currency);
+        const lines = renderReportLines(report, reportLink(this.configService, report.referenceMonth), currency);
+        const summary = lines.join('\n');
         const pdf = await buildCommercialReportPdf(report, { currency });
         const filename = commercialReportPdfFileName(report.organizationName, month);
         let delivered = false;
@@ -308,7 +309,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
                 organizationId,
                 recipients.groupIds,
                 {
-                    text: renderWhatsappReport(report, reportUrl, currency),
+                    text: summary,
                     linkPreview: isPublicReportUrl(reportUrl),
                     caption: '📎 *PDF do relatório de FinOps*',
                     filename,
@@ -796,7 +797,7 @@ function whatsappPlain(value: string): string {
     return value.replace(/[*_~`]/g, '').trim();
 }
 
-function renderWhatsappReport(report: CommercialReportResponse, link: string, currency: ReportCurrency): string {
+function renderReportLines(report: CommercialReportResponse, link: string, currency: ReportCurrency): string[] {
     const money = (value: number) => moneyIn(report, value, currency);
     const projectionMonth = monthLabel(report.kpis.projectionMonth);
     const projection =
@@ -836,45 +837,34 @@ function renderWhatsappReport(report: CommercialReportResponse, link: string, cu
         '',
         '🔗 *Abrir no painel:*',
         link,
-    ].join('\n');
+    ];
 }
-
-function renderReportSummary(report: CommercialReportResponse, currency: ReportCurrency): string {
-    const money = (value: number) => moneyIn(report, value, currency);
-    const month = monthLabel(report.referenceMonth);
-    const tenantName = report.tenantName || report.organizationName;
-    const organizations = report.organizationNames.filter(Boolean);
-    const organizationSentence = organizations.length > 0 ? ` Organizações: ${organizations.join(', ')}.` : '';
-    const projection =
-        report.kpis.projection != null
-            ? `A projeção de ${monthLabel(report.kpis.projectionMonth)} (${projectionOrigin(report.kpis.projectionSource)}) é de ${money(report.kpis.projection)}.`
-            : `Ainda não há base suficiente para projetar ${monthLabel(report.kpis.projectionMonth)}.`;
-    const credits = report.credits.hasCredits
-        ? `Nos créditos, já foram consumidos ${money(report.credits.consumed)} e o saldo restante é de ${money(report.credits.remaining)}.`
-        : 'Não há créditos ativos neste período.';
-    const exchange =
-        currency === 'BRL' && report.exchangeRate != null
-            ? `A cotação usada foi de ${report.exchangeRate.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} BRL por USD.`
-            : '';
-
-    return [
-        `Relatório de FinOps do tenant ${tenantName}, referente a ${month}.${organizationSentence} Os valores estão em ${currency === 'BRL' ? 'real' : 'dólar'}.`,
-        `O custo total do mês foi de ${money(report.kpis.totalCost)}, com média diária de ${money(report.kpis.avgDailyCost)}. ${report.kpis.accountsWithSpend} de ${report.kpis.accountsTotal} assinaturas tiveram consumo.`,
-        projection,
-        `No mês foram registradas ${report.anomalies.total} anomalias de custo, das quais ${report.anomalies.acknowledged} já foram reconhecidas.`,
-        credits,
-        exchange,
-        'O PDF completo do relatório segue em anexo.',
-    ]
-        .filter((line) => line.length > 0)
-        .join('\n\n');
-}
-
 
 function renderReportEmail(summary: string): string {
-    const paragraphs = summary
-        .split('\n\n')
-        .map((paragraph) => `<p style="margin:0 0 12px;">${escapeHtml(paragraph)}</p>`)
+    const lines = summary
+        .replace('segue nesta conversa.', 'segue em anexo.')
+        .split('\n')
+        .filter((line) => {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('🔗')) return false;
+            if (/^https?:\/\//i.test(trimmed)) return false;
+            return true;
+        });
+    while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+
+    return lines
+        .map((line) => {
+            if (!line.trim()) return '<div style="height:8px;line-height:8px;">&nbsp;</div>';
+            return `<p style="margin:0 0 4px;font-size:14px;line-height:1.5;">${formatEmailLine(line)}</p>`;
+        })
         .join('');
-    return paragraphs;
+}
+
+function formatEmailLine(line: string): string {
+    const trimmed = line.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+        const href = escapeHtml(trimmed);
+        return `<a href="${href}" style="color:#2563EB;">${href}</a>`;
+    }
+    return escapeHtml(line).replace(/\*([^*]+)\*/g, '<strong>$1</strong>').replace(/_([^_]+)_/g, '<em>$1</em>');
 }
