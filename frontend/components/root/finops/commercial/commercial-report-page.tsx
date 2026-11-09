@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -207,15 +207,22 @@ function ChartCard({
     );
 }
 
+function parseViewCurrency(value: string | null): ViewCurrency {
+    return value === 'USD' ? 'USD' : 'BRL';
+}
+
 export function CommercialReportPage() {
     const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
     const tf = useTranslations('finops');
     const tc = useTranslations('common');
     const { locale } = useLocale();
     const intl = toIntlLocale(locale);
     const months = useMemo(() => closedMonths(), []);
-    const selectedMonth = searchParams.get('month') && months.includes(searchParams.get('month')!) ? searchParams.get('month')! : months[0];
+    const monthParam = searchParams.get('month');
+    const selectedMonth = monthParam && months.includes(monthParam) ? monthParam : months[0];
+    const viewCurrency = parseViewCurrency(searchParams.get('currency'));
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
@@ -224,7 +231,19 @@ export function CommercialReportPage() {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
-    const [viewCurrency, setViewCurrency] = useState<ViewCurrency>('BRL');
+
+    const updateFilters = useCallback(
+        (patch: { month?: string; currency?: ViewCurrency }) => {
+            const params = new URLSearchParams(searchParams.toString());
+            const nextMonth = patch.month ?? selectedMonth;
+            if (nextMonth) params.set('month', nextMonth);
+            const nextCurrency = patch.currency ?? viewCurrency;
+            params.set('currency', nextCurrency);
+            const query = params.toString();
+            router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+        },
+        [pathname, router, searchParams, selectedMonth, viewCurrency],
+    );
 
     useEffect(() => {
         const read = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
@@ -236,6 +255,16 @@ export function CommercialReportPage() {
             window.removeEventListener('storage', read);
         };
     }, []);
+
+    useEffect(() => {
+        const hasValidMonth = Boolean(monthParam && months.includes(monthParam));
+        const hasCurrency = searchParams.get('currency') === 'USD' || searchParams.get('currency') === 'BRL';
+        if (hasValidMonth && hasCurrency) return;
+        updateFilters({
+            month: selectedMonth,
+            currency: viewCurrency,
+        });
+    }, [monthParam, months, searchParams, selectedMonth, updateFilters, viewCurrency]);
 
     const load = useCallback(async () => {
         if (!organizationId || !selectedMonth) return;
@@ -274,12 +303,6 @@ export function CommercialReportPage() {
             : report?.displayCurrency === 'USD'
               ? 'USD'
               : 'BRL';
-
-    const setMonth = (month: string) => {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('month', month);
-        router.replace(`/finops/reports/commercial?${params.toString()}`, { scroll: false });
-    };
 
     const exportPdf = async () => {
         if (!report || !organizationId) return;
@@ -385,7 +408,7 @@ export function CommercialReportPage() {
                             id="commercial-month"
                             className="border-input bg-background h-8 rounded-lg border px-2 text-sm"
                             value={selectedMonth}
-                            onChange={(event) => setMonth(event.target.value)}
+                            onChange={(event) => updateFilters({ month: event.target.value })}
                         >
                             {months.map((month) => (
                                 <option key={month} value={month}>
@@ -401,7 +424,7 @@ export function CommercialReportPage() {
                                 type="button"
                                 className={`px-3 text-sm ${activeCurrency === 'BRL' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                                 disabled={report?.exchangeRate == null && report?.displayCurrency !== 'BRL'}
-                                onClick={() => setViewCurrency('BRL')}
+                                onClick={() => updateFilters({ currency: 'BRL' })}
                             >
                                 {tf.commercialCurrencyBrl}
                             </button>
@@ -409,7 +432,7 @@ export function CommercialReportPage() {
                                 type="button"
                                 className={`border-l px-3 text-sm ${activeCurrency === 'USD' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                                 disabled={report?.exchangeRate == null && report?.displayCurrency !== 'USD'}
-                                onClick={() => setViewCurrency('USD')}
+                                onClick={() => updateFilters({ currency: 'USD' })}
                             >
                                 {tf.commercialCurrencyUsd}
                             </button>
