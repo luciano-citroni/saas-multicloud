@@ -29,7 +29,17 @@ describe('commercial report pdf', () => {
                 projectionBaseDays: 29,
             },
             anomalies: { total: 0, acknowledged: 0, items: [] },
-            credits: { hasCredits: false, granted: 0, consumed: 0, remaining: 0 },
+            credits: { hasCredits: false, granted: 0, consumed: 0, remaining: 0, deductedFromTotal: false },
+            commitments: {
+                hasData: false,
+                avgUtilizationPercent: null,
+                avgCoveragePercent: null,
+                unusedCommitment: null,
+                potentialMonthlySavings: null,
+                savingsPlanCount: 0,
+                reservationCount: 0,
+                cudCount: 0,
+            },
             totalEvolution: [
                 { month: '2026-08', cost: 6497.21 },
                 { month: '2026-09', cost: 6169.28 },

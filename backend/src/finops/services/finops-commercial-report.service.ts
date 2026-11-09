@@ -67,6 +67,19 @@ export type CommercialCredits = {
     granted: number;
     consumed: number;
     remaining: number;
+    /** Custo total do relatório não abate estes créditos promocionais. */
+    deductedFromTotal: false;
+};
+
+export type CommercialCommitments = {
+    hasData: boolean;
+    avgUtilizationPercent: number | null;
+    avgCoveragePercent: number | null;
+    unusedCommitment: number | null;
+    potentialMonthlySavings: number | null;
+    savingsPlanCount: number;
+    reservationCount: number;
+    cudCount: number;
 };
 
 export type CommercialReportResponse = CommercialReportModel & {
@@ -76,6 +89,7 @@ export type CommercialReportResponse = CommercialReportModel & {
     generatedAt: string;
     anomalies: CommercialAnomalies;
     credits: CommercialCredits;
+    commitments: CommercialCommitments;
     delivery: {
         enabled: boolean;
         emails: string[];
@@ -165,13 +179,14 @@ export class FinopsCommercialReportService implements OnModuleInit {
     async getReport(organizationId: string, month?: string): Promise<CommercialReportResponse> {
         const referenceMonth = this.resolveMonth(month);
         const report = await this.compose(organizationId, referenceMonth);
-        const [settings, lastSend, tenant, organizations, anomalies, credits] = await Promise.all([
+        const [settings, lastSend, tenant, organizations, anomalies, credits, commitments] = await Promise.all([
             this.settingsRepo.findOne({ where: { organizationId } }),
             this.sendRepo.findOne({ where: { organizationId, month: referenceMonth } }),
             this.tenantRepo.findOne({ where: { id: organizationId } }),
             this.organizationRepo.find({ where: { tenantId: organizationId }, order: { name: 'ASC' } }),
             this.loadMonthAnomalies(organizationId, report),
             this.loadCredits(organizationId, report),
+            this.loadCommitments(organizationId, report),
         ]);
         const tenantName = tenant?.name?.trim() ?? '';
         const organizationNames = [...new Set(organizations.map((organization) => organization.name.trim()).filter(Boolean))];
@@ -184,6 +199,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
             generatedAt: new Date().toISOString(),
             anomalies,
             credits,
+            commitments,
             delivery: {
                 enabled: settings?.enabled ?? false,
                 emails: settings?.emails ?? [],
@@ -444,11 +460,38 @@ export class FinopsCommercialReportService implements OnModuleInit {
         const currency = String(credits.totals.currency || 'USD');
         const granted = this.toDisplay(Number(credits.totals.totalGranted), currency, report);
         const remaining = this.toDisplay(Number(credits.totals.totalRemaining), currency, report);
+        const consumed = this.toDisplay(Number(credits.totals.consumedInPeriod), currency, report);
         return {
-            hasCredits: granted > 0 || remaining > 0,
+            hasCredits: granted > 0 || remaining > 0 || consumed > 0,
             granted,
-            consumed: Math.max(0, granted - remaining),
+            consumed,
             remaining,
+            deductedFromTotal: false,
+        };
+    }
+
+    private async loadCommitments(organizationId: string, report: CommercialReportModel): Promise<CommercialCommitments> {
+        const [overview, utilization] = await Promise.all([
+            this.commitmentsService.getOverview(organizationId),
+            this.commitmentsService.listUtilization(organizationId),
+        ]);
+        const currency = String(overview.commitments.currency || 'USD');
+        const items = utilization.items.filter((item) => !item.externalId.includes('aggregate'));
+        return {
+            hasData: items.length > 0 || overview.commitments.eligibleRecommendations > 0,
+            avgUtilizationPercent: overview.commitments.avgUtilizationPercent,
+            avgCoveragePercent: overview.commitments.avgCoveragePercent,
+            unusedCommitment:
+                overview.commitments.unusedCommitment == null
+                    ? null
+                    : this.toDisplay(Number(overview.commitments.unusedCommitment), currency, report),
+            potentialMonthlySavings:
+                overview.commitments.potentialMonthlySavings > 0
+                    ? this.toDisplay(Number(overview.commitments.potentialMonthlySavings), currency, report)
+                    : null,
+            savingsPlanCount: items.filter((item) => item.commitmentType === 'savings_plan').length,
+            reservationCount: items.filter((item) => item.commitmentType === 'reservation').length,
+            cudCount: items.filter((item) => item.commitmentType === 'cud').length,
         };
     }
 
@@ -805,8 +848,15 @@ function renderReportLines(report: CommercialReportResponse, link: string, curre
             ? `📈 *Projeção (${whatsappPlain(projectionMonth)}):* ${money(report.kpis.projection)}\n_${whatsappPlain(projectionOrigin(report.kpis.projectionSource))}_`
             : `📈 *Projeção (${whatsappPlain(projectionMonth)}):* sem base suficiente`;
     const credits = report.credits.hasCredits
-        ? [`💳 *Créditos*`, `• Consumido: *${money(report.credits.consumed)}*`, `• Saldo: *${money(report.credits.remaining)}*`].join('\n')
+        ? [
+              '💳 *Créditos*',
+              `• Créditos concedidos: *${money(report.credits.granted)}*`,
+              `• Créditos consumidos: *${money(report.credits.consumed)}*`,
+              `• Créditos restantes: *${money(report.credits.remaining)}*`,
+              '_O custo total acima ainda não abate esses créditos._',
+          ].join('\n')
         : '💳 *Créditos:* nenhum crédito ativo';
+    const commitments = renderCommitmentsLines(report, money);
     const exchange =
         currency === 'BRL' && report.exchangeRate != null
             ? `💱 *Cotação:* ${report.exchangeRate.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} BRL/USD`
@@ -822,6 +872,7 @@ function renderReportLines(report: CommercialReportResponse, link: string, curre
         `💵 *Moeda:* ${currency === 'BRL' ? 'Real' : 'Dólar'}`,
         '',
         `💰 *Custo total:* ${money(report.kpis.totalCost)}`,
+        '_Valor amortizado da nuvem. Não inclui abatimento de créditos promocionais._',
         `📅 *Média diária:* ${money(report.kpis.avgDailyCost)}`,
         `☁️ *Assinaturas com consumo:* ${report.kpis.accountsWithSpend} de ${report.kpis.accountsTotal}`,
         '',
@@ -831,13 +882,49 @@ function renderReportLines(report: CommercialReportResponse, link: string, curre
         `✅ *Reconhecidas:* ${report.anomalies.acknowledged}`,
         '',
         credits,
-        ...(exchange ? [exchange] : []),
+        '',
+        commitments,
+        ...(exchange ? ['', exchange] : []),
         '',
         '📎 O *PDF* completo segue nesta conversa.',
         '',
         '🔗 *Abrir no painel:*',
         link,
     ];
+}
+
+function formatPctLabel(value: number | null): string {
+    if (value == null || !Number.isFinite(value)) return '—';
+    return `${value.toFixed(1)}%`;
+}
+
+function renderCommitmentsLines(
+    report: CommercialReportResponse,
+    money: (value: number) => string,
+): string {
+    const commitments = report.commitments;
+    if (!commitments?.hasData) {
+        return '🔐 *Reservas e Savings Plans:* sem dados sincronizados';
+    }
+    const inventory = [
+        commitments.savingsPlanCount > 0 ? `${commitments.savingsPlanCount} Savings Plan` : null,
+        commitments.reservationCount > 0 ? `${commitments.reservationCount} Reservation` : null,
+        commitments.cudCount > 0 ? `${commitments.cudCount} CUD` : null,
+    ].filter(Boolean);
+    return [
+        '🔐 *Reservas e Savings Plans*',
+        ...(inventory.length > 0 ? [`• Ativos: *${inventory.join(' · ')}*`] : []),
+        `• Utilização média: *${formatPctLabel(commitments.avgUtilizationPercent)}*`,
+        `• Cobertura média: *${formatPctLabel(commitments.avgCoveragePercent)}*`,
+        commitments.unusedCommitment != null
+            ? `• Compromisso não usado: *${money(commitments.unusedCommitment)}*`
+            : null,
+        commitments.potentialMonthlySavings != null
+            ? `• Economia potencial (sugestões): *${money(commitments.potentialMonthlySavings)}*`
+            : null,
+    ]
+        .filter((line): line is string => line != null)
+        .join('\n');
 }
 
 function renderReportEmail(summary: string): string {

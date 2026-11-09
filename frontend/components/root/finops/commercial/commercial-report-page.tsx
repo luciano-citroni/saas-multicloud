@@ -23,6 +23,7 @@ import {
     sendCommercialReport,
 } from '@/app/actions/finops';
 import { CommercialReportDelivery } from '@/components/root/finops/commercial/commercial-report-delivery';
+import { CommercialFinancePanels } from '@/components/root/finops/commercial/commercial-finance-panels';
 import { commercialProjectionDetail } from '@/components/root/finops/commercial/projection-detail';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
@@ -127,6 +128,17 @@ export type CommercialReport = {
         granted: number;
         consumed: number;
         remaining: number;
+        deductedFromTotal?: false;
+    };
+    commitments: {
+        hasData: boolean;
+        avgUtilizationPercent: number | null;
+        avgCoveragePercent: number | null;
+        unusedCommitment: number | null;
+        potentialMonthlySavings: number | null;
+        savingsPlanCount: number;
+        reservationCount: number;
+        cudCount: number;
     };
     delivery: {
         enabled: boolean;
@@ -403,7 +415,7 @@ export function CommercialReportPage() {
                             </button>
                         </div>
                     </div>
-                    <Button size="sm" onClick={() => void exportPdf()} disabled={!report} isLoading={exportingPdf}>
+                    <Button onClick={() => void exportPdf()} disabled={!report} isLoading={exportingPdf}>
                         <FileText className="size-4" />
                         {tf.commercialExportPdf}
                     </Button>
@@ -546,7 +558,11 @@ function ReportBody({
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 print:grid-cols-3">
-                <Kpi title={copy.commercialKpiTotal} value={money(report.kpis.totalCost)} detail={copy.commercialVs.replace('{value}', formatPct(report.kpis.totalChangePct)).replace('{month}', labelOf(previousMonth))} />
+                <Kpi
+                    title={copy.commercialKpiTotal}
+                    value={money(report.kpis.totalCost)}
+                    detail={copy.commercialVs.replace('{value}', formatPct(report.kpis.totalChangePct)).replace('{month}', labelOf(previousMonth))}
+                />
                 <Kpi title={copy.commercialKpiAvg} value={money(report.kpis.avgDailyCost)} detail={`${copy.commercialDays.replace('{count}', String(report.kpis.daysInMonth))} · ${copy.commercialVs.replace('{value}', formatPct(report.kpis.avgDailyChangePct)).replace('{month}', labelOf(previousMonth))}`} />
                 <Kpi
                     title={copy.commercialKpiChange.replace('{month}', labelOf(previousMonth))}
@@ -564,14 +580,7 @@ function ReportBody({
                 ) : null}
             </div>
 
-            <div className="flex flex-col gap-3">
-                <h3 className="text-base font-semibold">{copy.commercialCreditsTitle}</h3>
-                <div className="grid gap-3 md:grid-cols-3 print:grid-cols-3">
-                    <Kpi title={copy.commercialCreditsGranted} value={money(report.credits.granted)} />
-                    <Kpi title={copy.commercialCreditsConsumed} value={money(report.credits.consumed)} />
-                    <Kpi title={copy.commercialCreditsRemaining} value={money(report.credits.remaining)} detail={report.credits.hasCredits ? undefined : copy.commercialCreditsNone} />
-                </div>
-            </div>
+            <CommercialFinancePanels credits={report.credits} commitments={report.commitments} money={money} />
 
             <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-2">
                 <ChartCard title={copy.commercialTotalEvolution} group="before">

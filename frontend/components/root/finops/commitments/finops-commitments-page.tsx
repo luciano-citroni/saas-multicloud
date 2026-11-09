@@ -40,6 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
@@ -964,8 +965,32 @@ export function FinopsCommitmentsPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <KpiCard label={t.commitmentsUtilization} value={pct(commitments?.avgUtilizationPercent)} />
-                    <KpiCard label={t.commitmentsCoverage} value={pct(commitments?.avgCoveragePercent)} />
+                    <MeterCard
+                        label={t.commitmentsUtilization}
+                        valueLabel={pct(commitments?.avgUtilizationPercent)}
+                        percent={commitments?.avgUtilizationPercent}
+                        tone={
+                            commitments?.avgUtilizationPercent == null
+                                ? 'neutral'
+                                : commitments.avgUtilizationPercent >= 80
+                                  ? 'good'
+                                  : commitments.avgUtilizationPercent < 60
+                                    ? 'warn'
+                                    : 'neutral'
+                        }
+                    />
+                    <MeterCard
+                        label={t.commitmentsCoverage}
+                        valueLabel={pct(commitments?.avgCoveragePercent)}
+                        percent={commitments?.avgCoveragePercent}
+                        tone={
+                            commitments?.avgCoveragePercent == null
+                                ? 'neutral'
+                                : commitments.avgCoveragePercent >= 50
+                                  ? 'good'
+                                  : 'warn'
+                        }
+                    />
                     <KpiCard
                         label={t.commitmentsUnused}
                         value={
@@ -1524,11 +1549,44 @@ function GrantUsageCell({ grant, t }: { grant: CreditGrant; t: FinopsT }) {
 
 function KpiCard({ label, value }: { label: string; value: string }) {
     return (
-        <Card>
-            <CardHeader className="pb-2">
-                <CardDescription>{label}</CardDescription>
-                <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        <Card className="justify-between gap-3">
+            <CardHeader className="pb-0">
+                <CardDescription className="text-xs font-medium">{label}</CardDescription>
+                <CardTitle className="text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">{value}</CardTitle>
             </CardHeader>
+            <CardContent className="pt-0" />
+        </Card>
+    );
+}
+
+function MeterCard({
+    label,
+    valueLabel,
+    percent,
+    tone = 'neutral',
+}: {
+    label: string;
+    valueLabel: string;
+    percent: number | null | undefined;
+    tone?: 'neutral' | 'good' | 'warn';
+}) {
+    const value = percent != null && Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+    return (
+        <Card className="justify-between gap-3">
+            <CardHeader className="pb-0">
+                <CardDescription className="text-xs font-medium">{label}</CardDescription>
+                <CardTitle className="text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">{valueLabel}</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+                <Progress
+                    value={value}
+                    className={cn(
+                        'h-2',
+                        tone === 'good' && '[&_[data-slot=progress-indicator]]:bg-emerald-600',
+                        tone === 'warn' && '[&_[data-slot=progress-indicator]]:bg-amber-500',
+                    )}
+                />
+            </CardContent>
         </Card>
     );
 }

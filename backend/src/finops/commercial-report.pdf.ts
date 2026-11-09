@@ -161,7 +161,7 @@ export async function buildCommercialReportPdf(
 
     let y = drawMetaLines(pdf, meta);
     y = drawKpiRow(pdf, y + 4, [
-        { label: copy.commercialKpiTotal, value: money(report.kpis.totalCost) },
+        { label: copy.commercialKpiTotal, value: money(report.kpis.totalCost), detail: copy.commercialTotalNote },
         { label: copy.commercialKpiAvg, value: money(report.kpis.avgDailyCost) },
         {
             label: copy.commercialKpiChange.replace('{month}', labelOf(previousMonth)),
@@ -183,14 +183,74 @@ export async function buildCommercialReportPdf(
             ? [{ label: copy.commercialKpiFx, value: rate.toLocaleString(intl, { maximumFractionDigits: 4 }) }]
             : []),
     ]);
+
+    const consumedShare =
+        credits.hasCredits && credits.granted > 0
+            ? Math.max(0, Math.min(100, (credits.consumed / credits.granted) * 100))
+            : null;
     y = drawSectionTitle(pdf, copy.commercialCreditsTitle, y);
     y = drawKpiRow(pdf, y, [
-        { label: copy.commercialCreditsGranted, value: money(credits.granted) },
-        { label: copy.commercialCreditsConsumed, value: money(credits.consumed) },
+        {
+            label: copy.commercialCreditsGranted,
+            value: money(credits.granted),
+            detail: credits.hasCredits ? copy.commercialCreditsNote : copy.commercialCreditsNone,
+        },
+        {
+            label: copy.commercialCreditsConsumed,
+            value: money(credits.consumed),
+            detail: consumedShare != null ? `${consumedShare.toFixed(0)}%` : undefined,
+        },
         {
             label: copy.commercialCreditsRemaining,
             value: money(credits.remaining),
-            detail: credits.hasCredits ? undefined : copy.commercialCreditsNone,
+        },
+    ]);
+
+    const commitments = report.commitments ?? {
+        hasData: false,
+        avgUtilizationPercent: null,
+        avgCoveragePercent: null,
+        unusedCommitment: null,
+        potentialMonthlySavings: null,
+        savingsPlanCount: 0,
+        reservationCount: 0,
+        cudCount: 0,
+    };
+    const inventory = [
+        commitments.savingsPlanCount > 0 ? `${commitments.savingsPlanCount} ${copy.commercialCommitmentsSp}` : null,
+        commitments.reservationCount > 0 ? `${commitments.reservationCount} ${copy.commercialCommitmentsReservation}` : null,
+        commitments.cudCount > 0 ? `${commitments.cudCount} ${copy.commercialCommitmentsCud}` : null,
+    ].filter((item): item is string => item != null);
+    y = drawSectionTitle(pdf, copy.commercialCommitmentsTitle, y + 3);
+    y = drawKpiRow(pdf, y, [
+        {
+            label: copy.commercialCommitmentsInventory,
+            value: inventory.length > 0 ? inventory.join(' · ') : '—',
+            detail: commitments.hasData ? undefined : copy.commercialCommitmentsNone,
+        },
+        {
+            label: copy.commercialCommitmentsUtilization,
+            value:
+                commitments.avgUtilizationPercent != null && Number.isFinite(commitments.avgUtilizationPercent)
+                    ? `${commitments.avgUtilizationPercent.toFixed(1)}%`
+                    : '—',
+        },
+        {
+            label: copy.commercialCommitmentsCoverage,
+            value:
+                commitments.avgCoveragePercent != null && Number.isFinite(commitments.avgCoveragePercent)
+                    ? `${commitments.avgCoveragePercent.toFixed(1)}%`
+                    : '—',
+        },
+    ]);
+    y = drawKpiRow(pdf, y + 3, [
+        {
+            label: copy.commercialCommitmentsUnused,
+            value: commitments.unusedCommitment != null ? money(commitments.unusedCommitment) : '—',
+        },
+        {
+            label: copy.commercialCommitmentsPotential,
+            value: commitments.potentialMonthlySavings != null ? money(commitments.potentialMonthlySavings) : '—',
         },
     ]);
 
