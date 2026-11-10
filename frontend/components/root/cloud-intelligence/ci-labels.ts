@@ -359,7 +359,7 @@ export function useCiLabels() {
     };
 }
 
-type CloudIntelligenceCopy = Translations['pt']['cloudIntelligence'];
+type CloudIntelligenceCopy = Translations['cloudIntelligence'];
 
 export function buildDailySummaryFromFindings(
     t: CloudIntelligenceCopy,
