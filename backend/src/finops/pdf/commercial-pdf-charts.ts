@@ -49,15 +49,16 @@ export type StackedChartSpec = ChartBase & {
 
 export type CommercialChartSpec = ColumnChartSpec | LineChartSpec | RankChartSpec | GroupedChartSpec | StackedChartSpec;
 
-const FALLBACK_SERIES: Rgb[] = [
+/** Bridge Ops Grid: magenta primary, then restrained cool/warm neutrals (no purple cascade). */
+const BRIDGE_SERIES: Rgb[] = [
     [192, 38, 211],
-    [232, 177, 90],
-    [224, 122, 61],
-    [180, 83, 42],
-    [138, 61, 34],
-    [42, 164, 196],
-    [124, 92, 191],
-    [59, 111, 216],
+    [71, 85, 105],
+    [217, 119, 6],
+    [13, 148, 136],
+    [100, 116, 139],
+    [37, 99, 235],
+    [161, 98, 7],
+    [51, 65, 85],
 ];
 
 export function readChartPalette(): ChartPalette {
@@ -66,8 +67,8 @@ export function readChartPalette(): ChartPalette {
         foreground: [24, 24, 27],
         muted: [113, 113, 122],
         border: [228, 228, 231],
-        grid: [228, 228, 231],
-        series: FALLBACK_SERIES,
+        grid: [241, 241, 245],
+        series: BRIDGE_SERIES,
     };
 }
 
@@ -120,21 +121,21 @@ type CardLayout = {
 };
 
 function layoutCard(doc: PdfDoc, chart: CommercialChartSpec, width: number): CardLayout {
-    const innerW = width - 10;
+    const innerW = width - 12;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     const titleLines = doc.splitTextToSize(chart.title, innerW);
     let descLines: string[] = [];
     if (chart.description) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         descLines = doc.splitTextToSize(chart.description, innerW);
     }
     const names = legendNames(chart);
     const legendLines: string[][] = [];
     if (names.length > 0) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         let row: string[] = [];
         let used = 0;
         for (const name of names) {
@@ -150,7 +151,14 @@ function layoutCard(doc: PdfDoc, chart: CommercialChartSpec, width: number): Car
         if (row.length > 0) legendLines.push(row);
     }
     const plotH = plotHeight(chart);
-    const height = 7 + titleLines.length * 4.6 + (descLines.length > 0 ? descLines.length * 3.6 + 1 : 0) + 3 + plotH + (legendLines.length > 0 ? legendLines.length * 5 + 3 : 0) + 5;
+    const height =
+        8 +
+        titleLines.length * 4.4 +
+        (descLines.length > 0 ? descLines.length * 3.4 + 1 : 0) +
+        3.5 +
+        plotH +
+        (legendLines.length > 0 ? legendLines.length * 5 + 3 : 0) +
+        6;
     return { height, titleLines, descLines, legendLines, plotH };
 }
 
@@ -399,28 +407,28 @@ function drawStacked(doc: PdfDoc, chart: StackedChartSpec, plotX: number, plotY:
 function drawChart(doc: PdfDoc, chart: CommercialChartSpec, x: number, y: number, width: number, height: number, layout: CardLayout, palette: ChartPalette): void {
     doc.setFillColor(...palette.card);
     doc.setDrawColor(...palette.border);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(x, y, width, height, 2, 2, 'FD');
-    let cursor = y + 5.5;
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, width, height, 2.2, 2.2, 'FD');
+    let cursor = y + 6;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(...palette.foreground);
     for (const line of layout.titleLines) {
-        doc.text(line, x + 4, cursor);
-        cursor += 4.6;
+        doc.text(line, x + 5, cursor);
+        cursor += 4.4;
     }
     if (layout.descLines.length > 0) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         doc.setTextColor(...palette.muted);
         for (const line of layout.descLines) {
-            doc.text(line, x + 4, cursor);
-            cursor += 3.6;
+            doc.text(line, x + 5, cursor);
+            cursor += 3.4;
         }
     }
-    cursor += 2;
-    const plotX = x + 4;
-    const plotW = width - 8;
+    cursor += 2.5;
+    const plotX = x + 5;
+    const plotW = width - 10;
     const legendBlock = layout.legendLines.length > 0 ? layout.legendLines.length * 5 + 6 : 4;
     const plotH = Math.max(24, height - (cursor - y) - legendBlock);
     if (chart.kind === 'column') drawColumn(doc, chart, plotX, cursor, plotW, plotH, palette);
@@ -429,7 +437,7 @@ function drawChart(doc: PdfDoc, chart: CommercialChartSpec, x: number, y: number
     if (chart.kind === 'grouped') drawGrouped(doc, chart, plotX, cursor, plotW, plotH, palette);
     if (chart.kind === 'stacked') drawStacked(doc, chart, plotX, cursor, plotW, plotH, palette);
     if (layout.legendLines.length > 0) {
-        drawLegend(doc, layout.legendLines, x + 4, y + height - layout.legendLines.length * 5 - 2, palette);
+        drawLegend(doc, layout.legendLines, x + 5, y + height - layout.legendLines.length * 5 - 2.5, palette);
     }
     doc.setFont('helvetica', 'normal');
 }

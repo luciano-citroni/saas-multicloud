@@ -8,9 +8,12 @@ import {
     addFinopsPdfFooter,
     drawFinopsPdfHeader,
     drawKpiRow,
-    drawMetaLines,
+    drawMetaStrip,
     drawSectionTitle,
     getTableEndY,
+    PDF_DANGER,
+    PDF_SUCCESS,
+    type KpiTone,
 } from './pdf/commercial-pdf-layout';
 import { FINOPS_PDF_TABLE, type PdfDoc } from './pdf/pdf-doc';
 import { collapseResourceLabels } from './pdf/resource-label';
@@ -82,6 +85,17 @@ function projectionDetail(
     return copy.commercialLinearBase.replace('{count}', count);
 }
 
+function changeTone(value: number | null): KpiTone {
+    if (value == null || !Number.isFinite(value) || Math.abs(value) < 0.05) return 'neutral';
+    return value > 0 ? 'up' : 'down';
+}
+
+function variationTextColor(value: string): [number, number, number] | null {
+    if (value.startsWith('+') && value !== '+0.0%') return PDF_DANGER;
+    if (value.startsWith('-')) return PDF_SUCCESS;
+    return null;
+}
+
 function drawNote(doc: PdfDoc, text: string, y: number): void {
     const width = doc.internal.pageSize.getWidth() - 28;
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -137,17 +151,17 @@ export async function buildCommercialReportPdf(
 
     drawFinopsPdfHeader(pdf, copy.commercialTitle, copy.commercialPdfGenerated.replace('{date}', formatDate(report.generatedAt, locale)));
 
-    const meta = [
-        report.organizationName,
-        `${copy.commercialMonth}: ${labelOf(report.referenceMonth)}`,
-        `${copy.reportProvider}: ${providers}`,
-        `${copy.commercialCurrencyLabel}: ${currencyName}`,
-        copy.commercialSource,
-    ];
     const showExchangeRate = viewCurrency !== 'USD' && rate != null;
-    if (showExchangeRate) {
-        meta.push(`${copy.commercialKpiFx}: ${rate.toLocaleString(intl, { maximumFractionDigits: 4 })}`);
-    }
+    const metaItems = [
+        { label: copy.commercialMetaOrg, value: report.organizationName },
+        { label: copy.commercialMonth, value: labelOf(report.referenceMonth) },
+        { label: copy.reportProvider, value: providers },
+        { label: copy.commercialCurrencyLabel, value: currencyName },
+        { label: copy.commercialSource, value: 'FinOps' },
+        ...(showExchangeRate
+            ? [{ label: copy.commercialKpiFx, value: rate.toLocaleString(intl, { maximumFractionDigits: 4 }) }]
+            : []),
+    ];
 
     const credits = report.credits ?? { hasCredits: false, granted: 0, consumed: 0, remaining: 0 };
     const previousCost = report.totalEvolution.find((item) => item.month === previousMonth)?.cost;
@@ -158,21 +172,37 @@ export async function buildCommercialReportPdf(
         if (value < -0.004) return `-${formatted}`;
         return formatted;
     };
+    const totalTone = changeTone(report.kpis.totalChangePct);
 
-    let y = drawMetaLines(pdf, meta);
-    y = drawKpiRow(pdf, y + 4, [
-        { label: copy.commercialKpiTotal, value: money(report.kpis.totalCost), detail: copy.commercialTotalNote },
-        { label: copy.commercialKpiAvg, value: money(report.kpis.avgDailyCost) },
+    let y = drawMetaStrip(pdf, metaItems, 38);
+    y = drawSectionTitle(pdf, copy.commercialSectionExecutive, y);
+    y = drawKpiRow(pdf, y, [
+        {
+            label: copy.commercialKpiTotal,
+            value: money(report.kpis.totalCost),
+            detail: copy.commercialTotalNote,
+            emphasis: 'hero',
+        },
         {
             label: copy.commercialKpiChange.replace('{month}', labelOf(previousMonth)),
             value: formatPct(report.kpis.totalChangePct),
             detail: costDelta == null ? undefined : signedMoney(costDelta),
+            tone: totalTone,
+            emphasis: 'hero',
         },
     ]);
     y = drawKpiRow(pdf, y + 3, [
         {
+            label: copy.commercialKpiAvg,
+            value: money(report.kpis.avgDailyCost),
+            detail: formatPct(report.kpis.avgDailyChangePct),
+            tone: changeTone(report.kpis.avgDailyChangePct),
+        },
+        {
             label: copy.commercialKpiAccounts,
-            value: copy.commercialAccountsOf.replace('{used}', String(report.kpis.accountsWithSpend)).replace('{total}', String(report.kpis.accountsTotal)),
+            value: copy.commercialAccountsOf
+                .replace('{used}', String(report.kpis.accountsWithSpend))
+                .replace('{total}', String(report.kpis.accountsTotal)),
         },
         {
             label: copy.commercialKpiProjection.replace('{month}', labelOf(report.kpis.projectionMonth)),
@@ -221,7 +251,7 @@ export async function buildCommercialReportPdf(
         commitments.reservationCount > 0 ? `${commitments.reservationCount} ${copy.commercialCommitmentsReservation}` : null,
         commitments.cudCount > 0 ? `${commitments.cudCount} ${copy.commercialCommitmentsCud}` : null,
     ].filter((item): item is string => item != null);
-    y = drawSectionTitle(pdf, copy.commercialCommitmentsTitle, y + 3);
+    y = drawSectionTitle(pdf, copy.commercialCommitmentsTitle, y + 2);
     y = drawKpiRow(pdf, y, [
         {
             label: copy.commercialCommitmentsInventory,
@@ -257,35 +287,46 @@ export async function buildCommercialReportPdf(
     const monthHeaders = report.months.map((month) => labelOf(month.key));
     const monthKeys = report.months.map((month) => month.key);
 
-    y = drawCommercialChartRow(pdf, y + 6, [
-        {
-            kind: 'column',
-            title: copy.commercialTotalEvolution,
-            labels: report.totalEvolution.map((item) => labelOf(item.month)),
-            values: report.totalEvolution.map((item) => toCurrency(item.cost)),
-            ...chartBase,
-        },
-        {
-            kind: 'column',
-            title: copy.commercialAvgEvolution,
-            labels: report.avgDailyEvolution.map((item) => labelOf(item.month)),
-            values: report.avgDailyEvolution.map((item) => toCurrency(item.avg)),
-            ...chartBase,
-        },
-    ], palette);
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'grouped',
-            title: copy.commercialAccountEvolution,
-            description: monthKeys.map((month) => labelOf(month)).join(' · '),
-            categories: report.accountEvolution.map((row) => row.alias),
-            series: monthKeys.map((month, index) => ({
-                name: labelOf(month),
-                values: report.accountEvolution.map((row) => toCurrency(row.costs[index] ?? 0)),
-            })),
-            ...chartBase,
-        },
-    ], palette);
+    y = drawSectionTitle(pdf, copy.commercialSectionEvolution, y + 2, { forcePageBreak: true });
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'column',
+                title: copy.commercialTotalEvolution,
+                labels: report.totalEvolution.map((item) => labelOf(item.month)),
+                values: report.totalEvolution.map((item) => toCurrency(item.cost)),
+                ...chartBase,
+            },
+            {
+                kind: 'column',
+                title: copy.commercialAvgEvolution,
+                labels: report.avgDailyEvolution.map((item) => labelOf(item.month)),
+                values: report.avgDailyEvolution.map((item) => toCurrency(item.avg)),
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'grouped',
+                title: copy.commercialAccountEvolution,
+                description: monthKeys.map((month) => labelOf(month)).join(' · '),
+                categories: report.accountEvolution.map((row) => row.alias),
+                series: monthKeys.map((month, index) => ({
+                    name: labelOf(month),
+                    values: report.accountEvolution.map((row) => toCurrency(row.costs[index] ?? 0)),
+                })),
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
 
     const totals = report.subscriptionTable.reduce(
         (acc, row) => [acc[0] + (row.costs[0] ?? 0), acc[1] + (row.costs[1] ?? 0), acc[2] + (row.costs[2] ?? 0)],
@@ -311,100 +352,164 @@ export async function buildCommercialReportPdf(
     }
     const tableTitle = drawSectionTitle(
         pdf,
-        copy.commercialDetail.replace('{from}', monthHeaders[0] ?? labelOf(report.referenceMonth)).replace('{to}', labelOf(report.referenceMonth)),
+        copy.commercialDetail
+            .replace('{from}', monthHeaders[0] ?? labelOf(report.referenceMonth))
+            .replace('{to}', labelOf(report.referenceMonth)),
         y,
+        { forcePageBreak: true },
     );
     autoTable(doc, {
         startY: tableTitle,
-        head: [[copy.commercialColAccount, monthHeaders[0] ?? '—', monthHeaders[1] ?? '—', copy.commercialColVar, monthHeaders[2] ?? '—', copy.commercialColVar]],
+        head: [
+            [
+                copy.commercialColAccount,
+                monthHeaders[0] ?? '—',
+                monthHeaders[1] ?? '—',
+                copy.commercialColVar,
+                monthHeaders[2] ?? '—',
+                copy.commercialColVar,
+            ],
+        ],
         body: subscriptionBody.length > 0 ? subscriptionBody : [['—', '—', '—', '—', '—', '—']],
         ...FINOPS_PDF_TABLE,
-        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+        columnStyles: {
+            1: { halign: 'right' },
+            2: { halign: 'right' },
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+        },
+        didParseCell: (data) => {
+            if (data.section !== 'body') return;
+            if (data.column.index === 3 || data.column.index === 5) {
+                const color = variationTextColor(String(data.cell.raw ?? ''));
+                if (color) data.cell.styles.textColor = color;
+            }
+            if (data.row.index === subscriptionBody.length - 1 && subscriptionBody.length > 0) {
+                data.cell.styles.fontStyle = 'bold';
+            }
+        },
     });
-    y = getTableEndY(pdf, tableTitle) + 10;
+    y = getTableEndY(pdf, tableTitle) + 8;
 
     const linePoints = (points: Array<{ date: string; cost: number }>) =>
         points.map((point) => ({ label: point.date.slice(8, 10), value: toCurrency(point.cost) }));
     const openTitle =
         report.inProgress.projection != null
-            ? copy.commercialDailyOpen.replace('{month}', labelOf(report.inProgress.month)).replace('{projection}', money(report.inProgress.projection))
+            ? copy.commercialDailyOpen
+                  .replace('{month}', labelOf(report.inProgress.month))
+                  .replace('{projection}', money(report.inProgress.projection))
             : copy.commercialDailyOpenEmpty.replace('{month}', labelOf(report.inProgress.month));
 
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'line',
-            title: copy.commercialDailyClosed.replace('{month}', labelOf(previousMonth)),
-            description: copy.commercialAvgDaily.replace('{amount}', money(report.kpis.previousAvgDaily)),
-            points: linePoints(report.dailyPrevious),
-            ...chartBase,
-        },
-        {
-            kind: 'line',
-            title: copy.commercialDailyClosed.replace('{month}', labelOf(report.referenceMonth)),
-            description: copy.commercialAvgDaily.replace('{amount}', money(report.kpis.avgDailyCost)),
-            points: linePoints(report.dailyReference),
-            ...chartBase,
-        },
-        { kind: 'line', title: openTitle, points: linePoints(report.inProgress.points), ...chartBase },
-    ], palette);
+    y = drawSectionTitle(pdf, copy.commercialSectionDaily, y, { forcePageBreak: true });
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'line',
+                title: copy.commercialDailyClosed.replace('{month}', labelOf(previousMonth)),
+                description: copy.commercialAvgDaily.replace('{amount}', money(report.kpis.previousAvgDaily)),
+                points: linePoints(report.dailyPrevious),
+                ...chartBase,
+            },
+            {
+                kind: 'line',
+                title: copy.commercialDailyClosed.replace('{month}', labelOf(report.referenceMonth)),
+                description: copy.commercialAvgDaily.replace('{amount}', money(report.kpis.avgDailyCost)),
+                points: linePoints(report.dailyReference),
+                ...chartBase,
+            },
+            { kind: 'line', title: openTitle, points: linePoints(report.inProgress.points), ...chartBase },
+        ],
+        palette,
+    );
 
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'rank',
-            title: copy.commercialReductions.replace('{current}', labelOf(report.referenceMonth)).replace('{previous}', labelOf(previousMonth)),
-            description: `${copy.commercialReductionSum.replace('{amount}', money(report.reductionSum))} ${copy.commercialGroupedNote}`,
-            rows: resourceRows(report.reductions),
-            empty: copy.commercialNoResources,
-            ...chartBase,
-        },
-        {
-            kind: 'rank',
-            title: copy.commercialIncreases.replace('{current}', labelOf(report.referenceMonth)).replace('{previous}', labelOf(previousMonth)),
-            description: `${copy.commercialIncreaseSum.replace('{amount}', money(report.increaseSum))} ${copy.commercialGroupedNote}`,
-            rows: resourceRows(report.increases),
-            empty: copy.commercialNoResources,
-            ...chartBase,
-        },
-    ], palette);
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'rank',
-            title: copy.commercialTopServices,
-            rows: report.topServices.map((item) => ({ name: friendlyServiceLabel(item.service, locale), value: toCurrency(item.cost) })),
-            empty: copy.commercialNoResources,
-            ...chartBase,
-        },
-        {
-            kind: 'rank',
-            title: copy.commercialTopResources,
-            rows: resourceRows(report.topResources.map((item) => ({ name: item.name, amount: item.cost }))),
-            empty: copy.commercialNoResources,
-            ...chartBase,
-        },
-    ], palette);
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'rank',
-            title: copy.commercialCostByAccount,
-            rows: report.costByAccount.map((item) => ({ name: item.alias, value: toCurrency(item.cost) })),
-            empty: copy.commercialNoResources,
-            ...chartBase,
-        },
-    ], palette);
+    y = drawSectionTitle(pdf, copy.commercialSectionDrivers, y + 2, { forcePageBreak: true });
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'rank',
+                title: copy.commercialReductions
+                    .replace('{current}', labelOf(report.referenceMonth))
+                    .replace('{previous}', labelOf(previousMonth)),
+                description: `${copy.commercialReductionSum.replace('{amount}', money(report.reductionSum))} ${copy.commercialGroupedNote}`,
+                rows: resourceRows(report.reductions),
+                empty: copy.commercialNoResources,
+                ...chartBase,
+            },
+            {
+                kind: 'rank',
+                title: copy.commercialIncreases
+                    .replace('{current}', labelOf(report.referenceMonth))
+                    .replace('{previous}', labelOf(previousMonth)),
+                description: `${copy.commercialIncreaseSum.replace('{amount}', money(report.increaseSum))} ${copy.commercialGroupedNote}`,
+                rows: resourceRows(report.increases),
+                empty: copy.commercialNoResources,
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'rank',
+                title: copy.commercialTopServices,
+                rows: report.topServices.map((item) => ({
+                    name: friendlyServiceLabel(item.service, locale),
+                    value: toCurrency(item.cost),
+                })),
+                empty: copy.commercialNoResources,
+                ...chartBase,
+            },
+            {
+                kind: 'rank',
+                title: copy.commercialTopResources,
+                rows: resourceRows(report.topResources.map((item) => ({ name: item.name, amount: item.cost }))),
+                empty: copy.commercialNoResources,
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'rank',
+                title: copy.commercialCostByAccount,
+                rows: report.costByAccount.map((item) => ({ name: item.alias, value: toCurrency(item.cost) })),
+                empty: copy.commercialNoResources,
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
 
     const serviceNames = report.accountByService.services.map((service) => friendlyServiceLabel(service, locale));
-    y = drawCommercialChartRow(pdf, y, [
-        {
-            kind: 'stacked',
-            title: copy.commercialAccountService,
-            categories: report.accountByService.rows.map((row) => row.alias),
-            series: serviceNames.map((name, index) => ({
-                name,
-                values: report.accountByService.rows.map((row) => toCurrency(row.costs[index] ?? 0)),
-            })),
-            ...chartBase,
-        },
-    ], palette);
+    y = drawCommercialChartRow(
+        pdf,
+        y,
+        [
+            {
+                kind: 'stacked',
+                title: copy.commercialAccountService,
+                categories: report.accountByService.rows.map((row) => row.alias),
+                series: serviceNames.map((name, index) => ({
+                    name,
+                    values: report.accountByService.rows.map((row) => toCurrency(row.costs[index] ?? 0)),
+                })),
+                ...chartBase,
+            },
+        ],
+        palette,
+    );
 
     const anomalies = report.anomalies ?? { total: 0, acknowledged: 0, items: [] };
     const anomalyStatus = (status: CommercialReportResponse['anomalies']['items'][number]['status']) => {
@@ -418,7 +523,7 @@ export async function buildCommercialReportPdf(
         if (severity === 'low') return copy.severityLow;
         return copy.severityMedium;
     };
-    y = drawSectionTitle(pdf, copy.commercialAnomaliesTitle, y);
+    y = drawSectionTitle(pdf, copy.commercialAnomaliesTitle, y, { forcePageBreak: true });
     y = drawKpiRow(pdf, y + 2, [
         { label: copy.commercialAnomaliesOccurred, value: String(anomalies.total) },
         { label: copy.commercialAnomaliesAcknowledged, value: String(anomalies.acknowledged) },
@@ -426,17 +531,40 @@ export async function buildCommercialReportPdf(
     const anomalyBody = anomalies.items.map((item) => [
         friendlyServiceLabel(item.service, locale),
         item.accountAlias || item.provider.toUpperCase(),
-        new Intl.DateTimeFormat(intl, { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${item.date.slice(0, 10)}T12:00:00Z`)),
+        new Intl.DateTimeFormat(intl, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(new Date(`${item.date.slice(0, 10)}T12:00:00Z`)),
         anomalySeverity(item.severity),
         anomalyStatus(item.status),
         money(item.impact),
     ]);
     if (anomalies.items.length < anomalies.total) {
-        anomalyBody.push([copy.commercialAnomaliesMore.replace('{shown}', String(anomalies.items.length)).replace('{total}', String(anomalies.total)), '', '', '', '', '']);
+        anomalyBody.push([
+            copy.commercialAnomaliesMore
+                .replace('{shown}', String(anomalies.items.length))
+                .replace('{total}', String(anomalies.total)),
+            '',
+            '',
+            '',
+            '',
+            '',
+        ]);
     }
     autoTable(doc, {
         startY: y + 4,
-        head: [[copy.commercialAnomalyColService, copy.commercialAnomalyColAccount, copy.commercialAnomalyColDate, copy.commercialAnomalyColSeverity, copy.commercialAnomalyColStatus, copy.commercialAnomalyColImpact]],
+        head: [
+            [
+                copy.commercialAnomalyColService,
+                copy.commercialAnomalyColAccount,
+                copy.commercialAnomalyColDate,
+                copy.commercialAnomalyColSeverity,
+                copy.commercialAnomalyColStatus,
+                copy.commercialAnomalyColImpact,
+            ],
+        ],
         body: anomalyBody.length > 0 ? anomalyBody : [[copy.commercialAnomaliesEmpty, '', '', '', '', '']],
         ...FINOPS_PDF_TABLE,
         columnStyles: { 5: { halign: 'right' } },
@@ -447,7 +575,10 @@ export async function buildCommercialReportPdf(
         pdf,
         copy.commercialHowToRead
             .replace('{month}', labelOf(report.referenceMonth))
-            .replace('{currency}', viewCurrency === 'BRL' ? copy.commercialAmountCurrencyBrl : copy.commercialAmountCurrencyUsd),
+            .replace(
+                '{currency}',
+                viewCurrency === 'BRL' ? copy.commercialAmountCurrencyBrl : copy.commercialAmountCurrencyUsd,
+            ),
         y,
     );
     addFinopsPdfFooter(pdf, copy.commercialPdfFooter);

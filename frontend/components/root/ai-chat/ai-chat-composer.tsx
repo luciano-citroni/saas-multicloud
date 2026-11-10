@@ -36,9 +36,9 @@ export function AiChatComposer({
     const canSend = Boolean(value.trim()) && !disabled && !isStreaming;
 
     return (
-        <div className="border-border bg-background border-t p-3">
+        <div className="border-border bg-background border-t p-3 sm:p-4">
             {noOrgHint ? <p className="text-muted-foreground mb-2 text-xs">{noOrgHint}</p> : null}
-            <InputGroup className="border-border bg-muted/20 h-auto min-h-16 items-stretch shadow-none">
+            <InputGroup className="border-border bg-muted/30 h-auto min-h-16 items-stretch shadow-none">
                 <InputGroupTextarea
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
@@ -56,7 +56,7 @@ export function AiChatComposer({
                     }}
                 />
                 <InputGroupAddon align="block-end" className="justify-between gap-2 pt-1">
-                    <span className="text-muted-foreground px-1 text-[11px]">Enter ↵</span>
+                    <span className="text-muted-foreground px-1 text-[11px]">Enter · Shift+Enter</span>
                     {isStreaming ? (
                         <InputGroupButton
                             type="button"

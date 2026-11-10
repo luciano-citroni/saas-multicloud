@@ -316,4 +316,36 @@ export class MailerService {
             ],
         });
     }
+
+    async sendCloudIntelligenceDigest(params: {
+        to: string[];
+        summary: string;
+        findings: Record<string, unknown>;
+    }): Promise<void> {
+        if (params.to.length === 0) {
+            return;
+        }
+
+        const digestUrl = `${this.frontendUrl}/cloud-intelligence/daily`;
+        const bodyHtml = `
+            <pre style="white-space:pre-wrap;font-family:inherit;margin:0 0 12px;">${escapeHtml(params.summary)}</pre>
+            <p style="margin:0;color:${EMAIL_BRAND.muted};font-size:13px;">
+              Findings: ${escapeHtml(JSON.stringify(params.findings))}
+            </p>
+        `;
+
+        await this.transporter.sendMail({
+            from: this.fromAddress,
+            to: params.to.join(', '),
+            subject: `Daily Cloud Intelligence · ${EMAIL_BRAND.name}`,
+            html: renderEmailLayout({
+                title: 'Daily Cloud Intelligence',
+                preheader: 'Resumo diário da infraestrutura',
+                bodyHtml,
+                frontendUrl: this.frontendUrl,
+                cta: { label: 'Abrir Cloud Intelligence', href: digestUrl },
+                footerNote: 'Você recebe este digest porque está em um grupo de notificação do Cloud Intelligence.',
+            }),
+        });
+    }
 }

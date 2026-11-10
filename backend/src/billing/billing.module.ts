@@ -5,6 +5,7 @@ import { UserSubscription } from '../db/entites/user-subscription.entity';
 import { User } from '../db/entites/user.entity';
 import { TenantMember } from '../db/entites/tenant-member.entity';
 import { Tenant } from '../db/entites/tenant.entity';
+import { AiOrgQuota } from '../db/entites/ai-org-quota.entity';
 import { TenantModule } from '../tenant/tenant.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { BillingService } from './billing.service';
@@ -13,7 +14,14 @@ import { BillingWebhookController } from './billing-webhook.controller';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([OrganizationSubscription, UserSubscription, User, TenantMember, Tenant]),
+        TypeOrmModule.forFeature([
+            OrganizationSubscription,
+            UserSubscription,
+            User,
+            TenantMember,
+            Tenant,
+            AiOrgQuota,
+        ]),
         TenantModule,
         RbacModule,
     ],

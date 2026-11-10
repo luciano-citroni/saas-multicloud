@@ -42,6 +42,13 @@ export interface PolicyEvaluationResult {
 export interface PolicyContext {
     cloudAccountId: string;
     organizationId: string;
+    /**
+     * Optional org rules loaded from Cloud Intelligence knowledge base (role=rule).
+     * When present, tag/label policies prefer these keys over platform defaults.
+     */
+    orgRules?: {
+        requiredTags?: string[];
+    };
 }
 
 /**

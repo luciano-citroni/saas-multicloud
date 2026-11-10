@@ -25,11 +25,15 @@ import { Tenant } from '../db/entites/tenant.entity';
 
 import { TenantMember } from '../db/entites/tenant-member.entity';
 
+import { AiOrgQuota } from '../db/entites/ai-org-quota.entity';
+
 import { OrgRole } from '../rbac/roles.enum';
 
 import { ErrorMessages } from '../common/messages/error-messages';
 
 import { ALL_MODULES_TOKEN, isKnownSystemModule, normalizeModuleName, normalizePlanModules, parseModulesMetadata } from '../common/modules/system-modules';
+
+import { resolveAiTier } from '../cloud-intelligence/usage/ai-tier.policy';
 
 export interface PlanMetadata {
     maxCloudAccounts: number;
@@ -39,6 +43,13 @@ export interface PlanMetadata {
     maxUsers: number;
 
     modules: string[];
+
+    /** Stripe metadata ai_tier: basic | professional | enterprise */
+    aiTier: string | null;
+
+    aiDailyLimit: number | null;
+
+    aiMonthlyLimit: number | null;
 }
 
 export interface PlanInfo {
@@ -88,6 +99,9 @@ export class BillingService {
 
         @InjectRepository(Tenant)
         private readonly tenantRepository: Repository<Tenant>,
+
+        @InjectRepository(AiOrgQuota)
+        private readonly aiOrgQuotaRepository: Repository<AiOrgQuota>,
 
         private readonly configService: ConfigService
     ) {
@@ -1083,15 +1097,42 @@ export class BillingService {
         const modulesChanged = JSON.stringify(currentModules) !== JSON.stringify(normalizedModules);
         const limitsChanged = tenant.maxCloudAccounts !== maxCloudAccounts || tenant.maxUsers !== maxUsers;
 
-        if (!modulesChanged && !limitsChanged) {
-            return;
+        if (modulesChanged || limitsChanged) {
+            tenant.plans = normalizedModules;
+            tenant.maxCloudAccounts = maxCloudAccounts;
+            tenant.maxUsers = maxUsers;
+            await this.tenantRepository.save(tenant);
         }
 
-        tenant.plans = normalizedModules;
-        tenant.maxCloudAccounts = maxCloudAccounts;
-        tenant.maxUsers = maxUsers;
+        await this.syncAiQuotaFromPlan(tenantId, plan);
+    }
 
-        await this.tenantRepository.save(tenant);
+    private async syncAiQuotaFromPlan(tenantId: string, plan: PlanInfo): Promise<void> {
+        const tier = resolveAiTier({
+            aiTier: plan.metadata.aiTier,
+            modules: plan.metadata.modules,
+        });
+
+        let quota = await this.aiOrgQuotaRepository.findOne({ where: { organizationId: tenantId } });
+        if (!quota) {
+            quota = this.aiOrgQuotaRepository.create({
+                organizationId: tenantId,
+                enabled: true,
+                perAgentLimits: {},
+                dailyIntelligenceEnabled: true,
+                notificationGroupIds: [],
+            });
+        }
+
+        quota.tier = tier;
+        if (plan.metadata.aiDailyLimit !== null) {
+            quota.dailyLimit = plan.metadata.aiDailyLimit;
+        }
+        if (plan.metadata.aiMonthlyLimit !== null) {
+            quota.monthlyLimit = plan.metadata.aiMonthlyLimit;
+        }
+
+        await this.aiOrgQuotaRepository.save(quota);
     }
 
     private async getOrInitializeTenantSubscriptionRecord(tenantId: string): Promise<OrganizationSubscription> {
@@ -1133,6 +1174,12 @@ export class BillingService {
             this.logger.warn(`Ignoring unknown Stripe plan modules: ${unknownModules.join(', ')}`);
         }
 
+        const parseOptionalInt = (raw: string | undefined): number | null => {
+            if (raw === undefined || raw.trim() === '') return null;
+            const value = Number.parseInt(raw, 10);
+            return Number.isFinite(value) && value >= 0 ? value : null;
+        };
+
         return {
             maxCloudAccounts: parseInt(metadata['max_cloud_accounts'] ?? '0', 10),
 
@@ -1141,6 +1188,12 @@ export class BillingService {
             maxUsers: parseInt(metadata['max_users'] ?? '0', 10),
 
             modules,
+
+            aiTier: metadata['ai_tier']?.trim() || null,
+
+            aiDailyLimit: parseOptionalInt(metadata['ai_daily_limit']),
+
+            aiMonthlyLimit: parseOptionalInt(metadata['ai_monthly_limit']),
         };
     }
 

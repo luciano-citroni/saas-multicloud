@@ -50,6 +50,13 @@ export class AiChatMessage {
     @Column({ type: 'jsonb', name: 'token_usage', nullable: true })
     tokenUsage!: Record<string, unknown> | null;
 
+    @Column({ type: 'varchar', length: 64, name: 'agent_type', nullable: true })
+    agentType!: string | null;
+
+    /** User feedback: 1 = positive, -1 = negative, null = none. */
+    @Column({ type: 'smallint', nullable: true })
+    feedback!: number | null;
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;
 }

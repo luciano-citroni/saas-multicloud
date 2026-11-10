@@ -46,7 +46,9 @@ export async function proxyToBackend(
     backendPath: string,
     options: { method?: string; requireOrg?: boolean } = {},
 ) {
-    const { method = 'GET', requireOrg = true } = options;
+    // Default to the incoming HTTP method so POST/PATCH/DELETE BFF routes
+    // don't silently fall back to GET when `method` is omitted.
+    const { method = request.method || 'GET', requireOrg = true } = options;
 
     if (method !== 'GET' && !hasTrustedOrigin(request)) {
         return NextResponse.json({ message: 'Origem não permitida' }, { status: 403 });

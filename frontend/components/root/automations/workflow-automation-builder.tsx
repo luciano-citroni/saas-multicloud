@@ -34,6 +34,14 @@ import {
     Search,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import {
+    Item,
+    ItemContent,
+    ItemDescription,
+    ItemGroup,
+    ItemMedia,
+    ItemTitle,
+} from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { automationNodeTypes, type AutomationNodeData } from '@/components/root/automation/automation-nodes';
@@ -289,35 +297,65 @@ function BuilderCanvas({
                                                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                                             )}
                                         </button>
-                                        {!collapsed &&
-                                            categoryActions.map((action) => {
-                                                const meta = ACTION_ICONS[action.type] ?? { icon: Cloud, color: 'bg-muted text-muted-foreground' };
-                                                const Icon = meta.icon;
-                                                return (
-                                                    <button
-                                                        key={action.type}
-                                                        type="button"
-                                                        draggable
-                                                        onDragStart={(event) => {
-                                                            event.dataTransfer.setData('application/automation-action', action.type);
-                                                            event.dataTransfer.setData('application/automation-name', action.name);
-                                                            event.dataTransfer.effectAllowed = 'move';
-                                                        }}
-                                                        onClick={() => addNode(action.type, action.name)}
-                                                        className="flex w-full cursor-grab items-center gap-2.5 rounded-lg border bg-background p-2.5 text-left shadow-sm hover:border-primary"
-                                                    >
-                                                        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', meta.color)}>
-                                                            <Icon className="h-4 w-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-semibold">{action.name}</p>
-                                                            <p className="truncate text-[10px] text-muted-foreground">
-                                                                {action.kind ?? 'native'}
-                                                            </p>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
+                                        {!collapsed && (
+                                            <ItemGroup className="gap-1.5">
+                                                {categoryActions.map((action) => {
+                                                    const meta =
+                                                        ACTION_ICONS[action.type] ?? {
+                                                            icon: Cloud,
+                                                            color: 'bg-muted text-muted-foreground',
+                                                        };
+                                                    const Icon = meta.icon;
+                                                    return (
+                                                        <Item
+                                                            key={action.type}
+                                                            role="listitem"
+                                                            tabIndex={0}
+                                                            size="sm"
+                                                            variant="outline"
+                                                            draggable
+                                                            className="bg-background cursor-grab shadow-sm hover:border-primary"
+                                                            onDragStart={(event) => {
+                                                                event.dataTransfer.setData(
+                                                                    'application/automation-action',
+                                                                    action.type,
+                                                                );
+                                                                event.dataTransfer.setData(
+                                                                    'application/automation-name',
+                                                                    action.name,
+                                                                );
+                                                                event.dataTransfer.effectAllowed = 'move';
+                                                            }}
+                                                            onClick={() => addNode(action.type, action.name)}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === 'Enter' || event.key === ' ') {
+                                                                    event.preventDefault();
+                                                                    addNode(action.type, action.name);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <ItemMedia
+                                                                variant="icon"
+                                                                className={cn(
+                                                                    'flex size-8 items-center justify-center rounded-lg',
+                                                                    meta.color,
+                                                                )}
+                                                            >
+                                                                <Icon className="size-4" />
+                                                            </ItemMedia>
+                                                            <ItemContent className="min-w-0">
+                                                                <ItemTitle className="text-xs font-semibold">
+                                                                    {action.name}
+                                                                </ItemTitle>
+                                                                <ItemDescription className="truncate text-[10px]">
+                                                                    {action.kind ?? 'native'}
+                                                                </ItemDescription>
+                                                            </ItemContent>
+                                                        </Item>
+                                                    );
+                                                })}
+                                            </ItemGroup>
+                                        )}
                                     </div>
                                 );
                             })

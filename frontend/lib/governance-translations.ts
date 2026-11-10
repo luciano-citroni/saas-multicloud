@@ -29,11 +29,91 @@ export function translateGovernancePolicyName(name: string): string {
 
     const policyMap: Record<string, string> = {
         'EC2 Instance Must Have Required Tags': 'Instância EC2 deve ter tags obrigatórias',
+        'EC2 Instance Should Have an IAM Instance Profile': 'Instância EC2 deve ter um perfil de instância IAM',
+        'EC2 Instance Should Not Have a Public IP Address': 'Instância EC2 não deve ter IP público',
         'S3 Bucket Must Have Server-Side Encryption Enabled': 'Bucket S3 deve ter criptografia no servidor habilitada',
+        'S3 Bucket Must Not Be Publicly Accessible': 'Bucket S3 não deve ser acessível publicamente',
         'S3 Bucket Should Have Server Access Logging Enabled': 'Bucket S3 deve ter logging de acesso habilitado',
+        'S3 Bucket Should Have Versioning Enabled': 'Bucket S3 deve ter versionamento habilitado',
+        'Security Group Must Not Allow SSH From Any IP': 'Security Group não deve permitir SSH de qualquer IP',
+        'Security Group Must Not Allow RDP From Any IP': 'Security Group não deve permitir RDP de qualquer IP',
+        'Security Group Must Not Expose Database Ports Publicly':
+            'Security Group não deve expor portas de banco publicamente',
+        'RDS Instance Must Not Be Publicly Accessible': 'Instância RDS não deve ser acessível publicamente',
+        'RDS Instance Must Have Storage Encryption Enabled': 'Instância RDS deve ter criptografia de armazenamento',
+        'RDS Instance Must Have Deletion Protection Enabled': 'Instância RDS deve ter proteção contra exclusão',
+        'RDS Production Instance Should Have Multi-AZ Enabled':
+            'Instância RDS de produção deve ter Multi-AZ habilitado',
+        'RDS Instance Must Have Automated Backups Retained for At Least 7 Days':
+            'Instância RDS deve reter backups automáticos por pelo menos 7 dias',
+        'IAM Role Must Not Have Unrestricted Administrator Access':
+            'Role IAM não deve ter acesso de administrador irrestrito',
+        'IAM Role Session Duration Should Not Exceed 8 Hours':
+            'Duração da sessão da role IAM não deve exceder 8 horas',
+        'Lambda Function That Accesses Private Resources Should Be in a VPC':
+            'Função Lambda que acessa recursos privados deve estar em uma VPC',
+        'EKS Cluster Public API Endpoint Must Be Restricted':
+            'Endpoint público da API do cluster EKS deve ser restrito',
+        'AWS GuardDuty Must Be Enabled': 'AWS GuardDuty deve estar habilitado',
+        'KMS Customer-Managed Keys Must Have Automatic Rotation Enabled':
+            'Chaves KMS gerenciadas pelo cliente devem ter rotação automática',
+        'CloudTrail Trail Must Be Actively Logging': 'Trail do CloudTrail deve estar registrando ativamente',
+        'CloudTrail Trail Should Be a Multi-Region Trail': 'Trail do CloudTrail deve ser multi-região',
+        'CloudTrail Log File Validation Must Be Enabled':
+            'Validação de arquivos de log do CloudTrail deve estar habilitada',
+        'GCP Storage Bucket Must Not Be Publicly Accessible':
+            'Bucket Storage GCP não deve ser acessível publicamente',
+        'GCP Storage Bucket Must Use Uniform Bucket-Level Access':
+            'Bucket Storage GCP deve usar acesso uniforme no nível do bucket',
+        'GCP Storage Bucket Should Have Versioning Enabled':
+            'Bucket Storage GCP deve ter versionamento habilitado',
+        'GCP VM Instance Must Have Required Labels': 'Instância VM GCP deve ter labels obrigatórios',
+        'GCP VM Instance Should Not Have a Public External IP':
+            'Instância VM GCP não deve ter IP externo público',
+        'GCP VM Instance Should Have Deletion Protection Enabled':
+            'Instância VM GCP deve ter proteção contra exclusão',
+        'GCP Firewall Rule Must Not Allow SSH From Any IP':
+            'Regra de firewall GCP não deve permitir SSH de qualquer IP',
+        'GCP Firewall Rule Must Not Allow RDP From Any IP':
+            'Regra de firewall GCP não deve permitir RDP de qualquer IP',
+        'GCP Firewall Rule Must Not Expose Database Ports to the Internet':
+            'Regra de firewall GCP não deve expor portas de banco à internet',
+        'GCP Cloud SQL Instance Must Not Have a Public IP Address':
+            'Instância Cloud SQL não deve ter IP público',
+        'GCP Cloud SQL Instance Must Have Automated Backups Enabled':
+            'Instância Cloud SQL deve ter backups automáticos habilitados',
+        'GCP Cloud SQL Instance Should Use High Availability':
+            'Instância Cloud SQL deve usar alta disponibilidade',
+        'GCP GKE Cluster Must Have Logging Enabled': 'Cluster GKE deve ter logging habilitado',
+        'GCP GKE Cluster Must Have Monitoring Enabled': 'Cluster GKE deve ter monitoramento habilitado',
     };
 
     return policyMap[name] ?? name;
+}
+
+/** Translates CI recommendation titles like "Governance: Policy Name" / "Cost anomaly: Service". */
+export function translateCiRecommendationTitle(
+    title: string,
+    prefixes?: { governance: string; costAnomaly: string },
+): string {
+    const governancePrefix = prefixes?.governance ?? 'Governance';
+    const costAnomalyPrefix = prefixes?.costAnomaly ?? 'Cost anomaly';
+
+    const governanceMatch = title.match(/^Governance:\s*(.+)$/i);
+    if (governanceMatch) {
+        return `${governancePrefix}: ${translateGovernancePolicyName(governanceMatch[1].trim())}`;
+    }
+
+    const costMatch = title.match(/^Cost anomaly:\s*(.+)$/i);
+    if (costMatch) {
+        return `${costAnomalyPrefix}: ${costMatch[1].trim()}`;
+    }
+
+    // Plain policy name without prefix (legacy / edge cases).
+    const translatedPolicy = translateGovernancePolicyName(title);
+    if (translatedPolicy !== title) return translatedPolicy;
+
+    return title;
 }
 
 export function translateGovernanceResourceType(resourceType: string): string {

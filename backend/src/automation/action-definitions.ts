@@ -154,6 +154,36 @@ export const ec2InstanceConfigSchema = z.object({
     name: z.union([z.string().min(1), valueBindingSchema]).optional(),
 });
 
+export const ec2CreateVolumeSnapshotsConfigSchema = z.object({
+    instanceId: bindableString,
+    region: bindableRegion,
+    descriptionPrefix: z.union([z.string().min(1), valueBindingSchema]).optional(),
+});
+
+export const ec2TerminateInstanceConfigSchema = z.object({
+    instanceId: bindableString,
+    region: bindableRegion,
+    deleteVolumes: z.boolean().optional().default(true),
+});
+
+export const ec2CreateTagsConfigSchema = z.object({
+    resourceIds: z.union([
+        z.array(z.string().min(1)).min(1),
+        z.string().min(1),
+        valueBindingSchema,
+    ]),
+    region: bindableRegion,
+    tags: z
+        .array(
+            z.object({
+                key: z.string().min(1).max(128),
+                value: z.string().max(256).optional().default(''),
+            }),
+        )
+        .min(1)
+        .max(40),
+});
+
 export const amplifyAppConfigSchema = z.object({
     name: bindableString,
     region: bindableRegion,
@@ -214,6 +244,19 @@ export const ACTION_OUTPUT_FIELDS: Record<string, readonly string[]> = {
     [AUTOMATION_ACTION_TYPES.AWS_NAT_GATEWAY_CREATE]: ['natGatewayId', 'subnetId', 'allocationId'],
     [AUTOMATION_ACTION_TYPES.AWS_RDS_INSTANCE_CREATE]: ['dbInstanceIdentifier', 'endpoint'],
     [AUTOMATION_ACTION_TYPES.AWS_EC2_INSTANCE_CREATE]: ['instanceId'],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS]: [
+        'instanceId',
+        'volumeIds',
+        'snapshotIds',
+        'snapshots',
+    ],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE]: [
+        'instanceId',
+        'terminated',
+        'deletedVolumeIds',
+        'skippedVolumeIds',
+    ],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS]: ['resourceIds', 'tags', 'tagged'],
     [AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE]: ['appId', 'appArn', 'defaultDomain'],
     [AUTOMATION_ACTION_TYPES.AWS_API_GATEWAY_CREATE]: ['restApiId', 'name', 'rootResourceId'],
     [AUTOMATION_ACTION_TYPES.AWS_CLOUDFORMATION_STACK]: ['stackId', 'stackName', 'stackStatus', 'outputs'],
@@ -278,6 +321,9 @@ export const ROLLBACK_IAM_ACTIONS: Record<string, readonly string[]> = {
     [AUTOMATION_ACTION_TYPES.AWS_NAT_GATEWAY_CREATE]: ['ec2:DeleteNatGateway', 'ec2:ReleaseAddress'],
     [AUTOMATION_ACTION_TYPES.AWS_RDS_INSTANCE_CREATE]: ['rds:DeleteDBInstance'],
     [AUTOMATION_ACTION_TYPES.AWS_EC2_INSTANCE_CREATE]: ['ec2:TerminateInstances'],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS]: ['ec2:DeleteSnapshot'],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE]: [],
+    [AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS]: ['ec2:DeleteTags'],
     [AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE]: ['amplify:DeleteApp'],
     [AUTOMATION_ACTION_TYPES.AWS_API_GATEWAY_CREATE]: ['apigateway:DELETE'],
     [AUTOMATION_ACTION_TYPES.AWS_CLOUDFORMATION_STACK]: [
@@ -581,6 +627,80 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         ],
     },
     {
+        type: AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS,
+        provider: 'AWS',
+        kind: 'native',
+        name: 'Criar snapshots dos volumes EBS',
+        category: 'Compute',
+        outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS],
+        requiredIamActions: [
+            'ec2:DescribeInstances',
+            'ec2:CreateSnapshot',
+            'ec2:CreateTags',
+            'ec2:DescribeSnapshots',
+        ],
+        fields: [
+            { key: 'instanceId', label: 'Instance ID', input: 'text', required: true, acceptsBinding: true },
+            regionField(),
+            {
+                key: 'descriptionPrefix',
+                label: 'Prefixo da descrição',
+                input: 'text',
+                defaultValue: 'CI remediation snapshot',
+                acceptsBinding: true,
+            },
+        ],
+    },
+    {
+        type: AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE,
+        provider: 'AWS',
+        kind: 'native',
+        name: 'Terminar EC2 e excluir EBS',
+        category: 'Compute',
+        outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE],
+        requiredIamActions: [
+            'ec2:DescribeInstances',
+            'ec2:TerminateInstances',
+            'ec2:DescribeVolumes',
+            'ec2:DeleteVolume',
+        ],
+        fields: [
+            { key: 'instanceId', label: 'Instance ID', input: 'text', required: true, acceptsBinding: true },
+            regionField(),
+            {
+                key: 'deleteVolumes',
+                label: 'Excluir volumes EBS após terminar',
+                input: 'boolean',
+                defaultValue: true,
+            },
+        ],
+    },
+    {
+        type: AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS,
+        provider: 'AWS',
+        kind: 'native',
+        name: 'Aplicar tags em recursos EC2',
+        category: 'Governance',
+        outputFields: ACTION_OUTPUT_FIELDS[AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS],
+        requiredIamActions: ['ec2:CreateTags', 'ec2:DescribeTags'],
+        fields: [
+            {
+                key: 'resourceIds',
+                label: 'Resource IDs (ex.: i-..., vol-...)',
+                input: 'text',
+                required: true,
+                acceptsBinding: true,
+            },
+            regionField(),
+            {
+                key: 'tags',
+                label: 'Tags (key/value)',
+                input: 'keyValue',
+                required: true,
+            },
+        ],
+    },
+    {
         type: AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE,
         provider: 'AWS',
         kind: 'native',
@@ -789,6 +909,12 @@ export function getConfigSchemaForAction(type: string): z.ZodType | undefined {
             return rdsInstanceConfigSchema;
         case AUTOMATION_ACTION_TYPES.AWS_EC2_INSTANCE_CREATE:
             return ec2InstanceConfigSchema;
+        case AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS:
+            return ec2CreateVolumeSnapshotsConfigSchema;
+        case AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE:
+            return ec2TerminateInstanceConfigSchema;
+        case AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS:
+            return ec2CreateTagsConfigSchema;
         case AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE:
             return amplifyAppConfigSchema;
         case AUTOMATION_ACTION_TYPES.AWS_API_GATEWAY_CREATE:

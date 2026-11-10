@@ -17,6 +17,9 @@ type PlanMetadata = {
     maxOrgAccounts: number;
     maxUsers: number;
     modules: string[];
+    aiTier?: string | null;
+    aiDailyLimit?: number | null;
+    aiMonthlyLimit?: number | null;
 };
 
 function normalizeBillingPlan(plan: BillingPlan): BillingPlan {

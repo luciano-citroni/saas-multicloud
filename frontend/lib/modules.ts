@@ -4,6 +4,7 @@ export enum PlanModule {
     FINOPS = 'finops',
     GOVERNANCE = 'governance',
     AUTOMATION = 'automation',
+    CLOUD_INTELLIGENCE = 'cloud_intelligence',
 }
 
 export const MODULE_ALIAS_MAP: Partial<Record<string, PlanModule>> = {
@@ -16,6 +17,7 @@ export const MODULE_LABEL_MAP: Record<PlanModule, string> = {
     [PlanModule.FINOPS]: 'finops',
     [PlanModule.GOVERNANCE]: 'governance',
     [PlanModule.AUTOMATION]: 'automation',
+    [PlanModule.CLOUD_INTELLIGENCE]: 'cloud intelligence',
 };
 
 export function hasModuleAccess(modules: string[] | unknown, module: PlanModule): boolean {

@@ -422,6 +422,105 @@ export const ErrorMessages = {
         },
     },
 
+    CLOUD_INTELLIGENCE: {
+        CONVERSATION_NOT_FOUND: {
+            en: 'Chat conversation not found.',
+            pt: 'Conversa do chat não encontrada.',
+        },
+        MESSAGE_TOO_LONG: {
+            en: 'Message exceeds the maximum allowed length.',
+            pt: 'A mensagem excede o tamanho máximo permitido.',
+        },
+        PROVIDER_NOT_CONFIGURED: {
+            en: 'The assistant is not available right now.',
+            pt: 'O assistente não está disponível no momento.',
+        },
+        PROVIDER_UNAVAILABLE: {
+            en: 'The assistant is temporarily unavailable. Please try again shortly.',
+            pt: 'O assistente está temporariamente indisponível. Tente novamente em instantes.',
+        },
+        PROVIDER_TIMEOUT: {
+            en: 'The assistant took too long to respond. Please try again.',
+            pt: 'O assistente demorou demais para responder. Tente de novo.',
+        },
+        PROVIDER_DISABLED: {
+            en: 'Cloud Intelligence AI is disabled for this environment.',
+            pt: 'O Cloud Intelligence AI está desabilitado neste ambiente.',
+        },
+        OUT_OF_SCOPE: {
+            en: 'I can only help with your organization data and this platform — costs, resources, compliance, analyses, and automations.',
+            pt: 'Só posso ajudar com os dados da sua organização e com esta plataforma — custos, recursos, conformidade, análises e automações.',
+        },
+        TOOL_LIMIT_EXCEEDED: {
+            en: 'This question asked for too much data at once. Try something more specific.',
+            pt: 'Esta pergunta pediu dados demais de uma vez. Tente algo mais específico.',
+        },
+        GENERATION_CANCELLED: {
+            en: 'The response was stopped.',
+            pt: 'A resposta foi interrompida.',
+        },
+        RATE_LIMITED: {
+            en: 'Too many questions in a short time. Please try again in a moment.',
+            pt: 'Muitas perguntas em pouco tempo. Tente novamente em instantes.',
+        },
+        NO_DATA: {
+            en: 'No data is available for this question in your organization.',
+            pt: 'Não há dados disponíveis para essa pergunta na sua organização.',
+        },
+        QUOTA_EXCEEDED: {
+            en: 'AI usage quota exceeded for this organization. Try again later or contact an administrator.',
+            pt: 'Cota de uso de IA excedida para esta organização. Tente mais tarde ou fale com um administrador.',
+        },
+        QUOTA_DISABLED: {
+            en: 'Cloud Intelligence AI is disabled for this organization.',
+            pt: 'O Cloud Intelligence AI está desabilitado para esta organização.',
+        },
+        AGENT_UNAVAILABLE: {
+            en: 'This AI agent is not available yet.',
+            pt: 'Este agente de IA ainda não está disponível.',
+        },
+        RECOMMENDATION_NOT_FOUND: {
+            en: 'AI recommendation not found.',
+            pt: 'Recomendação de IA não encontrada.',
+        },
+        INVALID_RECOMMENDATION_STATUS: {
+            en: 'Invalid recommendation status transition.',
+            pt: 'Transição de status de recomendação inválida.',
+        },
+        HUMAN_REVIEW_REQUIRED: {
+            en: 'For security, recommendations cannot be executed from Cloud Intelligence. Open the automation draft, review every create/delete action, publish it, then execute from the automation editor with explicit confirmation.',
+            pt: 'Por segurança, recomendações não podem ser executadas pelo Cloud Intelligence. Abra o rascunho da automação, revise cada ação de criar/excluir, publique e execute no editor de automações com confirmação explícita.',
+        },
+        MISSING_CLOUD_ACCOUNT: {
+            en: 'This recommendation is missing the cloud account reference, so an automation cannot be created. Regenerate Daily Intelligence and try again.',
+            pt: 'Esta recomendação está sem a conta cloud vinculada, então não dá para criar a automação. Gere o Daily de novo e tente outra vez.',
+        },
+        AUTOMATION_NOT_MAPPED: {
+            en: 'This recommendation type does not have an automatic remediation yet. Investigate in FinOps or add the fix manually in the automation editor.',
+            pt: 'Este tipo de recomendação ainda não tem remediação automática. Investigue no FinOps ou adicione a correção manualmente no editor de automações.',
+        },
+        RAG_TIER_REQUIRED: {
+            en: 'Organization private knowledge requires Enterprise AI tier.',
+            pt: 'A base de conhecimento privada exige tier Enterprise de IA.',
+        },
+        KNOWLEDGE_NOT_FOUND: {
+            en: 'Knowledge document not found.',
+            pt: 'Documento da base de conhecimento não encontrado.',
+        },
+        KNOWLEDGE_EMBEDDING_UNAVAILABLE: {
+            en: 'Document saved without semantic search. Configure embeddings/pgvector to enable RAG retrieval.',
+            pt: 'Documento salvo sem busca semântica. Configure embeddings/pgvector para habilitar o RAG.',
+        },
+        KNOWLEDGE_RULE_INVALID: {
+            en: 'Structured knowledge rule is invalid. Provide a valid rule payload when role is "rule".',
+            pt: 'Regra estruturada inválida. Informe um payload válido quando o papel for "regra".',
+        },
+        KNOWLEDGE_RULE_DOMAIN_MISMATCH: {
+            en: 'Structured rule type does not match the selected knowledge domain.',
+            pt: 'O tipo da regra estruturada não corresponde ao domínio selecionado.',
+        },
+    },
+
     NOTIFICATIONS: {
         GROUP_NOT_FOUND: {
             en: 'Notification group not found.',

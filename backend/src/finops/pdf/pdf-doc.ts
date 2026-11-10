@@ -22,8 +22,14 @@ export type PdfDoc = {
 };
 
 export const FINOPS_PDF_TABLE = {
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [17, 17, 17] as [number, number, number], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [250, 250, 250] as [number, number, number] },
+    styles: { fontSize: 7.5, cellPadding: 2.4, textColor: [24, 24, 27] as [number, number, number], lineColor: [228, 228, 231] as [number, number, number], lineWidth: 0.1 },
+    headStyles: {
+        fillColor: [24, 24, 27] as [number, number, number],
+        textColor: 255,
+        fontStyle: 'bold' as const,
+        fontSize: 7.5,
+        cellPadding: 2.6,
+    },
+    alternateRowStyles: { fillColor: [250, 250, 252] as [number, number, number] },
     margin: { left: 14, right: 14 },
 };

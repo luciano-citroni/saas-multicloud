@@ -4,6 +4,15 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { MessageSquareText, Trash2 } from 'lucide-react';
 import type { AiChatConversation } from '@/app/actions/ai-chat';
 import { Button } from '@/components/ui/button';
+import {
+    Item,
+    ItemActions,
+    ItemContent,
+    ItemDescription,
+    ItemGroup,
+    ItemMedia,
+    ItemTitle,
+} from '@/components/ui/item';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -104,24 +113,26 @@ export function AiChatConversationList({
 
     if (loading) {
         return (
-            <div className="min-h-0 flex-1 overflow-hidden">
-                <ConversationListSkeleton />
+            <div className="relative h-full min-h-0 flex-1 overflow-hidden">
+                <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+                    <ConversationListSkeleton />
+                </div>
             </div>
         );
     }
 
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="relative h-full min-h-0 flex-1 overflow-hidden">
                 {!conversations.length ? (
-                    <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+                    <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
                         <div className="bg-muted/70 text-muted-foreground/80 flex size-11 items-center justify-center rounded-full">
                             <MessageSquareText className="size-5" />
                         </div>
                         <p className="max-w-[240px] text-sm leading-relaxed">{labels.empty}</p>
                     </div>
                 ) : (
-                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+                    <div className="absolute inset-0 overflow-y-auto overscroll-contain px-2 py-2">
                         <AnimatePresence initial={false}>
                             {groups.map((group, groupIndex) => (
                                 <div key={group.key} className="mb-1">
@@ -129,7 +140,7 @@ export function AiChatConversationList({
                                     <p className="text-muted-foreground/80 px-2.5 pb-1.5 pt-1 text-[10px] font-medium tracking-wide uppercase">
                                         {labels[group.key]}
                                     </p>
-                                    <ul className="space-y-0.5">
+                                    <ItemGroup className="gap-1.5">
                                         {group.items.map((conversation) => {
                                             const isActive = activeId === conversation.id;
                                             const when = formatRelativeTime(
@@ -138,7 +149,7 @@ export function AiChatConversationList({
                                             );
 
                                             return (
-                                                <motion.li
+                                                <motion.div
                                                     key={conversation.id}
                                                     layout={!prefersReducedMotion}
                                                     initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
@@ -146,73 +157,75 @@ export function AiChatConversationList({
                                                     exit={prefersReducedMotion ? undefined : { opacity: 0, height: 0 }}
                                                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                                                 >
-                                                    <div
+                                                    <Item
+                                                        role="listitem"
+                                                        tabIndex={0}
+                                                        size="sm"
+                                                        variant={isActive ? 'muted' : 'outline'}
+                                                        aria-selected={isActive}
                                                         className={cn(
-                                                            'group relative flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors',
-                                                            isActive
-                                                                ? 'bg-primary/10 text-foreground'
-                                                                : 'hover:bg-muted/70 text-foreground/90',
+                                                            'group cursor-pointer hover:bg-muted/60',
+                                                            isActive &&
+                                                                'border-primary/40 bg-primary/10 ring-primary/20 ring-1',
                                                         )}
+                                                        onClick={() => onSelect(conversation.id)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                                event.preventDefault();
+                                                                onSelect(conversation.id);
+                                                            }
+                                                        }}
                                                     >
-                                                        {isActive ? (
-                                                            <span
-                                                                aria-hidden
-                                                                className="bg-primary absolute inset-y-2 left-0 w-0.5 rounded-full"
-                                                            />
-                                                        ) : null}
-
-                                                        <button
-                                                            type="button"
-                                                            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                                                            onClick={() => onSelect(conversation.id)}
+                                                        <ItemMedia
+                                                            variant="icon"
+                                                            className={cn(
+                                                                'bg-background size-9 rounded-lg border',
+                                                                isActive
+                                                                    ? 'border-primary/30 text-primary'
+                                                                    : 'border-border text-muted-foreground',
+                                                            )}
                                                         >
-                                                            <span
-                                                                className={cn(
-                                                                    'flex size-9 shrink-0 items-center justify-center rounded-lg border',
-                                                                    isActive
-                                                                        ? 'border-primary/25 bg-primary/15 text-primary'
-                                                                        : 'border-border/70 bg-background text-muted-foreground',
-                                                                )}
-                                                            >
-                                                                <MessageSquareText className="size-3.5" />
-                                                            </span>
-                                                            <span className="min-w-0 flex-1">
-                                                                <span className="line-clamp-2 text-sm font-medium leading-snug">
-                                                                    {conversation.title}
-                                                                </span>
-                                                                <span className="text-muted-foreground mt-1 block text-[11px] leading-none">
-                                                                    {when}
-                                                                </span>
-                                                            </span>
-                                                        </button>
-
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon-xs"
-                                                                    className={cn(
-                                                                        'text-muted-foreground hover:text-destructive size-7 shrink-0 rounded-md',
-                                                                        'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
-                                                                        'focus-visible:opacity-100',
-                                                                    )}
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation();
-                                                                        onDelete(conversation.id);
-                                                                    }}
-                                                                    aria-label={labels.delete}
-                                                                >
-                                                                    <Trash2 className="size-3.5" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="left">{labels.delete}</TooltipContent>
-                                                        </Tooltip>
-                                                    </div>
-                                                </motion.li>
+                                                            <MessageSquareText className="size-3.5" />
+                                                        </ItemMedia>
+                                                        <ItemContent className="min-w-0">
+                                                            <ItemTitle className="line-clamp-2 w-full max-w-none whitespace-normal">
+                                                                {conversation.title}
+                                                            </ItemTitle>
+                                                            <ItemDescription className="line-clamp-1 text-[11px]">
+                                                                {when}
+                                                            </ItemDescription>
+                                                        </ItemContent>
+                                                        <ItemActions>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon-xs"
+                                                                        className={cn(
+                                                                            'text-muted-foreground hover:text-destructive size-7 shrink-0 rounded-md',
+                                                                            'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+                                                                            'focus-visible:opacity-100',
+                                                                        )}
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation();
+                                                                            onDelete(conversation.id);
+                                                                        }}
+                                                                        aria-label={labels.delete}
+                                                                    >
+                                                                        <Trash2 className="size-3.5" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="left">
+                                                                    {labels.delete}
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </ItemActions>
+                                                    </Item>
+                                                </motion.div>
                                             );
                                         })}
-                                    </ul>
+                                    </ItemGroup>
                                 </div>
                             ))}
                         </AnimatePresence>

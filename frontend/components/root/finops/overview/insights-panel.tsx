@@ -1,11 +1,19 @@
 'use client';
 
-import { AlertCircle, TrendingDown, TrendingUp, Lightbulb, Target } from 'lucide-react';
+import { AlertCircle, TrendingDown, Lightbulb, Target } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+    Item,
+    ItemActions,
+    ItemContent,
+    ItemDescription,
+    ItemGroup,
+    ItemMedia,
+    ItemTitle,
+} from '@/components/ui/item';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from './helpers';
-import type { OptimizationInsight } from './types';
 import { useTranslations } from '@/lib/i18n';
 
 export type Insight = {
@@ -64,65 +72,70 @@ export function InsightsPanel({ insights, isLoading = false }: InsightsPanelProp
                 <CardTitle>Insights Inteligentes</CardTitle>
                 <CardDescription>Análise automática dos seus dados de FinOps</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-                {insights.map((insight, index) => {
-                    const iconColor =
-                        insight.type === 'positive'
-                            ? 'text-emerald-500'
-                            : insight.type === 'warning'
-                              ? 'text-destructive'
-                              : insight.type === 'opportunity'
-                                ? 'text-blue-500'
-                                : 'text-amber-500';
+            <CardContent>
+                <ItemGroup className="gap-2">
+                    {insights.map((insight, index) => {
+                        const iconColor =
+                            insight.type === 'positive'
+                                ? 'text-emerald-500'
+                                : insight.type === 'warning'
+                                  ? 'text-destructive'
+                                  : insight.type === 'opportunity'
+                                    ? 'text-blue-500'
+                                    : 'text-amber-500';
 
-                    const bgColor =
-                        insight.type === 'positive'
-                            ? 'bg-emerald-50 dark:bg-emerald-950'
-                            : insight.type === 'warning'
-                              ? 'bg-destructive/5'
-                              : insight.type === 'opportunity'
-                                ? 'bg-blue-50 dark:bg-blue-950'
-                                : 'bg-amber-50 dark:bg-amber-950';
+                        const bgColor =
+                            insight.type === 'positive'
+                                ? 'bg-emerald-50 dark:bg-emerald-950'
+                                : insight.type === 'warning'
+                                  ? 'bg-destructive/5'
+                                  : insight.type === 'opportunity'
+                                    ? 'bg-blue-50 dark:bg-blue-950'
+                                    : 'bg-amber-50 dark:bg-amber-950';
 
-                    return (
-                        <div key={index} className={cn('rounded-lg border p-3', bgColor)}>
-                            <div className="flex gap-3">
-                                <div className="flex-shrink-0 pt-0.5">
-                                    {insight.type === 'positive' && <TrendingDown className={cn('h-4 w-4', iconColor)} />}
-                                    {insight.type === 'warning' && <AlertCircle className={cn('h-4 w-4', iconColor)} />}
-                                    {insight.type === 'opportunity' && <Lightbulb className={cn('h-4 w-4', iconColor)} />}
-                                    {insight.type === 'info' && <Target className={cn('h-4 w-4', iconColor)} />}
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                            <p className="font-semibold text-sm">{insight.title}</p>
-                                            <p className="text-sm text-muted-foreground mt-0.5">{insight.description}</p>
-                                        </div>
-
-                                        {insight.metric && (
-                                            <Badge
-                                                variant={
-                                                    insight.type === 'positive' ? 'secondary' : insight.type === 'warning' ? 'destructive' : 'default'
-                                                }
-                                                className="flex-shrink-0"
-                                            >
-                                                {insight.metric}
-                                            </Badge>
-                                        )}
-                                    </div>
-
-                                    {insight.impact !== undefined && insight.currency && (
-                                        <div className="mt-2 text-sm">
-                                            <span className="font-medium">Impacto: {formatCurrency(insight.impact, insight.currency)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
+                        return (
+                            <Item
+                                key={index}
+                                size="sm"
+                                variant="outline"
+                                className={cn(bgColor)}
+                            >
+                                <ItemMedia variant="icon" className={cn(iconColor)}>
+                                    {insight.type === 'positive' && <TrendingDown className="size-4" />}
+                                    {insight.type === 'warning' && <AlertCircle className="size-4" />}
+                                    {insight.type === 'opportunity' && <Lightbulb className="size-4" />}
+                                    {insight.type === 'info' && <Target className="size-4" />}
+                                </ItemMedia>
+                                <ItemContent className="min-w-0">
+                                    <ItemTitle className="w-full max-w-none whitespace-normal">
+                                        {insight.title}
+                                    </ItemTitle>
+                                    <ItemDescription>{insight.description}</ItemDescription>
+                                    {insight.impact !== undefined && insight.currency ? (
+                                        <p className="mt-1 text-sm font-medium">
+                                            Impacto: {formatCurrency(insight.impact, insight.currency)}
+                                        </p>
+                                    ) : null}
+                                </ItemContent>
+                                {insight.metric ? (
+                                    <ItemActions className="self-start">
+                                        <Badge
+                                            variant={
+                                                insight.type === 'positive'
+                                                    ? 'secondary'
+                                                    : insight.type === 'warning'
+                                                      ? 'destructive'
+                                                      : 'default'
+                                            }
+                                        >
+                                            {insight.metric}
+                                        </Badge>
+                                    </ItemActions>
+                                ) : null}
+                            </Item>
+                        );
+                    })}
+                </ItemGroup>
             </CardContent>
         </Card>
     );

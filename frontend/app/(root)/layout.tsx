@@ -1,6 +1,7 @@
+import { Suspense } from 'react';
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
 import { ModuleAccessGuard } from '@/components/root/module-access-guard';
-import { AiChatSheet } from '@/components/root/ai-chat/ai-chat-sheet';
+import { AiChatDrawer } from '@/components/root/ai-chat/ai-chat-drawer';
 import { EmailVerificationBanner } from '@/components/root/email-verification-banner';
 import { SiteHeader } from '@/components/sidebar/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -21,16 +22,20 @@ export default function AuthenticatedLayout({
         >
             <ModuleAccessGuard />
             <AppSidebar variant="inset" />
-            <SidebarInset>
-                <SiteHeader />
+            <SidebarInset className="min-h-0">
+                <Suspense fallback={null}>
+                    <SiteHeader />
+                </Suspense>
                 <EmailVerificationBanner />
-                <div className="flex flex-1 flex-col">
-                    <div className="@container/main flex flex-1 flex-col gap-2">
-                        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">{children}</div>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="@container/main flex min-h-0 flex-1 flex-col overflow-hidden">
+                        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:gap-6 md:py-6 lg:px-6">
+                            {children}
+                        </div>
                     </div>
                 </div>
             </SidebarInset>
-            <AiChatSheet />
+            <AiChatDrawer />
         </SidebarProvider>
     );
 }

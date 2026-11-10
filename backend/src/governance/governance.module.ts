@@ -8,6 +8,7 @@ import { GovernanceController } from './controllers/governance.controller';
 // Services
 import { GovernanceService } from './services/governance.service';
 import { GovernanceScanService } from './services/governance-scan.service';
+import { OrgKnowledgeRulesService } from './services/org-knowledge-rules.service';
 
 // Processor
 import { GovernanceProcessor } from './processors/governance.processor';
@@ -72,6 +73,7 @@ import { GovernanceJob } from '../db/entites/governance-job.entity';
 import { GovernanceFinding } from '../db/entites/governance-finding.entity';
 import { GovernanceSuppression } from '../db/entites/governance-suppression.entity';
 import { CloudAccount } from '../db/entites/cloud-account.entity';
+import { AiKnowledgeChunk } from '../db/entites/ai-knowledge-chunk.entity';
 
 // ── Entities — AWS ────────────────────────────────────────────────────────────
 import { AwsVpc } from '../db/entites/aws-vpc.entity';
@@ -111,6 +113,7 @@ import { GOVERNANCE_QUEUE } from './constants';
             GovernanceFinding,
             GovernanceSuppression,
             CloudAccount,
+            AiKnowledgeChunk,
             // AWS
             AwsVpc,
             AwsEc2Instance,
@@ -141,6 +144,7 @@ import { GOVERNANCE_QUEUE } from './constants';
         // Core services
         GovernanceService,
         GovernanceScanService,
+        OrgKnowledgeRulesService,
         GovernanceProcessor,
         PolicyRegistryService,
 

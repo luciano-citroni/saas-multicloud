@@ -46,6 +46,7 @@ import { FinopsResourceChangeEvent } from '../db/entites/finops-resource-change-
 import { FinopsCostAggregate } from '../db/entites/finops-cost-aggregate.entity';
 import { FinopsCostSyncRun } from '../db/entites/finops-cost-sync-run.entity';
 import { FinopsCostAnomaly } from '../db/entites/finops-cost-anomaly.entity';
+import { AiKnowledgeChunk } from '../db/entites/ai-knowledge-chunk.entity';
 import { FinopsTenantBilling } from '../db/entites/finops-tenant-billing.entity';
 import { FinopsCreditGrant } from '../db/entites/finops-credit-grant.entity';
 import { FinopsCreditConsumption } from '../db/entites/finops-credit-consumption.entity';
@@ -103,6 +104,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
             FinopsCostAggregate,
             FinopsCostSyncRun,
             FinopsCostAnomaly,
+            AiKnowledgeChunk,
             FinopsTenantBilling,
             FinopsCreditGrant,
             FinopsCreditConsumption,

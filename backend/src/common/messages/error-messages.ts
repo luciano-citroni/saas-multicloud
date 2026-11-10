@@ -312,7 +312,7 @@ export const ErrorMessages = {
         WHATSAPP_JOIN_GROUP_FAILED: 'Could not join the WhatsApp group via Evolution API.',
     },
 
-    // AI Chat
+    // AI Chat (compat aliases — prefer CLOUD_INTELLIGENCE for new code)
 
     AI_CHAT: {
         CONVERSATION_NOT_FOUND: 'Chat conversation not found.',
@@ -335,6 +335,63 @@ export const ErrorMessages = {
         RATE_LIMITED: 'Too many questions in a short time. Please try again in a moment.',
 
         NO_DATA: 'No data is available for this question in your organization.',
+    },
+
+    CLOUD_INTELLIGENCE: {
+        CONVERSATION_NOT_FOUND: 'Chat conversation not found.',
+
+        MESSAGE_TOO_LONG: 'Message exceeds the maximum allowed length.',
+
+        PROVIDER_NOT_CONFIGURED: 'The assistant is not available right now.',
+
+        PROVIDER_UNAVAILABLE: 'The assistant is temporarily unavailable. Please try again shortly.',
+
+        PROVIDER_TIMEOUT: 'The assistant took too long to respond. Please try again.',
+
+        PROVIDER_DISABLED: 'Cloud Intelligence AI is disabled for this environment.',
+
+        OUT_OF_SCOPE:
+            'I can only help with your organization data and this platform — costs, resources, compliance, analyses, and automations.',
+
+        TOOL_LIMIT_EXCEEDED: 'This question asked for too much data at once. Try something more specific.',
+
+        GENERATION_CANCELLED: 'The response was stopped.',
+
+        RATE_LIMITED: 'Too many questions in a short time. Please try again in a moment.',
+
+        NO_DATA: 'No data is available for this question in your organization.',
+
+        QUOTA_EXCEEDED: 'AI usage quota exceeded for this organization. Try again later or contact an administrator.',
+
+        QUOTA_DISABLED: 'Cloud Intelligence AI is disabled for this organization.',
+
+        AGENT_UNAVAILABLE: 'This AI agent is not available yet.',
+
+        RECOMMENDATION_NOT_FOUND: 'AI recommendation not found.',
+
+        INVALID_RECOMMENDATION_STATUS: 'Invalid recommendation status transition.',
+
+        HUMAN_REVIEW_REQUIRED:
+            'For security, recommendations cannot be executed from Cloud Intelligence. Open the automation draft, review every create/delete action, publish it, then execute from the automation editor with explicit confirmation.',
+
+        MISSING_CLOUD_ACCOUNT:
+            'This recommendation is missing the cloud account reference, so an automation cannot be created. Regenerate Daily Intelligence and try again.',
+
+        AUTOMATION_NOT_MAPPED:
+            'This recommendation type does not have an automatic remediation yet. Investigate in FinOps or add the fix manually in the automation editor.',
+
+        RAG_TIER_REQUIRED: 'Organization private knowledge requires Enterprise AI tier.',
+
+        KNOWLEDGE_NOT_FOUND: 'Knowledge document not found.',
+
+        KNOWLEDGE_EMBEDDING_UNAVAILABLE:
+            'Document saved without semantic search. Configure embeddings/pgvector to enable RAG retrieval.',
+
+        KNOWLEDGE_RULE_INVALID:
+            'Structured knowledge rule is invalid. Provide a valid rule payload when role is "rule".',
+
+        KNOWLEDGE_RULE_DOMAIN_MISMATCH:
+            'Structured rule type does not match the selected knowledge domain.',
     },
 
     // General

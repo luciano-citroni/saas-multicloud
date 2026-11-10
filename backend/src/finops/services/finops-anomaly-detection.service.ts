@@ -2,12 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { AiKnowledgeChunk } from '../../db/entites/ai-knowledge-chunk.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
 import type { AnomalySeverity, AnomalyStatus } from '../../db/entites/finops-cost-anomaly.entity';
+import { accumulateOrgKnowledgeRules } from '../../cloud-intelligence/knowledge/knowledge-rule.schema';
 import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
-const ANOMALY_THRESHOLD = 1.3; // 30% acima da média → anomalia
+const DEFAULT_ANOMALY_THRESHOLD = 1.3; // 30% acima da média → anomalia
 /** Histórico diário usado como baseline (≈ 3 meses). */
 const BASELINE_LOOKBACK_DAYS = 90;
 /** Janela recente em que marcamos anomalias. */
@@ -27,7 +29,20 @@ export class FinopsAnomalyDetectionService {
 
         @InjectRepository(FinopsCostAnomaly)
         private readonly anomalyRepo: Repository<FinopsCostAnomaly>,
+
+        @InjectRepository(AiKnowledgeChunk)
+        private readonly knowledgeChunkRepo: Repository<AiKnowledgeChunk>,
     ) {}
+
+    private async resolveAnomalyThreshold(organizationId: string): Promise<number> {
+        const rows = await this.knowledgeChunkRepo.find({
+            where: { organizationId },
+            order: { updatedAt: 'DESC' },
+            take: 200,
+        });
+        const rules = accumulateOrgKnowledgeRules(rows);
+        return rules.finops.anomalyMultiplier ?? DEFAULT_ANOMALY_THRESHOLD;
+    }
 
     /**
      * Recalcula a janela recente a cada sync: apaga as anomalias do intervalo
@@ -183,6 +198,7 @@ export class FinopsAnomalyDetectionService {
         }
 
         let detected = 0;
+        const anomalyThreshold = await this.resolveAnomalyThreshold(organizationId);
 
         for (const today of todayByKey.values()) {
             const key = `${today.service}:${today.region}`;
@@ -192,7 +208,7 @@ export class FinopsAnomalyDetectionService {
 
             if (
                 avgCost > 0 &&
-                actualCost > avgCost * ANOMALY_THRESHOLD &&
+                actualCost > avgCost * anomalyThreshold &&
                 financialImpact >= MIN_FINANCIAL_IMPACT
             ) {
                 const rawDeviation = ((actualCost - avgCost) / avgCost) * 100;

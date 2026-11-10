@@ -45,13 +45,13 @@ export class GovernanceJob {
     @Column({ type: 'text', nullable: true })
     error!: string | null;
 
-    @Column({ type: 'timestamp', name: 'completed_at', nullable: true })
+    @Column({ type: 'timestamptz', name: 'completed_at', nullable: true })
     completedAt!: Date | null;
 
-    @CreateDateColumn({ name: 'created_at' })
+    @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
     createdAt!: Date;
 
-    @UpdateDateColumn({ name: 'updated_at' })
+    @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
     updatedAt!: Date;
 
     @ManyToOne(() => CloudAccount, { onDelete: 'CASCADE' })

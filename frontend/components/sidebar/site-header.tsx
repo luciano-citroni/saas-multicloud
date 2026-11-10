@@ -15,6 +15,7 @@ export function SiteHeader() {
     const nav = useTranslations('nav');
     const finops = useTranslations('finops');
     const automation = useTranslations('automation');
+    const cloudIntelligence = useTranslations('cloudIntelligence');
 
     const routeNames: Record<string, string> = {
         organizations: nav.organizations,
@@ -43,6 +44,12 @@ export function SiteHeader() {
         published: automation.published,
         executions: automation.executions,
         members: nav.members,
+        'cloud-intelligence': nav.cloudIntelligence,
+        chat: cloudIntelligence.navChat,
+        recommendations: cloudIntelligence.navRecommendations,
+        knowledge: cloudIntelligence.subnavKnowledge,
+        daily: cloudIntelligence.navDaily,
+        usage: cloudIntelligence.navUsage,
     };
 
     const rawSegments = pathname.split('/').filter(Boolean);
@@ -76,6 +83,13 @@ export function SiteHeader() {
 
     if (pathname === '/finops') {
         breadcrumbs.push({ title: finops.subnavOverview, url: '/finops' });
+    }
+
+    if (pathname === '/cloud-intelligence') {
+        breadcrumbs.push({
+            title: cloudIntelligence.subnavOverview,
+            url: '/cloud-intelligence',
+        });
     }
 
     function titleForSegment(segment: string, parent: string | undefined): string {

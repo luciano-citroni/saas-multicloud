@@ -11,6 +11,14 @@ import { Loader2, Save, Upload, Play, ArrowLeft, ShieldCheck, ListChecks, Pencil
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+    Item,
+    ItemActions,
+    ItemContent,
+    ItemDescription,
+    ItemGroup,
+    ItemTitle,
+} from '@/components/ui/item';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -800,40 +808,54 @@ export function AutomationDetailClient({
                 {executions.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{t.noExecutions}</p>
                 ) : (
-                    <ul className="space-y-2">
+                    <ItemGroup className="gap-2">
                         {executions.map((exec) => (
-                            <li key={exec.id} className="space-y-1 rounded-lg border px-3 py-2 text-sm">
-                                <div className="flex items-center justify-between gap-3">
-                                    <Link
-                                        href={`/automations/${automationId}/executions/${exec.id}`}
-                                        className="font-mono text-xs hover:underline"
-                                    >
-                                        {exec.id.slice(0, 8)}…{' '}
-                                        <span className="text-muted-foreground">v{exec.automationVersion ?? '?'}</span>
-                                    </Link>
-                                    <Badge className={cn('text-[10px]', executionStatusClass(exec.status))}>{exec.status}</Badge>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground">
-                                    {exec.startedAt ? new Date(exec.startedAt).toLocaleString(toIntlLocale()) : new Date(exec.createdAt).toLocaleString(toIntlLocale())}
-                                    {exec.durationMs != null ? ` · ${Math.round(exec.durationMs / 1000)}s` : ''}
-                                </p>
-                                {exec.status === 'FAILED' && exec.errorMessage && (
-                                    <p className="line-clamp-2 text-xs text-destructive">{exec.errorMessage}</p>
-                                )}
-                                {exec.status === 'FAILED' && canExecute && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="mt-1 h-7 gap-1.5 text-xs"
-                                        onClick={() => void handlePlan(exec.id)}
-                                    >
-                                        <RefreshCw className="h-3 w-3" />
-                                        {t.rerun}
-                                    </Button>
-                                )}
-                            </li>
+                            <Item key={exec.id} size="sm" variant="outline" className="items-start">
+                                <ItemContent className="min-w-0">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <ItemTitle className="font-mono text-xs font-normal">
+                                            <Link
+                                                href={`/automations/${automationId}/executions/${exec.id}`}
+                                                className="hover:underline"
+                                            >
+                                                {exec.id.slice(0, 8)}…{' '}
+                                                <span className="text-muted-foreground">
+                                                    v{exec.automationVersion ?? '?'}
+                                                </span>
+                                            </Link>
+                                        </ItemTitle>
+                                        <Badge className={cn('text-[10px]', executionStatusClass(exec.status))}>
+                                            {exec.status}
+                                        </Badge>
+                                    </div>
+                                    <ItemDescription className="text-[11px]">
+                                        {exec.startedAt
+                                            ? new Date(exec.startedAt).toLocaleString(toIntlLocale())
+                                            : new Date(exec.createdAt).toLocaleString(toIntlLocale())}
+                                        {exec.durationMs != null ? ` · ${Math.round(exec.durationMs / 1000)}s` : ''}
+                                    </ItemDescription>
+                                    {exec.status === 'FAILED' && exec.errorMessage ? (
+                                        <p className="text-destructive mt-1 line-clamp-2 text-xs">
+                                            {exec.errorMessage}
+                                        </p>
+                                    ) : null}
+                                </ItemContent>
+                                {exec.status === 'FAILED' && canExecute ? (
+                                    <ItemActions className="self-end">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 gap-1.5 text-xs"
+                                            onClick={() => void handlePlan(exec.id)}
+                                        >
+                                            <RefreshCw className="h-3 w-3" />
+                                            {t.rerun}
+                                        </Button>
+                                    </ItemActions>
+                                ) : null}
+                            </Item>
                         ))}
-                    </ul>
+                    </ItemGroup>
                 )}
             </div>
 

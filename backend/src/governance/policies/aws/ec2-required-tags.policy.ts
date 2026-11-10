@@ -4,23 +4,30 @@ import { AwsEc2Instance } from '../../../db/entites/aws-ec2.entity';
 
 import { GovernancePolicy, PolicyContext, PolicyEvaluationResult, FindingSeverity } from '../policy.interface';
 
-/** Tags que toda instância EC2 deve possuir. */
-const REQUIRED_TAGS = ['Name', 'Environment'];
+/** Fallback tags when the org has no knowledge-base required_tags rule. */
+const DEFAULT_REQUIRED_TAGS = ['Name', 'Environment'];
 
 @Injectable()
 export class Ec2RequiredTagsPolicy implements GovernancePolicy {
     readonly id = 'aws-ec2-required-tags';
     readonly name = 'EC2 Instance Must Have Required Tags';
-    readonly description = `EC2 instances must have the following tags: ${REQUIRED_TAGS.join(', ')}. Tags help with cost allocation, compliance reporting, and resource management.`;
+    readonly description =
+        'EC2 instances must have organization-required tags (from knowledge-base rules) or platform defaults (Name, Environment).';
     readonly resourceType = 'EC2Instance';
     readonly severity: FindingSeverity = 'medium';
     readonly provider = 'aws';
     readonly category = 'compute' as const;
     readonly frameworks = ['SOC2'] as const;
 
-    evaluate(instance: AwsEc2Instance, _context: PolicyContext): PolicyEvaluationResult[] {
+    evaluate(instance: AwsEc2Instance, context: PolicyContext): PolicyEvaluationResult[] {
+        const requiredTags =
+            context.orgRules?.requiredTags && context.orgRules.requiredTags.length > 0
+                ? context.orgRules.requiredTags
+                : DEFAULT_REQUIRED_TAGS;
         const tags = instance.tags ?? {};
-        const missingTags = REQUIRED_TAGS.filter((tag) => !tags[tag]);
+        const presentKeys = Object.keys(tags);
+        const presentLower = new Map(presentKeys.map((key) => [key.toLowerCase(), key]));
+        const missingTags = requiredTags.filter((tag) => !presentLower.has(tag.toLowerCase()));
 
         if (missingTags.length > 0) {
             return [
@@ -29,13 +36,17 @@ export class Ec2RequiredTagsPolicy implements GovernancePolicy {
                     resourceId: instance.awsInstanceId,
                     resourceType: this.resourceType,
                     description: `EC2 instance "${instance.awsInstanceId}" is missing required tags: ${missingTags.join(', ')}.`,
-                    recommendation: `Add the following required tags to the EC2 instance: ${missingTags.join(', ')}. Tags should describe the resource's name, environment (e.g., production, staging), and purpose.`,
+                    recommendation: `Add the following required tags to the EC2 instance: ${missingTags.join(', ')}.`,
                     metadata: {
                         instanceId: instance.awsInstanceId,
-                        missingTags,
-                        presentTags: Object.keys(tags),
                         instanceType: instance.instanceType,
                         state: instance.state,
+                        missingTags,
+                        presentTags: presentKeys,
+                        requiredTags,
+                        source: context.orgRules?.requiredTags?.length
+                            ? 'org_knowledge_rule'
+                            : 'platform_default',
                     },
                 },
             ];
@@ -46,7 +57,7 @@ export class Ec2RequiredTagsPolicy implements GovernancePolicy {
                 status: 'compliant',
                 resourceId: instance.awsInstanceId,
                 resourceType: this.resourceType,
-                description: `EC2 instance "${instance.awsInstanceId}" has all required tags (${REQUIRED_TAGS.join(', ')}).`,
+                description: `EC2 instance "${instance.awsInstanceId}" has all required tags (${requiredTags.join(', ')}).`,
                 recommendation: '',
             },
         ];

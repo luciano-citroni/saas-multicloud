@@ -25,6 +25,7 @@ const MODULE_ROUTE_CONFIG: ModuleRouteConfig[] = [
     { prefix: '/finops', module: PlanModule.FINOPS },
     { prefix: '/automation', module: PlanModule.AUTOMATION },
     { prefix: '/automations', module: PlanModule.AUTOMATION },
+    { prefix: '/cloud-intelligence', module: PlanModule.CLOUD_INTELLIGENCE },
 ];
 
 function resolveRequiredModule(pathname: string): PlanModule | null {

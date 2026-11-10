@@ -9,10 +9,18 @@ import { cn } from '@/lib/utils';
 type Props = {
     variant?: 'header' | 'fab';
     className?: string;
+    onClick?: () => void;
 };
 
-export function AiChatTriggerButton({ variant = 'header', className }: Props) {
+export function AiChatTriggerButton({ variant = 'header', className, onClick }: Props) {
     const t = useTranslations('aiChat');
+
+    const handleClick = () => {
+        onClick?.();
+        if (!onClick) {
+            notifyAiChatOpen();
+        }
+    };
 
     if (variant === 'fab') {
         return (
@@ -23,8 +31,8 @@ export function AiChatTriggerButton({ variant = 'header', className }: Props) {
                     'fixed right-4 bottom-4 z-[100] h-12 gap-2 rounded-full px-4 shadow-lg md:right-6 md:bottom-6',
                     className,
                 )}
-                onClick={() => notifyAiChatOpen()}
                 aria-label={t.open}
+                onClick={handleClick}
             >
                 <MessageCircle className="size-5" />
                 <span className="font-medium">{t.openShort}</span>
@@ -38,8 +46,8 @@ export function AiChatTriggerButton({ variant = 'header', className }: Props) {
             variant="outline"
             size="sm"
             className={cn('ml-auto gap-1.5', className)}
-            onClick={() => notifyAiChatOpen()}
             aria-label={t.open}
+            onClick={handleClick}
         >
             <MessageCircle className="size-4" />
             <span className="hidden sm:inline">{t.openShort}</span>

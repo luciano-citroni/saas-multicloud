@@ -1,14 +1,33 @@
 'use client';
 
 import { Cloud, DollarSign, FileSearch, ShieldCheck, Workflow } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+    Item,
+    ItemContent,
+    ItemGroup,
+    ItemMedia,
+    ItemTitle,
+} from '@/components/ui/item';
+import { cn } from '@/lib/utils';
 
 const SUGGESTIONS = [
     {
         icon: DollarSign,
-        key: 'costs',
-        pt: 'Qual foi o custo total no último mês?',
-        en: 'What was the total cost last month?',
+        key: 'waste',
+        pt: 'Quanto estou desperdiçando e o que cortar esta semana?',
+        en: 'How much am I wasting and what should I cut this week?',
+    },
+    {
+        icon: ShieldCheck,
+        key: 'critical',
+        pt: 'Quais findings críticos têm remediação pronta?',
+        en: 'Which critical findings have remediation ready?',
+    },
+    {
+        icon: FileSearch,
+        key: 'anomaly',
+        pt: 'Explique a anomalia de custo mais recente e o que mudou',
+        en: 'Explain the latest cost anomaly and what changed',
     },
     {
         icon: Cloud,
@@ -17,22 +36,10 @@ const SUGGESTIONS = [
         en: 'What resources exist in my cloud accounts?',
     },
     {
-        icon: ShieldCheck,
-        key: 'governance',
-        pt: 'Quais problemas de conformidade estão abertos?',
-        en: 'Which compliance issues are still open?',
-    },
-    {
-        icon: FileSearch,
-        key: 'assessment',
-        pt: 'Como ficou a última análise da conta?',
-        en: 'How did the latest account analysis go?',
-    },
-    {
         icon: Workflow,
         key: 'automation',
-        pt: 'Quais automações falharam recentemente?',
-        en: 'Which automations failed recently?',
+        pt: 'Crie um rascunho de automação para a recomendação mais urgente',
+        en: 'Draft an automation for the most urgent recommendation',
     },
 ] as const;
 
@@ -45,29 +52,52 @@ type Props = {
 
 export function AiChatSuggestions({ locale, title, onSelect, disabled }: Props) {
     return (
-        <div className="mt-4 w-full max-w-sm space-y-2">
+        <div className="mt-2 w-full max-w-2xl space-y-3">
             <p className="text-muted-foreground text-center text-[11px] font-medium tracking-wide uppercase">
                 {title}
             </p>
-            <div className="flex flex-col gap-1.5">
+            <ItemGroup className="grid gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((item) => {
                     const Icon = item.icon;
                     const prompt = locale === 'en' ? item.en : item.pt;
                     return (
-                        <Button
+                        <Item
                             key={item.key}
-                            type="button"
+                            role="listitem"
+                            tabIndex={disabled ? -1 : 0}
+                            size="sm"
                             variant="outline"
-                            disabled={disabled}
-                            className="h-auto justify-start gap-2 px-3 py-2 text-left text-xs font-normal whitespace-normal"
-                            onClick={() => onSelect(prompt)}
+                            aria-disabled={disabled || undefined}
+                            className={cn(
+                                'cursor-pointer hover:bg-muted/50',
+                                disabled && 'pointer-events-none opacity-60',
+                            )}
+                            onClick={() => {
+                                if (!disabled) onSelect(prompt);
+                            }}
+                            onKeyDown={(event) => {
+                                if (disabled) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onSelect(prompt);
+                                }
+                            }}
                         >
-                            <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                            <span>{prompt}</span>
-                        </Button>
+                            <ItemMedia
+                                variant="icon"
+                                className="bg-muted text-muted-foreground size-7 rounded-md"
+                            >
+                                <Icon className="size-3.5" />
+                            </ItemMedia>
+                            <ItemContent className="min-w-0">
+                                <ItemTitle className="line-clamp-3 w-full max-w-none text-xs font-normal whitespace-normal">
+                                    {prompt}
+                                </ItemTitle>
+                            </ItemContent>
+                        </Item>
                     );
                 })}
-            </div>
+            </ItemGroup>
         </div>
     );
 }

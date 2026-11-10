@@ -12,14 +12,20 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import type { AiChatSource } from '@/app/actions/ai-chat';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import {
+    Item,
+    ItemActions,
+    ItemContent,
+    ItemDescription,
+    ItemGroup,
+    ItemMedia,
+    ItemTitle,
+} from '@/components/ui/item';
 import { Separator } from '@/components/ui/separator';
 import {
     ACTIVE_ORG_STORAGE_KEY,
     notifyActiveCloudAccountChanged,
 } from '@/lib/sidebar-context';
-import { cn } from '@/lib/utils';
 
 const MODULE_ICON: Record<string, LucideIcon> = {
     finops: DollarSign,
@@ -63,7 +69,7 @@ export function AiChatSources({ sources, label, openLabel, onNavigate }: Props) 
         <div className="mt-3 space-y-2">
             <Separator />
             <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{label}</p>
-            <div className="flex flex-col gap-1.5">
+            <ItemGroup className="gap-1.5">
                 {sources.map((source) => {
                     const Icon = MODULE_ICON[source.module] ?? BookOpen;
                     const href = source.href && isSafeInternalHref(source.href) ? source.href : null;
@@ -71,29 +77,27 @@ export function AiChatSources({ sources, label, openLabel, onNavigate }: Props) 
 
                     if (!href) {
                         return (
-                            <Badge
-                                key={key}
-                                variant="secondary"
-                                className="h-auto max-w-full justify-start gap-1.5 px-2.5 py-1.5 font-normal"
-                            >
-                                <Icon className="size-3.5 opacity-70" />
-                                <span className="truncate">
-                                    {source.label}
-                                    {source.detail ? ` · ${source.detail}` : ''}
-                                </span>
-                            </Badge>
+                            <Item key={key} size="sm" variant="muted" className="pointer-events-none">
+                                <ItemMedia variant="icon" className="text-muted-foreground">
+                                    <Icon className="size-3.5 opacity-70" />
+                                </ItemMedia>
+                                <ItemContent className="min-w-0">
+                                    <ItemTitle className="truncate">{source.label}</ItemTitle>
+                                    {source.detail ? (
+                                        <ItemDescription className="truncate">{source.detail}</ItemDescription>
+                                    ) : null}
+                                </ItemContent>
+                            </Item>
                         );
                     }
 
                     return (
-                        <Button
+                        <Item
                             key={key}
                             asChild
-                            variant="outline"
                             size="sm"
-                            className={cn(
-                                'border-border/80 bg-muted/30 hover:bg-muted/60 h-auto max-w-full justify-between gap-2 px-2.5 py-2 font-normal',
-                            )}
+                            variant="outline"
+                            className="bg-muted/30 hover:bg-muted/60 cursor-pointer"
                         >
                             <Link
                                 href={href}
@@ -104,26 +108,26 @@ export function AiChatSources({ sources, label, openLabel, onNavigate }: Props) 
                                     onNavigate?.();
                                 }}
                             >
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <Icon className="size-3.5 shrink-0 opacity-70" />
-                                    <span className="min-w-0 text-left">
-                                        <span className="block truncate text-sm leading-tight">{source.label}</span>
-                                        {source.detail ? (
-                                            <span className="text-muted-foreground block truncate text-[11px] leading-tight">
-                                                {source.detail}
-                                            </span>
-                                        ) : null}
+                                <ItemMedia variant="icon" className="text-muted-foreground">
+                                    <Icon className="size-3.5 opacity-70" />
+                                </ItemMedia>
+                                <ItemContent className="min-w-0">
+                                    <ItemTitle className="truncate">{source.label}</ItemTitle>
+                                    {source.detail ? (
+                                        <ItemDescription className="truncate">{source.detail}</ItemDescription>
+                                    ) : null}
+                                </ItemContent>
+                                <ItemActions className="text-muted-foreground text-[11px]">
+                                    <span className="flex items-center gap-1">
+                                        {openLabel}
+                                        <ArrowUpRight className="size-3.5" />
                                     </span>
-                                </span>
-                                <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px]">
-                                    {openLabel}
-                                    <ArrowUpRight className="size-3.5" />
-                                </span>
+                                </ItemActions>
                             </Link>
-                        </Button>
+                        </Item>
                     );
                 })}
-            </div>
+            </ItemGroup>
         </div>
     );
 }

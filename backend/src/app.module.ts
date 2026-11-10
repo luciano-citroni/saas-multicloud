@@ -25,7 +25,7 @@ import { AutomationModule } from './automation/automation.module';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { FileStorageModule } from './file-storage/file-storage.module';
 import { OrgsModule } from './orgs/orgs.module';
-import { AiChatModule } from './ai-chat/ai-chat.module';
+import { CloudIntelligenceModule } from './cloud-intelligence/cloud-intelligence.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
@@ -76,7 +76,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         FinopsModule,
         GcpModule,
         AutomationModule,
-        AiChatModule,
+        CloudIntelligenceModule,
         NotificationsModule,
         FileStorageModule,
         OrgsModule,

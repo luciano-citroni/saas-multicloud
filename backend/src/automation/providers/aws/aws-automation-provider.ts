@@ -13,13 +13,18 @@ import {
     CreateNatGatewayCommand,
     CreateRouteTableCommand,
     CreateSecurityGroupCommand,
+    CreateSnapshotCommand,
     CreateSubnetCommand,
+    CreateTagsCommand,
     CreateVpcCommand,
     DeleteNatGatewayCommand,
     DeleteRouteTableCommand,
     DeleteSecurityGroupCommand,
     DeleteSubnetCommand,
+    DeleteVolumeCommand,
     DeleteVpcCommand,
+    DescribeInstancesCommand,
+    DescribeVolumesCommand,
     ModifySubnetAttributeCommand,
     ReleaseAddressCommand,
     RunInstancesCommand,
@@ -125,6 +130,12 @@ export class AwsAutomationProvider {
                 return this.createRdsInstance(config, context);
             case AUTOMATION_ACTION_TYPES.AWS_EC2_INSTANCE_CREATE:
                 return this.createEc2Instance(config, context);
+            case AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_VOLUME_SNAPSHOTS:
+                return this.createVolumeSnapshotsFromInstance(config, context);
+            case AUTOMATION_ACTION_TYPES.AWS_EC2_TERMINATE_INSTANCE:
+                return this.terminateInstanceAndDeleteVolumes(config, context);
+            case AUTOMATION_ACTION_TYPES.AWS_EC2_CREATE_TAGS:
+                return this.createEc2Tags(config, context);
             case AUTOMATION_ACTION_TYPES.AWS_AMPLIFY_APP_CREATE:
                 return this.createAmplifyApp(config, context);
             case AUTOMATION_ACTION_TYPES.AWS_API_GATEWAY_CREATE:
@@ -174,46 +185,46 @@ export class AwsAutomationProvider {
             }
         }
 
-        if (!alreadyExists) {
-            if (config.versioning) {
-                await client
-                    .send(
-                        new PutBucketVersioningCommand({
-                            Bucket: bucketName,
-                            VersioningConfiguration: { Status: 'Enabled' },
-                        }),
-                    )
-                    .catch((err: Error) => this.logger.warn(`S3 versioning falhou: ${err.message}`));
-            }
+        // Apply hardenings for both new and existing buckets (idempotent remediation).
+        // Pass `false` to skip a setting (so a draft can fix encryption without touching public access).
+        if (config.versioning) {
+            await client
+                .send(
+                    new PutBucketVersioningCommand({
+                        Bucket: bucketName,
+                        VersioningConfiguration: { Status: 'Enabled' },
+                    }),
+                )
+                .catch((err: Error) => this.logger.warn(`S3 versioning falhou: ${err.message}`));
+        }
 
-            if (config.encryption !== false) {
-                await client
-                    .send(
-                        new PutBucketEncryptionCommand({
-                            Bucket: bucketName,
-                            ServerSideEncryptionConfiguration: {
-                                Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
-                            },
-                        }),
-                    )
-                    .catch((err: Error) => this.logger.warn(`S3 encryption falhou: ${err.message}`));
-            }
+        if (config.encryption !== false) {
+            await client
+                .send(
+                    new PutBucketEncryptionCommand({
+                        Bucket: bucketName,
+                        ServerSideEncryptionConfiguration: {
+                            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+                        },
+                    }),
+                )
+                .catch((err: Error) => this.logger.warn(`S3 encryption falhou: ${err.message}`));
+        }
 
-            if (config.publicAccessBlock !== false) {
-                await client
-                    .send(
-                        new PutPublicAccessBlockCommand({
-                            Bucket: bucketName,
-                            PublicAccessBlockConfiguration: {
-                                BlockPublicAcls: true,
-                                IgnorePublicAcls: true,
-                                BlockPublicPolicy: true,
-                                RestrictPublicBuckets: true,
-                            },
-                        }),
-                    )
-                    .catch((err: Error) => this.logger.warn(`S3 public access block falhou: ${err.message}`));
-            }
+        if (config.publicAccessBlock !== false) {
+            await client
+                .send(
+                    new PutPublicAccessBlockCommand({
+                        Bucket: bucketName,
+                        PublicAccessBlockConfiguration: {
+                            BlockPublicAcls: true,
+                            IgnorePublicAcls: true,
+                            BlockPublicPolicy: true,
+                            RestrictPublicBuckets: true,
+                        },
+                    }),
+                )
+                .catch((err: Error) => this.logger.warn(`S3 public access block falhou: ${err.message}`));
         }
 
         const bucketArn = `arn:aws:s3:::${bucketName}`;
@@ -787,6 +798,224 @@ export class AwsAutomationProvider {
         const instanceId = result.Instances?.[0]?.InstanceId ?? null;
         if (!instanceId) throw new InternalServerErrorException('EC2 RunInstances não retornou instanceId');
         return { output: { instanceId }, resourceId: instanceId };
+    }
+
+    private async createVolumeSnapshotsFromInstance(
+        config: Record<string, unknown>,
+        context: AwsAutomationContext,
+    ): Promise<ActionExecutionResult> {
+        const region = str(config.region, 'us-east-1');
+        const instanceId = str(config.instanceId);
+        const descriptionPrefix = str(config.descriptionPrefix, 'CI remediation snapshot');
+        const client: EC2Client = await this.connector.getEc2Client(
+            context.cloudAccountId,
+            context.tenantId,
+            region,
+        );
+
+        const volumeIds = await this.listInstanceVolumeIds(client, instanceId);
+        if (!volumeIds.length) {
+            this.logger.warn(`EC2 ${instanceId} sem volumes EBS anexados para snapshot`);
+            return {
+                output: { instanceId, volumeIds: [], snapshotIds: [], snapshots: [] },
+                resourceId: null,
+            };
+        }
+
+        const snapshots: Array<{ volumeId: string; snapshotId: string }> = [];
+        for (const volumeId of volumeIds) {
+            const result = await client
+                .send(
+                    new CreateSnapshotCommand({
+                        VolumeId: volumeId,
+                        Description: `${descriptionPrefix} ${instanceId} ${volumeId}`.slice(0, 255),
+                        TagSpecifications: [
+                            {
+                                ResourceType: 'snapshot',
+                                Tags: [
+                                    { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                    { Key: 'SourceInstanceId', Value: instanceId },
+                                    { Key: 'SourceVolumeId', Value: volumeId },
+                                    {
+                                        Key: 'Name',
+                                        Value: `ci-remediation-${instanceId}-${volumeId}`.slice(0, 255),
+                                    },
+                                ],
+                            },
+                        ],
+                    }),
+                )
+                .catch((err) => this.fail('EC2 CreateSnapshot', err));
+
+            const snapshotId = result.SnapshotId;
+            if (!snapshotId) {
+                throw new InternalServerErrorException(
+                    `EC2 CreateSnapshot não retornou snapshotId para volume ${volumeId}`,
+                );
+            }
+            snapshots.push({ volumeId, snapshotId });
+        }
+
+        return {
+            output: {
+                instanceId,
+                volumeIds,
+                snapshotIds: snapshots.map((item) => item.snapshotId),
+                snapshots,
+            },
+            resourceId: snapshots[0]?.snapshotId ?? null,
+        };
+    }
+
+    private async createEc2Tags(
+        config: Record<string, unknown>,
+        context: AwsAutomationContext,
+    ): Promise<ActionExecutionResult> {
+        const region = str(config.region, 'us-east-1');
+        const rawIds = config.resourceIds;
+        const resourceIds = Array.isArray(rawIds)
+            ? rawIds.map((id) => String(id).trim()).filter(Boolean)
+            : String(rawIds ?? '')
+                  .split(/[,;\s]+/)
+                  .map((id) => id.trim())
+                  .filter(Boolean);
+        const rawTags = Array.isArray(config.tags) ? config.tags : [];
+        const tags = rawTags
+            .map((entry) => {
+                const record = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+                const key = String(record.key ?? record.Key ?? '').trim();
+                const value = String(record.value ?? record.Value ?? '').trim();
+                return key ? { Key: key, Value: value } : null;
+            })
+            .filter((tag): tag is { Key: string; Value: string } => Boolean(tag));
+
+        if (resourceIds.length === 0 || tags.length === 0) {
+            throw new InternalServerErrorException('resourceIds and tags are required for AWS_EC2_CREATE_TAGS');
+        }
+
+        const client: EC2Client = await this.connector.getEc2Client(
+            context.cloudAccountId,
+            context.tenantId,
+            region,
+        );
+
+        await client
+            .send(
+                new CreateTagsCommand({
+                    Resources: resourceIds,
+                    Tags: tags,
+                }),
+            )
+            .catch((err) => this.fail('EC2 CreateTags', err));
+
+        return {
+            output: {
+                resourceIds,
+                tags: tags.map((tag) => ({ key: tag.Key, value: tag.Value })),
+                tagged: true,
+            },
+        };
+    }
+
+    private async terminateInstanceAndDeleteVolumes(
+        config: Record<string, unknown>,
+        context: AwsAutomationContext,
+    ): Promise<ActionExecutionResult> {
+        const region = str(config.region, 'us-east-1');
+        const instanceId = str(config.instanceId);
+        const deleteVolumes = config.deleteVolumes !== false;
+        const client: EC2Client = await this.connector.getEc2Client(
+            context.cloudAccountId,
+            context.tenantId,
+            region,
+        );
+
+        const volumeIds = await this.listInstanceVolumeIds(client, instanceId);
+
+        await client
+            .send(new TerminateInstancesCommand({ InstanceIds: [instanceId] }))
+            .catch((err) => this.fail('EC2 TerminateInstances', err));
+
+        await this.waitForInstanceState(client, instanceId, ['terminated', 'shutting-down'], 90_000);
+
+        const deletedVolumeIds: string[] = [];
+        const skippedVolumeIds: string[] = [];
+
+        if (deleteVolumes) {
+            for (const volumeId of volumeIds) {
+                const deleted = await this.deleteVolumeWithRetry(client, volumeId);
+                if (deleted) deletedVolumeIds.push(volumeId);
+                else skippedVolumeIds.push(volumeId);
+            }
+        }
+
+        return {
+            output: {
+                instanceId,
+                terminated: true,
+                deletedVolumeIds,
+                skippedVolumeIds,
+            },
+            resourceId: null,
+        };
+    }
+
+    private async listInstanceVolumeIds(client: EC2Client, instanceId: string): Promise<string[]> {
+        const described = await client
+            .send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }))
+            .catch((err) => this.fail('EC2 DescribeInstances', err));
+        const instance = described.Reservations?.[0]?.Instances?.[0];
+        if (!instance) {
+            throw new InternalServerErrorException(`EC2 instance ${instanceId} não encontrada`);
+        }
+        return (instance.BlockDeviceMappings ?? [])
+            .map((mapping) => mapping.Ebs?.VolumeId)
+            .filter((volumeId): volumeId is string => Boolean(volumeId));
+    }
+
+    private async waitForInstanceState(
+        client: EC2Client,
+        instanceId: string,
+        states: string[],
+        timeoutMs: number,
+    ): Promise<void> {
+        const started = Date.now();
+        while (Date.now() - started < timeoutMs) {
+            const described = await client
+                .send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }))
+                .catch(() => null);
+            const state = described?.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+            if (state && states.includes(state)) {
+                if (state === 'terminated') return;
+                // Keep polling briefly while shutting-down so volumes detach.
+            }
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            if (state === 'terminated') return;
+        }
+        this.logger.warn(`Timeout aguardando estado ${states.join('|')} para ${instanceId}`);
+    }
+
+    private async deleteVolumeWithRetry(client: EC2Client, volumeId: string): Promise<boolean> {
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            try {
+                const described = await client.send(new DescribeVolumesCommand({ VolumeIds: [volumeId] }));
+                const volume = described.Volumes?.[0];
+                if (!volume) return true;
+                if (volume.State === 'in-use') {
+                    await new Promise((resolve) => setTimeout(resolve, 4000));
+                    continue;
+                }
+                await client.send(new DeleteVolumeCommand({ VolumeId: volumeId }));
+                return true;
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                if (message.includes('InvalidVolume.NotFound')) return true;
+                this.logger.warn(`DeleteVolume ${volumeId} tentativa ${attempt + 1}: ${message}`);
+                await new Promise((resolve) => setTimeout(resolve, 4000));
+            }
+        }
+        this.logger.warn(`Não foi possível excluir volume ${volumeId} após retries`);
+        return false;
     }
 
     private async createAmplifyApp(

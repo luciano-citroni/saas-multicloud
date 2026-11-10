@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Cloud, GitBranch, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
+import { Bell, BrainCircuit, Cloud, GitBranch, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
@@ -414,6 +414,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             { title: tn.governance, url: '/governance', icon: ShieldCheck, module: PlanModule.GOVERNANCE },
             { title: tn.finops, url: '/finops', icon: DollarSign, module: PlanModule.FINOPS },
             { title: tn.automation, url: '/automations', icon: Workflow, module: PlanModule.AUTOMATION },
+            {
+                title: tn.cloudIntelligence,
+                url: '/cloud-intelligence',
+                icon: BrainCircuit,
+                module: PlanModule.CLOUD_INTELLIGENCE,
+            },
         ].map((item) => {
             if (!activeOrganizationId) {
                 return { ...item, disabled: true, disabledReason: tn.moduleNotEnabled };

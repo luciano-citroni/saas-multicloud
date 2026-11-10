@@ -11,6 +11,7 @@ import { Job } from 'bullmq';
 import { GovernanceJob } from '../../db/entites/governance-job.entity';
 
 import { GovernanceScanService } from '../services/governance-scan.service';
+import { OrgKnowledgeRulesService } from '../services/org-knowledge-rules.service';
 
 import { GOVERNANCE_QUEUE, GOVERNANCE_WORKER_CONCURRENCY } from '../constants';
 
@@ -29,7 +30,8 @@ export class GovernanceProcessor extends WorkerHost {
         @InjectRepository(GovernanceJob)
         private readonly jobRepo: Repository<GovernanceJob>,
 
-        private readonly scanService: GovernanceScanService
+        private readonly scanService: GovernanceScanService,
+        private readonly orgKnowledgeRulesService: OrgKnowledgeRulesService,
     ) {
         super();
     }
@@ -47,19 +49,35 @@ export class GovernanceProcessor extends WorkerHost {
 
             await job.updateProgress(10);
 
-            const [resources, suppressions] = await Promise.all([
+            const [resources, suppressions, orgRules] = await Promise.all([
                 this.scanService.loadResources(cloudAccountId, provider),
                 this.scanService.loadSuppressions(cloudAccountId, organizationId),
+                this.orgKnowledgeRulesService.getOrgRules(organizationId),
             ]);
 
             this.logger.log(`[${jobId}] ${suppressions.length} supressão(ões) ativa(s) encontrada(s).`);
+            if (orgRules.requiredTags.length > 0) {
+                this.logger.log(
+                    `[${jobId}] Regras de tags da knowledge base: ${orgRules.requiredTags.join(', ')}`,
+                );
+            } else {
+                this.logger.warn(
+                    `[${jobId}] Nenhuma regra de tags encontrada na knowledge base — usando defaults das policies`,
+                );
+            }
 
             // ── 2. Avaliar políticas ────────────────────────────────────────
             this.logger.log(`[${jobId}] Fase 2/4: Avaliando políticas de governança ${provider.toUpperCase()}...`);
 
             await job.updateProgress(40);
 
-            const context = { cloudAccountId, organizationId };
+            const context = {
+                cloudAccountId,
+                organizationId,
+                orgRules: {
+                    requiredTags: orgRules.requiredTags,
+                },
+            };
 
             const { findings, score, totalChecks, totalNonCompliant, totalSuppressed } = this.scanService.evaluatePolicies(
                 resources,
@@ -80,13 +98,19 @@ export class GovernanceProcessor extends WorkerHost {
 
             await job.updateProgress(90);
 
-            await this.jobRepo.update(jobId, {
-                status: 'completed',
-                score,
-                totalFindings: totalNonCompliant,
-                totalChecks,
-                completedAt: new Date(),
-            });
+            await this.jobRepo
+                .createQueryBuilder()
+                .update(GovernanceJob)
+                .set({
+                    status: 'completed',
+                    score,
+                    totalFindings: totalNonCompliant,
+                    totalChecks,
+                    // DB NOW() avoids JS Date ↔ TIMESTAMP timezone skew on completed_at.
+                    completedAt: () => 'NOW()',
+                })
+                .where('id = :jobId', { jobId })
+                .execute();
 
             await job.updateProgress(100);
 
