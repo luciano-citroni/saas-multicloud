@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import { ErrorMessages } from '../../common/messages/error-messages';
 import {
     AiRecommendation,
@@ -36,6 +36,9 @@ export class RecommendationsService {
         filters?: {
             status?: AiRecommendationStatus | AiRecommendationStatus[];
             category?: string;
+            severity?: AiRecommendationSeverity;
+            source?: 'governance' | 'finops' | 'correlated' | 'tags';
+            q?: string;
             agentType?: string;
             assignee?: string;
             automatable?: boolean;
@@ -58,6 +61,19 @@ export class RecommendationsService {
         if (filters?.category) {
             qb.andWhere('r.category = :category', { category: filters.category });
         }
+        if (filters?.severity) {
+            qb.andWhere('r.severity = :severity', { severity: filters.severity });
+        }
+        if (filters?.q?.trim()) {
+            const needle = `%${filters.q.trim()}%`;
+            qb.andWhere(
+                new Brackets((inner) => {
+                    inner
+                        .where('r.title ILIKE :needle', { needle })
+                        .orWhere('r.description ILIKE :needle', { needle });
+                }),
+            );
+        }
         if (filters?.agentType) {
             qb.andWhere('r.agent_type = :agentType', { agentType: filters.agentType });
         }
@@ -69,10 +85,49 @@ export class RecommendationsService {
                 minScore: filters.minScore,
             });
         }
-        if (filters?.correlated === true) {
+
+        const source = filters?.source;
+        if (source === 'correlated' || filters?.correlated === true) {
             qb.andWhere(`jsonb_array_length(COALESCE(r.evidence->'sources', '[]'::jsonb)) > 1`);
         } else if (filters?.correlated === false) {
             qb.andWhere(`jsonb_array_length(COALESCE(r.evidence->'sources', '[]'::jsonb)) <= 1`);
+        }
+
+        if (source === 'governance') {
+            qb.andWhere(
+                new Brackets((inner) => {
+                    inner
+                        .where(`r.evidence->'sources' @> :govSource::jsonb`, {
+                            govSource: JSON.stringify([{ type: 'governance_finding' }]),
+                        })
+                        .orWhere(`r.evidence ? 'findingId'`)
+                        .orWhere(`r.title ILIKE 'Governance:%'`);
+                }),
+            );
+        } else if (source === 'finops') {
+            qb.andWhere(
+                new Brackets((inner) => {
+                    inner
+                        .where(`r.evidence->'sources' @> :finopsSaving::jsonb`, {
+                            finopsSaving: JSON.stringify([{ type: 'finops_saving' }]),
+                        })
+                        .orWhere(`r.evidence->'sources' @> :finopsAnomaly::jsonb`, {
+                            finopsAnomaly: JSON.stringify([{ type: 'finops_anomaly' }]),
+                        })
+                        .orWhere(`r.evidence ? 'anomalyId'`)
+                        .orWhere(`r.evidence ? 'finopsRecommendationId'`);
+                }),
+            );
+        } else if (source === 'tags') {
+            qb.andWhere(
+                new Brackets((inner) => {
+                    inner
+                        .where(`r.evidence->>'knowledgeRuleType' = 'required_tags'`)
+                        .orWhere(`r.evidence->>'policyId' ILIKE '%required-tags%'`)
+                        .orWhere(`r.evidence->>'policyId' ILIKE '%required-labels%'`)
+                        .orWhere(`jsonb_typeof(r.evidence->'missingTags') = 'array'`);
+                }),
+            );
         }
 
         const rows = await qb.getMany();

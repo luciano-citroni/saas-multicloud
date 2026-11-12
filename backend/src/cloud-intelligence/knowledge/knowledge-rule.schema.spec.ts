@@ -1,6 +1,8 @@
 import {
     accumulateOrgKnowledgeRules,
+    extractNamingPatternsFromContent,
     extractRequiredTagsFromContent,
+    namingPatternToRegExp,
 } from './knowledge-rule.schema';
 
 describe('extractRequiredTagsFromContent', () => {
@@ -103,5 +105,106 @@ describe('accumulateOrgKnowledgeRules', () => {
         ]);
 
         expect(rules.finops.anomalyMultiplier).toBe(1.5);
+    });
+
+    it('extracts naming patterns from structured role=naming documents', () => {
+        const rules = accumulateOrgKnowledgeRules([
+            {
+                title: 'Naming',
+                content: 'Padrão de nomenclatura: prod-*-web',
+                metadata: {
+                    domain: 'governance',
+                    role: 'naming',
+                    rule: {
+                        type: 'naming_pattern',
+                        pattern: 'prod-*-web',
+                        example: 'prod-api-web',
+                        providers: ['aws', 'gcp'],
+                    },
+                },
+            },
+        ]);
+
+        expect(rules.namingPatterns).toEqual([
+            {
+                pattern: 'prod-*-web',
+                example: 'prod-api-web',
+                providers: ['aws', 'gcp'],
+                resourceTypes: undefined,
+                scope: 'organization',
+                cloudAccountIds: [],
+            },
+        ]);
+    });
+
+    it('filters account-scoped rules for a specific cloud account', () => {
+        const rows = [
+            {
+                title: 'Org tags',
+                content: 'Tags',
+                metadata: {
+                    domain: 'governance',
+                    role: 'tags',
+                    scope: 'organization',
+                    rule: {
+                        type: 'required_tags',
+                        keys: ['OrgTag'],
+                        providers: ['aws', 'azure', 'gcp'],
+                    },
+                },
+            },
+            {
+                title: 'Account tags',
+                content: 'Tags',
+                metadata: {
+                    domain: 'governance',
+                    role: 'tags',
+                    scope: 'cloud_accounts',
+                    cloudAccountIds: ['acc-a'],
+                    rule: {
+                        type: 'required_tags',
+                        keys: ['AccountTag'],
+                        providers: ['aws', 'azure', 'gcp'],
+                    },
+                },
+            },
+        ];
+
+        expect(accumulateOrgKnowledgeRules(rows, { cloudAccountId: 'acc-a' }).requiredTags).toEqual(
+            expect.arrayContaining(['OrgTag', 'AccountTag']),
+        );
+        expect(accumulateOrgKnowledgeRules(rows, { cloudAccountId: 'acc-b' }).requiredTags).toEqual([
+            'OrgTag',
+        ]);
+    });
+
+    it('infers naming patterns from free-text', () => {
+        const rules = accumulateOrgKnowledgeRules([
+            {
+                title: 'Nomenclatura',
+                content: 'Padrão de nomenclatura: prod-*-app\n- staging-*-web',
+                metadata: { domain: 'governance', role: 'rule' },
+            },
+        ]);
+
+        expect(rules.namingPatterns.map((item) => item.pattern)).toEqual(
+            expect.arrayContaining(['prod-*-app', 'staging-*-web']),
+        );
+    });
+});
+
+describe('extractNamingPatternsFromContent', () => {
+    it('reads inline naming patterns', () => {
+        expect(extractNamingPatternsFromContent('nomenclatura: prod-*-web (exemplo: prod-api-web)')).toEqual([
+            { pattern: 'prod-*-web', example: 'prod-api-web' },
+        ]);
+    });
+});
+
+describe('namingPatternToRegExp', () => {
+    it('converts glob patterns', () => {
+        const regex = namingPatternToRegExp('prod-*-web');
+        expect(regex?.test('prod-api-web')).toBe(true);
+        expect(regex?.test('dev-api-web')).toBe(false);
     });
 });

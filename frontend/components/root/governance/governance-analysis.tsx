@@ -31,6 +31,7 @@ import { fetchGovernanceJobFindings, fetchGovernanceJobStatus } from '@/app/acti
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import {
+    GOVERNANCE_RESOURCE_TYPE_TAGS,
     GOVERNANCE_RESOURCE_TYPES_BY_PROVIDER,
     translateGovernanceDescription,
     translateGovernancePolicyName,
@@ -455,9 +456,17 @@ export function GovernanceAnalysis() {
             merged.add(resourceTypeFilter);
         }
 
-        return Array.from(merged).sort((left, right) =>
-            translateGovernanceResourceType(left).localeCompare(translateGovernanceResourceType(right), toIntlLocale())
-        );
+        // Always expose the Tags pseudo-filter, even before provider/job is known.
+        merged.add(GOVERNANCE_RESOURCE_TYPE_TAGS);
+
+        return Array.from(merged).sort((left, right) => {
+            if (left === GOVERNANCE_RESOURCE_TYPE_TAGS) return -1;
+            if (right === GOVERNANCE_RESOURCE_TYPE_TAGS) return 1;
+            return translateGovernanceResourceType(left).localeCompare(
+                translateGovernanceResourceType(right),
+                toIntlLocale(),
+            );
+        });
     }, [job?.provider, resourceTypeFilter, seenResourceTypes]);
 
     useEffect(() => {

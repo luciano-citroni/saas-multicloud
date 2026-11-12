@@ -9,8 +9,11 @@ import {
     CircleAlert,
     Loader2,
     RefreshCw,
+    RotateCcw,
+    Search,
     Sparkles,
     Workflow,
+    X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -31,6 +34,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import {
     Item,
     ItemActions,
@@ -63,6 +67,28 @@ import {
 } from './ci-labels';
 import { CiPageHeader } from './ci-page-header';
 import { RecommendationDetailBody } from './recommendation-detail';
+
+const SEVERITY_KEYS = ['critical', 'high', 'medium', 'low'] as const;
+const SOURCE_KEYS = ['governance', 'finops', 'correlated', 'tags'] as const;
+const SEARCH_DEBOUNCE_MS = 350;
+
+type CiSeverity = (typeof SEVERITY_KEYS)[number];
+type CiSource = (typeof SOURCE_KEYS)[number];
+type AutomatableFilter = 'all' | 'yes' | 'no';
+
+function isRecSeverity(value: string | null): value is CiSeverity {
+    return value !== null && (SEVERITY_KEYS as readonly string[]).includes(value);
+}
+
+function isRecSource(value: string | null): value is CiSource {
+    return value !== null && (SOURCE_KEYS as readonly string[]).includes(value);
+}
+
+function parseAutomatable(value: string | null): AutomatableFilter {
+    if (value === 'true' || value === 'yes') return 'yes';
+    if (value === 'false' || value === 'no') return 'no';
+    return 'all';
+}
 
 function unwrapList(body: unknown): AiRecommendation[] {
     if (Array.isArray(body)) return body;
@@ -122,34 +148,70 @@ export function CloudIntelligenceRecommendationsPanel() {
     const category = isRecCategory(searchParams.get('category'))
         ? searchParams.get('category')!
         : undefined;
+    const severity = isRecSeverity(searchParams.get('severity'))
+        ? searchParams.get('severity')!
+        : undefined;
+    const source = isRecSource(searchParams.get('source'))
+        ? searchParams.get('source')!
+        : undefined;
+    const automatable = parseAutomatable(searchParams.get('automatable'));
+    const qFromUrl = (searchParams.get('q') ?? '').trim();
     const [pending, startTransition] = useTransition();
     const [items, setItems] = useState<AiRecommendation[]>([]);
     const [selected, setSelected] = useState<AiRecommendation | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [actionPending, setActionPending] = useState<string | null>(null);
     const [mobilePane, setMobilePane] = useState<'list' | 'detail'>('list');
+    const [draftSearch, setDraftSearch] = useState(qFromUrl);
     const selectedId = searchParams.get('id') ?? undefined;
 
     const filterKey = useMemo(
-        () => `${status ?? ''}|${category ?? ''}|${selectedId ?? ''}`,
-        [status, category, selectedId],
+        () =>
+            [
+                status ?? '',
+                category ?? '',
+                severity ?? '',
+                source ?? '',
+                automatable,
+                qFromUrl,
+                selectedId ?? '',
+            ].join('|'),
+        [status, category, severity, source, automatable, qFromUrl, selectedId],
     );
     const numberLocale = locale === 'en' ? 'en-US' : 'pt-BR';
+    const hasActiveFilters = Boolean(
+        status || category || severity || source || automatable !== 'all' || qFromUrl,
+    );
 
-    const replaceRecsUrl = (patch: { status?: string; category?: string; id?: string | null }) => {
+    const replaceRecsUrl = (patch: {
+        status?: string | null;
+        category?: string | null;
+        severity?: string | null;
+        source?: string | null;
+        automatable?: AutomatableFilter | null;
+        q?: string | null;
+        id?: string | null;
+    }) => {
         const next = new URLSearchParams(searchParams.toString());
         next.delete('tab');
         next.delete('provider');
-        next.delete('severity');
         next.delete('account');
 
-        if ('status' in patch) {
-            if (!patch.status) next.delete('status');
-            else next.set('status', patch.status);
-        }
-        if ('category' in patch) {
-            if (!patch.category) next.delete('category');
-            else next.set('category', patch.category);
+        const applyOptional = (key: string, value: string | null | undefined) => {
+            if (!(key in patch)) return;
+            if (!value) next.delete(key);
+            else next.set(key, value);
+        };
+
+        applyOptional('status', patch.status);
+        applyOptional('category', patch.category);
+        applyOptional('severity', patch.severity);
+        applyOptional('source', patch.source);
+        applyOptional('q', patch.q?.trim() || null);
+
+        if ('automatable' in patch) {
+            if (!patch.automatable || patch.automatable === 'all') next.delete('automatable');
+            else next.set('automatable', patch.automatable === 'yes' ? 'true' : 'false');
         }
         if ('id' in patch) {
             if (!patch.id) next.delete('id');
@@ -165,6 +227,18 @@ export function CloudIntelligenceRecommendationsPanel() {
         );
     };
 
+    const clearFilters = () => {
+        setDraftSearch('');
+        replaceRecsUrl({
+            status: null,
+            category: null,
+            severity: null,
+            source: null,
+            automatable: 'all',
+            q: null,
+        });
+    };
+
     const load = () => {
         const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) {
@@ -176,6 +250,11 @@ export function CloudIntelligenceRecommendationsPanel() {
             const res = await fetchCloudIntelligenceRecommendations(organizationId, {
                 status,
                 category,
+                severity,
+                source,
+                q: qFromUrl || undefined,
+                automatable:
+                    automatable === 'all' ? undefined : automatable === 'yes' ? true : false,
             });
             if (!res.ok) {
                 toast.error(extractErrorMessage(await res.json().catch(() => ({}))));
@@ -194,6 +273,20 @@ export function CloudIntelligenceRecommendationsPanel() {
             setLoaded(true);
         });
     };
+
+    useEffect(() => {
+        setDraftSearch(qFromUrl);
+    }, [qFromUrl]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            const next = draftSearch.trim();
+            if (next === qFromUrl) return;
+            replaceRecsUrl({ q: next || null });
+        }, SEARCH_DEBOUNCE_MS);
+        return () => window.clearTimeout(timeoutId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draftSearch]);
 
     useEffect(() => {
         load();
@@ -461,6 +554,68 @@ export function CloudIntelligenceRecommendationsPanel() {
         )
     ) : null;
 
+    const sourceLabel = (value: CiSource) => {
+        switch (value) {
+            case 'governance':
+                return t.filterSourceGovernance;
+            case 'finops':
+                return t.filterSourceFinops;
+            case 'correlated':
+                return t.filterSourceCorrelated;
+            case 'tags':
+                return t.filterSourceTags;
+            default:
+                return value;
+        }
+    };
+
+    const activeFilterChips: Array<{ key: string; label: string; onClear: () => void }> = [];
+    if (qFromUrl) {
+        activeFilterChips.push({
+            key: 'q',
+            label: `"${qFromUrl}"`,
+            onClear: () => {
+                setDraftSearch('');
+                replaceRecsUrl({ q: null });
+            },
+        });
+    }
+    if (status) {
+        activeFilterChips.push({
+            key: 'status',
+            label: statusLabel(status),
+            onClear: () => replaceRecsUrl({ status: null }),
+        });
+    }
+    if (category) {
+        activeFilterChips.push({
+            key: 'category',
+            label: categoryLabel(category),
+            onClear: () => replaceRecsUrl({ category: null }),
+        });
+    }
+    if (severity) {
+        activeFilterChips.push({
+            key: 'severity',
+            label: severityLabel(severity),
+            onClear: () => replaceRecsUrl({ severity: null }),
+        });
+    }
+    if (source) {
+        activeFilterChips.push({
+            key: 'source',
+            label: sourceLabel(source),
+            onClear: () => replaceRecsUrl({ source: null }),
+        });
+    }
+    if (automatable !== 'all') {
+        activeFilterChips.push({
+            key: 'automatable',
+            label: automatable === 'yes' ? t.filterAutomatableYes : t.filterAutomatableNo,
+            onClear: () => replaceRecsUrl({ automatable: 'all' }),
+        });
+    }
+
     const listPane = (
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className="flex shrink-0 flex-col gap-3 px-3 py-3">
@@ -468,23 +623,49 @@ export function CloudIntelligenceRecommendationsPanel() {
                     <p className="text-muted-foreground text-xs">
                         {t.itemsCount.replace('{count}', String(items.length))}
                     </p>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 gap-1.5 px-2"
-                        disabled={pending}
-                        onClick={() => load()}
-                    >
-                        <RefreshCw className={cn('size-3.5', pending && 'animate-spin')} />
-                        {t.refreshList}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                        {hasActiveFilters ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 gap-1.5 px-2"
+                                onClick={clearFilters}
+                            >
+                                <RotateCcw className="size-3.5" />
+                                {t.clearFilters}
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 gap-1.5 px-2"
+                            disabled={pending}
+                            onClick={() => load()}
+                        >
+                            <RefreshCw className={cn('size-3.5', pending && 'animate-spin')} />
+                            {t.refreshList}
+                        </Button>
+                    </div>
                 </div>
+
+                <div className="relative">
+                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                    <Input
+                        value={draftSearch}
+                        onChange={(event) => setDraftSearch(event.target.value)}
+                        placeholder={t.filterSearchPlaceholder}
+                        aria-label={t.filterSearch}
+                        className="h-8 pl-8 text-xs"
+                    />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                     <Select
                         value={status ?? 'all'}
                         onValueChange={(value) =>
-                            replaceRecsUrl({ status: value === 'all' ? undefined : value })
+                            replaceRecsUrl({ status: value === 'all' ? null : value })
                         }
                     >
                         <SelectTrigger className="w-full" size="sm">
@@ -502,7 +683,7 @@ export function CloudIntelligenceRecommendationsPanel() {
                     <Select
                         value={category ?? 'all'}
                         onValueChange={(value) =>
-                            replaceRecsUrl({ category: value === 'all' ? undefined : value })
+                            replaceRecsUrl({ category: value === 'all' ? null : value })
                         }
                     >
                         <SelectTrigger className="w-full" size="sm">
@@ -517,7 +698,80 @@ export function CloudIntelligenceRecommendationsPanel() {
                             ))}
                         </SelectContent>
                     </Select>
+                    <Select
+                        value={severity ?? 'all'}
+                        onValueChange={(value) =>
+                            replaceRecsUrl({ severity: value === 'all' ? null : value })
+                        }
+                    >
+                        <SelectTrigger className="w-full" size="sm">
+                            <SelectValue placeholder={t.filterSeverity} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t.filterAllSeverities}</SelectItem>
+                            {SEVERITY_KEYS.map((value) => (
+                                <SelectItem key={value} value={value}>
+                                    {severityLabel(value)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={source ?? 'all'}
+                        onValueChange={(value) =>
+                            replaceRecsUrl({ source: value === 'all' ? null : value })
+                        }
+                    >
+                        <SelectTrigger className="w-full" size="sm">
+                            <SelectValue placeholder={t.filterSource} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t.filterAllSources}</SelectItem>
+                            {SOURCE_KEYS.map((value) => (
+                                <SelectItem key={value} value={value}>
+                                    {sourceLabel(value)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={automatable}
+                        onValueChange={(value) =>
+                            replaceRecsUrl({ automatable: value as AutomatableFilter })
+                        }
+                    >
+                        <SelectTrigger className="col-span-2 w-full" size="sm">
+                            <SelectValue placeholder={t.filterAutomatable} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t.filterAutomatableAll}</SelectItem>
+                            <SelectItem value="yes">{t.filterAutomatableYes}</SelectItem>
+                            <SelectItem value="no">{t.filterAutomatableNo}</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
+
+                {activeFilterChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                        {activeFilterChips.map((chip) => (
+                            <Badge
+                                key={chip.key}
+                                variant="secondary"
+                                className="h-6 gap-1 pr-1 text-[10px]"
+                            >
+                                <span className="max-w-[140px] truncate">{chip.label}</span>
+                                <button
+                                    type="button"
+                                    className="hover:bg-muted rounded-full p-0.5"
+                                    onClick={chip.onClear}
+                                    aria-label={t.clearFilters}
+                                >
+                                    <X className="size-3" />
+                                </button>
+                            </Badge>
+                        ))}
+                    </div>
+                ) : null}
             </div>
             <Separator className="shrink-0" />
             <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -533,11 +787,11 @@ export function CloudIntelligenceRecommendationsPanel() {
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm font-medium">
-                                    {status || category
+                                    {hasActiveFilters
                                         ? t.noRecommendationsForFilters
                                         : t.noRecommendations}
                                 </p>
-                                {!status && !category ? (
+                                {!hasActiveFilters ? (
                                     <div className="space-y-2">
                                         <p className="text-muted-foreground max-w-[220px] text-xs leading-relaxed">
                                             {t.recommendationsEmptyHint}
@@ -546,7 +800,18 @@ export function CloudIntelligenceRecommendationsPanel() {
                                             <Link href="/cloud-intelligence">{t.goToDaily}</Link>
                                         </Button>
                                     </div>
-                                ) : null}
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="mt-2 gap-1.5"
+                                        onClick={clearFilters}
+                                    >
+                                        <RotateCcw className="size-3.5" />
+                                        {t.clearFilters}
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     ) : (

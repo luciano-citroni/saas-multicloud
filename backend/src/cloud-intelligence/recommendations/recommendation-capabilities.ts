@@ -79,19 +79,34 @@ export function isRequiredTagsRecommendation(
     const resourceId = String(ref.resourceId ?? '');
     const resourceType = String(ref.resourceType ?? '').toLowerCase();
     const missingTags = evidence.missingTags;
+    const knowledgeRuleType = String(evidence.knowledgeRuleType ?? '').toLowerCase();
 
-    if (policyId === 'aws-ec2-required-tags' || policyId === 'gcp-vm-required-labels') {
+    if (knowledgeRuleType === 'required_tags') {
+        return true;
+    }
+    if (
+        policyId.includes('required-tags') ||
+        policyId.includes('required-labels') ||
+        policyId === 'aws-ec2-required-tags' ||
+        policyId === 'gcp-vm-required-labels'
+    ) {
         return true;
     }
     if (Array.isArray(missingTags) && missingTags.length > 0) {
         return true;
     }
     if (
-        (policy.includes('required tags') ||
-            policy.includes('required labels') ||
-            description.includes('missing required tags') ||
-            description.includes('missing required labels') ||
-            description.includes('missing tags')) &&
+        policy.includes('required tags') ||
+        policy.includes('required labels') ||
+        description.includes('missing required tags') ||
+        description.includes('missing required labels') ||
+        description.includes('missing tags')
+    ) {
+        return true;
+    }
+    // Legacy heuristic kept for older recommendations without policyId/missingTags.
+    if (
+        (description.includes('missing required tags') || description.includes('missing tags')) &&
         (resourceId.startsWith('i-') ||
             resourceType.includes('ec2') ||
             resourceType.includes('vm') ||
@@ -99,6 +114,43 @@ export function isRequiredTagsRecommendation(
     ) {
         return true;
     }
+    return false;
+}
+
+export function isNamingRecommendation(
+    recommendation: Pick<AiRecommendation, 'title' | 'description' | 'evidence'>,
+): boolean {
+    const evidence = asRecord(recommendation.evidence);
+    const policyId = String(evidence.policyId ?? '').toLowerCase();
+    const knowledgeRuleType = String(evidence.knowledgeRuleType ?? '').toLowerCase();
+    const policy = recommendation.title.replace(/^Governance:\s*/i, '').trim().toLowerCase();
+    const description = recommendation.description.toLowerCase();
+
+    if (knowledgeRuleType === 'naming_pattern') return true;
+    if (policyId.includes('-naming') || policyId.endsWith('naming')) return true;
+    if (policy.includes('naming pattern') || policy.includes('nomenclatura')) return true;
+    if (
+        description.includes('does not match required naming') ||
+        description.includes('naming pattern')
+    ) {
+        return true;
+    }
+    return false;
+}
+
+/** Only EC2 CreateTags is implemented in the automation engine today. */
+export function canAutomateRequiredTagsRecommendation(
+    recommendation: Pick<AiRecommendation, 'title' | 'description' | 'evidence' | 'resourceReference'>,
+): boolean {
+    if (!isRequiredTagsRecommendation(recommendation)) return false;
+    const ref = asRecord(recommendation.resourceReference);
+    const resourceId = String(ref.resourceId ?? '');
+    const resourceType = String(ref.resourceType ?? '').toLowerCase();
+    const policyId = String(asRecord(recommendation.evidence).policyId ?? '').toLowerCase();
+
+    if (policyId === 'aws-ec2-required-tags') return true;
+    if (resourceId.startsWith('i-')) return true;
+    if (resourceType.includes('ec2') && !resourceType.includes('rds')) return true;
     return false;
 }
 
@@ -121,9 +173,10 @@ export function canAutomateRecommendation(
     recommendation: Pick<AiRecommendation, 'title' | 'description' | 'evidence' | 'resourceReference'>,
 ): boolean {
     if (isCostAnomalyRecommendation(recommendation)) return false;
+    if (isNamingRecommendation(recommendation)) return false;
     if (isStoppedEc2EbsRecommendation(recommendation)) return true;
     if (isUnusedEbsRecommendation(recommendation)) return true;
-    if (isRequiredTagsRecommendation(recommendation)) return true;
+    if (canAutomateRequiredTagsRecommendation(recommendation)) return true;
 
     const policy = recommendation.title.replace(/^Governance:\s*/i, '').trim().toLowerCase();
     const description = recommendation.description.toLowerCase();

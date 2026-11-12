@@ -303,14 +303,23 @@ export class UpsertKnowledgeRequestDto {
     @ApiPropertyOptional({ enum: ['governance', 'finops', 'automation', 'general'] })
     domain?: 'governance' | 'finops' | 'automation' | 'general';
 
-    @ApiPropertyOptional({ enum: ['guidance', 'rule', 'tags'] })
-    role?: 'guidance' | 'rule' | 'tags';
+    @ApiPropertyOptional({ enum: ['guidance', 'rule', 'tags', 'naming'] })
+    role?: 'guidance' | 'rule' | 'tags' | 'naming';
 
     @ApiPropertyOptional({
         description:
-            'Structured rule payload (required_tags for role=tags | finops_threshold | automation_playbook)',
+            'Structured rule payload (required_tags | naming_pattern | finops_threshold | automation_playbook)',
     })
     rule?: Record<string, unknown>;
+
+    @ApiPropertyOptional({
+        enum: ['organization', 'cloud_accounts'],
+        description: 'organization = all accounts; cloud_accounts = only selected cloudAccountIds',
+    })
+    scope?: 'organization' | 'cloud_accounts';
+
+    @ApiPropertyOptional({ type: [String], description: 'Cloud account UUIDs when scope=cloud_accounts' })
+    cloudAccountIds?: string[];
 }
 
 export class UpsertKnowledgeResponseDto {

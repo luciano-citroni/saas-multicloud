@@ -249,9 +249,25 @@ export class GovernanceService {
         }
 
         if (options.resourceType?.trim()) {
-            query.andWhere('finding.resourceType = :resourceType', {
-                resourceType: options.resourceType.trim(),
-            });
+            const resourceType = options.resourceType.trim();
+            // Pseudo filter from Cloud Intelligence knowledge rules (tags/labels).
+            if (resourceType === 'OrgRequiredTags') {
+                query.andWhere(
+                    new Brackets((qb) => {
+                        qb.where('finding.policyId ILIKE :requiredTagsPolicy', {
+                            requiredTagsPolicy: '%required-tags%',
+                        })
+                            .orWhere('finding.policyId ILIKE :requiredLabelsPolicy', {
+                                requiredLabelsPolicy: '%required-labels%',
+                            })
+                            .orWhere(`finding.metadata->>'knowledgeRuleType' = :knowledgeRuleType`, {
+                                knowledgeRuleType: 'required_tags',
+                            });
+                    }),
+                );
+            } else {
+                query.andWhere('finding.resourceType = :resourceType', { resourceType });
+            }
         }
 
         if (options.severity) {

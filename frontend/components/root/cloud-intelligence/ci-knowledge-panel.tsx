@@ -22,9 +22,15 @@ import {
     type AiKnowledgeDocument,
     type KnowledgeDomain,
     type KnowledgeRole,
+    type KnowledgeScope,
 } from '@/app/actions/cloud-intelligence';
+import {
+    fetchOrganizationCloudAccounts,
+    type OrganizationCloudAccount,
+} from '@/app/actions/organization';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Input } from '@/components/ui/input';
 import {
@@ -101,15 +107,25 @@ function roleLabel(
         knowledgeRoleGuidance: string;
         knowledgeRoleRule: string;
         knowledgeRoleTags: string;
+        knowledgeRoleNaming: string;
     },
 ) {
     if (role === 'rule') return labels.knowledgeRoleRule;
     if (role === 'tags') return labels.knowledgeRoleTags;
+    if (role === 'naming') return labels.knowledgeRoleNaming;
     return labels.knowledgeRoleGuidance;
 }
 
 function buildTagsContent(keys: string[]) {
     return ['Tags obrigatórias:', ...keys.map((key) => `- ${key}`)].join('\n');
+}
+
+function buildNamingContent(pattern: string, example?: string) {
+    const lines = [`Padrão de nomenclatura: ${pattern}`];
+    if (example?.trim()) {
+        lines.push(`Exemplo: ${example.trim()}`);
+    }
+    return lines.join('\n');
 }
 
 export function CiKnowledgePanel() {
@@ -129,6 +145,11 @@ export function CiKnowledgePanel() {
     const [domain, setDomain] = useState<KnowledgeDomain>('general');
     const [role, setRole] = useState<KnowledgeRole>('guidance');
     const [tagRows, setTagRows] = useState<string[]>(['']);
+    const [namingPattern, setNamingPattern] = useState('');
+    const [namingExample, setNamingExample] = useState('');
+    const [scope, setScope] = useState<KnowledgeScope>('organization');
+    const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+    const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [pending, setPending] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -195,6 +216,38 @@ export function CiKnowledgePanel() {
         void load();
     }, [load]);
 
+    useEffect(() => {
+        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+        if (!organizationId) {
+            setCloudAccounts([]);
+            return;
+        }
+        void (async () => {
+            try {
+                const res = await fetchOrganizationCloudAccounts(organizationId, {
+                    limit: 100,
+                    isActive: true,
+                });
+                if (!res.ok) {
+                    setCloudAccounts([]);
+                    return;
+                }
+                const body = (await res.json().catch(() => null)) as
+                    | OrganizationCloudAccount[]
+                    | { items?: OrganizationCloudAccount[] }
+                    | null;
+                const items = Array.isArray(body)
+                    ? body
+                    : Array.isArray(body?.items)
+                      ? body.items
+                      : [];
+                setCloudAccounts(items);
+            } catch {
+                setCloudAccounts([]);
+            }
+        })();
+    }, []);
+
     const normalizedTags = useMemo(
         () =>
             tagRows
@@ -205,6 +258,8 @@ export function CiKnowledgePanel() {
     );
 
     const isTagsRole = domain === 'governance' && role === 'tags';
+    const isNamingRole = domain === 'governance' && role === 'naming';
+    const isStructuredGovernanceRole = isTagsRole || isNamingRole;
 
     const resetForm = () => {
         setTitle('');
@@ -212,6 +267,10 @@ export function CiKnowledgePanel() {
         setDomain('general');
         setRole('guidance');
         setTagRows(['']);
+        setNamingPattern('');
+        setNamingExample('');
+        setScope('organization');
+        setSelectedAccountIds([]);
         setSelectedId(null);
         setSelectedSnapshot(null);
     };
@@ -226,28 +285,53 @@ export function CiKnowledgePanel() {
             doc.role === 'tags' ||
             (doc.domain === 'governance' && doc.rule?.type === 'required_tags')
                 ? 'tags'
-                : (doc.role ?? 'guidance');
+                : doc.role === 'naming' ||
+                    (doc.domain === 'governance' && doc.rule?.type === 'naming_pattern')
+                  ? 'naming'
+                  : (doc.role ?? 'guidance');
         setRole(nextRole);
         setTagRows(
             doc.rule?.type === 'required_tags' && doc.rule.keys.length > 0
                 ? doc.rule.keys
                 : [''],
         );
+        setNamingPattern(doc.rule?.type === 'naming_pattern' ? doc.rule.pattern : '');
+        setNamingExample(
+            doc.rule?.type === 'naming_pattern' && doc.rule.example ? doc.rule.example : '',
+        );
+        const nextScope =
+            doc.scope === 'cloud_accounts' || (doc.cloudAccountIds?.length ?? 0) > 0
+                ? 'cloud_accounts'
+                : 'organization';
+        setScope(nextScope);
+        setSelectedAccountIds(doc.cloudAccountIds ?? []);
+    };
+
+    const toggleAccount = (accountId: string, checked: boolean) => {
+        setSelectedAccountIds((ids) =>
+            checked
+                ? ids.includes(accountId)
+                    ? ids
+                    : [...ids, accountId]
+                : ids.filter((id) => id !== accountId),
+        );
     };
 
     const onDomainChange = (value: KnowledgeDomain) => {
         setDomain(value);
-        if (value !== 'governance' && role === 'tags') {
+        if (value !== 'governance' && (role === 'tags' || role === 'naming')) {
             setRole('guidance');
             setTagRows(['']);
+            setNamingPattern('');
+            setNamingExample('');
         }
     };
 
     const onRoleChange = (value: KnowledgeRole) => {
         setRole(value);
-        if (value === 'tags') {
+        if (value === 'tags' || value === 'naming') {
             setDomain('governance');
-            if (tagRows.every((row) => !row.trim())) {
+            if (value === 'tags' && tagRows.every((row) => !row.trim())) {
                 setTagRows(['']);
             }
         }
@@ -270,7 +354,12 @@ export function CiKnowledgePanel() {
 
     const canSave =
         Boolean(title.trim()) &&
-        (isTagsRole ? normalizedTags.length > 0 : Boolean(content.trim()));
+        (isTagsRole
+            ? normalizedTags.length > 0
+            : isNamingRole
+              ? Boolean(namingPattern.trim())
+              : Boolean(content.trim())) &&
+        (scope !== 'cloud_accounts' || selectedAccountIds.length > 0);
 
     const onSave = async () => {
         const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -280,9 +369,42 @@ export function CiKnowledgePanel() {
             toast.error(t.knowledgeTagRuleRequired);
             return;
         }
+        if (isNamingRole && !namingPattern.trim()) {
+            toast.error(t.knowledgeNamingRuleRequired);
+            return;
+        }
+        if (scope === 'cloud_accounts' && selectedAccountIds.length === 0) {
+            toast.error(t.knowledgeScopeAccountsRequired);
+            return;
+        }
 
-        const contentToSave =
-            isTagsRole && !content.trim() ? buildTagsContent(normalizedTags) : content.trim();
+        const contentToSave = isTagsRole
+            ? content.trim() || buildTagsContent(normalizedTags)
+            : isNamingRole
+              ? content.trim() || buildNamingContent(namingPattern.trim(), namingExample)
+              : content.trim();
+
+        const allProviders = ['aws', 'azure', 'gcp'] as Array<'aws' | 'azure' | 'gcp'>;
+        const structuredRule = isTagsRole
+            ? {
+                  type: 'required_tags' as const,
+                  keys: normalizedTags,
+                  providers: allProviders,
+              }
+            : isNamingRole
+              ? {
+                    type: 'naming_pattern' as const,
+                    pattern: namingPattern.trim(),
+                    ...(namingExample.trim() ? { example: namingExample.trim() } : {}),
+                    providers: allProviders,
+                }
+              : undefined;
+
+        const effectiveScope: KnowledgeScope = isStructuredGovernanceRole
+            ? scope
+            : 'organization';
+        const effectiveAccountIds =
+            effectiveScope === 'cloud_accounts' ? selectedAccountIds : [];
 
         setPending(true);
         try {
@@ -291,17 +413,11 @@ export function CiKnowledgePanel() {
                 title: title.trim(),
                 content: contentToSave,
                 source: 'ui-upload',
-                domain: isTagsRole ? 'governance' : domain,
-                role: isTagsRole ? 'tags' : role,
-                ...(isTagsRole
-                    ? {
-                          rule: {
-                              type: 'required_tags' as const,
-                              keys: normalizedTags,
-                              providers: ['aws', 'azure', 'gcp'] as Array<'aws' | 'azure' | 'gcp'>,
-                          },
-                      }
-                    : {}),
+                domain: isStructuredGovernanceRole ? 'governance' : domain,
+                role: isTagsRole ? 'tags' : isNamingRole ? 'naming' : role,
+                scope: effectiveScope,
+                cloudAccountIds: effectiveAccountIds,
+                ...(structuredRule ? { rule: structuredRule } : {}),
             });
             const body = (await res.json().catch(() => ({}))) as {
                 ok?: boolean;
@@ -330,20 +446,16 @@ export function CiKnowledgePanel() {
                     source: 'ui-upload',
                     content: `${title.trim()}\n\n${contentToSave}`,
                     contentPreview: contentToSave.slice(0, 180),
-                    domain: isTagsRole ? 'governance' : domain,
-                    role: isTagsRole ? 'tags' : role,
-                    rule: isTagsRole
-                        ? {
-                              type: 'required_tags',
-                              keys: normalizedTags,
-                              providers: ['aws', 'azure', 'gcp'],
-                          }
-                        : undefined,
+                    domain: isStructuredGovernanceRole ? 'governance' : domain,
+                    role: isTagsRole ? 'tags' : isNamingRole ? 'naming' : role,
+                    rule: structuredRule,
+                    scope: effectiveScope,
+                    cloudAccountIds: effectiveAccountIds,
                     hasEmbedding: false,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                 });
-                if (isTagsRole && !content.trim()) {
+                if (isStructuredGovernanceRole && !content.trim()) {
                     setContent(contentToSave);
                 }
             }
@@ -483,6 +595,16 @@ export function CiKnowledgePanel() {
                                                 >
                                                     {roleLabel(doc.role, t)}
                                                 </Badge>
+                                                {doc.role === 'tags' || doc.role === 'naming' ? (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="h-5 px-1.5 text-[10px]"
+                                                    >
+                                                        {doc.scope === 'cloud_accounts'
+                                                            ? t.knowledgeScopeAccounts
+                                                            : t.knowledgeScopeOrganization}
+                                                    </Badge>
+                                                ) : null}
                                             </div>
                                         </ItemContent>
                                         <ItemActions className="self-start">
@@ -604,7 +726,12 @@ export function CiKnowledgePanel() {
                                     <SelectItem value="guidance">{t.knowledgeRoleGuidance}</SelectItem>
                                     <SelectItem value="rule">{t.knowledgeRoleRule}</SelectItem>
                                     {domain === 'governance' ? (
-                                        <SelectItem value="tags">{t.knowledgeRoleTags}</SelectItem>
+                                        <>
+                                            <SelectItem value="tags">{t.knowledgeRoleTags}</SelectItem>
+                                            <SelectItem value="naming">
+                                                {t.knowledgeRoleNaming}
+                                            </SelectItem>
+                                        </>
                                     ) : null}
                                 </SelectContent>
                             </Select>
@@ -663,8 +790,111 @@ export function CiKnowledgePanel() {
                     </div>
                 ) : null}
 
+                {isNamingRole ? (
+                    <div className="bg-muted/30 space-y-3 rounded-xl border border-border/70 p-3">
+                        <div>
+                            <p className="text-xs font-medium">{t.knowledgeNamingRuleTitle}</p>
+                            <p className="text-muted-foreground mt-0.5 text-[11px] leading-relaxed">
+                                {t.knowledgeNamingRuleHint}
+                            </p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">{t.knowledgeNamingPatternLabel}</Label>
+                            <Input
+                                value={namingPattern}
+                                onChange={(event) => setNamingPattern(event.target.value)}
+                                placeholder={t.knowledgeNamingPatternPlaceholder}
+                                disabled={pending || deleting}
+                                className="h-9"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">{t.knowledgeNamingExampleLabel}</Label>
+                            <Input
+                                value={namingExample}
+                                onChange={(event) => setNamingExample(event.target.value)}
+                                placeholder={t.knowledgeNamingExamplePlaceholder}
+                                disabled={pending || deleting}
+                                className="h-9"
+                            />
+                        </div>
+                    </div>
+                ) : null}
+
+                {isStructuredGovernanceRole ? (
+                    <div className="bg-muted/30 space-y-3 rounded-xl border border-border/70 p-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">{t.knowledgeScopeLabel}</Label>
+                            <Select
+                                value={scope}
+                                onValueChange={(value) => {
+                                    const next = value as KnowledgeScope;
+                                    setScope(next);
+                                    if (next === 'organization') {
+                                        setSelectedAccountIds([]);
+                                    }
+                                }}
+                                disabled={pending || deleting}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="organization">
+                                        {t.knowledgeScopeOrganization}
+                                    </SelectItem>
+                                    <SelectItem value="cloud_accounts">
+                                        {t.knowledgeScopeAccounts}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {scope === 'cloud_accounts' ? (
+                            <div className="space-y-2">
+                                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                    {t.knowledgeScopeAccountsHint}
+                                </p>
+                                {cloudAccounts.length === 0 ? (
+                                    <p className="text-muted-foreground text-[11px]">
+                                        {t.knowledgeScopeAccountsEmpty}
+                                    </p>
+                                ) : (
+                                    <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                                        {cloudAccounts.map((account) => {
+                                            const checked = selectedAccountIds.includes(account.id);
+                                            return (
+                                                <label
+                                                    key={account.id}
+                                                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-1 py-1"
+                                                >
+                                                    <Checkbox
+                                                        checked={checked}
+                                                        disabled={pending || deleting}
+                                                        onCheckedChange={(value) =>
+                                                            toggleAccount(account.id, value === true)
+                                                        }
+                                                    />
+                                                    <span className="min-w-0 flex-1 truncate text-xs">
+                                                        {account.alias}
+                                                    </span>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="h-5 shrink-0 px-1.5 text-[10px] uppercase"
+                                                    >
+                                                        {account.provider}
+                                                    </Badge>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 <div className="min-h-0 flex-1">
-                    {isTagsRole ? (
+                    {isStructuredGovernanceRole ? (
                         <Label className="text-muted-foreground mb-1.5 block text-xs">
                             {t.knowledgeContentOptionalLabel}
                         </Label>

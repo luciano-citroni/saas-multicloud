@@ -7,6 +7,7 @@ import type {
 } from '../../db/entites/ai-recommendation.entity';
 import { AiAgentType } from '../agents/agent.interface';
 import { canAutomateRecommendation } from '../recommendations/recommendation-capabilities';
+import { governanceFindingDedupeKey } from '../recommendations/governance-finding-recommendation.mapper';
 
 export const DAILY_RANKING_VERSION = 'v1';
 export const DAILY_TOP_UPSERT = 25;
@@ -314,10 +315,10 @@ export function aggregateDailySignals(input: {
                     recencyBonus(finding.createdAt, now),
             );
             signals.push({
-                dedupeKey: `gov-finding:${finding.id}`,
+                dedupeKey: governanceFindingDedupeKey(finding),
                 correlationKey: null,
                 agentType: AiAgentType.SECURITY_ANALYST,
-                category: 'security',
+                category: finding.category || 'security',
                 title,
                 description,
                 severity: mapFindingSeverity(finding.severity),

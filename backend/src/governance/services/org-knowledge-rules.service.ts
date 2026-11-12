@@ -18,12 +18,15 @@ export class OrgKnowledgeRulesService {
         private readonly chunkRepository: Repository<AiKnowledgeChunk>,
     ) {}
 
-    async getOrgRules(organizationId: string): Promise<OrgKnowledgeRules> {
+    async getOrgRules(
+        organizationId: string,
+        cloudAccountId?: string | null,
+    ): Promise<OrgKnowledgeRules> {
         const rows = await this.chunkRepository.find({
             where: { organizationId },
             order: { updatedAt: 'DESC' },
             take: 200,
         });
-        return accumulateOrgKnowledgeRules(rows);
+        return accumulateOrgKnowledgeRules(rows, { cloudAccountId });
     }
 }

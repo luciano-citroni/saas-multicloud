@@ -72,16 +72,18 @@ Ver policy em `usage/ai-tier.policy.ts` e Stripe metadata em [cloud-intelligence
 | Papel (`role`) | Domínio | Efeito |
 |---|---|---|
 | `guidance` | qualquer | Orientação para chat (`search_knowledge`) e drafts |
-| `rule` + **Regra de tags** (`required_tags`) | `governance` | Tags dinâmicas aplicadas no **scan de Governança** (EC2/VM) |
-| `rule` (texto) | `governance` | Também infere tags de listas Markdown se não houver payload estruturado |
+| `tags` + `required_tags` | `governance` | Tags no scan (AWS: EC2/S3/RDS/Lambda/SG; Azure: VM/Storage/SQL/WebApp/NSG; GCP: VM/Storage). Escopo: organização ou contas selecionadas. |
+| `naming` + `naming_pattern` | `governance` | Nomenclatura no scan (nome canônico / tag `Name`). Mesmo escopo multi-conta e multi-cloud. |
+| `rule` (texto) | `governance` | Infere tags/nomenclatura (heurística + LLM best-effort) se não houver payload estruturado |
 | `rule` | `finops` / `automation` | Contexto forte para chat/drafts |
 
-Fluxo de remediação de tags:
+Fluxo Knowledge → Governança → Recomendações:
 
-1. Salvar regra de tags em `/cloud-intelligence/knowledge` (Governança + Regra + tags).
+1. Salvar regra de **tags** ou **nomenclatura** em `/cloud-intelligence/knowledge` (domínio Governança).
 2. Rodar **scan de Governança**.
-3. **Gerar análise** no Cloud Intelligence (ou Daily) para virar recomendação.
-4. Na recomendação → **Gerar automação** (`AWS_EC2_CREATE_TAGS`) — revise valores (`pending-review`) antes de executar.
+3. Ao concluir o scan, findings `non_compliant` são upsertados em `ai_recommendations` (`dedupeKey = gov-policy:account:policy:resource`).
+4. Na recomendação → **Gerar automação** quando mapeado (hoje: tags EC2 via `AWS_EC2_CREATE_TAGS`; nomenclatura e tags em outros recursos aparecem sem CTA de automação).
+5. Daily Intelligence continua correlacionando FinOps + governança (mesmo dedupe estável para findings).
 
 ## Fluxo prepare → execute
 

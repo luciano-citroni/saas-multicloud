@@ -12,6 +12,7 @@ import { GovernanceJob } from '../../db/entites/governance-job.entity';
 
 import { GovernanceScanService } from '../services/governance-scan.service';
 import { OrgKnowledgeRulesService } from '../services/org-knowledge-rules.service';
+import { GovernanceRecommendationBridgeService } from '../services/governance-recommendation-bridge.service';
 
 import { GOVERNANCE_QUEUE, GOVERNANCE_WORKER_CONCURRENCY } from '../constants';
 
@@ -32,6 +33,7 @@ export class GovernanceProcessor extends WorkerHost {
 
         private readonly scanService: GovernanceScanService,
         private readonly orgKnowledgeRulesService: OrgKnowledgeRulesService,
+        private readonly recommendationBridge: GovernanceRecommendationBridgeService,
     ) {
         super();
     }
@@ -52,7 +54,7 @@ export class GovernanceProcessor extends WorkerHost {
             const [resources, suppressions, orgRules] = await Promise.all([
                 this.scanService.loadResources(cloudAccountId, provider),
                 this.scanService.loadSuppressions(cloudAccountId, organizationId),
-                this.orgKnowledgeRulesService.getOrgRules(organizationId),
+                this.orgKnowledgeRulesService.getOrgRules(organizationId, cloudAccountId),
             ]);
 
             this.logger.log(`[${jobId}] ${suppressions.length} supressão(ões) ativa(s) encontrada(s).`);
@@ -63,6 +65,13 @@ export class GovernanceProcessor extends WorkerHost {
             } else {
                 this.logger.warn(
                     `[${jobId}] Nenhuma regra de tags encontrada na knowledge base — usando defaults das policies`,
+                );
+            }
+            if (orgRules.namingPatterns.length > 0) {
+                this.logger.log(
+                    `[${jobId}] Regras de nomenclatura da knowledge base: ${orgRules.namingPatterns
+                        .map((item) => item.pattern)
+                        .join(', ')}`,
                 );
             }
 
@@ -76,6 +85,9 @@ export class GovernanceProcessor extends WorkerHost {
                 organizationId,
                 orgRules: {
                     requiredTags: orgRules.requiredTags,
+                    requiredTagProviders: orgRules.requiredTagProviders,
+                    requiredTagResourceTypes: orgRules.requiredTagResourceTypes,
+                    namingPatterns: orgRules.namingPatterns,
                 },
             };
 
@@ -87,14 +99,32 @@ export class GovernanceProcessor extends WorkerHost {
             );
 
             // ── 3. Persistir findings ───────────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 3/4: Salvando ${totalNonCompliant} achados não-conformes (${totalSuppressed} suprimidos)...`);
+            this.logger.log(`[${jobId}] Fase 3/5: Salvando ${totalNonCompliant} achados não-conformes (${totalSuppressed} suprimidos)...`);
 
-            await job.updateProgress(70);
+            await job.updateProgress(60);
 
             await this.scanService.saveFindings(jobId, cloudAccountId, organizationId, findings);
 
-            // ── 4. Finalizar job ────────────────────────────────────────────
-            this.logger.log(`[${jobId}] Fase 4/4: Finalizando job (score=${score})...`);
+            // ── 4. Upsert recomendações CI ───────────────────────────────────
+            this.logger.log(`[${jobId}] Fase 4/5: Upsert de recomendações no Cloud Intelligence...`);
+            await job.updateProgress(80);
+            try {
+                const { upserted } = await this.recommendationBridge.upsertFromJob(
+                    jobId,
+                    organizationId,
+                );
+                this.logger.log(`[${jobId}] ${upserted} recomendação(ões) sincronizada(s).`);
+            } catch (bridgeError) {
+                // Findings already saved — do not fail the governance job if CI bridge fails.
+                this.logger.warn(
+                    `[${jobId}] Bridge de recomendações falhou: ${
+                        bridgeError instanceof Error ? bridgeError.message : String(bridgeError)
+                    }`,
+                );
+            }
+
+            // ── 5. Finalizar job ────────────────────────────────────────────
+            this.logger.log(`[${jobId}] Fase 5/5: Finalizando job (score=${score})...`);
 
             await job.updateProgress(90);
 

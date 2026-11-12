@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 
 import { AwsEc2Instance } from '../../../db/entites/aws-ec2.entity';
 
+import {
+    evaluateRequiredTagsFinding,
+    resolveApplicableRequiredTags,
+} from '../org-knowledge-policy.helpers';
 import { GovernancePolicy, PolicyContext, PolicyEvaluationResult, FindingSeverity } from '../policy.interface';
 
 /** Fallback tags when the org has no knowledge-base required_tags rule. */
@@ -20,46 +24,24 @@ export class Ec2RequiredTagsPolicy implements GovernancePolicy {
     readonly frameworks = ['SOC2'] as const;
 
     evaluate(instance: AwsEc2Instance, context: PolicyContext): PolicyEvaluationResult[] {
-        const requiredTags =
-            context.orgRules?.requiredTags && context.orgRules.requiredTags.length > 0
-                ? context.orgRules.requiredTags
-                : DEFAULT_REQUIRED_TAGS;
-        const tags = instance.tags ?? {};
-        const presentKeys = Object.keys(tags);
-        const presentLower = new Map(presentKeys.map((key) => [key.toLowerCase(), key]));
-        const missingTags = requiredTags.filter((tag) => !presentLower.has(tag.toLowerCase()));
-
-        if (missingTags.length > 0) {
-            return [
-                {
-                    status: 'non_compliant',
-                    resourceId: instance.awsInstanceId,
-                    resourceType: this.resourceType,
-                    description: `EC2 instance "${instance.awsInstanceId}" is missing required tags: ${missingTags.join(', ')}.`,
-                    recommendation: `Add the following required tags to the EC2 instance: ${missingTags.join(', ')}.`,
-                    metadata: {
-                        instanceId: instance.awsInstanceId,
-                        instanceType: instance.instanceType,
-                        state: instance.state,
-                        missingTags,
-                        presentTags: presentKeys,
-                        requiredTags,
-                        source: context.orgRules?.requiredTags?.length
-                            ? 'org_knowledge_rule'
-                            : 'platform_default',
-                    },
-                },
-            ];
+        // Org KB tags are evaluated for every taggable resource by evaluateOrgKnowledgeTags.
+        if (resolveApplicableRequiredTags(context, 'aws', this.resourceType)) {
+            return [];
         }
 
-        return [
-            {
-                status: 'compliant',
-                resourceId: instance.awsInstanceId,
-                resourceType: this.resourceType,
-                description: `EC2 instance "${instance.awsInstanceId}" has all required tags (${requiredTags.join(', ')}).`,
-                recommendation: '',
+        const finding = evaluateRequiredTagsFinding({
+            resourceId: instance.awsInstanceId,
+            resourceType: this.resourceType,
+            resourceLabel: `EC2 instance "${instance.awsInstanceId}"`,
+            tags: instance.tags,
+            requiredTags: DEFAULT_REQUIRED_TAGS,
+            extraMetadata: {
+                instanceId: instance.awsInstanceId,
+                instanceType: instance.instanceType,
+                state: instance.state,
+                source: 'platform_default',
             },
-        ];
+        });
+        return [finding];
     }
 }

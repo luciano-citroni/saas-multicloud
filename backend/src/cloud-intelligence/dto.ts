@@ -73,6 +73,9 @@ export const listRecommendationsQuerySchema = z.object({
         ])
         .optional(),
     category: z.string().min(1).max(100).optional(),
+    severity: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+    source: z.enum(['governance', 'finops', 'correlated', 'tags']).optional(),
+    q: z.string().min(1).max(200).optional(),
     agentType: z.string().min(1).max(64).optional(),
     assignee: z.string().uuid().optional(),
     automatable: z
@@ -126,6 +129,8 @@ export const upsertKnowledgeDocSchema = z
         domain: knowledgeDomainSchema.optional().default('general'),
         role: knowledgeRoleSchema.optional().default('guidance'),
         rule: knowledgeStructuredRuleSchema.optional(),
+        scope: z.enum(['organization', 'cloud_accounts']).optional().default('organization'),
+        cloudAccountIds: z.array(z.string().uuid()).max(50).optional().default([]),
     })
     .superRefine((value, ctx) => {
         const hasContent = value.content.trim().length > 0;
@@ -133,18 +138,22 @@ export const upsertKnowledgeDocSchema = z
             value.role === 'tags' &&
             value.rule?.type === 'required_tags' &&
             value.rule.keys.length > 0;
-        if (!hasContent && !hasTagRule) {
+        const hasNamingRule =
+            value.role === 'naming' &&
+            value.rule?.type === 'naming_pattern' &&
+            value.rule.pattern.trim().length > 0;
+        if (!hasContent && !hasTagRule && !hasNamingRule) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ['content'],
-                message: 'content is required unless role is tags with keys',
+                message: 'content is required unless role is tags/naming with a structured rule',
             });
         }
-        if (value.role === 'tags' && value.domain !== 'governance') {
+        if ((value.role === 'tags' || value.role === 'naming') && value.domain !== 'governance') {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ['role'],
-                message: 'role tags requires domain governance',
+                message: 'role tags/naming requires domain governance',
             });
         }
         if (value.role === 'tags' && !hasTagRule) {
@@ -152,6 +161,20 @@ export const upsertKnowledgeDocSchema = z
                 code: z.ZodIssueCode.custom,
                 path: ['rule'],
                 message: 'role tags requires required_tags keys',
+            });
+        }
+        if (value.role === 'naming' && !hasNamingRule) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['rule'],
+                message: 'role naming requires naming_pattern',
+            });
+        }
+        if (value.scope === 'cloud_accounts' && value.cloudAccountIds.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['cloudAccountIds'],
+                message: 'scope cloud_accounts requires at least one cloudAccountId',
             });
         }
     });

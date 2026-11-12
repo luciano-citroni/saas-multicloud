@@ -203,6 +203,9 @@ export class CloudIntelligenceController {
         return this.recommendationsService.list(org.id, {
             status: query.status,
             category: query.category,
+            severity: query.severity,
+            source: query.source,
+            q: query.q,
             agentType: query.agentType,
             assignee: query.assignee,
             automatable: query.automatable,

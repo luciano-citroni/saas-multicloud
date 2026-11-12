@@ -16,15 +16,18 @@ import { getAllSaasDocs } from '../docs/saas-docs';
 import { OpenAiProvider } from '../providers/openai.provider';
 import { tierHasCapability } from '../usage/ai-tier.policy';
 import { AiQuotasService } from '../usage/ai-quotas.service';
+import { normalizeGovernanceRulesFromText } from './knowledge-rule-normalizer';
 import {
     accumulateOrgKnowledgeRules,
-    extractRequiredTagsFromContent,
+    ALL_CLOUD_PROVIDERS,
     knowledgeDomainSchema,
     knowledgeRoleSchema,
+    knowledgeScopeSchema,
     knowledgeStructuredRuleSchema,
     parseKnowledgeDocMeta,
     type KnowledgeDomain,
     type KnowledgeRole,
+    type KnowledgeScope,
     type KnowledgeStructuredRule,
     type OrgKnowledgeRules,
 } from './knowledge-rule.schema';
@@ -38,6 +41,8 @@ export type KnowledgeDocSummary = {
     domain: KnowledgeDomain;
     role: KnowledgeRole;
     rule?: KnowledgeStructuredRule;
+    scope: KnowledgeScope;
+    cloudAccountIds: string[];
     hasEmbedding: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -150,6 +155,8 @@ export class KnowledgeBaseService implements OnModuleInit {
             domain: meta.domain,
             role: meta.role,
             rule: meta.rule,
+            scope: meta.scope,
+            cloudAccountIds: meta.cloudAccountIds,
             hasEmbedding: Boolean((row as { embedding?: unknown }).embedding ?? row.metadata?.hasEmbedding),
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
@@ -170,13 +177,16 @@ export class KnowledgeBaseService implements OnModuleInit {
      * Loads structured org rules + guidance snippets from knowledge docs.
      * Used by Governance/FinOps/Automation without going through the chat LLM.
      */
-    async getOrgRules(organizationId: string): Promise<OrgKnowledgeRules> {
+    async getOrgRules(
+        organizationId: string,
+        cloudAccountId?: string | null,
+    ): Promise<OrgKnowledgeRules> {
         const rows = await this.chunkRepository.find({
             where: { organizationId },
             order: { updatedAt: 'DESC' },
             take: 200,
         });
-        return accumulateOrgKnowledgeRules(rows);
+        return accumulateOrgKnowledgeRules(rows, { cloudAccountId });
     }
 
     async deleteOrgDocument(organizationId: string, id: string): Promise<{ ok: true }> {
@@ -199,6 +209,8 @@ export class KnowledgeBaseService implements OnModuleInit {
             domain?: KnowledgeDomain;
             role?: KnowledgeRole;
             rule?: KnowledgeStructuredRule;
+            scope?: KnowledgeScope;
+            cloudAccountIds?: string[];
         },
     ): Promise<{ ok: true; id: string; semanticSearchEnabled: boolean; warning?: string }> {
         await this.assertEnterprise(organizationId);
@@ -209,7 +221,15 @@ export class KnowledgeBaseService implements OnModuleInit {
 
         const domain = knowledgeDomainSchema.parse(input.domain ?? 'general');
         const role = knowledgeRoleSchema.parse(input.role ?? 'guidance');
-        if (role === 'tags' && domain !== 'governance') {
+        const scope = knowledgeScopeSchema.parse(input.scope ?? 'organization');
+        const cloudAccountIds =
+            scope === 'cloud_accounts'
+                ? [...new Set((input.cloudAccountIds ?? []).filter(Boolean))].slice(0, 50)
+                : [];
+        if (scope === 'cloud_accounts' && cloudAccountIds.length === 0) {
+            throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
+        }
+        if ((role === 'tags' || role === 'naming') && domain !== 'governance') {
             throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_DOMAIN_MISMATCH);
         }
 
@@ -221,7 +241,17 @@ export class KnowledgeBaseService implements OnModuleInit {
                 throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
             }
             rule = parsed.data;
-            if (rule.type === 'required_tags' && domain !== 'governance') {
+            // Tag/naming rules always apply to all cloud providers unless explicitly narrowed.
+            if (rule.type === 'required_tags' || rule.type === 'naming_pattern') {
+                rule = {
+                    ...rule,
+                    providers: rule.providers?.length ? rule.providers : [...ALL_CLOUD_PROVIDERS],
+                };
+            }
+            if (
+                (rule.type === 'required_tags' || rule.type === 'naming_pattern') &&
+                domain !== 'governance'
+            ) {
                 throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_DOMAIN_MISMATCH);
             }
             if (rule.type === 'finops_threshold' && domain !== 'finops') {
@@ -237,27 +267,50 @@ export class KnowledgeBaseService implements OnModuleInit {
                 throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
             }
         }
+        if (role === 'naming') {
+            if (!rule || rule.type !== 'naming_pattern' || !rule.pattern.trim()) {
+                throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
+            }
+        }
 
         const title = input.title.trim().slice(0, 300);
         let body = input.content.trim().slice(0, 20000);
         if (!body && role === 'tags' && rule?.type === 'required_tags') {
             body = ['Tags obrigatórias:', ...rule.keys.map((key) => `- ${key}`)].join('\n');
         }
+        if (!body && role === 'naming' && rule?.type === 'naming_pattern') {
+            body = [
+                `Padrão de nomenclatura: ${rule.pattern}`,
+                ...(rule.example ? [`Exemplo: ${rule.example}`] : []),
+            ].join('\n');
+        }
         const content = `${title}\n\n${body}`.slice(0, 20000);
 
-        // Auto-materialize required tags from free-text only for explicit tag/rule docs.
-        if (!rule && (role === 'tags' || (domain === 'governance' && role === 'rule'))) {
-            const keys = extractRequiredTagsFromContent(content);
-            if (keys.length > 0) {
-                rule = {
-                    type: 'required_tags',
-                    keys,
-                    providers: ['aws', 'azure', 'gcp'],
-                };
+        // Auto-materialize structured rules from free-text (heuristic + optional LLM).
+        if (
+            !rule &&
+            domain === 'governance' &&
+            (role === 'tags' || role === 'naming' || role === 'rule' || role === 'guidance')
+        ) {
+            const normalized = await normalizeGovernanceRulesFromText({
+                title,
+                content,
+                openAiProvider: this.openAiProvider,
+                logger: this.logger,
+            });
+            if (role === 'naming') {
+                rule = normalized.naming;
+            } else if (role === 'tags') {
+                rule = normalized.tags;
+            } else {
+                rule = normalized.tags ?? normalized.naming;
             }
         }
 
         if (role === 'tags' && (!rule || rule.type !== 'required_tags' || rule.keys.length === 0)) {
+            throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
+        }
+        if (role === 'naming' && (!rule || rule.type !== 'naming_pattern' || !rule.pattern.trim())) {
             throw new BadRequestException(ErrorMessages.CLOUD_INTELLIGENCE.KNOWLEDGE_RULE_INVALID);
         }
         const contentHash = this.hashContent(`org:${organizationId}:${content}`);
@@ -265,6 +318,8 @@ export class KnowledgeBaseService implements OnModuleInit {
         const baseMetadata: Record<string, unknown> = {
             domain,
             role,
+            scope,
+            cloudAccountIds,
             ...(rule ? { rule } : {}),
         };
         const canEmbed =

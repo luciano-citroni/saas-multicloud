@@ -8,6 +8,19 @@ import { S3EncryptionEnabledPolicy } from './aws/s3-encryption-enabled.policy';
 import { SgNoOpenSshPolicy } from './aws/sg-no-open-ssh.policy';
 import { SgNoOpenRdpPolicy } from './aws/sg-no-open-rdp.policy';
 import { Ec2RequiredTagsPolicy } from './aws/ec2-required-tags.policy';
+import {
+    LambdaRequiredTagsPolicy,
+    RdsRequiredTagsPolicy,
+    S3RequiredTagsPolicy,
+    SgRequiredTagsPolicy,
+} from './aws/aws-org-required-tags.policies';
+import {
+    Ec2NamingPolicy,
+    LambdaNamingPolicy,
+    RdsNamingPolicy,
+    S3NamingPolicy,
+    SgNamingPolicy,
+} from './aws/aws-org-naming.policies';
 import { CloudTrailEnabledPolicy } from './aws/cloudtrail-enabled.policy';
 import { RdsNotPubliclyAccessiblePolicy } from './aws/rds-not-publicly-accessible.policy';
 import { SgNoOpenDatabasePortsPolicy } from './aws/sg-no-open-database-ports.policy';
@@ -47,12 +60,26 @@ import { GcpFirewallOpenRdpPolicy } from './gcp/gcp-firewall-open-rdp.policy';
 import { GcpFirewallOpenDatabasePortsPolicy } from './gcp/gcp-firewall-open-database-ports.policy';
 import { GcpVmPublicIpPolicy } from './gcp/gcp-vm-public-ip.policy';
 import { GcpVmRequiredLabelsPolicy } from './gcp/gcp-vm-required-labels.policy';
+import { GcpStorageRequiredLabelsPolicy } from './gcp/gcp-storage-required-labels.policy';
 import { GcpSqlBackupDisabledPolicy } from './gcp/gcp-sql-backup-disabled.policy';
 import { GcpSqlPublicIpPolicy } from './gcp/gcp-sql-public-ip.policy';
 import { GcpGkeLoggingDisabledPolicy } from './gcp/gcp-gke-logging-disabled.policy';
 import { GcpVmDeletionProtectionDisabledPolicy } from './gcp/gcp-vm-deletion-protection-disabled.policy';
 import { GcpGkeMonitoringDisabledPolicy } from './gcp/gcp-gke-monitoring-disabled.policy';
 import { GcpSqlNoHighAvailabilityPolicy } from './gcp/gcp-sql-no-high-availability.policy';
+import { GcpStorageNamingPolicy, GcpVmNamingPolicy } from './gcp/gcp-org-naming.policies';
+import {
+    AzureNsgNamingPolicy,
+    AzureNsgRequiredTagsPolicy,
+    AzureSqlNamingPolicy,
+    AzureSqlRequiredTagsPolicy,
+    AzureStorageNamingPolicy,
+    AzureStorageRequiredTagsPolicy,
+    AzureVmNamingPolicy,
+    AzureVmRequiredTagsPolicy,
+    AzureWebAppNamingPolicy,
+    AzureWebAppRequiredTagsPolicy,
+} from './azure/azure-org-knowledge.policies';
 
 /**
  * Registro central de todas as políticas de governança disponíveis.
@@ -74,6 +101,15 @@ export class PolicyRegistryService {
         private readonly sgNoOpenRdp: SgNoOpenRdpPolicy,
         private readonly sgNoOpenDatabasePorts: SgNoOpenDatabasePortsPolicy,
         private readonly ec2RequiredTags: Ec2RequiredTagsPolicy,
+        private readonly s3RequiredTags: S3RequiredTagsPolicy,
+        private readonly rdsRequiredTags: RdsRequiredTagsPolicy,
+        private readonly lambdaRequiredTags: LambdaRequiredTagsPolicy,
+        private readonly sgRequiredTags: SgRequiredTagsPolicy,
+        private readonly ec2Naming: Ec2NamingPolicy,
+        private readonly s3Naming: S3NamingPolicy,
+        private readonly rdsNaming: RdsNamingPolicy,
+        private readonly lambdaNaming: LambdaNamingPolicy,
+        private readonly sgNaming: SgNamingPolicy,
         private readonly cloudTrailEnabled: CloudTrailEnabledPolicy,
         private readonly rdsNotPubliclyAccessible: RdsNotPubliclyAccessiblePolicy,
 
@@ -112,12 +148,27 @@ export class PolicyRegistryService {
         private readonly gcpFirewallOpenDatabasePorts: GcpFirewallOpenDatabasePortsPolicy,
         private readonly gcpVmPublicIp: GcpVmPublicIpPolicy,
         private readonly gcpVmRequiredLabels: GcpVmRequiredLabelsPolicy,
+        private readonly gcpStorageRequiredLabels: GcpStorageRequiredLabelsPolicy,
+        private readonly gcpVmNaming: GcpVmNamingPolicy,
+        private readonly gcpStorageNaming: GcpStorageNamingPolicy,
         private readonly gcpVmDeletionProtectionDisabled: GcpVmDeletionProtectionDisabledPolicy,
         private readonly gcpSqlBackupDisabled: GcpSqlBackupDisabledPolicy,
         private readonly gcpSqlPublicIp: GcpSqlPublicIpPolicy,
         private readonly gcpSqlNoHighAvailability: GcpSqlNoHighAvailabilityPolicy,
         private readonly gcpGkeLoggingDisabled: GcpGkeLoggingDisabledPolicy,
-        private readonly gcpGkeMonitoringDisabled: GcpGkeMonitoringDisabledPolicy
+        private readonly gcpGkeMonitoringDisabled: GcpGkeMonitoringDisabledPolicy,
+
+        // ── Azure knowledge rules ─────────────────────────────────────────────
+        private readonly azureVmRequiredTags: AzureVmRequiredTagsPolicy,
+        private readonly azureStorageRequiredTags: AzureStorageRequiredTagsPolicy,
+        private readonly azureSqlRequiredTags: AzureSqlRequiredTagsPolicy,
+        private readonly azureWebAppRequiredTags: AzureWebAppRequiredTagsPolicy,
+        private readonly azureNsgRequiredTags: AzureNsgRequiredTagsPolicy,
+        private readonly azureVmNaming: AzureVmNamingPolicy,
+        private readonly azureStorageNaming: AzureStorageNamingPolicy,
+        private readonly azureSqlNaming: AzureSqlNamingPolicy,
+        private readonly azureWebAppNaming: AzureWebAppNamingPolicy,
+        private readonly azureNsgNaming: AzureNsgNamingPolicy,
     ) {
         this.policies = [
             // ── AWS — Original ────────────────────────────────────────────────
@@ -127,6 +178,15 @@ export class PolicyRegistryService {
             this.sgNoOpenRdp,
             this.sgNoOpenDatabasePorts,
             this.ec2RequiredTags,
+            this.s3RequiredTags,
+            this.rdsRequiredTags,
+            this.lambdaRequiredTags,
+            this.sgRequiredTags,
+            this.ec2Naming,
+            this.s3Naming,
+            this.rdsNaming,
+            this.lambdaNaming,
+            this.sgNaming,
             this.cloudTrailEnabled,
             this.rdsNotPubliclyAccessible,
 
@@ -165,12 +225,27 @@ export class PolicyRegistryService {
             this.gcpFirewallOpenDatabasePorts,
             this.gcpVmPublicIp,
             this.gcpVmRequiredLabels,
+            this.gcpStorageRequiredLabels,
+            this.gcpVmNaming,
+            this.gcpStorageNaming,
             this.gcpVmDeletionProtectionDisabled,
             this.gcpSqlBackupDisabled,
             this.gcpSqlPublicIp,
             this.gcpSqlNoHighAvailability,
             this.gcpGkeLoggingDisabled,
             this.gcpGkeMonitoringDisabled,
+
+            // ── Azure knowledge rules ─────────────────────────────────────────
+            this.azureVmRequiredTags,
+            this.azureStorageRequiredTags,
+            this.azureSqlRequiredTags,
+            this.azureWebAppRequiredTags,
+            this.azureNsgRequiredTags,
+            this.azureVmNaming,
+            this.azureStorageNaming,
+            this.azureSqlNaming,
+            this.azureWebAppNaming,
+            this.azureNsgNaming,
         ];
     }
 

@@ -119,30 +119,77 @@ function isRequiredTagsRecommendation(item: {
     resourceReference?: Record<string, unknown> | null;
 }): boolean {
     const evidence = asRecord(item.evidence);
-    const ref = asRecord(item.resourceReference);
     const policyId = String(evidence.policyId ?? '').toLowerCase();
+    const knowledgeRuleType = String(evidence.knowledgeRuleType ?? '').toLowerCase();
     const policy = item.title
         .replace(/^Governance:\s*/i, '')
         .replace(/^Governança:\s*/i, '')
         .trim()
         .toLowerCase();
     const description = item.description.toLowerCase();
-    const resourceId = String(ref.resourceId ?? '');
-    const resourceType = String(ref.resourceType ?? '').toLowerCase();
-    if (policyId === 'aws-ec2-required-tags' || policyId === 'gcp-vm-required-labels') return true;
-    if (Array.isArray(evidence.missingTags) && evidence.missingTags.length > 0) return true;
+    if (knowledgeRuleType === 'required_tags') return true;
     if (
-        (policy.includes('required tags') ||
-            policy.includes('required labels') ||
-            description.includes('missing required tags') ||
-            description.includes('missing tags')) &&
-        (resourceId.startsWith('i-') ||
-            resourceType.includes('ec2') ||
-            resourceType.includes('vm') ||
-            resourceType.includes('instance'))
+        policyId.includes('required-tags') ||
+        policyId.includes('required-labels') ||
+        policyId === 'aws-ec2-required-tags' ||
+        policyId === 'gcp-vm-required-labels'
     ) {
         return true;
     }
+    if (Array.isArray(evidence.missingTags) && evidence.missingTags.length > 0) return true;
+    if (
+        policy.includes('required tags') ||
+        policy.includes('required labels') ||
+        description.includes('missing required tags') ||
+        description.includes('missing required labels') ||
+        description.includes('missing tags')
+    ) {
+        return true;
+    }
+    return false;
+}
+
+function isNamingRecommendation(item: {
+    title: string;
+    description: string;
+    evidence?: Record<string, unknown> | null;
+}): boolean {
+    const evidence = asRecord(item.evidence);
+    const policyId = String(evidence.policyId ?? '').toLowerCase();
+    const knowledgeRuleType = String(evidence.knowledgeRuleType ?? '').toLowerCase();
+    const policy = item.title
+        .replace(/^Governance:\s*/i, '')
+        .replace(/^Governança:\s*/i, '')
+        .trim()
+        .toLowerCase();
+    const description = item.description.toLowerCase();
+    if (knowledgeRuleType === 'naming_pattern') return true;
+    if (policyId.includes('-naming') || policyId.endsWith('naming')) return true;
+    if (policy.includes('naming pattern') || policy.includes('nomenclatura')) return true;
+    if (
+        description.includes('does not match required naming') ||
+        description.includes('naming pattern')
+    ) {
+        return true;
+    }
+    return false;
+}
+
+function canAutomateRequiredTagsRecommendation(item: {
+    title: string;
+    description: string;
+    evidence?: Record<string, unknown> | null;
+    resourceReference?: Record<string, unknown> | null;
+}): boolean {
+    if (!isRequiredTagsRecommendation(item)) return false;
+    const evidence = asRecord(item.evidence);
+    const ref = asRecord(item.resourceReference);
+    const resourceId = String(ref.resourceId ?? '');
+    const resourceType = String(ref.resourceType ?? '').toLowerCase();
+    const policyId = String(evidence.policyId ?? '').toLowerCase();
+    if (policyId === 'aws-ec2-required-tags') return true;
+    if (resourceId.startsWith('i-')) return true;
+    if (resourceType.includes('ec2') && !resourceType.includes('rds')) return true;
     return false;
 }
 
@@ -153,8 +200,9 @@ export function canAutomateRecommendation(item: {
     resourceReference?: Record<string, unknown> | null;
 }): boolean {
     if (isCostAnomalyRecommendation(item)) return false;
+    if (isNamingRecommendation(item)) return false;
     if (isStoppedEc2EbsRecommendation(item)) return true;
-    if (isRequiredTagsRecommendation(item)) return true;
+    if (canAutomateRequiredTagsRecommendation(item)) return true;
 
     const evidence = asRecord(item.evidence);
     const ref = asRecord(item.resourceReference);

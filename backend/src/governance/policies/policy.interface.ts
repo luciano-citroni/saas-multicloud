@@ -43,11 +43,21 @@ export interface PolicyContext {
     cloudAccountId: string;
     organizationId: string;
     /**
-     * Optional org rules loaded from Cloud Intelligence knowledge base (role=rule).
-     * When present, tag/label policies prefer these keys over platform defaults.
+     * Optional org rules loaded from Cloud Intelligence knowledge base.
+     * When present, tag/label/naming policies prefer these over platform defaults.
      */
     orgRules?: {
         requiredTags?: string[];
+        requiredTagProviders?: Array<'aws' | 'azure' | 'gcp'>;
+        requiredTagResourceTypes?: string[];
+        namingPatterns?: Array<{
+            pattern: string;
+            example?: string;
+            providers: Array<'aws' | 'azure' | 'gcp'>;
+            resourceTypes?: string[];
+            scope?: 'organization' | 'cloud_accounts';
+            cloudAccountIds?: string[];
+        }>;
     };
 }
 

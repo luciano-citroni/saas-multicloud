@@ -124,11 +124,25 @@ export async function updateCloudIntelligenceQuotas(
 
 export async function fetchCloudIntelligenceRecommendations(
     organizationId: string,
-    params?: { status?: string; category?: string; agentType?: string },
+    params?: {
+        status?: string;
+        category?: string;
+        severity?: string;
+        source?: string;
+        q?: string;
+        automatable?: boolean;
+        agentType?: string;
+    },
 ) {
     const search = new URLSearchParams();
     if (params?.status) search.set('status', params.status);
     if (params?.category) search.set('category', params.category);
+    if (params?.severity) search.set('severity', params.severity);
+    if (params?.source) search.set('source', params.source);
+    if (params?.q) search.set('q', params.q);
+    if (typeof params?.automatable === 'boolean') {
+        search.set('automatable', String(params.automatable));
+    }
     if (params?.agentType) search.set('agentType', params.agentType);
     const qs = search.toString();
     const path = qs
@@ -224,12 +238,20 @@ export async function updateCloudIntelligenceDailySettings(
 }
 
 export type KnowledgeDomain = 'governance' | 'finops' | 'automation' | 'general';
-export type KnowledgeRole = 'guidance' | 'rule' | 'tags';
+export type KnowledgeRole = 'guidance' | 'rule' | 'tags' | 'naming';
+export type KnowledgeScope = 'organization' | 'cloud_accounts';
 
 export type KnowledgeStructuredRule =
     | {
           type: 'required_tags';
           keys: string[];
+          providers?: Array<'aws' | 'azure' | 'gcp'>;
+          resourceTypes?: string[];
+      }
+    | {
+          type: 'naming_pattern';
+          pattern: string;
+          example?: string;
           providers?: Array<'aws' | 'azure' | 'gcp'>;
           resourceTypes?: string[];
       }
@@ -253,6 +275,8 @@ export type AiKnowledgeDocument = {
     domain?: KnowledgeDomain;
     role?: KnowledgeRole;
     rule?: KnowledgeStructuredRule;
+    scope?: KnowledgeScope;
+    cloudAccountIds?: string[];
     hasEmbedding: boolean;
     createdAt: string;
     updatedAt: string;
@@ -284,6 +308,8 @@ export async function upsertCloudIntelligenceKnowledge(
         domain?: KnowledgeDomain;
         role?: KnowledgeRole;
         rule?: KnowledgeStructuredRule;
+        scope?: KnowledgeScope;
+        cloudAccountIds?: string[];
     },
 ) {
     return fetch(withOrg('/api/cloud-intelligence/knowledge', organizationId), {
