@@ -30,16 +30,8 @@ export function AiLicenseForm({ tenantId, midOrgId, onSuccess }: Props) {
             createLicenseSchema({
                 nameRequired: t.validation.nameRequired,
                 providerRequired: t.validation.providerRequired,
-                apiKeyRequired: t.validation.apiKeyRequired,
-                roleArnRequired: t.validation.roleArnRequired,
-                regionRequired: t.validation.regionRequired,
-                endpointRequired: t.validation.endpointRequired,
-                entraTenantRequired: t.validation.entraTenantRequired,
-                clientIdRequired: t.validation.clientIdRequired,
-                clientSecretRequired: t.validation.clientSecretRequired,
                 quantityInvalid: t.validation.quantityInvalid,
                 unitCostInvalid: t.validation.unitCostInvalid,
-                remainingInvalid: t.validation.remainingInvalid,
             }),
         [t],
     );

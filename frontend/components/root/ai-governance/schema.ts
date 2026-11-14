@@ -83,19 +83,24 @@ export function createConnectionLimitsSchema(msgs: ConnectionLimitsSchemaMessage
 
 export type ConnectionLimitsFormValues = z.infer<ReturnType<typeof createConnectionLimitsSchema>>;
 
-export function createTeamSchema(msgs: AiGovernanceSchemaMessages) {
+export function createTeamSchema(msgs: Pick<AiGovernanceSchemaMessages, 'nameRequired'>) {
     return z.object({
         name: z.string().trim().min(1, msgs.nameRequired),
     });
 }
 
-export function createApplicationSchema(msgs: AiGovernanceSchemaMessages) {
+export function createApplicationSchema(msgs: Pick<AiGovernanceSchemaMessages, 'nameRequired'>) {
     return z.object({
         name: z.string().trim().min(1, msgs.nameRequired),
     });
 }
 
-export function createLicenseSchema(msgs: AiGovernanceSchemaMessages) {
+export function createLicenseSchema(
+    msgs: Pick<
+        AiGovernanceSchemaMessages,
+        'nameRequired' | 'providerRequired' | 'quantityInvalid' | 'unitCostInvalid'
+    >,
+) {
     return z.object({
         name: z.string().trim().min(1, msgs.nameRequired),
         provider: z.string().trim().min(1, msgs.providerRequired),
@@ -113,7 +118,9 @@ export function createLicenseSchema(msgs: AiGovernanceSchemaMessages) {
     });
 }
 
-export function createAzureCreditsSchema(msgs: AiGovernanceSchemaMessages) {
+export function createAzureCreditsSchema(
+    msgs: Pick<AiGovernanceSchemaMessages, 'nameRequired' | 'quantityInvalid' | 'remainingInvalid'>,
+) {
     return z.object({
         name: z.string().trim().min(1, msgs.nameRequired),
         quantity: z
