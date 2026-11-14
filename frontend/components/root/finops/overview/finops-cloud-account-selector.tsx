@@ -1,11 +1,11 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, Cloud } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 
 const SELECTED_ACCOUNT_STORAGE_KEY = 'smc_finops_selected_account';
@@ -94,25 +94,18 @@ export function FinopsCloudAccountSelector({ cloudAccounts, selectedAccountId, o
                     <ChevronLeft className="size-4" />
                 </Button>
 
-                <Select value={selectedAccount.id} onValueChange={handleAccountChange}>
-                    <SelectTrigger className="h-12 flex-1 rounded-xl">
-                        <SelectValue placeholder={t.selectAccountPlaceholder} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {cloudAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <span
-                                        className={cn('inline-block size-2 rounded-full', account.isActive ? 'bg-emerald-500' : 'bg-muted-foreground')}
-                                    />
-                                    <span className="truncate font-medium">{account.alias}</span>
-                                    <span className="text-xs text-muted-foreground">{account.provider.toUpperCase()}</span>
-                                    {account.id === selectedAccount.id ? <Check className="size-3.5 text-primary" /> : null}
-                                </div>
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <SearchableSelect
+                    mode="single"
+                    className="min-w-0 flex-1"
+                    triggerClassName="h-12 rounded-xl"
+                    value={selectedAccount.id}
+                    placeholder={t.selectAccountPlaceholder}
+                    options={cloudAccounts.map((account) => ({
+                        value: account.id,
+                        label: `${account.alias} (${account.provider.toUpperCase()})${account.isActive ? '' : ' · inactive'}`,
+                    }))}
+                    onValueChange={handleAccountChange}
+                />
 
                 <Button
                     type="button"

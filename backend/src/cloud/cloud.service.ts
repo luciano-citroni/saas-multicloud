@@ -16,9 +16,8 @@ import { Organization } from '../db/entites/organization.entity';
 
 import type { CreateCloudAccountDto, ListCloudAccountsQueryDto, UpdateCloudAccountDto } from './dto';
 
-import * as crypto from 'crypto';
-
 import { BillingService } from '../billing/billing.service';
+import { decryptCredentialsJson, encryptCredentialsJson } from '../common/crypto/credentials-cipher';
 
 import { CloudConnectionService } from './cloud-connection.service';
 
@@ -175,31 +174,18 @@ export class CloudService {
     private encryptCredentials(credentials: Record<string, any>): string {
         const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
 
-        if (!keyHex) {
-            throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY não configurada');
+        try {
+            return encryptCredentialsJson(credentials, keyHex ?? '');
+        } catch (error) {
+            const code = error instanceof Error ? error.message : '';
+            if (code === 'CREDENTIALS_ENCRYPTION_KEY_MISSING') {
+                throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY não configurada');
+            }
+            if (code === 'CREDENTIALS_ENCRYPTION_KEY_INVALID') {
+                throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
+            }
+            throw error;
         }
-
-        const key = Buffer.from(keyHex, 'hex');
-
-        if (key.length !== 32) {
-            throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
-        }
-
-        const iv = crypto.randomBytes(16);
-
-        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-
-        const credentialsJson = JSON.stringify(credentials);
-
-        let encrypted = cipher.update(credentialsJson, 'utf8', 'hex');
-
-        encrypted += cipher.final('hex');
-
-        const authTag = cipher.getAuthTag();
-
-        const combined = `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
-
-        return Buffer.from(combined).toString('base64');
     }
 
     /**
@@ -236,38 +222,16 @@ export class CloudService {
 
     private decryptCredentials(encrypted: string): Record<string, any> {
         try {
-            // Decodifica a base64 para recuperar o formato textual "ivHex:authTagHex:ciphertextHex"
-
-            const combined = Buffer.from(encrypted, 'base64').toString('utf8');
-
-            const [ivHex, authTagHex, ciphertext] = combined.split(':');
-
             const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
-
-            if (!keyHex) {
+            return decryptCredentialsJson(encrypted, keyHex ?? '');
+        } catch (error) {
+            const code = error instanceof Error ? error.message : '';
+            if (code === 'CREDENTIALS_ENCRYPTION_KEY_MISSING') {
                 throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY não configurada');
             }
-
-            const key = Buffer.from(keyHex, 'hex');
-
-            if (key.length !== 32) {
+            if (code === 'CREDENTIALS_ENCRYPTION_KEY_INVALID') {
                 throw new InternalServerErrorException('CREDENTIALS_ENCRYPTION_KEY inválida: deve ter 32 bytes (64 hex chars)');
             }
-
-            const iv = Buffer.from(ivHex, 'hex');
-
-            const authTag = Buffer.from(authTagHex, 'hex');
-
-            const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-
-            decipher.setAuthTag(authTag);
-
-            let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
-
-            decrypted += decipher.final('utf8');
-
-            return JSON.parse(decrypted);
-        } catch (error) {
             throw new BadRequestException('Falha ao descriptografar as credenciais');
         }
     }

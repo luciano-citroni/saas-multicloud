@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTranslations } from '@/lib/i18n';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { createKeyPairSchema } from './resource-config-schemas';
 
 const OS_PRESETS = [
     { id: 'amazon-linux-2023', label: 'Amazon Linux 2023', short: 'AL2023', color: 'bg-orange-500' },
@@ -87,6 +88,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
     const [loadingAmi, setLoadingAmi] = useState(false);
     const [keyDialogOpen, setKeyDialogOpen] = useState(false);
     const [newKeyName, setNewKeyName] = useState('');
+    const [keyNameError, setKeyNameError] = useState<string | null>(null);
     const [creatingKey, setCreatingKey] = useState(false);
 
     const region = String(config.region ?? 'us-east-1');
@@ -190,14 +192,31 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
     };
 
     const handleCreateKeyPair = async () => {
-        if (!newKeyName.trim()) return;
+        const parsed = createKeyPairSchema({
+            instanceTypeRequired: ta.configInstanceTypeRequired,
+            regionRequired: ta.configRegionRequired,
+            amiOrOsRequired: ta.configAmiOrOsRequired,
+            bucketNameMin: ta.configBucketNameMin,
+            dbIdentifierRequired: ta.configDbIdentifierRequired,
+            engineRequired: ta.configEngineRequired,
+            masterPasswordRequired: ta.configMasterPasswordRequired,
+            functionNameRequired: ta.configFunctionNameRequired,
+            roleArnRequired: ta.configRoleArnRequired,
+            keyNameRequired: ta.configKeyNameRequired,
+            unsupportedType: ta.configUnsupportedType,
+        }).safeParse({ name: newKeyName });
+        if (!parsed.success) {
+            setKeyNameError(parsed.error.issues[0]?.message ?? ta.configKeyNameRequired);
+            return;
+        }
+        setKeyNameError(null);
         setCreatingKey(true);
         try {
             const qs = new URLSearchParams({ organizationId });
             const res = await fetch(`/api/automation/resources/key-pairs?${qs}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cloudAccountId, region, keyName: newKeyName.trim() }),
+                body: JSON.stringify({ cloudAccountId, region, keyName: parsed.data.name }),
             });
             if (!res.ok) {
                 const err = await res.json();
@@ -508,10 +527,17 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                             <Input
                                 className="h-8 text-xs"
                                 value={newKeyName}
-                                onChange={(e) => setNewKeyName(e.target.value)}
+                                onChange={(e) => {
+                                    setNewKeyName(e.target.value);
+                                    if (keyNameError) setKeyNameError(null);
+                                }}
                                 placeholder={ta.ec2KeyNamePlaceholder}
+                                aria-invalid={Boolean(keyNameError)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateKeyPair(); }}
                             />
+                            {keyNameError ? (
+                                <p className="text-[11px] font-medium text-destructive">{keyNameError}</p>
+                            ) : null}
                         </div>
                     </div>
                     <DialogFooter>
@@ -519,7 +545,7 @@ export function Ec2ConfigForm({ config, onChange, cloudAccountId, organizationId
                         <Button
                             size="sm"
                             isLoading={creatingKey}
-                            disabled={!newKeyName.trim() || creatingKey}
+                            disabled={creatingKey}
                             onClick={() => void handleCreateKeyPair()}
                         >
                             {ta.ec2CreateAndDownload}

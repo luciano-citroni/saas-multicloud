@@ -67,4 +67,25 @@ describe('AiQuotasService', () => {
         usageService.totalTokensBetween.mockResolvedValue(10);
         await expect(service.assertWithinQuota('org-1')).resolves.toBeUndefined();
     });
+
+    it('treats null limits as unlimited even when env defaults exist', async () => {
+        quotaRepository.findOne.mockResolvedValue({
+            organizationId: 'org-1',
+            dailyLimit: null,
+            monthlyLimit: null,
+            perAgentLimits: {},
+            enabled: true,
+            tier: 'basic',
+            dailyIntelligenceEnabled: true,
+            notificationGroupIds: [],
+        });
+        usageService.totalTokensBetween.mockResolvedValue(50_000);
+
+        const snapshot = await service.getSnapshot('org-1');
+        expect(snapshot.dailyLimit).toBeNull();
+        expect(snapshot.monthlyLimit).toBeNull();
+        expect(snapshot.dailyRemaining).toBeNull();
+        expect(snapshot.monthlyRemaining).toBeNull();
+        await expect(service.assertWithinQuota('org-1')).resolves.toBeUndefined();
+    });
 });

@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { IconInput } from '@/components/ui/input-icon';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
     deleteOrganizationCloudAccount,
     fetchOrganizationCloudAccountById,
@@ -275,8 +275,7 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                 form.reset(nextFormValues);
 
                 if (typeof account.organizationId === 'string') {
-                    const selectedOrg = orgs.find((org) => org.id === account.organizationId);
-                    form.setValue('orgId', selectedOrg?.name ?? '', { shouldValidate: true });
+                    form.setValue('orgId', account.organizationId ?? '', { shouldValidate: true });
                 }
             } catch {
                 toast.error(tca.loadError);
@@ -381,12 +380,10 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                 if (data.gcpServiceAccountEmail) credentials.serviceAccountEmail = data.gcpServiceAccountEmail.trim();
             }
 
-            const selectedOrg = orgs.find((org) => org.name === data.orgId);
-
             const response = await updateOrganizationCloudAccount(organizationId, cloudAccountId, {
                 alias: data.alias.trim(),
                 credentials,
-                organizationId: selectedOrg?.id,
+                organizationId: data.orgId || undefined,
             });
 
             const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
@@ -507,15 +504,17 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>{tca.organizationRequired}</FormLabel>
-                                <Combobox items={orgs} value={field.value ?? ''} onValueChange={(value) => field.onChange(value ?? '')}>
-                                    <ComboboxInput placeholder={tca.organizationPlaceholder} className="h-9 w-full rounded-md shadow-sm" />
-                                    <ComboboxContent>
-                                        <ComboboxEmpty>{tca.noOrganization}</ComboboxEmpty>
-                                        <ComboboxList>
-                                            {(org: MidOrg) => <ComboboxItem key={org.id} value={org.name}>{org.name}</ComboboxItem>}
-                                        </ComboboxList>
-                                    </ComboboxContent>
-                                </Combobox>
+                                <SearchableSelect
+                                    mode="single"
+                                    value={field.value ?? ''}
+                                    onValueChange={field.onChange}
+                                    placeholder={tca.organizationPlaceholder}
+                                    emptyText={tca.noOrganization}
+                                    options={orgs.map((org) => ({
+                                        value: org.id,
+                                        label: org.name,
+                                    }))}
+                                />
                                 <FormMessage />
                             </FormItem>
                         )}

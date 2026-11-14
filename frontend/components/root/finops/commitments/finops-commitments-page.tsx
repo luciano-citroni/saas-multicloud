@@ -37,6 +37,7 @@ import { DatePicker, preventDismissOnDatePicker } from '@/components/ui/date-pic
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,8 +46,6 @@ import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
 import {
-    ACCOUNT_FILTER_ALL,
-    PROVIDER_FILTER_ALL,
     buildFinopsQuery,
     parseFinopsUrlFilters,
 } from '@/components/root/finops/finops-filter-utils';
@@ -373,11 +372,17 @@ export function FinopsCommitmentsPage() {
     const watchedAccountId = form.watch('cloudAccountId');
 
     const updateUrl = useCallback(
-        (patch: Partial<{ period: DashboardPeriod; account: string | null; provider: string | null }>) => {
+        (
+            patch: Partial<{
+                period: DashboardPeriod;
+                account: string | string[] | null;
+                provider: string | string[] | null;
+            }>,
+        ) => {
             const query = buildFinopsQuery(searchParams, {
                 period: patch.period ?? urlFilters.period,
-                account: patch.account === undefined ? urlFilters.accountId : patch.account,
-                provider: patch.provider === undefined ? urlFilters.provider : patch.provider,
+                account: patch.account === undefined ? urlFilters.accountIds : patch.account,
+                provider: patch.provider === undefined ? urlFilters.providers : patch.provider,
             });
             router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
         },
@@ -455,8 +460,8 @@ export function FinopsCommitmentsPage() {
         }
         setLoading(true);
         const filter = {
-            cloudAccountId: urlFilters.accountId ?? undefined,
-            provider: urlFilters.provider ?? undefined,
+            cloudAccountId: urlFilters.accountIds.length === 1 ? urlFilters.accountIds[0] : undefined,
+            provider: urlFilters.providers[0] ?? undefined,
             periodStart: periodDates.periodStart,
             periodEnd: periodDates.periodEnd,
         };
@@ -493,7 +498,7 @@ export function FinopsCommitmentsPage() {
         } finally {
             setLoading(false);
         }
-    }, [organizationId, urlFilters.accountId, urlFilters.provider, periodDates, t.commitmentsLoadError]);
+    }, [organizationId, urlFilters.accountIds, urlFilters.providers, periodDates, t.commitmentsLoadError]);
 
     useEffect(() => {
         void loadData();
@@ -528,7 +533,7 @@ export function FinopsCommitmentsPage() {
     const openCreateGrant = () => {
         setEditingGrant(null);
         form.reset({
-            cloudAccountId: urlFilters.accountId ?? cloudAccounts[0]?.id ?? '',
+            cloudAccountId: urlFilters.accountIds[0] ?? cloudAccounts[0]?.id ?? '',
             name: '',
             totalAmount: 0,
             currency: 'USD',
@@ -657,20 +662,21 @@ export function FinopsCommitmentsPage() {
 
             <FinopsFilterBar
                 period={urlFilters.period}
-                accountId={urlFilters.accountId}
-                provider={urlFilters.provider}
-                service={null}
+                accountIds={urlFilters.accountIds}
+                providers={urlFilters.providers}
+                services={[]}
                 cloudAccounts={cloudAccounts}
                 serviceOptions={[]}
+                showServiceFilter={false}
                 onPeriodChange={(period) => updateUrl({ period })}
-                onAccountChange={(account) => updateUrl({ account })}
-                onProviderChange={(provider) => updateUrl({ provider })}
-                onServiceChange={() => undefined}
+                onAccountsChange={(accountIds) => updateUrl({ account: accountIds })}
+                onProvidersChange={(providers) => updateUrl({ provider: providers })}
+                onServicesChange={() => undefined}
                 onClear={() =>
                     updateUrl({
                         period: 'lastmonth',
-                        account: ACCOUNT_FILTER_ALL,
-                        provider: PROVIDER_FILTER_ALL,
+                        account: null,
+                        provider: null,
                     })
                 }
             />
@@ -1217,27 +1223,20 @@ export function FinopsCommitmentsPage() {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>{t.creditsGrantAccount}</FormLabel>
-                                        <Select
+                                        <SearchableSelect
+                                            mode="single"
                                             value={field.value}
                                             onValueChange={(value) => {
                                                 field.onChange(value);
                                                 if (!editingGrant) form.setValue('services', []);
                                             }}
                                             disabled={Boolean(editingGrant)}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={t.creditsGrantAccount} />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {cloudAccounts.map((account) => (
-                                                    <SelectItem key={account.id} value={account.id}>
-                                                        {account.provider.toUpperCase()} — {account.alias}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            placeholder={t.creditsGrantAccount}
+                                            options={cloudAccounts.map((account) => ({
+                                                value: account.id,
+                                                label: `${account.provider.toUpperCase()} — ${account.alias}`,
+                                            }))}
+                                        />
                                         <FormMessage />
                                     </FormItem>
                                 )}

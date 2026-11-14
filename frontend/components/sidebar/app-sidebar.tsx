@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BrainCircuit, Cloud, GitBranch, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
+import { Bell, BrainCircuit, Cloud, GitBranch, KeyRound, LayoutDashboard, Layers, Plus, ShieldCheck, DollarSign, Users, Workflow } from 'lucide-react';
 import { AccountSwitcher } from '@/components/sidebar/account-switcher';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { NavMain } from '@/components/sidebar/nav-main';
@@ -413,6 +413,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             { title: tn.assessment, url: '/assessment', icon: GitBranch, module: PlanModule.ASSESSMENT },
             { title: tn.governance, url: '/governance', icon: ShieldCheck, module: PlanModule.GOVERNANCE },
             { title: tn.finops, url: '/finops', icon: DollarSign, module: PlanModule.FINOPS },
+            { title: tn.aiGovernance, url: '/ai-governance', icon: KeyRound, module: PlanModule.AI_FINOPS },
             { title: tn.automation, url: '/automations', icon: Workflow, module: PlanModule.AUTOMATION },
             {
                 title: tn.cloudIntelligence,

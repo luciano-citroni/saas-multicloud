@@ -222,6 +222,7 @@ describe('AiOrchestratorService', () => {
                         arguments: JSON.stringify({ organizationId: 'org-evil', period: 'last30days' }),
                     },
                 ],
+                usage: { promptTokens: 20, completionTokens: 8, totalTokens: 28 },
             })
             .mockResolvedValueOnce({
                 content: 'Total foi 10 USD.',
@@ -247,8 +248,8 @@ describe('AiOrchestratorService', () => {
             expect.objectContaining({
                 organizationId: 'org-1',
                 userId: 'user-1',
-                inputTokens: 10,
-                outputTokens: 5,
+                inputTokens: 30,
+                outputTokens: 13,
             }),
         );
         expect(events).toEqual(

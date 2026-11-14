@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Accordion,
@@ -1027,22 +1028,17 @@ export function NotificationWhatsappSettings({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>{t.targetType}</FormLabel>
-                                        <Select
+                                        <SearchableSelect
+                                            mode="single"
                                             value={field.value}
                                             onValueChange={(value) =>
                                                 field.onChange(value as 'phone' | 'group')
                                             }
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="phone">{t.phone}</SelectItem>
-                                                <SelectItem value="group">{t.waGroupOption}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                            options={[
+                                                { value: 'phone', label: t.phone },
+                                                { value: 'group', label: t.waGroupOption },
+                                            ]}
+                                        />
                                         <FormMessage />
                                     </FormItem>
                                 )}

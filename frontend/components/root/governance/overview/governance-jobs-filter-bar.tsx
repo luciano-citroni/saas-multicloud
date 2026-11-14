@@ -3,7 +3,7 @@
 import { Filter, RotateCcw, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { GovernanceJob } from '@/components/root/governance/overview/types';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -55,23 +55,16 @@ export function GovernanceJobsFilterBar({ status, onStatusChange, onClear, class
             </div>
 
             <div className="grid gap-3 sm:max-w-xs">
-                <div className="space-y-1.5">
-                    <label htmlFor="governance-jobs-status" className="text-xs font-medium text-muted-foreground">
-                        {tc.status}
-                    </label>
-                    <Select value={status} onValueChange={(value) => onStatusChange(value as JobStatusFilter)}>
-                        <SelectTrigger id="governance-jobs-status" className="w-full">
-                            <SelectValue placeholder={tg.statusAll} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {statusOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+                <SearchableSelect
+                    mode="single"
+                    id="governance-jobs-status"
+                    label={tc.status}
+                    value={status}
+                    options={statusOptions}
+                    searchPlaceholder={tc.search}
+                    clearLabel={tg.clearFilters}
+                    onValueChange={(value) => onStatusChange(value as JobStatusFilter)}
+                />
             </div>
 
             {hasActiveFilters && (

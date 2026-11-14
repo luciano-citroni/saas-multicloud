@@ -24,6 +24,7 @@ import { FinopsSpendPanel } from '@/components/root/finops/overview/finops-spend
 import { FinopsAccountsStrip } from '@/components/root/finops/overview/finops-accounts-strip';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
+import { FinopsDataCoverageBanner } from '@/components/root/finops/finops-data-coverage-banner';
 import {
     FinopsKpiStrip,
     FinopsPortfolioStrip,
@@ -31,7 +32,6 @@ import {
     type FinopsPortfolioSnapshot,
 } from '@/components/root/finops/finops-kpi-strip';
 import {
-    ACCOUNT_FILTER_ALL,
     buildFinopsQuery,
     parseFinopsUrlFilters,
 } from '@/components/root/finops/finops-filter-utils';
@@ -107,16 +107,17 @@ export function FinopsOverview() {
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const period = urlFilters.period;
-    const selectedAccountId = urlFilters.accountId;
-    const providerFilter = urlFilters.provider;
-    const serviceFilter = urlFilters.service;
+    const selectedAccountIds = urlFilters.accountIds;
+    const selectedAccountId = selectedAccountIds[0] ?? null;
+    const providerFilters = urlFilters.providers;
+    const serviceFilters = urlFilters.services;
 
     const syncUrlState = useCallback(
         (next: Partial<{
             period: DashboardPeriod;
-            account: string | null;
-            provider: string | null;
-            service: string | null;
+            account: string | string[] | null;
+            provider: string | string[] | null;
+            service: string | string[] | null;
         }>) => {
             const nextQuery = buildFinopsQuery(searchParams, next);
             router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
@@ -182,9 +183,11 @@ export function FinopsOverview() {
     );
 
     const syncTargetAccount = useMemo(() => {
-        if (selectedAccount) return selectedAccount;
+        if (selectedAccountIds.length === 1) {
+            return cloudAccounts.find((account) => account.id === selectedAccountIds[0]) ?? null;
+        }
         return cloudAccounts.find((account) => account.id === sidebarAccountId) ?? cloudAccounts[0] ?? null;
-    }, [cloudAccounts, selectedAccount, sidebarAccountId]);
+    }, [cloudAccounts, selectedAccountIds, sidebarAccountId]);
 
     const accountAliases = useMemo(() => {
         const map: Record<string, string> = {};
@@ -199,7 +202,7 @@ export function FinopsOverview() {
             try {
                 const response = await fetchFinopsOrgOverview(orgId, {
                     period,
-                    cloudAccountId: selectedAccountId ?? undefined,
+                    cloudAccountIds: selectedAccountIds.length > 0 ? selectedAccountIds : undefined,
                 });
 
                 if (response.status === 401) {
@@ -223,8 +226,8 @@ export function FinopsOverview() {
                     setPortfolio(null);
                 } else {
                     const portfolioResponse = await fetchFinopsCommitmentsOverview(orgId, {
-                        cloudAccountId: selectedAccountId ?? undefined,
-                        provider: providerFilter ?? undefined,
+                        cloudAccountId: selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined,
+                        provider: providerFilters[0] ?? undefined,
                         periodStart: payload.period.startDate,
                         periodEnd: payload.period.endDate,
                     });
@@ -241,7 +244,7 @@ export function FinopsOverview() {
                 if (!options.silent) setLoadingInitial(false);
             }
         },
-        [period, providerFilter, router, selectedAccountId, tc.sessionExpired, tf.loadError]
+        [period, providerFilters, router, selectedAccountIds, tc.sessionExpired, tf.loadError]
     );
 
     useEffect(() => {
@@ -512,15 +515,17 @@ export function FinopsOverview() {
                       };
                   });
 
-        if (!providerFilter) return base;
-        return base.filter((account) => account.provider.toLowerCase() === providerFilter);
-    }, [cloudAccounts, overview?.accounts, providerFilter]);
+        if (providerFilters.length === 0) return base;
+        const allowedProviders = new Set(providerFilters);
+        return base.filter((account) => allowedProviders.has(account.provider.toLowerCase()));
+    }, [cloudAccounts, overview?.accounts, providerFilters]);
 
     const filteredCostByService = useMemo(() => {
         const items = overview?.costByService ?? [];
-        if (!serviceFilter) return items;
-        return items.filter((item) => item.service === serviceFilter);
-    }, [overview?.costByService, serviceFilter]);
+        if (serviceFilters.length === 0) return items;
+        const allowed = new Set(serviceFilters);
+        return items.filter((item) => allowed.has(item.service));
+    }, [overview?.costByService, serviceFilters]);
 
     const filteredTotals = useMemo(() => {
         if (!overview) {
@@ -536,36 +541,40 @@ export function FinopsOverview() {
         }
 
         const providerScoped =
-            providerFilter && !selectedAccountId
+            providerFilters.length > 0 && selectedAccountIds.length === 0
                 ? displayAccounts.reduce((sum, account) => sum + Number(account.totalCost ?? 0), 0)
                 : overview.totals.cost;
 
         const allowedIds =
-            providerFilter && !selectedAccountId
+            providerFilters.length > 0 && selectedAccountIds.length === 0
                 ? new Set(displayAccounts.map((account) => account.id))
                 : null;
 
+        const serviceSet = serviceFilters.length > 0 ? new Set(serviceFilters) : null;
+
         const anomalies = overview.anomalies.filter((item) => {
             if (allowedIds && !allowedIds.has(item.cloudAccountId)) return false;
-            if (serviceFilter && item.service !== serviceFilter) return false;
+            if (serviceSet && !serviceSet.has(item.service)) return false;
             return true;
         });
 
         const recommendations = overview.recommendations.filter((item) => {
             if (allowedIds && !allowedIds.has(item.cloudAccountId)) return false;
-            if (serviceFilter && !(item.description ?? '').includes(serviceFilter)) return false;
+            if (serviceSet && !serviceFilters.some((service) => (item.description ?? '').includes(service))) {
+                return false;
+            }
             return true;
         });
 
         return {
-            cost: serviceFilter
+            cost: serviceFilters.length > 0
                 ? filteredCostByService.reduce((sum, item) => sum + Number(item.currentMonthCost ?? 0), 0)
                 : providerScoped,
             currency: overview.totals.currency,
             momGrowth: Number(overview.totals.momGrowth),
             forecastedCost: overview.totals.forecastedCost,
             potentialSavings:
-                providerFilter || serviceFilter
+                providerFilters.length > 0 || serviceFilters.length > 0
                     ? recommendations.reduce((sum, item) => sum + Number(item.potentialSaving ?? 0), 0)
                     : overview.totals.potentialSavings,
             openAnomalies: anomalies.length,
@@ -575,9 +584,9 @@ export function FinopsOverview() {
         displayAccounts,
         filteredCostByService,
         overview,
-        providerFilter,
-        selectedAccountId,
-        serviceFilter,
+        providerFilters,
+        selectedAccountIds.length,
+        serviceFilters,
     ]);
 
     const serviceOptions = useMemo(
@@ -587,9 +596,12 @@ export function FinopsOverview() {
 
     const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
     const hasNoData = overview != null && filteredTotals.cost === 0 && overview.costTrend.length === 0;
-    const subtitle = selectedAccount
-        ? tf.spendOfAccount.replace('{alias}', selectedAccount.alias)
-        : tf.tenantConsolidation;
+    const subtitle =
+        selectedAccountIds.length === 1 && selectedAccount
+            ? tf.spendOfAccount.replace('{alias}', selectedAccount.alias)
+            : selectedAccountIds.length > 1
+              ? tf.filterSelectedCount.replace('{count}', String(selectedAccountIds.length))
+              : tf.tenantConsolidation;
 
     if (!organizationId) {
         return (
@@ -640,20 +652,20 @@ export function FinopsOverview() {
 
                 <FinopsFilterBar
                     period={period}
-                    accountId={selectedAccountId}
-                    provider={providerFilter}
-                    service={serviceFilter}
+                    accountIds={selectedAccountIds}
+                    providers={providerFilters}
+                    services={serviceFilters}
                     cloudAccounts={cloudAccounts}
                     serviceOptions={serviceOptions}
                     sidebarAccountId={sidebarAccountId}
                     onPeriodChange={(nextPeriod) => syncUrlState({ period: nextPeriod })}
-                    onAccountChange={(accountId) => syncUrlState({ account: accountId ?? ACCOUNT_FILTER_ALL })}
-                    onProviderChange={(provider) => syncUrlState({ provider })}
-                    onServiceChange={(service) => syncUrlState({ service })}
+                    onAccountsChange={(accountIds) => syncUrlState({ account: accountIds })}
+                    onProvidersChange={(providers) => syncUrlState({ provider: providers })}
+                    onServicesChange={(services) => syncUrlState({ service: services })}
                     onClear={() =>
                         syncUrlState({
                             period: 'lastmonth',
-                            account: ACCOUNT_FILTER_ALL,
+                            account: null,
                             provider: null,
                             service: null,
                         })
@@ -663,12 +675,20 @@ export function FinopsOverview() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     {overview?.period && (
                         <span>
-                            Período analisado:{' '}
+                            {tf.periodAnalyzedLabel}:{' '}
                             <strong className="text-foreground">
                                 {overview.period.startDate} → {overview.period.endDate}
                             </strong>
                         </span>
                     )}
+                    {overview?.dataCoverage?.availableStart && overview.dataCoverage.availableEnd ? (
+                        <span>
+                            {tf.dataAvailableLabel}:{' '}
+                            <strong className="text-foreground">
+                                {overview.dataCoverage.availableStart} → {overview.dataCoverage.availableEnd}
+                            </strong>
+                        </span>
+                    ) : null}
                     <span>
                         Última sincronização:{' '}
                         <strong className="text-foreground">
@@ -676,6 +696,14 @@ export function FinopsOverview() {
                         </strong>
                     </span>
                 </div>
+
+                {overview?.dataCoverage?.incomplete && !collectingCosts ? (
+                    <FinopsDataCoverageBanner
+                        coverage={overview.dataCoverage}
+                        onSyncClick={canSync && syncTargetAccount ? () => void handleSyncClick() : undefined}
+                        syncDisabled={syncing}
+                    />
+                ) : null}
 
                 {collectingCosts && (
                     <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
@@ -745,14 +773,17 @@ export function FinopsOverview() {
                 <FinopsSpendPanel
                     overview={overview}
                     accounts={displayAccounts}
-                    costByService={overview?.costByService ?? []}
+                    costByService={filteredCostByService}
                     isLoading={loadingInitial && !overview}
-                    onServiceClick={(service) =>
-                        syncUrlState({ service: serviceFilter === service ? null : service })
-                    }
+                    onServiceClick={(service) => {
+                        const next = serviceFilters.includes(service)
+                            ? serviceFilters.filter((item) => item !== service)
+                            : [...serviceFilters, service];
+                        syncUrlState({ service: next });
+                    }}
                     organizationId={organizationId}
                     selectedAccountId={selectedAccountId}
-                    selectedService={urlFilters.service}
+                    selectedService={serviceFilters[0] ?? null}
                 />
 
                 <FinopsAccountsStrip
@@ -761,7 +792,12 @@ export function FinopsOverview() {
                     selectedAccountId={selectedAccountId}
                     isLoading={loadingCloudAccounts && displayAccounts.length === 0}
                     canManage={canSync}
-                    onSelectAccount={(accountId) => syncUrlState({ account: accountId })}
+                    onSelectAccount={(accountId) => {
+                        const next = selectedAccountIds.includes(accountId)
+                            ? selectedAccountIds.filter((id) => id !== accountId)
+                            : [...selectedAccountIds, accountId];
+                        syncUrlState({ account: next });
+                    }}
                     onRevokeConsent={(account) => setRevokeTarget(account)}
                 />
             </div>

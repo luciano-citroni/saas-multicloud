@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { getActiveMidOrgId, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import {
     buildTrustPolicy,
@@ -172,7 +172,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                 const activeMidOrgId = getActiveMidOrgId(organizationId);
                 const activeMidOrg = activeMidOrgId ? items.find((org) => org.id === activeMidOrgId) : undefined;
                 if (activeMidOrg && !form.getValues('orgId')) {
-                    form.setValue('orgId', activeMidOrg.name);
+                    form.setValue('orgId', activeMidOrg.id);
                 }
             })
             .catch(() => undefined);
@@ -221,8 +221,7 @@ export function FormCloudAccount({ organizationId }: Props) {
             };
 
             if (data.orgId) {
-                const selectedOrg = orgs.find((o) => o.name === data.orgId);
-                if (selectedOrg) body.organizationId = selectedOrg.id;
+                body.organizationId = data.orgId;
             }
 
             const response = await fetch(`/api/cloud/accounts?organizationId=${encodeURIComponent(organizationId)}`, {
@@ -297,22 +296,17 @@ export function FormCloudAccount({ organizationId }: Props) {
                                         </Link>
                                     </div>
                                 ) : (
-                                    <Combobox items={orgs} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
-                                        <ComboboxInput
-                                            placeholder={tca.organizationPlaceholder}
-                                            className="h-9 w-full rounded-md shadow-sm"
-                                        />
-                                        <ComboboxContent>
-                                            <ComboboxEmpty>{tca.noOrganization}</ComboboxEmpty>
-                                            <ComboboxList>
-                                                {(org: MidOrg) => (
-                                                    <ComboboxItem key={org.id} value={org.name}>
-                                                        {org.name}
-                                                    </ComboboxItem>
-                                                )}
-                                            </ComboboxList>
-                                        </ComboboxContent>
-                                    </Combobox>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value ?? ''}
+                                        onValueChange={field.onChange}
+                                        placeholder={tca.organizationPlaceholder}
+                                        emptyText={tca.noOrganization}
+                                        options={orgs.map((org) => ({
+                                            value: org.id,
+                                            label: org.name,
+                                        }))}
+                                    />
                                 )}
                                 <FormMessage />
                             </FormItem>

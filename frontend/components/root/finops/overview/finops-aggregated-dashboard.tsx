@@ -18,7 +18,7 @@ import {
 import { PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
@@ -242,19 +242,20 @@ export function FinopsAggregatedDashboard({ data, isLoading = false, onPeriodCha
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                         <div className="w-full sm:w-56">
-                            <Select value={selectedPeriod} onValueChange={(value) => setPeriodFilter(value as DashboardPeriod)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder={tf.billingColPeriod} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="last7days">{periodLabels.last7days}</SelectItem>
-                                    <SelectItem value="last30days">{periodLabels.last30days}</SelectItem>
-                                    <SelectItem value="last90days">{periodLabels.last90days}</SelectItem>
-                                    <SelectItem value="currentmonth">{periodLabels.currentmonth}</SelectItem>
-                                    <SelectItem value="lastmonth">{periodLabels.lastmonth}</SelectItem>
-                                    <SelectItem value="ytd">{periodLabels.ytd}</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                mode="single"
+                                value={selectedPeriod}
+                                placeholder={tf.billingColPeriod}
+                                options={[
+                                    { value: 'last7days', label: periodLabels.last7days },
+                                    { value: 'last30days', label: periodLabels.last30days },
+                                    { value: 'last90days', label: periodLabels.last90days },
+                                    { value: 'currentmonth', label: periodLabels.currentmonth },
+                                    { value: 'lastmonth', label: periodLabels.lastmonth },
+                                    { value: 'ytd', label: periodLabels.ytd },
+                                ]}
+                                onValueChange={(value) => setPeriodFilter(value as DashboardPeriod)}
+                            />
                         </div>
                         <div className="rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground">
                             {tf.periodChip.replace('{period}', periodLabel(selectedPeriod, periodLabels))}

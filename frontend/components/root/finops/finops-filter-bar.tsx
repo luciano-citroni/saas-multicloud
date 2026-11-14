@@ -4,15 +4,12 @@ import { useMemo, useState } from 'react';
 import { Filter, RotateCcw, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { DashboardPeriod } from '@/components/root/finops/overview/types';
 import {
-    ACCOUNT_FILTER_ALL,
     DASHBOARD_PERIODS,
-    PROVIDER_FILTER_ALL,
-    SERVICE_FILTER_ALL,
     periodLabel,
 } from '@/components/root/finops/finops-filter-utils';
 import { cn } from '@/lib/utils';
@@ -20,148 +17,151 @@ import { useTranslations } from '@/lib/i18n';
 
 type FinopsFilterBarProps = {
     period: DashboardPeriod;
-    accountId: string | null;
-    provider: string | null;
-    service: string | null;
+    accountIds: string[];
+    providers: string[];
+    services: string[];
     cloudAccounts: OrganizationCloudAccount[];
     serviceOptions: string[];
     sidebarAccountId?: string | null;
+    /** Quando false, esconde o filtro de serviço (ex.: commitments). */
+    showServiceFilter?: boolean;
     onPeriodChange: (period: DashboardPeriod) => void;
-    onAccountChange: (accountId: string | null) => void;
-    onProviderChange: (provider: string | null) => void;
-    onServiceChange: (service: string | null) => void;
+    onAccountsChange: (accountIds: string[]) => void;
+    onProvidersChange: (providers: string[]) => void;
+    onServicesChange: (services: string[]) => void;
     onClear: () => void;
     className?: string;
 };
 
 function FilterFields({
     period,
-    accountId,
-    provider,
-    service,
+    accountIds,
+    providers,
+    services,
     cloudAccounts,
     serviceOptions,
-    providers,
+    providerOptions,
+    showServiceFilter,
     onPeriodChange,
-    onAccountChange,
-    onProviderChange,
-    onServiceChange,
+    onAccountsChange,
+    onProvidersChange,
+    onServicesChange,
 }: {
     period: DashboardPeriod;
-    accountId: string | null;
-    provider: string | null;
-    service: string | null;
+    accountIds: string[];
+    providers: string[];
+    services: string[];
     cloudAccounts: OrganizationCloudAccount[];
     serviceOptions: string[];
-    providers: string[];
+    providerOptions: string[];
+    showServiceFilter: boolean;
     onPeriodChange: (period: DashboardPeriod) => void;
-    onAccountChange: (accountId: string | null) => void;
-    onProviderChange: (provider: string | null) => void;
-    onServiceChange: (service: string | null) => void;
+    onAccountsChange: (accountIds: string[]) => void;
+    onProvidersChange: (providers: string[]) => void;
+    onServicesChange: (services: string[]) => void;
 }) {
     const t = useTranslations('finops');
     const tCommon = useTranslations('common');
 
+    const periodOptions = DASHBOARD_PERIODS.map((item) => ({
+        value: item,
+        label: periodLabel(item),
+    }));
+
+    const accountOptions = cloudAccounts.map((account) => ({
+        value: account.id,
+        label: `${account.alias} (${account.provider.toUpperCase()})`,
+    }));
+
+    const providerSelectOptions = providerOptions.map((item) => ({
+        value: item,
+        label: item.toUpperCase(),
+    }));
+
+    const serviceSelectOptions = serviceOptions.map((item) => ({
+        value: item,
+        label: item,
+    }));
+
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{t.budgetPeriod}</label>
-                <Select value={period} onValueChange={(value) => onPeriodChange(value as DashboardPeriod)}>
-                    <SelectTrigger className="w-full">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {DASHBOARD_PERIODS.map((item) => (
-                            <SelectItem key={item} value={item}>
-                                {periodLabel(item)}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+        <div
+            className={cn(
+                'grid grid-cols-1 items-end gap-3 sm:grid-cols-2',
+                showServiceFilter ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+            )}
+        >
+            <SearchableSelect
+                mode="single"
+                label={t.budgetPeriod}
+                value={period}
+                options={periodOptions}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => onPeriodChange(value as DashboardPeriod)}
+            />
 
-            <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{t.accountScope}</label>
-                <Select
-                    value={accountId ?? ACCOUNT_FILTER_ALL}
-                    onValueChange={(value) => onAccountChange(value === ACCOUNT_FILTER_ALL ? null : value)}
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t.allAccounts} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ACCOUNT_FILTER_ALL}>{t.allAccounts}</SelectItem>
-                        {cloudAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                                {`${account.alias} (${account.provider.toUpperCase()})`}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <SearchableSelect
+                label={t.accountScope}
+                allLabel={t.allAccounts}
+                value={accountIds}
+                options={accountOptions}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                selectedCountLabel={t.filterSelectedCount}
+                onValueChange={onAccountsChange}
+            />
 
-            <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{t.providerLabel}</label>
-                <Select
-                    value={provider ?? PROVIDER_FILTER_ALL}
-                    onValueChange={(value) => onProviderChange(value === PROVIDER_FILTER_ALL ? null : value)}
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder={tCommon.all} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={PROVIDER_FILTER_ALL}>{t.filterAllProviders}</SelectItem>
-                        {providers.map((item) => (
-                            <SelectItem key={item} value={item}>
-                                {item.toUpperCase()}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <SearchableSelect
+                label={t.providerLabel}
+                allLabel={t.filterAllProviders}
+                value={providers}
+                options={providerSelectOptions}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                selectedCountLabel={t.filterSelectedCount}
+                onValueChange={onProvidersChange}
+            />
 
-            <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{t.filterService}</label>
-                <Select
-                    value={service ?? SERVICE_FILTER_ALL}
-                    onValueChange={(value) => onServiceChange(value === SERVICE_FILTER_ALL ? null : value)}
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder={tCommon.all} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={SERVICE_FILTER_ALL}>{t.filterAllServices}</SelectItem>
-                        {serviceOptions.map((item) => (
-                            <SelectItem key={item} value={item}>
-                                {item}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            {showServiceFilter ? (
+                <SearchableSelect
+                    label={t.filterService}
+                    allLabel={t.filterAllServices}
+                    value={services}
+                    options={serviceSelectOptions}
+                    searchPlaceholder={tCommon.search}
+                    emptyText={t.filterSearchEmpty}
+                    clearLabel={t.clearFilters}
+                    selectedCountLabel={t.filterSelectedCount}
+                    onValueChange={onServicesChange}
+                />
+            ) : null}
         </div>
     );
 }
 
 export function FinopsFilterBar({
     period,
-    accountId,
-    provider,
-    service,
+    accountIds,
+    providers,
+    services,
     cloudAccounts,
     serviceOptions,
     sidebarAccountId,
+    showServiceFilter = true,
     onPeriodChange,
-    onAccountChange,
-    onProviderChange,
-    onServiceChange,
+    onAccountsChange,
+    onProvidersChange,
+    onServicesChange,
     onClear,
     className,
 }: FinopsFilterBarProps) {
     const t = useTranslations('finops');
     const [sheetOpen, setSheetOpen] = useState(false);
 
-    const providers = useMemo(() => {
+    const providerOptions = useMemo(() => {
         const set = new Set<string>();
         for (const account of cloudAccounts) {
             const value = (account.provider ?? '').trim().toLowerCase();
@@ -170,26 +170,33 @@ export function FinopsFilterBar({
         return Array.from(set).sort();
     }, [cloudAccounts]);
 
-    const accountAlias = accountId
-        ? (cloudAccounts.find((account) => account.id === accountId)?.alias ?? accountId.slice(0, 8))
-        : null;
+    const accountLabel = (id: string) =>
+        cloudAccounts.find((account) => account.id === id)?.alias ?? id.slice(0, 8);
 
     const activeChips: Array<{ key: string; label: string; onClear: () => void }> = [];
     if (period !== 'lastmonth') {
         activeChips.push({ key: 'period', label: periodLabel(period), onClear: () => onPeriodChange('lastmonth') });
     }
-    if (accountId) {
-        activeChips.push({ key: 'account', label: t.filterChipAccount.replace('{value}', accountAlias ?? ''), onClear: () => onAccountChange(null) });
-    }
-    if (provider) {
+    for (const id of accountIds) {
         activeChips.push({
-            key: 'provider',
-            label: t.filterChipProvider.replace('{value}', provider.toUpperCase()),
-            onClear: () => onProviderChange(null),
+            key: `account-${id}`,
+            label: t.filterChipAccount.replace('{value}', accountLabel(id)),
+            onClear: () => onAccountsChange(accountIds.filter((item) => item !== id)),
         });
     }
-    if (service) {
-        activeChips.push({ key: 'service', label: t.filterChipService.replace('{value}', service), onClear: () => onServiceChange(null) });
+    for (const provider of providers) {
+        activeChips.push({
+            key: `provider-${provider}`,
+            label: t.filterChipProvider.replace('{value}', provider.toUpperCase()),
+            onClear: () => onProvidersChange(providers.filter((item) => item !== provider)),
+        });
+    }
+    for (const service of services) {
+        activeChips.push({
+            key: `service-${service}`,
+            label: t.filterChipService.replace('{value}', service),
+            onClear: () => onServicesChange(services.filter((item) => item !== service)),
+        });
     }
 
     const hasActiveFilters = activeChips.length > 0;
@@ -207,12 +214,12 @@ export function FinopsFilterBar({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    {sidebarAccount && accountId !== sidebarAccount.id && (
+                    {sidebarAccount && !accountIds.includes(sidebarAccount.id) && (
                         <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => onAccountChange(sidebarAccount.id)}
+                            onClick={() => onAccountsChange([...accountIds, sidebarAccount.id])}
                         >
                             {t.filterUseSidebarAccount}
                         </Button>
@@ -240,18 +247,17 @@ export function FinopsFilterBar({
                             <div className="mt-4 space-y-4 pb-6">
                                 <FilterFields
                                     period={period}
-                                    accountId={accountId}
-                                    provider={provider}
-                                    service={service}
+                                    accountIds={accountIds}
+                                    providers={providers}
+                                    services={services}
                                     cloudAccounts={cloudAccounts}
                                     serviceOptions={serviceOptions}
-                                    providers={providers}
-                                    onPeriodChange={(value) => {
-                                        onPeriodChange(value);
-                                    }}
-                                    onAccountChange={onAccountChange}
-                                    onProviderChange={onProviderChange}
-                                    onServiceChange={onServiceChange}
+                                    providerOptions={providerOptions}
+                                    showServiceFilter={showServiceFilter}
+                                    onPeriodChange={onPeriodChange}
+                                    onAccountsChange={onAccountsChange}
+                                    onProvidersChange={onProvidersChange}
+                                    onServicesChange={onServicesChange}
                                 />
                                 <Button type="button" className="w-full" onClick={() => setSheetOpen(false)}>
                                     {t.filterApply}
@@ -265,16 +271,17 @@ export function FinopsFilterBar({
             <div className="hidden lg:block">
                 <FilterFields
                     period={period}
-                    accountId={accountId}
-                    provider={provider}
-                    service={service}
+                    accountIds={accountIds}
+                    providers={providers}
+                    services={services}
                     cloudAccounts={cloudAccounts}
                     serviceOptions={serviceOptions}
-                    providers={providers}
+                    providerOptions={providerOptions}
+                    showServiceFilter={showServiceFilter}
                     onPeriodChange={onPeriodChange}
-                    onAccountChange={onAccountChange}
-                    onProviderChange={onProviderChange}
-                    onServiceChange={onServiceChange}
+                    onAccountsChange={onAccountsChange}
+                    onProvidersChange={onProvidersChange}
+                    onServicesChange={onServicesChange}
                 />
             </div>
 

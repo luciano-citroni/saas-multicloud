@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowUpRight, BarChart2, DollarSign, Lightbulb, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import {
     type KpiStatus,
@@ -216,45 +216,42 @@ export function FinopsDashboardPanels({
                 </div>
 
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <Select value={selectedPeriod} onValueChange={(value) => setFilterParam('period', value)}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Período" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="last7days">Últimos 7 dias</SelectItem>
-                            <SelectItem value="last30days">Últimos 30 dias</SelectItem>
-                            <SelectItem value="last90days">Últimos 90 dias</SelectItem>
-                            <SelectItem value="currentmonth">Mês atual</SelectItem>
-                            <SelectItem value="lastmonth">Mês passado</SelectItem>
-                            <SelectItem value="ytd">Ano até hoje</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        mode="single"
+                        value={selectedPeriod}
+                        placeholder="Período"
+                        options={[
+                            { value: 'last7days', label: 'Últimos 7 dias' },
+                            { value: 'last30days', label: 'Últimos 30 dias' },
+                            { value: 'last90days', label: 'Últimos 90 dias' },
+                            { value: 'currentmonth', label: 'Mês atual' },
+                            { value: 'lastmonth', label: 'Mês passado' },
+                            { value: 'ytd', label: 'Ano até hoje' },
+                        ]}
+                        onValueChange={(value) => setFilterParam('period', value)}
+                    />
 
-                    <Select value={normalizedProvider} onValueChange={(value) => setFilterParam('provider', value)}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Cloud" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {providerOptions.map((provider) => (
-                                <SelectItem key={provider} value={provider}>
-                                    {provider === 'all' ? 'Todas as clouds' : provider.toUpperCase()}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        mode="single"
+                        value={normalizedProvider}
+                        placeholder="Cloud"
+                        options={providerOptions.map((provider) => ({
+                            value: provider,
+                            label: provider === 'all' ? 'Todas as clouds' : provider.toUpperCase(),
+                        }))}
+                        onValueChange={(value) => setFilterParam('provider', value)}
+                    />
 
-                    <Select value={normalizedService} onValueChange={(value) => setFilterParam('service', value)}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Serviço" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {serviceOptions.map((service) => (
-                                <SelectItem key={service} value={service}>
-                                    {service === 'all' ? 'Todos os serviços' : serviceLabel(service)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        mode="single"
+                        value={normalizedService}
+                        placeholder="Serviço"
+                        options={serviceOptions.map((service) => ({
+                            value: service,
+                            label: service === 'all' ? 'Todos os serviços' : serviceLabel(service),
+                        }))}
+                        onValueChange={(value) => setFilterParam('service', value)}
+                    />
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -6,14 +6,16 @@ import { cn } from '@/lib/utils';
 type Tone = 'ok' | 'near' | 'full';
 
 export function usageTone(used: number, limit: number | null | undefined): Tone {
-    if (limit == null || limit <= 0) return 'ok';
-    if (used >= limit) return 'full';
+    // null = unlimited; 0 = exhausted (matches backend assertWithinQuota)
+    if (limit == null) return 'ok';
+    if (limit <= 0 || used >= limit) return 'full';
     if (used / limit >= 0.8) return 'near';
     return 'ok';
 }
 
 export function usagePercent(used: number, limit: number | null | undefined): number | null {
-    if (limit == null || limit <= 0) return null;
+    if (limit == null) return null;
+    if (limit <= 0) return 100;
     return Math.min(100, Math.max(0, (used / limit) * 100));
 }
 

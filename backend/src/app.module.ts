@@ -20,6 +20,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { BillingModule } from './billing/billing.module';
 import { GovernanceModule } from './governance/governance.module';
 import { FinopsModule } from './finops/finops.module';
+import { AiFinopsModule } from './ai-finops/ai-finops.module';
 import { GcpModule } from './gcp/gcp.module';
 import { AutomationModule } from './automation/automation.module';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
@@ -74,6 +75,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         BillingModule,
         GovernanceModule,
         FinopsModule,
+        AiFinopsModule,
         GcpModule,
         AutomationModule,
         CloudIntelligenceModule,

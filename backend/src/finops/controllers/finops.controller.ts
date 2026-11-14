@@ -226,6 +226,12 @@ export class FinopsController {
     @ApiQuery({ name: 'month', required: false, type: Number })
     @ApiQuery({ name: 'anomalyDays', required: false, type: Number })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({
+        name: 'cloudAccountIds',
+        required: false,
+        type: String,
+        description: 'Lista de UUIDs separados por vírgula (multi-conta)',
+    })
     @ApiResponse({ status: 200, description: 'Overview agregado' })
     async getOrgOverview(
         @Query('period') period: string,
@@ -233,9 +239,17 @@ export class FinopsController {
         @Query('month') month: string,
         @Query('anomalyDays') anomalyDays: string,
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @CurrentOrganization() org: Tenant
     ) {
-        return this.orgOverviewService.getOverview(org.id, { period, year, month, anomalyDays, cloudAccountId });
+        return this.orgOverviewService.getOverview(org.id, {
+            period,
+            year,
+            month,
+            anomalyDays,
+            cloudAccountId,
+            cloudAccountIds,
+        });
     }
 
     @Get('optimize')

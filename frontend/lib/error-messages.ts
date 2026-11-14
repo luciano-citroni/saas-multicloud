@@ -584,6 +584,37 @@ export const ErrorMessages = {
         },
     },
 
+    AI_FINOPS: {
+        CONNECTION_NOT_FOUND: {
+            en: 'AI FinOps connection not found.',
+            pt: 'Conexão AI FinOps não encontrada.',
+        },
+        LICENSE_NOT_FOUND: {
+            en: 'AI FinOps license not found.',
+            pt: 'Licença AI FinOps não encontrada.',
+        },
+        BUDGET_NOT_FOUND: {
+            en: 'AI FinOps budget not found.',
+            pt: 'Orçamento AI FinOps não encontrado.',
+        },
+        POLICY_BLOCKED: {
+            en: 'Request blocked by AI FinOps policy.',
+            pt: 'Requisição bloqueada pela política de AI FinOps.',
+        },
+        BUDGET_EXCEEDED: {
+            en: 'AI FinOps budget limit exceeded.',
+            pt: 'Limite de orçamento AI FinOps excedido.',
+        },
+        RATE_LIMITED: {
+            en: 'AI FinOps rate limit exceeded.',
+            pt: 'Limite de taxa AI FinOps excedido.',
+        },
+        ORGANIZATION_REQUIRED: {
+            en: 'A mid-organization is required for AI FinOps resources.',
+            pt: 'Uma organização intermediária é obrigatória para recursos de AI FinOps.',
+        },
+    },
+
     FINOPS: {
         BUDGET_NOT_FOUND: {
             en: 'FinOps budget not found.',
@@ -683,6 +714,7 @@ export type ErrorKey =
     | `DATABASE.${keyof typeof ErrorMessages.DATABASE}`
     | `VALIDATION.${keyof typeof ErrorMessages.VALIDATION}`
     | `FINOPS.${keyof typeof ErrorMessages.FINOPS}`
+    | `AI_FINOPS.${keyof typeof ErrorMessages.AI_FINOPS}`
     | `GENERAL.${keyof typeof ErrorMessages.GENERAL}`;
 
 /**

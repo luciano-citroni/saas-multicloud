@@ -1125,12 +1125,9 @@ export class BillingService {
         }
 
         quota.tier = tier;
-        if (plan.metadata.aiDailyLimit !== null) {
-            quota.dailyLimit = plan.metadata.aiDailyLimit;
-        }
-        if (plan.metadata.aiMonthlyLimit !== null) {
-            quota.monthlyLimit = plan.metadata.aiMonthlyLimit;
-        }
+        // Always mirror Stripe metadata, including null (= unlimited). Do not leave stale caps.
+        quota.dailyLimit = plan.metadata.aiDailyLimit;
+        quota.monthlyLimit = plan.metadata.aiMonthlyLimit;
 
         await this.aiOrgQuotaRepository.save(quota);
     }

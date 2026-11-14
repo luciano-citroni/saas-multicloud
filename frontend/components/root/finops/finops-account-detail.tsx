@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Loader2, PlayCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     AlertDialog,
@@ -475,8 +475,14 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <Select
+                        <SearchableSelect
+                            mode="single"
+                            className="w-[170px]"
                             value={period}
+                            options={DASHBOARD_PERIODS.map((item) => ({
+                                value: item,
+                                label: periodLabel(item),
+                            }))}
                             onValueChange={(value) => {
                                 const next = value as DashboardPeriod;
                                 setPeriod(next);
@@ -488,18 +494,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                     scroll: false,
                                 });
                             }}
-                        >
-                            <SelectTrigger className="w-[170px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {DASHBOARD_PERIODS.map((item) => (
-                                    <SelectItem key={item} value={item}>
-                                        {periodLabel(item)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        />
 
                         <Button
                             variant="outline"

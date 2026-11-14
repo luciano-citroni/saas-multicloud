@@ -22,7 +22,7 @@ export class AiOrgQuota {
     @JoinColumn({ name: 'organization_id' })
     organization!: Relation<Tenant>;
 
-    /** Null = use env default / unlimited when default also unset. */
+    /** Null = unlimited. Env defaults only seed new rows via getOrCreateQuota. */
     @Column({ type: 'int', name: 'daily_limit', nullable: true })
     dailyLimit!: number | null;
 

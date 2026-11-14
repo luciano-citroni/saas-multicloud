@@ -21,8 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
+import { FinopsDataCoverageBanner } from '@/components/root/finops/finops-data-coverage-banner';
 import {
-    ACCOUNT_FILTER_ALL,
     buildFinopsQuery,
     parseFinopsUrlFilters,
 } from '@/components/root/finops/finops-filter-utils';
@@ -81,7 +81,14 @@ export function FinopsMulticloud() {
     const [providerChartType, setProviderChartType] = useState<ChartType>('bar');
 
     const syncUrlState = useCallback(
-        (next: Partial<{ period: DashboardPeriod; account: string | null; provider: string | null; service: string | null }>) => {
+        (
+            next: Partial<{
+                period: DashboardPeriod;
+                account: string | string[] | null;
+                provider: string | string[] | null;
+                service: string | string[] | null;
+            }>,
+        ) => {
             const nextQuery = buildFinopsQuery(searchParams, next);
             router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
         },
@@ -139,7 +146,7 @@ export function FinopsMulticloud() {
             try {
                 const response = await fetchFinopsOrgOverview(orgId, {
                     period: urlFilters.period,
-                    cloudAccountId: urlFilters.accountId ?? undefined,
+                    cloudAccountIds: urlFilters.accountIds.length > 0 ? urlFilters.accountIds : undefined,
                 });
                 if (response.status === 401) {
                     toast.error(tc.sessionExpired);
@@ -159,7 +166,7 @@ export function FinopsMulticloud() {
                 if (!silent) setLoading(false);
             }
         },
-        [router, tc.sessionExpired, tf.loadError, urlFilters.accountId, urlFilters.period]
+        [router, tc.sessionExpired, tf.loadError, urlFilters.accountIds, urlFilters.period]
     );
 
     useEffect(() => {
@@ -174,7 +181,7 @@ export function FinopsMulticloud() {
         const map = new Map<string, ProviderRow>();
         for (const account of overview?.accounts ?? []) {
             const provider = (account.provider || 'other').toLowerCase();
-            if (urlFilters.provider && provider !== urlFilters.provider) continue;
+            if (urlFilters.providers.length > 0 && !urlFilters.providers.includes(provider)) continue;
             const current = map.get(provider) ?? {
                 provider,
                 totalCost: 0,
@@ -189,7 +196,7 @@ export function FinopsMulticloud() {
             map.set(provider, current);
         }
         return Array.from(map.values()).sort((a, b) => b.totalCost - a.totalCost);
-    }, [overview?.accounts, urlFilters.provider]);
+    }, [overview?.accounts, urlFilters.providers]);
 
     const currency = overview?.totals.currency ?? 'USD';
     const chartData = providerRows.map((row) => ({
@@ -239,25 +246,27 @@ export function FinopsMulticloud() {
 
             <FinopsFilterBar
                 period={urlFilters.period}
-                accountId={urlFilters.accountId}
-                provider={urlFilters.provider}
-                service={urlFilters.service}
+                accountIds={urlFilters.accountIds}
+                providers={urlFilters.providers}
+                services={urlFilters.services}
                 cloudAccounts={cloudAccounts}
                 serviceOptions={(overview?.costByService ?? []).map((item) => item.service)}
                 sidebarAccountId={sidebarAccountId}
                 onPeriodChange={(period) => syncUrlState({ period })}
-                onAccountChange={(accountId) => syncUrlState({ account: accountId ?? ACCOUNT_FILTER_ALL })}
-                onProviderChange={(provider) => syncUrlState({ provider })}
-                onServiceChange={(service) => syncUrlState({ service })}
+                onAccountsChange={(accountIds) => syncUrlState({ account: accountIds })}
+                onProvidersChange={(providers) => syncUrlState({ provider: providers })}
+                onServicesChange={(services) => syncUrlState({ service: services })}
                 onClear={() =>
                     syncUrlState({
                         period: 'lastmonth',
-                        account: ACCOUNT_FILTER_ALL,
+                        account: null,
                         provider: null,
                         service: null,
                     })
                 }
             />
+
+            <FinopsDataCoverageBanner coverage={overview?.dataCoverage} />
 
             <div className="grid gap-3 sm:grid-cols-3">
                 <Card>

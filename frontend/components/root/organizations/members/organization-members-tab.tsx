@@ -28,6 +28,7 @@ import {
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { hasRequiredOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
@@ -246,16 +247,22 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                     placeholder="Filtrar por nome ou e-mail..."
                                     className="h-8 w-50"
                                 />
-                                <Select value={memberRoleFilter} onValueChange={(v) => { setMemberRoleFilter(v); setMemberPageIndex(0); }}>
-                                    <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ALL">Todos os cargos</SelectItem>
-                                        <SelectItem value="OWNER">Owner</SelectItem>
-                                        <SelectItem value="ADMIN">Admin</SelectItem>
-                                        <SelectItem value="MEMBER">Member</SelectItem>
-                                        <SelectItem value="VIEWER">Viewer</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    mode="single"
+                                    className="w-36"
+                                    value={memberRoleFilter}
+                                    options={[
+                                        { value: 'ALL', label: 'Todos os cargos' },
+                                        { value: 'OWNER', label: 'Owner' },
+                                        { value: 'ADMIN', label: 'Admin' },
+                                        { value: 'MEMBER', label: 'Member' },
+                                        { value: 'VIEWER', label: 'Viewer' },
+                                    ]}
+                                    onValueChange={(v) => {
+                                        setMemberRoleFilter(v);
+                                        setMemberPageIndex(0);
+                                    }}
+                                />
                             </div>
                             <div className="rounded-lg border">
                                 <Table>
@@ -370,16 +377,22 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                     placeholder="Filtrar por e-mail..."
                                     className="h-8 w-50"
                                 />
-                                <Select value={inviteRoleFilter} onValueChange={(v) => { setInviteRoleFilter(v); setInvitePageIndex(0); }}>
-                                    <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ALL">Todos os cargos</SelectItem>
-                                        <SelectItem value="OWNER">Owner</SelectItem>
-                                        <SelectItem value="ADMIN">Admin</SelectItem>
-                                        <SelectItem value="MEMBER">Member</SelectItem>
-                                        <SelectItem value="VIEWER">Viewer</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    mode="single"
+                                    className="w-36"
+                                    value={inviteRoleFilter}
+                                    options={[
+                                        { value: 'ALL', label: 'Todos os cargos' },
+                                        { value: 'OWNER', label: 'Owner' },
+                                        { value: 'ADMIN', label: 'Admin' },
+                                        { value: 'MEMBER', label: 'Member' },
+                                        { value: 'VIEWER', label: 'Viewer' },
+                                    ]}
+                                    onValueChange={(v) => {
+                                        setInviteRoleFilter(v);
+                                        setInvitePageIndex(0);
+                                    }}
+                                />
                             </div>
                             <div className="rounded-lg border">
                                 <Table>

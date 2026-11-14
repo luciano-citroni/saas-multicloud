@@ -13,8 +13,8 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { DatePicker, preventDismissOnDatePicker } from '@/components/ui/date-picker';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useTranslations } from '@/lib/i18n';
 
 const syncSchema = z.object({
@@ -87,17 +87,17 @@ export function FinopsSyncDialog({ open, cloudProvider, onConfirm, onCancel, isL
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Granularidade</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder={tf.selectPlaceholder} />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="daily">Diária</SelectItem>
-                                            <SelectItem value="monthly">Mensal</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={field.onChange}
+                                        placeholder={tf.selectPlaceholder}
+                                        triggerClassName="w-full"
+                                        options={[
+                                            { value: 'daily', label: 'Diária' },
+                                            { value: 'monthly', label: 'Mensal' },
+                                        ]}
+                                    />
                                     <FormMessage />
                                 </FormItem>
                             )}

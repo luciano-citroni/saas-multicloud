@@ -255,10 +255,10 @@ export class AiOrchestratorService {
             let toolCallsUsed = 0;
             let finalContent = '';
             let usage: {
-                promptTokens?: number;
-                completionTokens?: number;
-                totalTokens?: number;
-            } | null = null;
+                promptTokens: number;
+                completionTokens: number;
+                totalTokens: number;
+            } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
             while (true) {
                 if (abortController.signal.aborted) {
@@ -267,12 +267,81 @@ export class AiOrchestratorService {
                     );
                 }
 
-                const completion = await provider.complete({
+                const completionRequest = {
                     messages,
                     tools,
                     signal: abortController.signal,
-                });
-                usage = completion.usage ?? usage;
+                };
+
+                let completion: Awaited<ReturnType<typeof provider.complete>>;
+                if (provider.streamComplete) {
+                    const pendingTokens: string[] = [];
+                    let wake: (() => void) | null = null;
+                    const notify = () => {
+                        const resolve = wake;
+                        wake = null;
+                        resolve?.();
+                    };
+                    const waitForTokenOrDone = () =>
+                        new Promise<void>((resolve) => {
+                            wake = resolve;
+                        });
+
+                    const settled: {
+                        current:
+                            | { ok: true; value: Awaited<ReturnType<typeof provider.complete>> }
+                            | { ok: false; error: unknown }
+                            | null;
+                    } = { current: null };
+
+                    const streamPromise = provider
+                        .streamComplete(completionRequest, {
+                            onContentDelta: async (_delta, fullContent) => {
+                                pendingTokens.push(fullContent);
+                                notify();
+                            },
+                        })
+                        .then((value) => {
+                            settled.current = { ok: true, value };
+                            notify();
+                        })
+                        .catch((error: unknown) => {
+                            settled.current = { ok: false, error };
+                            notify();
+                        });
+
+                    while (settled.current === null || pendingTokens.length > 0) {
+                        while (pendingTokens.length > 0) {
+                            yield { event: 'token', data: { content: pendingTokens.shift()! } };
+                        }
+                        if (settled.current !== null) break;
+                        await waitForTokenOrDone();
+                    }
+
+                    await streamPromise;
+                    const outcome = settled.current;
+                    if (!outcome) {
+                        throw new ServiceUnavailableException(
+                            ErrorMessages.CLOUD_INTELLIGENCE.PROVIDER_UNAVAILABLE,
+                        );
+                    }
+                    if (!outcome.ok) {
+                        throw outcome.error;
+                    }
+                    completion = outcome.value;
+                } else {
+                    completion = await provider.complete(completionRequest);
+                }
+
+                if (completion.usage) {
+                    usage = {
+                        promptTokens:
+                            usage.promptTokens + (completion.usage.promptTokens ?? 0),
+                        completionTokens:
+                            usage.completionTokens + (completion.usage.completionTokens ?? 0),
+                        totalTokens: usage.totalTokens + (completion.usage.totalTokens ?? 0),
+                    };
+                }
 
                 if (completion.toolCalls.length > 0) {
                     messages.push({
@@ -354,8 +423,8 @@ export class AiOrchestratorService {
                 agentType: effectiveAgent.type,
                 provider: provider.getProviderName(),
                 model: provider.getModel(),
-                inputTokens: usage?.promptTokens ?? 0,
-                outputTokens: usage?.completionTokens ?? 0,
+                inputTokens: usage.promptTokens,
+                outputTokens: usage.completionTokens,
                 conversationId: conversation.id,
             });
 
@@ -369,7 +438,7 @@ export class AiOrchestratorService {
             };
 
             this.logger.log(
-                `cloud-intelligence.completed org=${organizationId} conversation=${conversation.id} agent=${effectiveAgent.type} latencyMs=${Date.now() - startedAt} tools=${toolCallsUsed} tokens=${usage?.totalTokens ?? 'n/a'}`,
+                `cloud-intelligence.completed org=${organizationId} conversation=${conversation.id} agent=${effectiveAgent.type} latencyMs=${Date.now() - startedAt} tools=${toolCallsUsed} tokens=${usage.totalTokens || 'n/a'}`,
             );
         } catch (error) {
             const message =

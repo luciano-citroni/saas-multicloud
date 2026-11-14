@@ -22,13 +22,20 @@ type ModuleRouteConfig = {
 const MODULE_ROUTE_CONFIG: ModuleRouteConfig[] = [
     { prefix: '/assessment', module: PlanModule.ASSESSMENT },
     { prefix: '/governance', module: PlanModule.GOVERNANCE },
-    { prefix: '/finops', module: PlanModule.FINOPS },
+    { prefix: '/ai-governance', module: PlanModule.AI_FINOPS },
     { prefix: '/automation', module: PlanModule.AUTOMATION },
     { prefix: '/automations', module: PlanModule.AUTOMATION },
     { prefix: '/cloud-intelligence', module: PlanModule.CLOUD_INTELLIGENCE },
 ];
 
 function resolveRequiredModule(pathname: string): PlanModule | null {
+    // AI Costs lives under FinOps routes but is gated by ai_finops.
+    if (pathname === '/finops/ai' || pathname.startsWith('/finops/ai/')) {
+        return PlanModule.AI_FINOPS;
+    }
+    if (pathname === '/finops' || pathname.startsWith('/finops/')) {
+        return PlanModule.FINOPS;
+    }
     const matched = MODULE_ROUTE_CONFIG.find((entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`));
     return matched?.module ?? null;
 }

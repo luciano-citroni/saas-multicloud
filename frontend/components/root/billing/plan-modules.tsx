@@ -19,6 +19,7 @@ export function usePlanModuleLabels() {
             if (moduleName === PlanModule.GOVERNANCE) return t.moduleGovernance;
             if (moduleName === PlanModule.AUTOMATION) return t.moduleAutomation;
             if (moduleName === PlanModule.CLOUD_INTELLIGENCE) return t.moduleCloudIntelligence;
+            if (moduleName === PlanModule.AI_FINOPS) return t.moduleAiFinops;
             return moduleName;
         });
     };

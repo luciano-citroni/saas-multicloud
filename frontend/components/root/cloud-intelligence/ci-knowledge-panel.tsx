@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
     BookOpen,
     ChevronLeft,
@@ -32,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import {
     Item,
@@ -42,19 +45,17 @@ import {
     ItemMedia,
     ItemTitle,
 } from '@/components/ui/item';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { CiMarkdownEditor } from './ci-markdown-editor';
+import {
+    createKnowledgeSchema,
+    knowledgeFormDefaults,
+    type KnowledgeFormValues,
+} from './knowledge-schema';
 
 const LIBRARY_PAGE_SIZE = 8;
 
@@ -140,15 +141,6 @@ export function CiKnowledgePanel() {
         return Number.isInteger(raw) && raw > 0 ? raw : 1;
     }, [searchParams]);
 
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [domain, setDomain] = useState<KnowledgeDomain>('general');
-    const [role, setRole] = useState<KnowledgeRole>('guidance');
-    const [tagRows, setTagRows] = useState<string[]>(['']);
-    const [namingPattern, setNamingPattern] = useState('');
-    const [namingExample, setNamingExample] = useState('');
-    const [scope, setScope] = useState<KnowledgeScope>('organization');
-    const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [pending, setPending] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -158,6 +150,29 @@ export function CiKnowledgePanel() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedSnapshot, setSelectedSnapshot] = useState<AiKnowledgeDocument | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AiKnowledgeDocument | null>(null);
+
+    const knowledgeSchema = useMemo(
+        () =>
+            createKnowledgeSchema({
+                titleRequired: t.knowledgeTitleRequired,
+                contentRequired: t.knowledgeContentRequired,
+                tagsRequired: t.knowledgeTagRuleRequired,
+                namingRequired: t.knowledgeNamingRuleRequired,
+                accountsRequired: t.knowledgeScopeAccountsRequired,
+            }),
+        [t],
+    );
+
+    const form = useForm<KnowledgeFormValues>({
+        resolver: zodResolver(knowledgeSchema),
+        defaultValues: knowledgeFormDefaults,
+    });
+
+    const domain = form.watch('domain');
+    const role = form.watch('role');
+    const tagRows = form.watch('tagRows');
+    const scope = form.watch('scope');
+    const selectedAccountIds = form.watch('selectedAccountIds');
 
     const domainLabel = useMemo(
         () =>
@@ -262,15 +277,7 @@ export function CiKnowledgePanel() {
     const isStructuredGovernanceRole = isTagsRole || isNamingRole;
 
     const resetForm = () => {
-        setTitle('');
-        setContent('');
-        setDomain('general');
-        setRole('guidance');
-        setTagRows(['']);
-        setNamingPattern('');
-        setNamingExample('');
-        setScope('organization');
-        setSelectedAccountIds([]);
+        form.reset(knowledgeFormDefaults);
         setSelectedId(null);
         setSelectedSnapshot(null);
     };
@@ -278,10 +285,7 @@ export function CiKnowledgePanel() {
     const onSelect = (doc: AiKnowledgeDocument) => {
         setSelectedId(doc.id);
         setSelectedSnapshot(doc);
-        setTitle(doc.title);
-        setContent(stripTitlePrefix(doc));
-        setDomain(doc.domain ?? 'general');
-        const nextRole =
+        const nextRole: KnowledgeRole =
             doc.role === 'tags' ||
             (doc.domain === 'governance' && doc.rule?.type === 'required_tags')
                 ? 'tags'
@@ -289,132 +293,124 @@ export function CiKnowledgePanel() {
                     (doc.domain === 'governance' && doc.rule?.type === 'naming_pattern')
                   ? 'naming'
                   : (doc.role ?? 'guidance');
-        setRole(nextRole);
-        setTagRows(
-            doc.rule?.type === 'required_tags' && doc.rule.keys.length > 0
-                ? doc.rule.keys
-                : [''],
-        );
-        setNamingPattern(doc.rule?.type === 'naming_pattern' ? doc.rule.pattern : '');
-        setNamingExample(
-            doc.rule?.type === 'naming_pattern' && doc.rule.example ? doc.rule.example : '',
-        );
-        const nextScope =
+        const nextScope: KnowledgeScope =
             doc.scope === 'cloud_accounts' || (doc.cloudAccountIds?.length ?? 0) > 0
                 ? 'cloud_accounts'
                 : 'organization';
-        setScope(nextScope);
-        setSelectedAccountIds(doc.cloudAccountIds ?? []);
+        form.reset({
+            title: doc.title,
+            content: stripTitlePrefix(doc),
+            domain: doc.domain ?? 'general',
+            role: nextRole,
+            tagRows:
+                doc.rule?.type === 'required_tags' && doc.rule.keys.length > 0
+                    ? doc.rule.keys
+                    : [''],
+            namingPattern: doc.rule?.type === 'naming_pattern' ? doc.rule.pattern : '',
+            namingExample:
+                doc.rule?.type === 'naming_pattern' && doc.rule.example ? doc.rule.example : '',
+            scope: nextScope,
+            selectedAccountIds: doc.cloudAccountIds ?? [],
+        });
     };
 
     const toggleAccount = (accountId: string, checked: boolean) => {
-        setSelectedAccountIds((ids) =>
+        const ids = form.getValues('selectedAccountIds');
+        form.setValue(
+            'selectedAccountIds',
             checked
                 ? ids.includes(accountId)
                     ? ids
                     : [...ids, accountId]
                 : ids.filter((id) => id !== accountId),
+            { shouldValidate: true },
         );
     };
 
     const onDomainChange = (value: KnowledgeDomain) => {
-        setDomain(value);
+        form.setValue('domain', value, { shouldValidate: true });
         if (value !== 'governance' && (role === 'tags' || role === 'naming')) {
-            setRole('guidance');
-            setTagRows(['']);
-            setNamingPattern('');
-            setNamingExample('');
+            form.setValue('role', 'guidance', { shouldValidate: true });
+            form.setValue('tagRows', [''], { shouldValidate: true });
+            form.setValue('namingPattern', '', { shouldValidate: true });
+            form.setValue('namingExample', '', { shouldValidate: true });
         }
     };
 
     const onRoleChange = (value: KnowledgeRole) => {
-        setRole(value);
+        form.setValue('role', value, { shouldValidate: true });
         if (value === 'tags' || value === 'naming') {
-            setDomain('governance');
+            form.setValue('domain', 'governance', { shouldValidate: true });
             if (value === 'tags' && tagRows.every((row) => !row.trim())) {
-                setTagRows(['']);
+                form.setValue('tagRows', [''], { shouldValidate: true });
             }
         }
     };
 
     const updateTagRow = (index: number, value: string) => {
-        setTagRows((rows) => rows.map((row, i) => (i === index ? value : row)));
+        const rows = form.getValues('tagRows').map((row, i) => (i === index ? value : row));
+        form.setValue('tagRows', rows, { shouldValidate: true });
     };
 
     const addTagRow = () => {
-        setTagRows((rows) => (rows.length >= 20 ? rows : [...rows, '']));
+        const rows = form.getValues('tagRows');
+        if (rows.length >= 20) return;
+        form.setValue('tagRows', [...rows, ''], { shouldValidate: true });
     };
 
     const removeTagRow = (index: number) => {
-        setTagRows((rows) => {
-            if (rows.length <= 1) return [''];
-            return rows.filter((_, i) => i !== index);
-        });
+        const rows = form.getValues('tagRows');
+        form.setValue(
+            'tagRows',
+            rows.length <= 1 ? [''] : rows.filter((_, i) => i !== index),
+            { shouldValidate: true },
+        );
     };
 
-    const canSave =
-        Boolean(title.trim()) &&
-        (isTagsRole
-            ? normalizedTags.length > 0
-            : isNamingRole
-              ? Boolean(namingPattern.trim())
-              : Boolean(content.trim())) &&
-        (scope !== 'cloud_accounts' || selectedAccountIds.length > 0);
-
-    const onSave = async () => {
+    const onSave = form.handleSubmit(async (data) => {
         const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
-        if (!organizationId || !canSave) return;
+        if (!organizationId) return;
 
-        if (isTagsRole && normalizedTags.length === 0) {
-            toast.error(t.knowledgeTagRuleRequired);
-            return;
-        }
-        if (isNamingRole && !namingPattern.trim()) {
-            toast.error(t.knowledgeNamingRuleRequired);
-            return;
-        }
-        if (scope === 'cloud_accounts' && selectedAccountIds.length === 0) {
-            toast.error(t.knowledgeScopeAccountsRequired);
-            return;
-        }
+        const dataIsTagsRole = data.domain === 'governance' && data.role === 'tags';
+        const dataIsNamingRole = data.domain === 'governance' && data.role === 'naming';
+        const dataIsStructured = dataIsTagsRole || dataIsNamingRole;
+        const tags = data.tagRows.map((tag) => tag.trim()).filter(Boolean).slice(0, 20);
 
-        const contentToSave = isTagsRole
-            ? content.trim() || buildTagsContent(normalizedTags)
-            : isNamingRole
-              ? content.trim() || buildNamingContent(namingPattern.trim(), namingExample)
-              : content.trim();
+        const contentToSave = dataIsTagsRole
+            ? data.content.trim() || buildTagsContent(tags)
+            : dataIsNamingRole
+              ? data.content.trim() || buildNamingContent(data.namingPattern.trim(), data.namingExample)
+              : data.content.trim();
 
         const allProviders = ['aws', 'azure', 'gcp'] as Array<'aws' | 'azure' | 'gcp'>;
-        const structuredRule = isTagsRole
+        const structuredRule = dataIsTagsRole
             ? {
                   type: 'required_tags' as const,
-                  keys: normalizedTags,
+                  keys: tags,
                   providers: allProviders,
               }
-            : isNamingRole
+            : dataIsNamingRole
               ? {
                     type: 'naming_pattern' as const,
-                    pattern: namingPattern.trim(),
-                    ...(namingExample.trim() ? { example: namingExample.trim() } : {}),
+                    pattern: data.namingPattern.trim(),
+                    ...(data.namingExample.trim() ? { example: data.namingExample.trim() } : {}),
                     providers: allProviders,
                 }
               : undefined;
 
-        const effectiveScope: KnowledgeScope = isStructuredGovernanceRole
-            ? scope
-            : 'organization';
+        const effectiveScope: KnowledgeScope = dataIsStructured ? data.scope : 'organization';
         const effectiveAccountIds =
-            effectiveScope === 'cloud_accounts' ? selectedAccountIds : [];
+            effectiveScope === 'cloud_accounts' ? data.selectedAccountIds : [];
 
         setPending(true);
         try {
             const res = await upsertCloudIntelligenceKnowledge(organizationId, {
                 ...(selectedId ? { id: selectedId } : {}),
-                title: title.trim(),
+                title: data.title.trim(),
                 content: contentToSave,
                 source: 'ui-upload',
-                domain: isStructuredGovernanceRole ? 'governance' : domain,
-                role: isTagsRole ? 'tags' : isNamingRole ? 'naming' : role,
+                domain: dataIsStructured ? 'governance' : data.domain,
+                role: dataIsTagsRole ? 'tags' : dataIsNamingRole ? 'naming' : data.role,
                 scope: effectiveScope,
                 cloudAccountIds: effectiveAccountIds,
                 ...(structuredRule ? { rule: structuredRule } : {}),
@@ -442,12 +438,12 @@ export function CiKnowledgePanel() {
                 setSelectedId(savedId);
                 setSelectedSnapshot({
                     id: savedId,
-                    title: title.trim(),
+                    title: data.title.trim(),
                     source: 'ui-upload',
-                    content: `${title.trim()}\n\n${contentToSave}`,
+                    content: `${data.title.trim()}\n\n${contentToSave}`,
                     contentPreview: contentToSave.slice(0, 180),
-                    domain: isStructuredGovernanceRole ? 'governance' : domain,
-                    role: isTagsRole ? 'tags' : isNamingRole ? 'naming' : role,
+                    domain: dataIsStructured ? 'governance' : data.domain,
+                    role: dataIsTagsRole ? 'tags' : dataIsNamingRole ? 'naming' : data.role,
                     rule: structuredRule,
                     scope: effectiveScope,
                     cloudAccountIds: effectiveAccountIds,
@@ -455,14 +451,14 @@ export function CiKnowledgePanel() {
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                 });
-                if (isStructuredGovernanceRole && !content.trim()) {
-                    setContent(contentToSave);
+                if (dataIsStructured && !data.content.trim()) {
+                    form.setValue('content', contentToSave);
                 }
             }
         } finally {
             setPending(false);
         }
-    };
+    });
 
     const requestDelete = (doc?: AiKnowledgeDocument | null) => {
         const target = doc ?? selectedSnapshot;
@@ -680,62 +676,76 @@ export function CiKnowledgePanel() {
                     ) : null}
                 </div>
 
+                <Form {...form}>
+                    <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col gap-4">
                 <div className="space-y-3">
-                    <Input
-                        value={title}
-                        onChange={(event) => setTitle(event.target.value)}
-                        placeholder={t.knowledgeTitleLabel}
-                        disabled={pending || deleting}
-                        className="h-9"
+                    <FormField
+                        control={form.control}
+                        name="title"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormControl>
+                                    <Input
+                                        {...field}
+                                        placeholder={t.knowledgeTitleLabel}
+                                        disabled={pending || deleting}
+                                        className="h-9"
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">{t.knowledgeDomainLabel}</Label>
-                            <Select
-                                value={domain}
-                                onValueChange={(value) => onDomainChange(value as KnowledgeDomain)}
-                                disabled={pending || deleting}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="general">{t.knowledgeDomainGeneral}</SelectItem>
-                                    <SelectItem value="governance">
-                                        {t.knowledgeDomainGovernance}
-                                    </SelectItem>
-                                    <SelectItem value="finops">{t.knowledgeDomainFinops}</SelectItem>
-                                    <SelectItem value="automation">
-                                        {t.knowledgeDomainAutomation}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">{t.knowledgeRoleLabel}</Label>
-                            <Select
-                                value={role}
-                                onValueChange={(value) => onRoleChange(value as KnowledgeRole)}
-                                disabled={pending || deleting}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="guidance">{t.knowledgeRoleGuidance}</SelectItem>
-                                    <SelectItem value="rule">{t.knowledgeRoleRule}</SelectItem>
-                                    {domain === 'governance' ? (
-                                        <>
-                                            <SelectItem value="tags">{t.knowledgeRoleTags}</SelectItem>
-                                            <SelectItem value="naming">
-                                                {t.knowledgeRoleNaming}
-                                            </SelectItem>
-                                        </>
-                                    ) : null}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <FormField
+                            control={form.control}
+                            name="domain"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">{t.knowledgeDomainLabel}</FormLabel>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={(value) => onDomainChange(value as KnowledgeDomain)}
+                                        disabled={pending || deleting}
+                                        options={[
+                                            { value: 'general', label: t.knowledgeDomainGeneral },
+                                            { value: 'governance', label: t.knowledgeDomainGovernance },
+                                            { value: 'finops', label: t.knowledgeDomainFinops },
+                                            { value: 'automation', label: t.knowledgeDomainAutomation },
+                                        ]}
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="role"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">{t.knowledgeRoleLabel}</FormLabel>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={(value) => onRoleChange(value as KnowledgeRole)}
+                                        disabled={pending || deleting}
+                                        options={[
+                                            { value: 'guidance', label: t.knowledgeRoleGuidance },
+                                            { value: 'rule', label: t.knowledgeRoleRule },
+                                            ...(domain === 'governance'
+                                                ? [
+                                                      { value: 'tags', label: t.knowledgeRoleTags },
+                                                      { value: 'naming', label: t.knowledgeRoleNaming },
+                                                  ]
+                                                : []),
+                                        ]}
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
                 </div>
 
@@ -748,7 +758,7 @@ export function CiKnowledgePanel() {
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-xs">{t.knowledgeRequiredTagsLabel}</Label>
+                            <FormLabel className="text-xs">{t.knowledgeRequiredTagsLabel}</FormLabel>
                             {tagRows.map((tag, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                     <Input
@@ -775,6 +785,11 @@ export function CiKnowledgePanel() {
                                     </Button>
                                 </div>
                             ))}
+                            {form.formState.errors.tagRows ? (
+                                <p className="text-[0.8rem] font-medium text-destructive">
+                                    {form.formState.errors.tagRows.message as string}
+                                </p>
+                            ) : null}
                             <Button
                                 type="button"
                                 size="sm"
@@ -798,57 +813,81 @@ export function CiKnowledgePanel() {
                                 {t.knowledgeNamingRuleHint}
                             </p>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">{t.knowledgeNamingPatternLabel}</Label>
-                            <Input
-                                value={namingPattern}
-                                onChange={(event) => setNamingPattern(event.target.value)}
-                                placeholder={t.knowledgeNamingPatternPlaceholder}
-                                disabled={pending || deleting}
-                                className="h-9"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">{t.knowledgeNamingExampleLabel}</Label>
-                            <Input
-                                value={namingExample}
-                                onChange={(event) => setNamingExample(event.target.value)}
-                                placeholder={t.knowledgeNamingExamplePlaceholder}
-                                disabled={pending || deleting}
-                                className="h-9"
-                            />
-                        </div>
+                        <FormField
+                            control={form.control}
+                            name="namingPattern"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">{t.knowledgeNamingPatternLabel}</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            {...field}
+                                            placeholder={t.knowledgeNamingPatternPlaceholder}
+                                            disabled={pending || deleting}
+                                            className="h-9"
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="namingExample"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">{t.knowledgeNamingExampleLabel}</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            {...field}
+                                            placeholder={t.knowledgeNamingExamplePlaceholder}
+                                            disabled={pending || deleting}
+                                            className="h-9"
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
                 ) : null}
 
                 {isStructuredGovernanceRole ? (
                     <div className="bg-muted/30 space-y-3 rounded-xl border border-border/70 p-3">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">{t.knowledgeScopeLabel}</Label>
-                            <Select
-                                value={scope}
-                                onValueChange={(value) => {
-                                    const next = value as KnowledgeScope;
-                                    setScope(next);
-                                    if (next === 'organization') {
-                                        setSelectedAccountIds([]);
-                                    }
-                                }}
-                                disabled={pending || deleting}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="organization">
-                                        {t.knowledgeScopeOrganization}
-                                    </SelectItem>
-                                    <SelectItem value="cloud_accounts">
-                                        {t.knowledgeScopeAccounts}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <FormField
+                            control={form.control}
+                            name="scope"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">{t.knowledgeScopeLabel}</FormLabel>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={(value) => {
+                                            const next = value as KnowledgeScope;
+                                            form.setValue('scope', next, { shouldValidate: true });
+                                            if (next === 'organization') {
+                                                form.setValue('selectedAccountIds', [], {
+                                                    shouldValidate: true,
+                                                });
+                                            }
+                                        }}
+                                        disabled={pending || deleting}
+                                        options={[
+                                            {
+                                                value: 'organization',
+                                                label: t.knowledgeScopeOrganization,
+                                            },
+                                            {
+                                                value: 'cloud_accounts',
+                                                label: t.knowledgeScopeAccounts,
+                                            },
+                                        ]}
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         {scope === 'cloud_accounts' ? (
                             <div className="space-y-2">
                                 <p className="text-muted-foreground text-[11px] leading-relaxed">
@@ -888,6 +927,11 @@ export function CiKnowledgePanel() {
                                         })}
                                     </div>
                                 )}
+                                {form.formState.errors.selectedAccountIds ? (
+                                    <p className="text-[0.8rem] font-medium text-destructive">
+                                        {form.formState.errors.selectedAccountIds.message as string}
+                                    </p>
+                                ) : null}
                             </div>
                         ) : null}
                     </div>
@@ -895,37 +939,47 @@ export function CiKnowledgePanel() {
 
                 <div className="min-h-0 flex-1">
                     {isStructuredGovernanceRole ? (
-                        <Label className="text-muted-foreground mb-1.5 block text-xs">
+                        <FormLabel className="text-muted-foreground mb-1.5 block text-xs">
                             {t.knowledgeContentOptionalLabel}
-                        </Label>
+                        </FormLabel>
                     ) : null}
-                    <CiMarkdownEditor
-                        value={content}
-                        onChange={setContent}
-                        disabled={pending || deleting}
-                        placeholder={t.knowledgeContentLabel}
-                        labels={{
-                            bold: t.knowledgeFmtBold,
-                            italic: t.knowledgeFmtItalic,
-                            strike: t.knowledgeFmtStrike,
-                            heading: t.knowledgeFmtHeading,
-                            bullet: t.knowledgeFmtBullet,
-                            numbered: t.knowledgeFmtNumbered,
-                            quote: t.knowledgeFmtQuote,
-                            code: t.knowledgeFmtCode,
-                            indent: t.knowledgeFmtIndent,
-                            outdent: t.knowledgeFmtOutdent,
-                        }}
+                    <FormField
+                        control={form.control}
+                        name="content"
+                        render={({ field }) => (
+                            <FormItem className="h-full">
+                                <FormControl>
+                                    <CiMarkdownEditor
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        disabled={pending || deleting}
+                                        placeholder={t.knowledgeContentLabel}
+                                        labels={{
+                                            bold: t.knowledgeFmtBold,
+                                            italic: t.knowledgeFmtItalic,
+                                            strike: t.knowledgeFmtStrike,
+                                            heading: t.knowledgeFmtHeading,
+                                            bullet: t.knowledgeFmtBullet,
+                                            numbered: t.knowledgeFmtNumbered,
+                                            quote: t.knowledgeFmtQuote,
+                                            code: t.knowledgeFmtCode,
+                                            indent: t.knowledgeFmtIndent,
+                                            outdent: t.knowledgeFmtOutdent,
+                                        }}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
                     <Button
-                        type="button"
+                        type="submit"
                         size="sm"
-                        disabled={pending || deleting || !canSave}
+                        disabled={pending || deleting}
                         isLoading={pending}
-                        onClick={() => void onSave()}
                     >
                         {selectedId ? t.knowledgeUpdate : t.knowledgeSave}
                     </Button>
@@ -943,6 +997,8 @@ export function CiKnowledgePanel() {
                         </Button>
                     ) : null}
                 </div>
+                    </form>
+                </Form>
             </section>
 
             <ConfirmDeleteDialog

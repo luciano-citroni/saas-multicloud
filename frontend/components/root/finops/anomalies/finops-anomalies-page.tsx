@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import {
@@ -301,10 +302,7 @@ export function FinopsAnomaliesPage() {
         async (orgId: string, accountIds: string[]) => {
             setLoading(true);
             try {
-                const selectedAccountId =
-                    urlFilters.accountId && accountIds.includes(urlFilters.accountId)
-                        ? urlFilters.accountId
-                        : undefined;
+                const selectedAccountIds = urlFilters.accountIds.filter((id) => accountIds.includes(id));
 
                 // Sem contas no escopo da mid-org → lista vazia (não vaza outras orgs).
                 if (accountIds.length === 0) {
@@ -328,9 +326,14 @@ export function FinopsAnomaliesPage() {
                     severity: severityFilter,
                     period: periodFilter,
                     sort: sortFilter,
-                    cloudAccountId: selectedAccountId,
-                    cloudAccountIds: selectedAccountId ? undefined : accountIds,
-                    provider: urlFilters.provider ?? undefined,
+                    cloudAccountId: selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined,
+                    cloudAccountIds:
+                        selectedAccountIds.length > 1
+                            ? selectedAccountIds
+                            : selectedAccountIds.length === 0
+                              ? accountIds
+                              : undefined,
+                    provider: urlFilters.providers[0] ?? undefined,
                     page,
                     limit: pageSize,
                 });
@@ -363,8 +366,8 @@ export function FinopsAnomaliesPage() {
             statusFilter,
             t,
             tCommon,
-            urlFilters.accountId,
-            urlFilters.provider,
+            urlFilters.accountIds,
+            urlFilters.providers,
         ],
     );
 
@@ -383,9 +386,10 @@ export function FinopsAnomaliesPage() {
             if (!organizationId) setLoading(false);
             return;
         }
-        // Conta da URL fora do escopo mid-org → limpa filtro
-        if (urlFilters.accountId && !scopedAccountIds.includes(urlFilters.accountId)) {
-            syncUrlState({ account: null, page: null });
+        // Contas da URL fora do escopo mid-org → remove só as inválidas
+        if (urlFilters.accountIds.some((id) => !scopedAccountIds.includes(id))) {
+            const valid = urlFilters.accountIds.filter((id) => scopedAccountIds.includes(id));
+            syncUrlState({ account: valid.length > 0 ? valid : null, page: null });
             return;
         }
         void loadAnomalies(organizationId, scopedAccountIds);
@@ -394,7 +398,7 @@ export function FinopsAnomaliesPage() {
         accountsReady,
         scopedAccountIds,
         loadAnomalies,
-        urlFilters.accountId,
+        urlFilters.accountIds,
         syncUrlState,
     ]);
 
@@ -572,151 +576,123 @@ export function FinopsAnomaliesPage() {
                             </Button>
                         ) : null}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                        <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                            <label htmlFor="anomalies-cloud-account" className="text-xs font-medium text-muted-foreground">
-                                {t.cloudAccountLabel}
-                            </label>
-                            <Select
-                                value={
-                                    urlFilters.accountId && scopedAccountIds.includes(urlFilters.accountId)
-                                        ? urlFilters.accountId
-                                        : ACCOUNT_FILTER_ALL
+                    <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-cloud-account"
+                            label={t.cloudAccountLabel}
+                            className="sm:col-span-2 lg:col-span-1"
+                            value={
+                                urlFilters.accountId && scopedAccountIds.includes(urlFilters.accountId)
+                                    ? urlFilters.accountId
+                                    : ACCOUNT_FILTER_ALL
+                            }
+                            options={[
+                                { value: ACCOUNT_FILTER_ALL, label: t.allAccounts },
+                                ...cloudAccounts.map((account) => ({
+                                    value: account.id,
+                                    label: `${account.alias}${account.provider ? ` · ${account.provider.toUpperCase()}` : ''}`,
+                                })),
+                            ]}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            disabled={!accountsReady}
+                            onValueChange={(value) => {
+                                if (value !== ACCOUNT_FILTER_ALL) {
+                                    window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
                                 }
-                                onValueChange={(value) => {
-                                    if (value !== ACCOUNT_FILTER_ALL) {
-                                        window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
-                                    }
-                                    syncUrlState({
-                                        account: value === ACCOUNT_FILTER_ALL ? null : value,
-                                        page: null,
-                                    });
-                                }}
-                                disabled={!accountsReady}
-                            >
-                                <SelectTrigger id="anomalies-cloud-account" className="w-full">
-                                    <SelectValue placeholder={t.selectAccountPlaceholder} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={ACCOUNT_FILTER_ALL}>{t.allAccounts}</SelectItem>
-                                    {cloudAccounts.map((account) => (
-                                        <SelectItem key={account.id} value={account.id}>
-                                            {account.alias}
-                                            {account.provider ? ` · ${account.provider.toUpperCase()}` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                                syncUrlState({
+                                    account: value === ACCOUNT_FILTER_ALL ? null : value,
+                                    page: null,
+                                });
+                            }}
+                        />
 
-                        <div className="space-y-1.5">
-                            <label htmlFor="anomalies-status" className="text-xs font-medium text-muted-foreground">
-                                {tCommon.status}
-                            </label>
-                            <Select
-                                value={statusFilter}
-                                onValueChange={(value) => syncUrlState({ status: value, page: null })}
-                            >
-                                <SelectTrigger id="anomalies-status" className="w-full">
-                                    <SelectValue placeholder={tCommon.status} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {(['open', 'acknowledged', 'resolved', 'all'] as const).map((s) => (
-                                        <SelectItem key={s} value={s}>
-                                            {statusLabel(t, s)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-status"
+                            label={tCommon.status}
+                            value={statusFilter}
+                            options={(['open', 'acknowledged', 'resolved', 'all'] as const).map((s) => ({
+                                value: s,
+                                label: statusLabel(t, s),
+                            }))}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            onValueChange={(value) => syncUrlState({ status: value, page: null })}
+                        />
 
-                        <div className="space-y-1.5">
-                            <label htmlFor="anomalies-severity" className="text-xs font-medium text-muted-foreground">
-                                {t.severity}
-                            </label>
-                            <Select
-                                value={severityFilter}
-                                onValueChange={(value) => syncUrlState({ severity: value, page: null })}
-                            >
-                                <SelectTrigger id="anomalies-severity" className="w-full">
-                                    <SelectValue placeholder={t.severity} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">{t.allSeverities}</SelectItem>
-                                    <SelectItem value="critical">{t.severityCritical}</SelectItem>
-                                    <SelectItem value="high">{t.severityHigh}</SelectItem>
-                                    <SelectItem value="medium">{t.severityMedium}</SelectItem>
-                                    <SelectItem value="low">{t.severityLow}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-severity"
+                            label={t.severity}
+                            value={severityFilter}
+                            options={[
+                                { value: 'all', label: t.allSeverities },
+                                { value: 'critical', label: t.severityCritical },
+                                { value: 'high', label: t.severityHigh },
+                                { value: 'medium', label: t.severityMedium },
+                                { value: 'low', label: t.severityLow },
+                            ]}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            onValueChange={(value) => syncUrlState({ severity: value, page: null })}
+                        />
 
-                        <div className="space-y-1.5">
-                            <label htmlFor="anomalies-period" className="text-xs font-medium text-muted-foreground">
-                                {t.budgetPeriod}
-                            </label>
-                            <Select
-                                value={periodFilter}
-                                onValueChange={(value) => syncUrlState({ period: value, page: null })}
-                            >
-                                <SelectTrigger id="anomalies-period" className="w-full">
-                                    <SelectValue placeholder={t.budgetPeriod} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {PERIOD_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {t[option.labelKey]}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-period"
+                            label={t.budgetPeriod}
+                            value={periodFilter}
+                            options={PERIOD_OPTIONS.map((option) => ({
+                                value: option.value,
+                                label: t[option.labelKey],
+                            }))}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            onValueChange={(value) => syncUrlState({ period: value, page: null })}
+                        />
 
-                        <div className="space-y-1.5">
-                            <label htmlFor="anomalies-provider" className="text-xs font-medium text-muted-foreground">
-                                {t.providerLabel}
-                            </label>
-                            <Select
-                                value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
-                                onValueChange={(value) =>
-                                    syncUrlState({
-                                        provider: value === PROVIDER_FILTER_ALL ? null : value,
-                                        page: null,
-                                    })
-                                }
-                            >
-                                <SelectTrigger id="anomalies-provider" className="w-full">
-                                    <SelectValue placeholder={t.providerLabel} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={PROVIDER_FILTER_ALL}>{t.allProviders}</SelectItem>
-                                    <SelectItem value="aws">AWS</SelectItem>
-                                    <SelectItem value="azure">Azure</SelectItem>
-                                    <SelectItem value="gcp">GCP</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-provider"
+                            label={t.providerLabel}
+                            value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
+                            options={[
+                                { value: PROVIDER_FILTER_ALL, label: t.allProviders },
+                                { value: 'aws', label: 'AWS' },
+                                { value: 'azure', label: 'Azure' },
+                                { value: 'gcp', label: 'GCP' },
+                            ]}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            onValueChange={(value) =>
+                                syncUrlState({
+                                    provider: value === PROVIDER_FILTER_ALL ? null : value,
+                                    page: null,
+                                })
+                            }
+                        />
 
-                        <div className="space-y-1.5">
-                            <label htmlFor="anomalies-sort" className="text-xs font-medium text-muted-foreground">
-                                {t.sortByLabel}
-                            </label>
-                            <Select
-                                value={sortFilter}
-                                onValueChange={(value) => syncUrlState({ sort: value, page: null })}
-                            >
-                                <SelectTrigger id="anomalies-sort" className="w-full">
-                                    <SelectValue placeholder={t.sortPlaceholder} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {SORT_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {t[option.labelKey]}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <SearchableSelect
+                            mode="single"
+                            id="anomalies-sort"
+                            label={t.sortByLabel}
+                            value={sortFilter}
+                            options={SORT_OPTIONS.map((option) => ({
+                                value: option.value,
+                                label: t[option.labelKey],
+                            }))}
+                            searchPlaceholder={tCommon.search}
+                            emptyText={t.filterSearchEmpty}
+                            clearLabel={t.clearFilters}
+                            onValueChange={(value) => syncUrlState({ sort: value, page: null })}
+                        />
                     </div>
                 </CardHeader>
             </Card>

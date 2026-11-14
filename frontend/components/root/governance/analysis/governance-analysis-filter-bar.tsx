@@ -5,7 +5,7 @@ import { Filter, RotateCcw, Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { translateGovernanceResourceType, translateGovernanceSeverity } from '@/lib/governance-translations';
 import { useTranslations } from '@/lib/i18n';
@@ -51,6 +51,7 @@ function FilterFields({
     onResourceTypeChange: (value: ResourceTypeFilter) => void;
 }) {
     const tg = useTranslations('governance');
+    const tc = useTranslations('common');
     const severityOptions: Array<{ value: SeverityFilter; label: string }> = [
         { value: 'all', label: tg.allCriticalities },
         { value: 'critical', label: translateGovernanceSeverity('critical') },
@@ -58,9 +59,16 @@ function FilterFields({
         { value: 'medium', label: translateGovernanceSeverity('medium') },
         { value: 'low', label: translateGovernanceSeverity('low') },
     ];
+    const resourceOptions = [
+        { value: RESOURCE_TYPE_FILTER_ALL, label: tg.allTypes },
+        ...resourceTypeOptions.map((resourceType) => ({
+            value: resourceType,
+            label: translateGovernanceResourceType(resourceType),
+        })),
+    ];
 
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                 <label htmlFor="governance-findings-search" className="text-xs font-medium text-muted-foreground">
                     {tg.searchLabel}
@@ -72,7 +80,7 @@ function FilterFields({
                         value={draftName}
                         onChange={(event) => onDraftNameChange(event.target.value)}
                         placeholder={tg.searchPlaceholder}
-                        className="w-full pr-9 pl-9"
+                        className="h-8 w-full pr-9 pl-9"
                     />
                     {draftName.trim().length > 0 && (
                         <button
@@ -87,45 +95,27 @@ function FilterFields({
                 </div>
             </div>
 
-            <div className="space-y-1.5">
-                <label htmlFor="governance-findings-severity" className="text-xs font-medium text-muted-foreground">
-                    {tg.criticality}
-                </label>
-                <Select value={severityFilter} onValueChange={(value) => onSeverityChange(value as SeverityFilter)}>
-                    <SelectTrigger id="governance-findings-severity" className="w-full">
-                        <SelectValue placeholder={tg.allCriticalities} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {severityOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <SearchableSelect
+                mode="single"
+                id="governance-findings-severity"
+                label={tg.criticality}
+                value={severityFilter}
+                options={severityOptions}
+                searchPlaceholder={tc.search}
+                clearLabel={tg.clear}
+                onValueChange={(value) => onSeverityChange(value as SeverityFilter)}
+            />
 
-            <div className="space-y-1.5">
-                <label htmlFor="governance-findings-resource-type" className="text-xs font-medium text-muted-foreground">
-                    {tg.resourceType}
-                </label>
-                <Select
-                    value={resourceTypeFilter}
-                    onValueChange={(value) => onResourceTypeChange(value as ResourceTypeFilter)}
-                >
-                    <SelectTrigger id="governance-findings-resource-type" className="w-full">
-                        <SelectValue placeholder={tg.allTypes} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={RESOURCE_TYPE_FILTER_ALL}>{tg.allTypes}</SelectItem>
-                        {resourceTypeOptions.map((resourceType) => (
-                            <SelectItem key={resourceType} value={resourceType}>
-                                {translateGovernanceResourceType(resourceType)}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <SearchableSelect
+                mode="single"
+                id="governance-findings-resource-type"
+                label={tg.resourceType}
+                value={resourceTypeFilter}
+                options={resourceOptions}
+                searchPlaceholder={tc.search}
+                clearLabel={tg.clear}
+                onValueChange={(value) => onResourceTypeChange(value as ResourceTypeFilter)}
+            />
         </div>
     );
 }

@@ -413,6 +413,7 @@ export async function fetchFinopsOrgOverview(
         month?: number;
         anomalyDays?: number;
         cloudAccountId?: string;
+        cloudAccountIds?: string[];
     }
 ) {
     const params = new URLSearchParams({ organizationId });
@@ -420,7 +421,11 @@ export async function fetchFinopsOrgOverview(
     if (options?.year !== undefined) params.set('year', String(options.year));
     if (options?.month !== undefined) params.set('month', String(options.month));
     if (options?.anomalyDays !== undefined) params.set('anomalyDays', String(options.anomalyDays));
-    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) {
+        params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    } else if (options?.cloudAccountId) {
+        params.set('cloudAccountId', options.cloudAccountId);
+    }
 
     return fetch(`/api/finops/overview?${params.toString()}`, { cache: 'no-store' });
 }

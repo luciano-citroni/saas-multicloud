@@ -18,7 +18,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
 import {
     fetchFinopsAnomalyAlertSettings,
@@ -399,23 +399,18 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>{t.alertsMinSeverityLabel}</FormLabel>
-                                                <Select
+                                                <SearchableSelect
+                                                    mode="single"
                                                     value={field.value}
                                                     onValueChange={field.onChange}
                                                     disabled={!canManage || !enabled}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="critical">{t.alertsMinSeverityCritical}</SelectItem>
-                                                        <SelectItem value="high">{t.alertsMinSeverityHigh}</SelectItem>
-                                                        <SelectItem value="medium">{t.alertsMinSeverityMedium}</SelectItem>
-                                                        <SelectItem value="low">{t.alertsMinSeverityAll}</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                    options={[
+                                                        { value: 'critical', label: t.alertsMinSeverityCritical },
+                                                        { value: 'high', label: t.alertsMinSeverityHigh },
+                                                        { value: 'medium', label: t.alertsMinSeverityMedium },
+                                                        { value: 'low', label: t.alertsMinSeverityAll },
+                                                    ]}
+                                                />
                                                 <p className="text-xs text-muted-foreground">
                                                     {t.alertsSeverityNote.replace(
                                                         '{severity}',

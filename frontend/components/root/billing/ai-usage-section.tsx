@@ -4,9 +4,7 @@ import { useEffect, useState } from 'react';
 import { BrainCircuit, Sparkles } from 'lucide-react';
 import {
     fetchCloudIntelligenceQuotas,
-    fetchCloudIntelligenceRoi,
     type AiQuotaSnapshot,
-    type AiRoiSnapshot,
 } from '@/app/actions/cloud-intelligence';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,11 +26,9 @@ export function AiUsageSection({
     planAiTier?: string | null;
 }) {
     const t = useTranslations('billing');
-    const ciT = useTranslations('cloudIntelligence');
     const hasCi = hasModuleAccess(planModules, PlanModule.CLOUD_INTELLIGENCE);
     const [loading, setLoading] = useState(hasCi);
     const [quotas, setQuotas] = useState<AiQuotaSnapshot | null>(null);
-    const [roi, setRoi] = useState<AiRoiSnapshot | null>(null);
 
     const modulesKey = planModules.join(',');
 
@@ -54,25 +50,15 @@ export function AiUsageSection({
 
         void (async () => {
             try {
-                const [res, roiRes] = await Promise.all([
-                    fetchCloudIntelligenceQuotas(organizationId),
-                    fetchCloudIntelligenceRoi(organizationId),
-                ]);
+                const res = await fetchCloudIntelligenceQuotas(organizationId);
                 if (!res.ok) {
                     if (!cancelled) setQuotas(null);
                     return;
                 }
                 const payload = (await res.json()) as AiQuotaSnapshot;
                 if (!cancelled) setQuotas(payload);
-                if (roiRes.ok) {
-                    const roiPayload = (await roiRes.json()) as { latest?: AiRoiSnapshot | null };
-                    if (!cancelled) setRoi(roiPayload.latest ?? null);
-                }
             } catch {
-                if (!cancelled) {
-                    setQuotas(null);
-                    setRoi(null);
-                }
+                if (!cancelled) setQuotas(null);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -135,20 +121,6 @@ export function AiUsageSection({
                                         </li>
                                     ))}
                                 </ul>
-                            </div>
-                        ) : null}
-
-                        {roi ? (
-                            <div className="bg-muted/40 space-y-1 rounded-lg border border-border/60 px-3 py-2.5">
-                                <p className="text-xs font-medium">{ciT.roiTitle}</p>
-                                <p className="text-muted-foreground text-[11px]">
-                                    {ciT.roiPotential}: {Number(roi.potentialSaving).toFixed(2)}{' '}
-                                    {roi.currency}
-                                </p>
-                                <p className="text-muted-foreground text-[11px]">
-                                    {ciT.roiCompleted}: {Number(roi.completedSaving).toFixed(2)}{' '}
-                                    {roi.currency}
-                                </p>
                             </div>
                         ) : null}
 

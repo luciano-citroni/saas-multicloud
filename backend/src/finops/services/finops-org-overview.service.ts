@@ -8,7 +8,7 @@ import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
 import { FinopsRecommendation } from '../../db/entites/finops-recommendation.entity';
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
-import { FinopsAnalysisService, type CostByServiceItem } from './finops-analysis.service';
+import type { CostByServiceItem } from './finops-analysis.service';
 import { FinopsForecastService } from './finops-forecast.service';
 import { resolveFinopsPeriod, type ResolvedFinopsPeriod } from '../utils/resolve-finops-period';
 import { andWhereServiceLevelCost } from '../utils/service-level-cost';
@@ -64,6 +64,21 @@ export type OrgOverviewRecommendation = {
     createdAt: string;
 };
 
+export type OrgFinopsDataCoverage = {
+    /** Primeira data com custo sincronizado nas contas do escopo (qualquer período). */
+    availableStart: string | null;
+    /** Última data com custo sincronizado nas contas do escopo. */
+    availableEnd: string | null;
+    requestedStart: string;
+    requestedEnd: string;
+    /** true quando o intervalo filtrado não está totalmente coberto pelos dados sincronizados. */
+    incomplete: boolean;
+    /** true quando o início do filtro é anterior ao primeiro custo disponível. */
+    missingBefore: boolean;
+    /** true quando o fim do filtro é posterior ao último custo disponível (com folga de 1 dia). */
+    missingAfter: boolean;
+};
+
 export type OrgFinopsOverview = {
     period: ResolvedFinopsPeriod;
     totals: {
@@ -78,6 +93,7 @@ export type OrgFinopsOverview = {
     anomalies: OrgOverviewAnomaly[];
     recommendations: OrgOverviewRecommendation[];
     accounts: OrgOverviewAccountRollup[];
+    dataCoverage: OrgFinopsDataCoverage;
 };
 
 export type OrgOptimizeItem = {
@@ -168,13 +184,19 @@ export class FinopsOrgOverviewService {
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>,
 
-        private readonly analysisService: FinopsAnalysisService,
         private readonly forecastService: FinopsForecastService
     ) {}
 
     async getOverview(
         organizationId: string,
-        query: { period?: string; year?: string; month?: string; anomalyDays?: string; cloudAccountId?: string }
+        query: {
+            period?: string;
+            year?: string;
+            month?: string;
+            anomalyDays?: string;
+            cloudAccountId?: string;
+            cloudAccountIds?: string;
+        }
     ): Promise<OrgFinopsOverview> {
         const resolved = resolveFinopsPeriod({
             period: query.period,
@@ -189,7 +211,15 @@ export class FinopsOrgOverviewService {
             }
         }
 
-        const accounts = await this.listFinopsAccounts(organizationId, query.cloudAccountId);
+        const scopedIds = (query.cloudAccountIds ?? '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+        const accounts = await this.listFinopsAccounts(
+            organizationId,
+            query.cloudAccountId,
+            scopedIds.length > 0 ? scopedIds : undefined,
+        );
         const accountIds = accounts.map((a) => a.id);
         const supportedAccounts = accounts.filter((a) => this.isFinopsSupportedProvider(a.provider));
         const supportedIds = supportedAccounts.map((a) => a.id);
@@ -210,14 +240,17 @@ export class FinopsOrgOverviewService {
             consents,
             accountCosts,
             lastSyncByAccount,
+            availableRange,
         ] = await Promise.all([
             emptyMetrics
                 ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostByService']>>)
-                : this.getOrgCostByService(organizationId, supportedIds, resolved.year, resolved.month),
+                : this.getOrgCostByService(organizationId, supportedIds, resolved.startDate, resolved.endDate),
             emptyMetrics
                 ? Promise.resolve([] as Awaited<ReturnType<FinopsOrgOverviewService['getOrgCostTrend']>>)
                 : this.getOrgCostTrend(organizationId, supportedIds, resolved.startDate, resolved.endDate),
-            emptyMetrics ? Promise.resolve(0) : this.getOrgMomGrowth(organizationId, supportedIds, resolved.year, resolved.month),
+            emptyMetrics
+                ? Promise.resolve(0)
+                : this.getOrgPeriodGrowth(organizationId, supportedIds, resolved.startDate, resolved.endDate),
             emptyMetrics
                 ? Promise.resolve([] as Array<Awaited<ReturnType<FinopsForecastService['forecastCurrentMonth']>> | null>)
                 : Promise.all(supportedAccounts.map((a) => this.forecastService.forecastCurrentMonth(organizationId, a.id).catch(() => null))),
@@ -234,10 +267,13 @@ export class FinopsOrgOverviewService {
                   }),
             emptyMetrics
                 ? Promise.resolve(new Map<string, number>())
-                : this.getAccountCosts(organizationId, supportedIds, resolved.year, resolved.month),
+                : this.getAccountCosts(organizationId, supportedIds, resolved.startDate, resolved.endDate),
             accountIds.length === 0
                 ? Promise.resolve(new Map<string, string>())
                 : this.getLastSyncByAccount(organizationId, accountIds),
+            emptyMetrics
+                ? Promise.resolve({ availableStart: null, availableEnd: null })
+                : this.getAvailableCostRange(organizationId, supportedIds),
         ]);
 
         const consentSet = new Set(consents.map((c) => c.cloudAccountId));
@@ -270,8 +306,15 @@ export class FinopsOrgOverviewService {
             lastSyncAt: lastSyncByAccount.get(account.id) ?? null,
         }));
 
+        const dataCoverage = this.buildDataCoverage(
+            resolved.startDate,
+            resolved.endDate,
+            availableRange.availableStart,
+            availableRange.availableEnd,
+        );
+
         this.logger.log(
-            `[Overview] org=${organizationId} accounts=${accountIds.length} cost=${totalCost.toFixed(2)} period=${resolved.period}`
+            `[Overview] org=${organizationId} accounts=${accountIds.length} cost=${totalCost.toFixed(2)} period=${resolved.period} coverage=${dataCoverage.availableStart ?? 'none'}→${dataCoverage.availableEnd ?? 'none'} incomplete=${dataCoverage.incomplete}`
         );
 
         return {
@@ -288,6 +331,7 @@ export class FinopsOrgOverviewService {
             anomalies: anomalies.map((a) => this.mapAnomaly(a)),
             recommendations: recommendations.map((r) => this.mapRecommendation(r)),
             accounts: accountRollups,
+            dataCoverage,
         };
     }
 
@@ -380,7 +424,11 @@ export class FinopsOrgOverviewService {
         };
     }
 
-    private async listFinopsAccounts(organizationId: string, cloudAccountId?: string): Promise<CloudAccount[]> {
+    private async listFinopsAccounts(
+        organizationId: string,
+        cloudAccountId?: string,
+        cloudAccountIds?: string[],
+    ): Promise<CloudAccount[]> {
         // Todas as contas do tenant (mesmo universo da sidebar / cloud-accounts).
         // tenant_id é a chave principal; organization_id cobre registros legados.
         const qb = this.cloudAccountRepo
@@ -388,7 +436,9 @@ export class FinopsOrgOverviewService {
             .where('(ca.tenantId = :organizationId OR ca.organizationId = :organizationId)', { organizationId })
             .orderBy('ca.alias', 'ASC');
 
-        if (cloudAccountId) {
+        if (cloudAccountIds && cloudAccountIds.length > 0) {
+            qb.andWhere('ca.id IN (:...cloudAccountIds)', { cloudAccountIds });
+        } else if (cloudAccountId) {
             qb.andWhere('ca.id = :cloudAccountId', { cloudAccountId });
         }
 
@@ -433,39 +483,46 @@ export class FinopsOrgOverviewService {
     private async getOrgCostByService(
         organizationId: string,
         accountIds: string[],
-        year: number,
-        month: number
+        startDate: string,
+        endDate: string,
     ): Promise<CostByServiceItem[]> {
-        const results = await Promise.all(
-            accountIds.map((id) => this.analysisService.getCostByService(id, organizationId, year, month).catch(() => [] as CostByServiceItem[]))
-        );
+        const exclusiveEnd = this.addOneDay(endDate);
+        const previous = this.equalLengthPreviousPeriod(startDate, endDate);
 
-        const serviceMap = new Map<string, CostByServiceItem>();
+        const [currentMap, previousMap] = await Promise.all([
+            this.sumCostByService(organizationId, accountIds, startDate, exclusiveEnd),
+            this.sumCostByService(organizationId, accountIds, previous.start, previous.exclusiveEnd),
+        ]);
 
-        for (const items of results) {
-            for (const item of items) {
-                const existing = serviceMap.get(item.service);
-                if (existing) {
-                    const currentCost = Number(existing.currentMonthCost) + Number(item.currentMonthCost);
-                    const previousCost = Number(existing.previousMonthCost ?? 0) + Number(item.previousMonthCost ?? 0);
-                    const change = currentCost - previousCost;
-                    const changePercentage = previousCost > 0 ? (change / previousCost) * 100 : 0;
-                    serviceMap.set(item.service, {
-                        service: item.service,
-                        currentMonthCost: currentCost,
-                        previousMonthCost: previousCost,
-                        change,
-                        changePercentage,
-                        trend: change > 0 ? 'up' : change < 0 ? 'down' : 'stable',
-                        currency: existing.currency,
-                    });
-                } else {
-                    serviceMap.set(item.service, { ...item });
-                }
+        const services = Array.from(new Set([...currentMap.keys(), ...previousMap.keys()]));
+        const items: CostByServiceItem[] = services.map((service) => {
+            const current = currentMap.get(service);
+            const previousRow = previousMap.get(service);
+            const currentMonthCost = current?.cost ?? 0;
+            const previousMonthCost = previousRow?.cost ?? 0;
+            const change = currentMonthCost - previousMonthCost;
+            const changePercentage =
+                previousMonthCost > 0 ? (change / previousMonthCost) * 100 : currentMonthCost > 0 ? 100 : 0;
+            const trend: 'up' | 'down' | 'stable' =
+                Math.abs(changePercentage) < 5 ? 'stable' : change > 0 ? 'up' : 'down';
+
+            return {
+                service,
+                currentMonthCost,
+                previousMonthCost,
+                change,
+                changePercentage,
+                trend,
+                currency: current?.currency ?? previousRow?.currency ?? 'USD',
+            };
+        });
+
+        return items.sort((left, right) => {
+            if (right.currentMonthCost !== left.currentMonthCost) {
+                return right.currentMonthCost - left.currentMonthCost;
             }
-        }
-
-        return Array.from(serviceMap.values()).sort((a, b) => Number(b.currentMonthCost) - Number(a.currentMonthCost));
+            return right.previousMonthCost - left.previousMonthCost;
+        });
     }
 
     private async getOrgCostTrend(
@@ -526,24 +583,23 @@ export class FinopsOrgOverviewService {
         }));
     }
 
-    private async getOrgMomGrowth(organizationId: string, accountIds: string[], year: number, month: number): Promise<number> {
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const currentStart = `${year}-${pad(month)}-01`;
-        const nextMonth = month === 12 ? 1 : month + 1;
-        const nextYear = month === 12 ? year + 1 : year;
-        const currentEnd = `${nextYear}-${pad(nextMonth)}-01`;
+    /** Crescimento do período atual vs janela anterior de mesma duração. */
+    private async getOrgPeriodGrowth(
+        organizationId: string,
+        accountIds: string[],
+        startDate: string,
+        endDate: string,
+    ): Promise<number> {
+        const exclusiveEnd = this.addOneDay(endDate);
+        const previous = this.equalLengthPreviousPeriod(startDate, endDate);
 
-        const prevMonth = month === 1 ? 12 : month - 1;
-        const prevYear = month === 1 ? year - 1 : year;
-        const previousStart = `${prevYear}-${pad(prevMonth)}-01`;
-
-        const [current, previous] = await Promise.all([
-            this.sumCost(organizationId, accountIds, currentStart, currentEnd),
-            this.sumCost(organizationId, accountIds, previousStart, currentStart),
+        const [current, previousTotal] = await Promise.all([
+            this.sumCost(organizationId, accountIds, startDate, exclusiveEnd),
+            this.sumCost(organizationId, accountIds, previous.start, previous.exclusiveEnd),
         ]);
 
-        if (previous <= 0) return current > 0 ? 100 : 0;
-        return ((current - previous) / previous) * 100;
+        if (previousTotal <= 0) return current > 0 ? 100 : 0;
+        return ((current - previousTotal) / previousTotal) * 100;
     }
 
     private async sumCost(organizationId: string, accountIds: string[], from: string, to: string): Promise<number> {
@@ -568,14 +624,10 @@ export class FinopsOrgOverviewService {
     private async getAccountCosts(
         organizationId: string,
         accountIds: string[],
-        year: number,
-        month: number
+        startDate: string,
+        endDate: string,
     ): Promise<Map<string, number>> {
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const start = `${year}-${pad(month)}-01`;
-        const nextMonth = month === 12 ? 1 : month + 1;
-        const nextYear = month === 12 ? year + 1 : year;
-        const end = `${nextYear}-${pad(nextMonth)}-01`;
+        const exclusiveEnd = this.addOneDay(endDate);
 
         const loadByGranularity = async (granularity: 'daily' | 'monthly') => {
             const qb = this.costRecordRepo
@@ -584,8 +636,8 @@ export class FinopsOrgOverviewService {
                 .addSelect('SUM(r.cost)', 'total')
                 .where('r.organizationId = :organizationId', { organizationId })
                 .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
-                .andWhere('r.date >= :start', { start })
-                .andWhere('r.date < :end', { end })
+                .andWhere('r.date >= :start', { start: startDate })
+                .andWhere('r.date < :end', { end: exclusiveEnd })
                 .andWhere('r.granularity = :granularity', { granularity });
             andWhereServiceLevelCost(qb, 'r');
             return qb.groupBy('r.cloudAccountId').getRawMany<{ cloudAccountId: string; total: string }>();
@@ -606,6 +658,60 @@ export class FinopsOrgOverviewService {
         }
 
         return map;
+    }
+
+    private async sumCostByService(
+        organizationId: string,
+        accountIds: string[],
+        from: string,
+        to: string,
+    ): Promise<Map<string, { cost: number; currency: string }>> {
+        const loadByGranularity = async (granularity: 'daily' | 'monthly') => {
+            const qb = this.costRecordRepo
+                .createQueryBuilder('r')
+                .select('r.service', 'service')
+                .addSelect('SUM(r.cost)', 'totalCost')
+                .addSelect('MAX(r.currency)', 'currency')
+                .where('r.organizationId = :organizationId', { organizationId })
+                .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds })
+                .andWhere('r.date >= :from', { from })
+                .andWhere('r.date < :to', { to })
+                .andWhere('r.granularity = :granularity', { granularity });
+            andWhereServiceLevelCost(qb, 'r');
+            return qb.groupBy('r.service').getRawMany<{ service: string; totalCost: string; currency: string }>();
+        };
+
+        const [dailyRows, monthlyRows] = await Promise.all([loadByGranularity('daily'), loadByGranularity('monthly')]);
+        const dailyTotal = dailyRows.reduce((sum, row) => sum + Number(row.totalCost), 0);
+        const monthlyTotal = monthlyRows.reduce((sum, row) => sum + Number(row.totalCost), 0);
+        const rows = Math.abs(dailyTotal) >= Math.abs(monthlyTotal) ? dailyRows : monthlyRows;
+
+        const map = new Map<string, { cost: number; currency: string }>();
+        for (const row of rows) {
+            map.set(row.service, {
+                cost: Number(row.totalCost),
+                currency: row.currency ?? 'USD',
+            });
+        }
+        return map;
+    }
+
+    /** Janela imediatamente anterior com a mesma quantidade de dias (inclusive). */
+    private equalLengthPreviousPeriod(
+        startDate: string,
+        endDate: string,
+    ): { start: string; exclusiveEnd: string } {
+        const start = new Date(`${startDate}T00:00:00Z`);
+        const end = new Date(`${endDate}T00:00:00Z`);
+        const days = Math.max(1, Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1);
+        const prevEnd = new Date(start);
+        prevEnd.setUTCDate(prevEnd.getUTCDate() - 1);
+        const prevStart = new Date(prevEnd);
+        prevStart.setUTCDate(prevStart.getUTCDate() - (days - 1));
+        return {
+            start: prevStart.toISOString().slice(0, 10),
+            exclusiveEnd: startDate,
+        };
     }
 
     /**
@@ -1088,6 +1194,70 @@ export class FinopsOrgOverviewService {
             anomalies: [],
             recommendations: [],
             accounts: [],
+            dataCoverage: this.buildDataCoverage(period.startDate, period.endDate, null, null),
+        };
+    }
+
+    private async getAvailableCostRange(
+        organizationId: string,
+        accountIds: string[],
+    ): Promise<{ availableStart: string | null; availableEnd: string | null }> {
+        if (accountIds.length === 0) {
+            return { availableStart: null, availableEnd: null };
+        }
+
+        const qb = this.costRecordRepo
+            .createQueryBuilder('r')
+            .select('MIN(r.date)', 'minDate')
+            .addSelect('MAX(r.date)', 'maxDate')
+            .where('r.organizationId = :organizationId', { organizationId })
+            .andWhere('r.cloudAccountId IN (:...accountIds)', { accountIds });
+        andWhereServiceLevelCost(qb, 'r');
+
+        const row = await qb.getRawOne<{ minDate: string | Date | null; maxDate: string | Date | null }>();
+        const toDateOnly = (value: string | Date | null | undefined): string | null => {
+            if (!value) return null;
+            if (value instanceof Date) return value.toISOString().slice(0, 10);
+            return String(value).slice(0, 10);
+        };
+
+        return {
+            availableStart: toDateOnly(row?.minDate),
+            availableEnd: toDateOnly(row?.maxDate),
+        };
+    }
+
+    private buildDataCoverage(
+        requestedStart: string,
+        requestedEnd: string,
+        availableStart: string | null,
+        availableEnd: string | null,
+    ): OrgFinopsDataCoverage {
+        if (!availableStart || !availableEnd) {
+            return {
+                availableStart: null,
+                availableEnd: null,
+                requestedStart,
+                requestedEnd,
+                incomplete: true,
+                missingBefore: true,
+                missingAfter: true,
+            };
+        }
+
+        // Folga de 1 dia no fim: clouds costumam fechar D-1.
+        const endWithGrace = this.addOneDay(availableEnd);
+        const missingBefore = availableStart > requestedStart;
+        const missingAfter = endWithGrace < requestedEnd;
+
+        return {
+            availableStart,
+            availableEnd,
+            requestedStart,
+            requestedEnd,
+            incomplete: missingBefore || missingAfter,
+            missingBefore,
+            missingAfter,
         };
     }
 

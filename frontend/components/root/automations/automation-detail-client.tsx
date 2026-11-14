@@ -75,6 +75,8 @@ import {
     parametersFromForm,
     resolveDefaultCloudAccountId,
 } from './execution-parameters-form';
+import { validateExecutionParamsWithZod } from './execution-params-schema';
+import { validateWorkflowNodes } from './workflow-config-schema';
 import { executionStatusClass } from './status-styles';
 import { toIntlLocale } from '@/lib/i18n/format';
 
@@ -285,9 +287,17 @@ export function AutomationDetailClient({
         return saved;
     }
 
+    function validateWorkflowConfig(): boolean {
+        const result = validateWorkflowNodes(nodes, actions, t.fieldRequired);
+        if (result.ok) return true;
+        toast.error(t.workflowConfigInvalid);
+        return false;
+    }
+
     async function handleSave() {
         const valid = await detailsForm.trigger();
         if (!valid) return;
+        if (!validateWorkflowConfig()) return;
         setSaving(true);
         try {
             const saved = await persist();
@@ -298,6 +308,7 @@ export function AutomationDetailClient({
     }
 
     async function handlePublish() {
+        if (!validateWorkflowConfig()) return;
         setSaving(true);
         try {
             const saved = await persist();
@@ -533,16 +544,13 @@ export function AutomationDetailClient({
     }, [automation, loading, canAdmin, searchParams, automationId, router, isPublishedPage]);
 
     function validateExecutionParams(): boolean {
-        const errors: Record<string, string> = {};
-        for (const [name, variable] of Object.entries(executionVariables)) {
-            const raw = executionParams[name];
-            const missing = raw == null || String(raw).trim() === '';
-            if (variable.required !== false && variable.default == null && missing) {
-                errors[name] = t.fieldRequired;
-            }
+        const result = validateExecutionParamsWithZod(executionVariables, executionParams, t.fieldRequired);
+        if (result.ok) {
+            setExecutionParamErrors({});
+            return true;
         }
-        setExecutionParamErrors(errors);
-        return Object.keys(errors).length === 0;
+        setExecutionParamErrors(result.errors);
+        return false;
     }
 
     async function handleExecute() {

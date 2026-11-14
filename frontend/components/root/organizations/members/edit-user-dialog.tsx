@@ -9,8 +9,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
@@ -48,11 +48,16 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
     const [addingToOrg, setAddingToOrg] = useState<string | null>(null);
     const [removingFromOrg, setRemovingFromOrg] = useState<string | null>(null);
     const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
+    const [addToOrgErrors, setAddToOrgErrors] = useState<Record<string, string>>({});
 
     const roleSchema = z.object({
         role: z.enum(['ADMIN', 'MEMBER', 'VIEWER'], { message: t.roleRequired }),
     });
     type RoleForm = z.infer<typeof roleSchema>;
+
+    const addToOrgSchema = z.object({
+        role: z.enum(['ADMIN', 'MEMBER', 'VIEWER'], { message: t.roleRequired }),
+    });
 
     const assignableRoles = getAssignableRoles(requesterRole);
     const canChangeRole =
@@ -121,14 +126,23 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
     });
 
     const handleAddToOrg = async (targetOrgId: string) => {
-        const role = pendingRole[targetOrgId];
-        if (!role) return;
+        const parsed = addToOrgSchema.safeParse({ role: pendingRole[targetOrgId] });
+        if (!parsed.success) {
+            const message = parsed.error.issues[0]?.message ?? t.roleRequired;
+            setAddToOrgErrors((prev) => ({ ...prev, [targetOrgId]: message }));
+            return;
+        }
+        setAddToOrgErrors((prev) => {
+            const next = { ...prev };
+            delete next[targetOrgId];
+            return next;
+        });
         setAddingToOrg(targetOrgId);
         try {
             const res = await fetch(`/api/organization/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}/add-to-org`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ organizationId: targetOrgId, role }),
+                body: JSON.stringify({ organizationId: targetOrgId, role: parsed.data.role }),
             });
             const body = await res.json().catch(() => null);
             if (!res.ok) {
@@ -136,6 +150,11 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                 return;
             }
             toast.success(t.addToOrgSuccess);
+            setPendingRole((prev) => {
+                const next = { ...prev };
+                delete next[targetOrgId];
+                return next;
+            });
             void loadOrgAccess();
             onSuccess();
         } catch {
@@ -215,20 +234,15 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                                         render={({ field }) => (
                                             <FormItem className="flex-1">
                                                 <FormLabel className="sr-only">{t.inviteRoleLabel}</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {assignableRoles.map((r) => (
-                                                            <SelectItem key={r} value={r}>
-                                                                {roleLabel(r)}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <SearchableSelect
+                                                    mode="single"
+                                                    value={field.value}
+                                                    onValueChange={field.onChange}
+                                                    options={assignableRoles.map((r) => ({
+                                                        value: r,
+                                                        label: roleLabel(r),
+                                                    }))}
+                                                />
                                                 <FormMessage />
                                             </FormItem>
                                         )}
@@ -321,31 +335,45 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-1.5 self-end sm:shrink-0 sm:self-auto">
-                                                <Select
-                                                    value={pendingRole[org.id] ?? ''}
-                                                    onValueChange={(v) => setPendingRole((prev) => ({ ...prev, [org.id]: v }))}
-                                                >
-                                                    <SelectTrigger className="h-7 w-28 text-xs">
-                                                        <SelectValue placeholder={t.selectRoleToAdd} />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="ADMIN">{t.roleAdmin}</SelectItem>
-                                                        <SelectItem value="MEMBER">{t.roleMember}</SelectItem>
-                                                        <SelectItem value="VIEWER">{t.roleViewer}</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="h-7 gap-1 px-2 text-xs"
-                                                    disabled={!pendingRole[org.id] || addingToOrg === org.id}
-                                                    isLoading={addingToOrg === org.id}
-                                                    onClick={() => handleAddToOrg(org.id)}
-                                                >
-                                                    <Plus className="h-3 w-3" />
-                                                    {t.addToOrg}
-                                                </Button>
+                                            <div className="flex flex-col items-end gap-1 self-end sm:self-auto">
+                                                <div className="flex items-center gap-1.5">
+                                                    <SearchableSelect
+                                                        mode="single"
+                                                        value={pendingRole[org.id] ?? ''}
+                                                        onValueChange={(v) => {
+                                                            setPendingRole((prev) => ({ ...prev, [org.id]: v }));
+                                                            setAddToOrgErrors((prev) => {
+                                                                const next = { ...prev };
+                                                                delete next[org.id];
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        placeholder={t.selectRoleToAdd}
+                                                        triggerClassName={cn(
+                                                            'h-7 w-28 text-xs',
+                                                            addToOrgErrors[org.id] && 'border-destructive',
+                                                        )}
+                                                        options={[
+                                                            { value: 'ADMIN', label: t.roleAdmin },
+                                                            { value: 'MEMBER', label: t.roleMember },
+                                                            { value: 'VIEWER', label: t.roleViewer },
+                                                        ]}
+                                                    />
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-7 gap-1 px-2 text-xs"
+                                                        disabled={addingToOrg === org.id}
+                                                        isLoading={addingToOrg === org.id}
+                                                        onClick={() => handleAddToOrg(org.id)}
+                                                    >
+                                                        <Plus className="h-3 w-3" />
+                                                        {t.addToOrg}
+                                                    </Button>
+                                                </div>
+                                                {addToOrgErrors[org.id] ? (
+                                                    <p className="text-[0.8rem] font-medium text-destructive">{addToOrgErrors[org.id]}</p>
+                                                ) : null}
                                             </div>
                                         )}
                                     </div>

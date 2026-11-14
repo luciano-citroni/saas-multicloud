@@ -151,6 +151,7 @@ export class AiRoiService {
         }
 
         const briefing = await this.briefingComposer.compose({
+            organizationId,
             signals: ranked,
             recommendationIdsByDedupe: ids,
             counts: {

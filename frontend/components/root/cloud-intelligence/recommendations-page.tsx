@@ -44,13 +44,7 @@ import {
     ItemMedia,
     ItemTitle,
 } from '@/components/ui/item';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
 import { useLocale } from '@/components/providers/locale-provider';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -122,6 +116,7 @@ function statusBadgeClass(status: string) {
 
 export function CloudIntelligenceRecommendationsPanel() {
     const t = useTranslations('cloudIntelligence');
+    const tCommon = useTranslations('common');
     const {
         statusLabel,
         statusActionLabel,
@@ -661,94 +656,79 @@ export function CloudIntelligenceRecommendationsPanel() {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                    <Select
+                <div className="grid grid-cols-2 items-end gap-2">
+                    <SearchableSelect
+                        mode="single"
                         value={status ?? 'all'}
+                        options={[
+                            { value: 'all', label: t.filterAllStatuses },
+                            ...STATUS_KEYS.map((value) => ({ value, label: statusLabel(value) })),
+                        ]}
+                        placeholder={t.filterStatus}
+                        searchPlaceholder={tCommon.search}
+                        clearLabel={t.clearFilters}
                         onValueChange={(value) =>
                             replaceRecsUrl({ status: value === 'all' ? null : value })
                         }
-                    >
-                        <SelectTrigger className="w-full" size="sm">
-                            <SelectValue placeholder={t.filterStatus} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t.filterAllStatuses}</SelectItem>
-                            {STATUS_KEYS.map((value) => (
-                                <SelectItem key={value} value={value}>
-                                    {statusLabel(value)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select
+                    />
+                    <SearchableSelect
+                        mode="single"
                         value={category ?? 'all'}
+                        options={[
+                            { value: 'all', label: t.filterAllCategories },
+                            ...CATEGORY_KEYS.map((value) => ({ value, label: categoryLabel(value) })),
+                        ]}
+                        placeholder={t.filterCategory}
+                        searchPlaceholder={tCommon.search}
+                        clearLabel={t.clearFilters}
                         onValueChange={(value) =>
                             replaceRecsUrl({ category: value === 'all' ? null : value })
                         }
-                    >
-                        <SelectTrigger className="w-full" size="sm">
-                            <SelectValue placeholder={t.filterCategory} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t.filterAllCategories}</SelectItem>
-                            {CATEGORY_KEYS.map((value) => (
-                                <SelectItem key={value} value={value}>
-                                    {categoryLabel(value)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select
+                    />
+                    <SearchableSelect
+                        mode="single"
                         value={severity ?? 'all'}
+                        options={[
+                            { value: 'all', label: t.filterAllSeverities },
+                            ...SEVERITY_KEYS.map((value) => ({ value, label: severityLabel(value) })),
+                        ]}
+                        placeholder={t.filterSeverity}
+                        searchPlaceholder={tCommon.search}
+                        clearLabel={t.clearFilters}
                         onValueChange={(value) =>
                             replaceRecsUrl({ severity: value === 'all' ? null : value })
                         }
-                    >
-                        <SelectTrigger className="w-full" size="sm">
-                            <SelectValue placeholder={t.filterSeverity} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t.filterAllSeverities}</SelectItem>
-                            {SEVERITY_KEYS.map((value) => (
-                                <SelectItem key={value} value={value}>
-                                    {severityLabel(value)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select
+                    />
+                    <SearchableSelect
+                        mode="single"
                         value={source ?? 'all'}
+                        options={[
+                            { value: 'all', label: t.filterAllSources },
+                            ...SOURCE_KEYS.map((value) => ({ value, label: sourceLabel(value) })),
+                        ]}
+                        placeholder={t.filterSource}
+                        searchPlaceholder={tCommon.search}
+                        clearLabel={t.clearFilters}
                         onValueChange={(value) =>
                             replaceRecsUrl({ source: value === 'all' ? null : value })
                         }
-                    >
-                        <SelectTrigger className="w-full" size="sm">
-                            <SelectValue placeholder={t.filterSource} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t.filterAllSources}</SelectItem>
-                            {SOURCE_KEYS.map((value) => (
-                                <SelectItem key={value} value={value}>
-                                    {sourceLabel(value)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select
+                    />
+                    <SearchableSelect
+                        mode="single"
+                        className="col-span-2"
                         value={automatable}
+                        options={[
+                            { value: 'all', label: t.filterAutomatableAll },
+                            { value: 'yes', label: t.filterAutomatableYes },
+                            { value: 'no', label: t.filterAutomatableNo },
+                        ]}
+                        placeholder={t.filterAutomatable}
+                        searchPlaceholder={tCommon.search}
+                        clearLabel={t.clearFilters}
                         onValueChange={(value) =>
                             replaceRecsUrl({ automatable: value as AutomatableFilter })
                         }
-                    >
-                        <SelectTrigger className="col-span-2 w-full" size="sm">
-                            <SelectValue placeholder={t.filterAutomatable} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t.filterAutomatableAll}</SelectItem>
-                            <SelectItem value="yes">{t.filterAutomatableYes}</SelectItem>
-                            <SelectItem value="no">{t.filterAutomatableNo}</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    />
                 </div>
 
                 {activeFilterChips.length > 0 ? (

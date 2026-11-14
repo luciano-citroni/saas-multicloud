@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
@@ -309,7 +309,8 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{t.scopeLabel}</FormLabel>
-                                            <Select
+                                            <SearchableSelect
+                                                mode="single"
                                                 value={field.value}
                                                 onValueChange={(value) => {
                                                     field.onChange(value);
@@ -317,17 +318,11 @@ export function FinopsBudgetForm({
                                                         form.setValue('cloudAccountId', '');
                                                     }
                                                 }}
-                                            >
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="organization">{t.budgetScopeWholeOrg}</SelectItem>
-                                                    <SelectItem value="cloud_account">{t.budgetScopeCloudAccount}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                                options={[
+                                                    { value: 'organization', label: t.budgetScopeWholeOrg },
+                                                    { value: 'cloud_account', label: t.budgetScopeCloudAccount },
+                                                ]}
+                                            />
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -339,17 +334,15 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{t.budgetFormLimitPeriod}</FormLabel>
-                                            <Select value={field.value} onValueChange={field.onChange}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="monthly">{t.monthly}</SelectItem>
-                                                    <SelectItem value="daily">{t.daily}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <SearchableSelect
+                                                mode="single"
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                                options={[
+                                                    { value: 'monthly', label: t.monthly },
+                                                    { value: 'daily', label: t.daily },
+                                                ]}
+                                            />
                                             <p className="text-xs text-muted-foreground">
                                                 {t.budgetFormLimitPeriodHint}
                                             </p>
@@ -366,20 +359,16 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{t.budgetScopeCloudAccount}</FormLabel>
-                                            <Select value={field.value || undefined} onValueChange={field.onChange}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder={t.selectAccountPlaceholder} />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {cloudAccounts.map((account) => (
-                                                        <SelectItem key={account.id} value={account.id}>
-                                                            {`${account.alias} (${account.provider.toUpperCase()})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <SearchableSelect
+                                                mode="single"
+                                                value={field.value || ''}
+                                                onValueChange={field.onChange}
+                                                placeholder={t.selectAccountPlaceholder}
+                                                options={cloudAccounts.map((account) => ({
+                                                    value: account.id,
+                                                    label: `${account.alias} (${account.provider.toUpperCase()})`,
+                                                }))}
+                                            />
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -453,17 +442,15 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{t.budgetFormCadence}</FormLabel>
-                                            <Select value={field.value} onValueChange={field.onChange}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="daily">{t.budgetFormCadenceDaily}</SelectItem>
-                                                    <SelectItem value="monthly">{t.monthly}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <SearchableSelect
+                                                mode="single"
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                                options={[
+                                                    { value: 'daily', label: t.budgetFormCadenceDaily },
+                                                    { value: 'monthly', label: t.monthly },
+                                                ]}
+                                            />
                                             <p className="text-xs text-muted-foreground">
                                                 {t.budgetFormCadenceHint}
                                             </p>
@@ -478,17 +465,15 @@ export function FinopsBudgetForm({
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{t.budgetFormType}</FormLabel>
-                                            <Select value={field.value} onValueChange={field.onChange}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="percentage">{t.budgetFormTypePercentage}</SelectItem>
-                                                    <SelectItem value="amount">{t.budgetAlertTypeAmount}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <SearchableSelect
+                                                mode="single"
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                                options={[
+                                                    { value: 'percentage', label: t.budgetFormTypePercentage },
+                                                    { value: 'amount', label: t.budgetAlertTypeAmount },
+                                                ]}
+                                            />
                                             <FormMessage />
                                         </FormItem>
                                     )}

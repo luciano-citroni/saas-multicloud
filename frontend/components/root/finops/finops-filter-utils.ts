@@ -10,8 +10,15 @@ export type FinopsTab = 'spend' | 'optimize';
 
 export type FinopsUrlFilters = {
     period: DashboardPeriod;
+    /** Uma ou mais contas selecionadas (vazio = todas). */
+    accountIds: string[];
+    /** @deprecated use accountIds — mantido para compat com páginas que ainda leem singular. */
     accountId: string | null;
+    providers: string[];
+    /** @deprecated use providers */
     provider: string | null;
+    services: string[];
+    /** @deprecated use services */
     service: string | null;
     tab: FinopsTab;
 };
@@ -50,6 +57,21 @@ export const DASHBOARD_PERIODS: DashboardPeriod[] = [
     'ytd',
 ];
 
+/** Parse lista CSV da URL; ignora sentinelas "all" / "organization". */
+export function parseCsvParam(value: string | null, ignore: string[] = [ACCOUNT_FILTER_ALL]): string[] {
+    if (!value) return [];
+    return value
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0 && !ignore.includes(part));
+}
+
+export function serializeCsvParam(values: string[]): string | null {
+    const cleaned = values.map((v) => v.trim()).filter(Boolean);
+    if (cleaned.length === 0) return null;
+    return cleaned.join(',');
+}
+
 export function parseFinopsUrlFilters(searchParams: URLSearchParams): FinopsUrlFilters {
     const periodParam = searchParams.get('period');
     const tabParam = searchParams.get('tab');
@@ -58,24 +80,20 @@ export function parseFinopsUrlFilters(searchParams: URLSearchParams): FinopsUrlF
     const serviceParam = searchParams.get('service');
 
     // "organization" is the budgets-only org-scope sentinel — never a cloud account UUID.
-    const accountId =
-        !accountParam || accountParam === ACCOUNT_FILTER_ALL || accountParam === 'organization'
-            ? null
-            : accountParam;
+    const accountIds = parseCsvParam(accountParam, [ACCOUNT_FILTER_ALL, 'organization']);
 
-    const provider =
-        !providerParam || providerParam === PROVIDER_FILTER_ALL
-            ? null
-            : providerParam.toLowerCase();
+    const providers = parseCsvParam(providerParam, [PROVIDER_FILTER_ALL]).map((p) => p.toLowerCase());
 
-    const service =
-        !serviceParam || serviceParam === SERVICE_FILTER_ALL ? null : serviceParam;
+    const services = parseCsvParam(serviceParam, [SERVICE_FILTER_ALL]);
 
     return {
         period: isDashboardPeriod(periodParam) ? periodParam : 'lastmonth',
-        accountId,
-        provider,
-        service,
+        accountIds,
+        accountId: accountIds[0] ?? null,
+        providers,
+        provider: providers[0] ?? null,
+        services,
+        service: services[0] ?? null,
         tab: isFinopsTab(tabParam) ? tabParam : 'spend',
     };
 }
@@ -85,9 +103,9 @@ export function buildFinopsQuery(
     next: Partial<{
         tab: FinopsTab;
         period: DashboardPeriod;
-        account: string | null;
-        provider: string | null;
-        service: string | null;
+        account: string | string[] | null;
+        provider: string | string[] | null;
+        service: string | string[] | null;
     }>
 ): string {
     const params = new URLSearchParams(current.toString());
@@ -104,18 +122,36 @@ export function buildFinopsQuery(
     }
 
     if (next.account !== undefined) {
-        if (!next.account || next.account === ACCOUNT_FILTER_ALL) params.delete('account');
-        else params.set('account', next.account);
+        const list = Array.isArray(next.account)
+            ? next.account
+            : next.account && next.account !== ACCOUNT_FILTER_ALL
+              ? [next.account]
+              : [];
+        const serialized = serializeCsvParam(list);
+        if (!serialized) params.delete('account');
+        else params.set('account', serialized);
     }
 
     if (next.provider !== undefined) {
-        if (!next.provider || next.provider === PROVIDER_FILTER_ALL) params.delete('provider');
-        else params.set('provider', next.provider);
+        const list = Array.isArray(next.provider)
+            ? next.provider
+            : next.provider && next.provider !== PROVIDER_FILTER_ALL
+              ? [next.provider]
+              : [];
+        const serialized = serializeCsvParam(list.map((p) => p.toLowerCase()));
+        if (!serialized) params.delete('provider');
+        else params.set('provider', serialized);
     }
 
     if (next.service !== undefined) {
-        if (!next.service || next.service === SERVICE_FILTER_ALL) params.delete('service');
-        else params.set('service', next.service);
+        const list = Array.isArray(next.service)
+            ? next.service
+            : next.service && next.service !== SERVICE_FILTER_ALL
+              ? [next.service]
+              : [];
+        const serialized = serializeCsvParam(list);
+        if (!serialized) params.delete('service');
+        else params.set('service', serialized);
     }
 
     return params.toString();

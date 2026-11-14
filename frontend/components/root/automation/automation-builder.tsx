@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlow, Background, Controls, addEdge, useEdgesState, useNodesState, type Connection, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Server, HardDrive, Database, Zap, Trash2, Settings2, ChevronRight } from 'lucide-react';
@@ -15,6 +15,7 @@ import { Ec2ConfigForm } from './ec2-config-form';
 import type { FlowDefinition, FlowNode, ResourceType } from '@/app/actions/automation';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { isResourceConfigured, type ResourceConfigSchemaMessages } from './resource-config-schemas';
 
 const PALETTE_ITEMS = [
     { type: 'ec2', label: 'EC2', icon: Server, color: 'bg-orange-500' },
@@ -218,6 +219,8 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
         setSelectedNodeId(id);
     }, [nodes, edges, setNodes]);
 
+    const configMsgs = useMemo(() => resourceConfigMessages(t), [t]);
+
     const updateNodeConfig = useCallback((key: string, value: unknown) => {
         if (!selectedNodeId) return;
 
@@ -226,13 +229,13 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
                 if (n.id !== selectedNodeId) return n;
                 const data = n.data as AutomationNodeData;
                 const newConfig = { ...data.config, [key]: value };
-                const configured = isConfigured(data.resourceType, newConfig);
+                const configured = isConfigured(data.resourceType, newConfig, configMsgs);
                 const label = buildLabel(data.resourceType, newConfig);
                 return { ...n, data: { ...data, config: newConfig, configured, label } };
             });
             return updated;
         });
-    }, [selectedNodeId, setNodes]);
+    }, [selectedNodeId, setNodes, configMsgs]);
 
     const deleteNode = useCallback((nodeId: string) => {
         setNodes((nds) => {
@@ -351,14 +354,36 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
     );
 }
 
-function isConfigured(type: string, config: Record<string, unknown>): boolean {
-    switch (type) {
-        case 'ec2': return Boolean(config.instanceType && config.region && (config.amiId || config.osPreset));
-        case 's3': return Boolean(config.bucketName && String(config.bucketName).length >= 3 && config.region);
-        case 'rds': return Boolean(config.dbInstanceIdentifier && config.engine && config.masterUserPassword);
-        case 'lambda': return Boolean(config.functionName && config.roleArn);
-        default: return false;
-    }
+function resourceConfigMessages(t: {
+    configInstanceTypeRequired: string;
+    configRegionRequired: string;
+    configAmiOrOsRequired: string;
+    configBucketNameMin: string;
+    configDbIdentifierRequired: string;
+    configEngineRequired: string;
+    configMasterPasswordRequired: string;
+    configFunctionNameRequired: string;
+    configRoleArnRequired: string;
+    configKeyNameRequired: string;
+    configUnsupportedType: string;
+}): ResourceConfigSchemaMessages {
+    return {
+        instanceTypeRequired: t.configInstanceTypeRequired,
+        regionRequired: t.configRegionRequired,
+        amiOrOsRequired: t.configAmiOrOsRequired,
+        bucketNameMin: t.configBucketNameMin,
+        dbIdentifierRequired: t.configDbIdentifierRequired,
+        engineRequired: t.configEngineRequired,
+        masterPasswordRequired: t.configMasterPasswordRequired,
+        functionNameRequired: t.configFunctionNameRequired,
+        roleArnRequired: t.configRoleArnRequired,
+        keyNameRequired: t.configKeyNameRequired,
+        unsupportedType: t.configUnsupportedType,
+    };
+}
+
+function isConfigured(type: string, config: Record<string, unknown>, msgs?: ResourceConfigSchemaMessages): boolean {
+    return isResourceConfigured(type, config, msgs);
 }
 
 function buildLabel(type: string, config: Record<string, unknown>): string {

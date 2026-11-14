@@ -210,7 +210,7 @@ export function AiChatMessageList({
     }
 
     return (
-        <MessageScrollerProvider autoScroll>
+        <MessageScrollerProvider autoScroll defaultScrollPosition="end">
             <div className="min-h-0 flex-1 overflow-hidden">
                 <MessageScroller className="h-full">
                     <MessageScrollerViewport>
@@ -218,7 +218,7 @@ export function AiChatMessageList({
                             {messages.map((message) => {
                                 if (message.role === 'user') {
                                     return (
-                                        <MessageScrollerItem key={message.id} messageId={message.id} scrollAnchor>
+                                        <MessageScrollerItem key={message.id} messageId={message.id}>
                                             <UserBubble message={message} youLabel={youLabel} />
                                         </MessageScrollerItem>
                                     );
@@ -240,7 +240,7 @@ export function AiChatMessageList({
                             })}
 
                             {isStreaming || streamingContent !== null || toolSteps.length > 0 ? (
-                                <MessageScrollerItem messageId="streaming-assistant">
+                                <MessageScrollerItem messageId="streaming-assistant" scrollAnchor>
                                     <Message align="start">
                                         <MessageAvatar>
                                             <Avatar size="sm">

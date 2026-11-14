@@ -218,6 +218,16 @@ export type OrgCostTrendPoint = {
     currency: string;
 };
 
+export type OrgFinopsDataCoverage = {
+    availableStart: string | null;
+    availableEnd: string | null;
+    requestedStart: string;
+    requestedEnd: string;
+    incomplete: boolean;
+    missingBefore: boolean;
+    missingAfter: boolean;
+};
+
 export type OrgFinopsOverview = {
     period: {
         period: string;
@@ -239,6 +249,7 @@ export type OrgFinopsOverview = {
     anomalies: Array<FinopsAnomaly & { cloudAccountId: string }>;
     recommendations: Array<FinopsRecommendation & { cloudAccountId: string }>;
     accounts: OrgOverviewAccount[];
+    dataCoverage?: OrgFinopsDataCoverage;
 };
 
 export type OrgOptimizeItem = {

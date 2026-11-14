@@ -7,6 +7,7 @@ export const SYSTEM_MODULES = [
     'finops',
     'automation',
     'cloud_intelligence',
+    'ai_finops',
 ] as const;
 
 export const SystemModule = {
@@ -16,6 +17,7 @@ export const SystemModule = {
     FINOPS: 'finops',
     AUTOMATION: 'automation',
     CLOUD_INTELLIGENCE: 'cloud_intelligence',
+    AI_FINOPS: 'ai_finops',
 } as const;
 
 export type SystemModuleName = (typeof SYSTEM_MODULES)[number];

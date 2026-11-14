@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, priorityColor, priorityLabel } from '@/components/root/finops/overview/helpers';
 import type { FinopsRecommendation } from '@/components/root/finops/overview/types';
@@ -136,16 +137,22 @@ export function FinopsRecommendations({ recommendations, previewLimit, actionHre
                             placeholder="Filtrar por recurso..."
                             className="h-8 w-50"
                         />
-                        <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setPageIndex(0); }}>
-                            <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todas as prioridades</SelectItem>
-                                <SelectItem value="critical">Crítica</SelectItem>
-                                <SelectItem value="high">Alta</SelectItem>
-                                <SelectItem value="medium">Média</SelectItem>
-                                <SelectItem value="low">Baixa</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            mode="single"
+                            className="w-44"
+                            value={priorityFilter}
+                            options={[
+                                { value: 'ALL', label: 'Todas as prioridades' },
+                                { value: 'critical', label: 'Crítica' },
+                                { value: 'high', label: 'Alta' },
+                                { value: 'medium', label: 'Média' },
+                                { value: 'low', label: 'Baixa' },
+                            ]}
+                            onValueChange={(v) => {
+                                setPriorityFilter(v);
+                                setPageIndex(0);
+                            }}
+                        />
                     </div>
                     <div className="rounded-lg border">
                         <Table>

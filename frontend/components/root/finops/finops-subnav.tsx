@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { AlertTriangle, BarChart3, Cloud, FileText, Landmark, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
+import { AlertTriangle, Bot, Cloud, FileText, Landmark, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -13,7 +13,8 @@ type SubnavLabelKey =
     | 'subnavCommitments'
     | 'subnavMulticloud'
     | 'subnavBudgets'
-    | 'subnavReports';
+    | 'subnavReports'
+    | 'subnavAiCosts';
 
 const LINKS: ReadonlyArray<{
     href: string;
@@ -57,6 +58,12 @@ const LINKS: ReadonlyArray<{
         labelKey: 'subnavReports',
         icon: FileText,
         match: (path) => path.startsWith('/finops/reports'),
+    },
+    {
+        href: '/finops/ai',
+        labelKey: 'subnavAiCosts',
+        icon: Bot,
+        match: (path) => path === '/finops/ai' || path.startsWith('/finops/ai/'),
     },
 ];
 

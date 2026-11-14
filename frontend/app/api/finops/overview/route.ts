@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     if (!organizationId) return NextResponse.json({ message: 'organizationId é obrigatório' }, { status: 400 });
 
     const query = new URLSearchParams();
-    for (const key of ['period', 'year', 'month', 'anomalyDays', 'cloudAccountId'] as const) {
+    for (const key of ['period', 'year', 'month', 'anomalyDays', 'cloudAccountId', 'cloudAccountIds'] as const) {
         const value = searchParams.get(key);
         if (value) query.set(key, value);
     }

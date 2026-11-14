@@ -10,8 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
 import { FinopsFilterBar } from '@/components/root/finops/finops-filter-bar';
+import { FinopsDataCoverageBanner } from '@/components/root/finops/finops-data-coverage-banner';
 import {
-    ACCOUNT_FILTER_ALL,
     buildFinopsQuery,
     downloadCsv,
     parseFinopsUrlFilters,
@@ -55,7 +55,14 @@ export function FinopsReports() {
     const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
     const syncUrlState = useCallback(
-        (next: Partial<{ period: DashboardPeriod; account: string | null; provider: string | null; service: string | null }>) => {
+        (
+            next: Partial<{
+                period: DashboardPeriod;
+                account: string | string[] | null;
+                provider: string | string[] | null;
+                service: string | string[] | null;
+            }>,
+        ) => {
             const nextQuery = buildFinopsQuery(searchParams, next);
             router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
         },
@@ -114,11 +121,11 @@ export function FinopsReports() {
                 const [overviewRes, optimizeRes] = await Promise.all([
                     fetchFinopsOrgOverview(orgId, {
                         period: urlFilters.period,
-                        cloudAccountId: urlFilters.accountId ?? undefined,
+                        cloudAccountIds: urlFilters.accountIds.length > 0 ? urlFilters.accountIds : undefined,
                     }),
                     fetchFinopsOrgOptimize(orgId, {
                         status: 'open',
-                        cloudAccountId: urlFilters.accountId ?? undefined,
+                        cloudAccountId: urlFilters.accountIds.length === 1 ? urlFilters.accountIds[0] : undefined,
                         limit: 100,
                     }),
                 ]);
@@ -150,7 +157,7 @@ export function FinopsReports() {
                 if (!silent) setLoading(false);
             }
         },
-        [router, tc.sessionExpired, tf.loadError, urlFilters.accountId, urlFilters.period]
+        [router, tc.sessionExpired, tf.loadError, urlFilters.accountIds, urlFilters.period]
     );
 
     useEffect(() => {
@@ -163,40 +170,49 @@ export function FinopsReports() {
 
     const filteredAccounts = useMemo(() => {
         const accounts = overview?.accounts ?? [];
-        if (!urlFilters.provider) return accounts;
-        return accounts.filter((account) => account.provider.toLowerCase() === urlFilters.provider);
-    }, [overview?.accounts, urlFilters.provider]);
+        if (urlFilters.providers.length === 0) return accounts;
+        const allowed = new Set(urlFilters.providers);
+        return accounts.filter((account) => allowed.has(account.provider.toLowerCase()));
+    }, [overview?.accounts, urlFilters.providers]);
 
     const filteredServices = useMemo(() => {
         const services = overview?.costByService ?? [];
-        if (!urlFilters.service) return services;
-        return services.filter((item) => item.service === urlFilters.service);
-    }, [overview?.costByService, urlFilters.service]);
+        if (urlFilters.services.length === 0) return services;
+        const allowed = new Set(urlFilters.services);
+        return services.filter((item) => allowed.has(item.service));
+    }, [overview?.costByService, urlFilters.services]);
 
     const filteredOptimizeItems = useMemo(() => {
         let items = optimize?.items ?? [];
-        if (urlFilters.provider) {
-            items = items.filter((item) => item.cloudProvider.toLowerCase() === urlFilters.provider);
+        if (urlFilters.providers.length > 0) {
+            const allowed = new Set(urlFilters.providers);
+            items = items.filter((item) => allowed.has(item.cloudProvider.toLowerCase()));
         }
-        if (urlFilters.service) {
-            items = items.filter(
-                (item) => (item.service ?? '').includes(urlFilters.service!) || item.title.includes(urlFilters.service!)
+        if (urlFilters.services.length > 0) {
+            items = items.filter((item) =>
+                urlFilters.services.some(
+                    (service) => (item.service ?? '').includes(service) || item.title.includes(service),
+                ),
             );
         }
         return items;
-    }, [optimize?.items, urlFilters.provider, urlFilters.service]);
+    }, [optimize?.items, urlFilters.providers, urlFilters.services]);
 
     const currency = overview?.totals.currency ?? 'USD';
-    const totalCost = urlFilters.provider
-        ? filteredAccounts.reduce((sum, account) => sum + Number(account.totalCost ?? 0), 0)
-        : urlFilters.service
-          ? filteredServices.reduce((sum, item) => sum + Number(item.currentMonthCost ?? 0), 0)
-          : (overview?.totals.cost ?? 0);
+    const totalCost =
+        urlFilters.services.length > 0
+            ? filteredServices.reduce((sum, item) => sum + Number(item.currentMonthCost ?? 0), 0)
+            : urlFilters.providers.length > 0
+              ? filteredAccounts.reduce((sum, account) => sum + Number(account.totalCost ?? 0), 0)
+              : (overview?.totals.cost ?? 0);
 
     const accountAlias =
-        urlFilters.accountId != null
-            ? (cloudAccounts.find((account) => account.id === urlFilters.accountId)?.alias ?? urlFilters.accountId)
-            : tf.reportAllAccounts;
+        urlFilters.accountIds.length === 1
+            ? (cloudAccounts.find((account) => account.id === urlFilters.accountIds[0])?.alias ??
+              urlFilters.accountIds[0])
+            : urlFilters.accountIds.length > 1
+              ? tf.filterSelectedCount.replace('{count}', String(urlFilters.accountIds.length))
+              : tf.reportAllAccounts;
 
     const accountAliases = useMemo(() => {
         const map: Record<string, string> = {};
@@ -362,25 +378,27 @@ export function FinopsReports() {
 
             <FinopsFilterBar
                 period={urlFilters.period}
-                accountId={urlFilters.accountId}
-                provider={urlFilters.provider}
-                service={urlFilters.service}
+                accountIds={urlFilters.accountIds}
+                providers={urlFilters.providers}
+                services={urlFilters.services}
                 cloudAccounts={cloudAccounts}
                 serviceOptions={(overview?.costByService ?? []).map((item) => item.service)}
                 sidebarAccountId={sidebarAccountId}
                 onPeriodChange={(period) => syncUrlState({ period })}
-                onAccountChange={(accountId) => syncUrlState({ account: accountId ?? ACCOUNT_FILTER_ALL })}
-                onProviderChange={(provider) => syncUrlState({ provider })}
-                onServiceChange={(service) => syncUrlState({ service })}
+                onAccountsChange={(accountIds) => syncUrlState({ account: accountIds })}
+                onProvidersChange={(providers) => syncUrlState({ provider: providers })}
+                onServicesChange={(services) => syncUrlState({ service: services })}
                 onClear={() =>
                     syncUrlState({
                         period: 'lastmonth',
-                        account: ACCOUNT_FILTER_ALL,
+                        account: null,
                         provider: null,
                         service: null,
                     })
                 }
             />
+
+            <FinopsDataCoverageBanner coverage={overview?.dataCoverage} />
 
             <Card>
                 <CardHeader>

@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ErrorMessages, extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -171,18 +171,16 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>{t.inviteRoleLabel}</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="ADMIN">{t.roleAdmin}</SelectItem>
-                                            <SelectItem value="MEMBER">{t.roleMember}</SelectItem>
-                                            <SelectItem value="VIEWER">{t.roleViewer}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={field.onChange}
+                                        options={[
+                                            { value: 'ADMIN', label: t.roleAdmin },
+                                            { value: 'MEMBER', label: t.roleMember },
+                                            { value: 'VIEWER', label: t.roleViewer },
+                                        ]}
+                                    />
                                     <FormMessage />
                                 </FormItem>
                             )}

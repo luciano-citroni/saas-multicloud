@@ -201,6 +201,7 @@ export class DailyIntelligenceService {
         }
 
         const briefing = await this.briefingComposer.compose({
+            organizationId,
             signals: topSignals,
             recommendationIdsByDedupe,
             counts: {

@@ -7,8 +7,8 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import type { OrganizationRole } from '@/lib/organization-rbac';
@@ -96,20 +96,15 @@ export function ChangeRoleDialog({ open, onOpenChange, organizationId, userId, c
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>{t.inviteRoleLabel}</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {availableRoles.map((role) => (
-                                                <SelectItem key={role} value={role}>
-                                                    {roleLabels[role]}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        mode="single"
+                                        value={field.value}
+                                        onValueChange={field.onChange}
+                                        options={availableRoles.map((role) => ({
+                                            value: role,
+                                            label: roleLabels[role],
+                                        }))}
+                                    />
                                     <FormMessage />
                                 </FormItem>
                             )}

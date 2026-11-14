@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiProviderFactory } from '../providers/ai-provider.factory';
+import { AiUsageService } from '../usage/ai-usage.service';
 import {
     DAILY_BRIEFING_TOP,
     type RankedDailySignal,
@@ -51,9 +52,13 @@ function templateBriefing(
 export class DailyBriefingComposer {
     private readonly logger = new Logger(DailyBriefingComposer.name);
 
-    constructor(private readonly providerFactory: AiProviderFactory) {}
+    constructor(
+        private readonly providerFactory: AiProviderFactory,
+        private readonly usageService: AiUsageService,
+    ) {}
 
     async compose(input: {
+        organizationId: string;
         signals: RankedDailySignal[];
         recommendationIdsByDedupe: Map<string, string>;
         counts: { anomalies: number; findings: number; savings: number };
@@ -103,6 +108,15 @@ export class DailyBriefingComposer {
                     },
                 ],
                 maxTokens: 800,
+            });
+
+            await this.usageService.record({
+                organizationId: input.organizationId,
+                agentType: 'daily_intelligence',
+                provider: provider.getProviderName(),
+                model: provider.getModel(),
+                inputTokens: result.usage?.promptTokens ?? 0,
+                outputTokens: result.usage?.completionTokens ?? 0,
             });
 
             const raw = result.content?.trim();

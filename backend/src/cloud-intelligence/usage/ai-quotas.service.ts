@@ -72,8 +72,9 @@ export class AiQuotasService {
         const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-        const dailyLimit = quota.dailyLimit ?? this.envLimit('AI_DEFAULT_DAILY_LIMIT');
-        const monthlyLimit = quota.monthlyLimit ?? this.envLimit('AI_DEFAULT_MONTHLY_LIMIT');
+        // Row values are authoritative after create/sync. Null means unlimited (env only seeds new rows).
+        const dailyLimit = quota.dailyLimit;
+        const monthlyLimit = quota.monthlyLimit;
 
         const [dailyUsed, monthlyUsed] = await Promise.all([
             this.usageService.totalTokensBetween(organizationId, startOfDay, now),
