@@ -105,16 +105,17 @@ export function SearchableSelect(props: SearchableSelectProps) {
     }, [normalizedQuery, options]);
 
     const selectSingle = (next: string) => {
-        if (mode !== 'single') return;
+        if (props.mode !== 'single') return;
         props.onValueChange(next);
         setOpen(false);
         setQuery('');
     };
 
     const toggleMultiple = (next: string, checked: boolean) => {
-        if (mode !== 'multiple') return;
-        if (checked) props.onValueChange([...props.value, next]);
-        else props.onValueChange(props.value.filter((item) => item !== next));
+        if ((props.mode ?? 'multiple') !== 'multiple') return;
+        const multi = props as SearchableSelectMultipleProps;
+        if (checked) multi.onValueChange([...multi.value, next]);
+        else multi.onValueChange(multi.value.filter((item) => item !== next));
     };
 
     return (
@@ -185,7 +186,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
                             <button
                                 type="button"
                                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => props.onValueChange([])}
+                                onClick={() => (props as SearchableSelectMultipleProps).onValueChange([])}
                             >
                                 <SelectionMark checked={selectedValues.length === 0} multiple />
                                 <span className="truncate">{allLabel}</span>
@@ -233,7 +234,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
                                 size="sm"
                                 variant="ghost"
                                 className="w-full"
-                                onClick={() => props.onValueChange([])}
+                                onClick={() => (props as SearchableSelectMultipleProps).onValueChange([])}
                             >
                                 {clearLabel}
                             </Button>

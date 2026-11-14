@@ -380,7 +380,7 @@ export function AiGovernancePage() {
                 <Button asChild variant="outline" size="sm">
                     <Link href="/finops/ai">{t.openAiCosts}</Link>
                 </Button>
-                <Button variant="outline" size="sm" isLoading={pending} onClick={refresh}>
+                <Button variant="outline" size="sm" isLoading={pending} onClick={() => refresh()}>
                     <RefreshCw className="size-3.5" />
                     {tc.refresh}
                 </Button>

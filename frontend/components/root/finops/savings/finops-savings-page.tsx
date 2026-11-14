@@ -316,7 +316,7 @@ export function FinopsSavingsPage() {
         }
         if (urlFilters.accountIds.some((id) => !scopedAccountIds.includes(id))) {
             const valid = urlFilters.accountIds.filter((id) => scopedAccountIds.includes(id));
-            syncUrlState({ account: valid.length > 0 ? valid : null, page: null });
+            syncUrlState({ account: valid.length > 0 ? valid.join(',') : null, page: null });
             return;
         }
         void loadSavings(organizationId, scopedAccountIds);

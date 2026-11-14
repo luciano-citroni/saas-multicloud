@@ -599,7 +599,7 @@ export function CloudIntelligenceRecommendationsPanel() {
     if (source) {
         activeFilterChips.push({
             key: 'source',
-            label: sourceLabel(source),
+            label: sourceLabel(source as CiSource),
             onClear: () => replaceRecsUrl({ source: null }),
         });
     }

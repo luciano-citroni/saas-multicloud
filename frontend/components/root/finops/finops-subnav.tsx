@@ -2,7 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { AlertTriangle, Bot, Cloud, FileText, Landmark, LayoutDashboard, PiggyBank, Target } from 'lucide-react';
+import {
+    AlertTriangle,
+    BarChart3,
+    Bot,
+    Cloud,
+    FileText,
+    Landmark,
+    LayoutDashboard,
+    PiggyBank,
+    Target,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 

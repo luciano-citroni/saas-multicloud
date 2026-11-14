@@ -389,7 +389,7 @@ export function FinopsAnomaliesPage() {
         // Contas da URL fora do escopo mid-org → remove só as inválidas
         if (urlFilters.accountIds.some((id) => !scopedAccountIds.includes(id))) {
             const valid = urlFilters.accountIds.filter((id) => scopedAccountIds.includes(id));
-            syncUrlState({ account: valid.length > 0 ? valid : null, page: null });
+            syncUrlState({ account: valid.length > 0 ? valid.join(',') : null, page: null });
             return;
         }
         void loadAnomalies(organizationId, scopedAccountIds);

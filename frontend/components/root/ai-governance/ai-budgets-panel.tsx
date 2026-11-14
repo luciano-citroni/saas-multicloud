@@ -119,7 +119,7 @@ function createAiBudgetSchema(messages: {
             scopeType: z.enum(['organization', 'provider', 'connection', 'model', 'user']),
             scopeId: z.string().max(255).optional().or(z.literal('')),
             budgetAmount: z.string().min(1),
-            currency: z.string().length(3).default('USD'),
+            currency: z.string().length(3),
             period: z.enum(['daily', 'monthly']),
             alertThresholds: z.string().min(1),
             alertChannelEmail: z.boolean(),
