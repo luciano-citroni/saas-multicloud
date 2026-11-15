@@ -13,6 +13,7 @@ import {
     PiggyBank,
     Target,
 } from 'lucide-react';
+import { ScrollableSubnav } from '@/components/root/layout';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -77,6 +78,14 @@ const LINKS: ReadonlyArray<{
     },
 ];
 
+const linkClass = (active: boolean) =>
+    cn(
+        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium whitespace-nowrap transition-colors',
+        active
+            ? 'bg-muted text-foreground'
+            : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
+    );
+
 type FinopsSubnavProps = {
     className?: string;
 };
@@ -92,22 +101,14 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
         const value = searchParams.get(key);
         if (value) preserved.set(key, value);
     }
-    const query = preserved.toString();
 
     const isAccountDetail = pathname.startsWith('/finops/accounts/');
 
     return (
-        <nav
-            aria-label={t.subnavAria}
-            className={cn(
-                'inline-flex w-fit max-w-full flex-wrap items-center rounded-lg border border-border p-0.5',
-                className
-            )}
-        >
+        <ScrollableSubnav aria-label={t.subnavAria} className={className}>
             {LINKS.map((link) => {
                 const active = link.match(pathname);
                 const linkParams = new URLSearchParams(preserved);
-                // Sentinel de escopo org só faz sentido na listagem de orçamentos.
                 if (link.href !== '/finops/budgets' && linkParams.get('account') === 'organization') {
                     linkParams.delete('account');
                 }
@@ -116,16 +117,7 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
                 const Icon = link.icon;
 
                 return (
-                    <Link
-                        key={link.href}
-                        href={href}
-                        className={cn(
-                            'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
-                            active
-                                ? 'bg-muted text-foreground'
-                                : 'text-muted-foreground hover:bg-transparent hover:text-foreground'
-                        )}
-                    >
+                    <Link key={link.href} href={href} className={linkClass(active)}>
                         <Icon className="size-3.5 shrink-0" />
                         {t[link.labelKey]}
                     </Link>
@@ -133,11 +125,11 @@ export function FinopsSubnav({ className }: FinopsSubnavProps) {
             })}
 
             {isAccountDetail && (
-                <span className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm font-medium text-foreground">
+                <span className={linkClass(true)}>
                     <BarChart3 className="size-3.5 shrink-0" />
                     {t.subnavAccountDetail}
                 </span>
             )}
-        </nav>
+        </ScrollableSubnav>
     );
 }

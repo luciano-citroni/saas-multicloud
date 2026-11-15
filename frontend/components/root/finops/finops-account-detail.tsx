@@ -458,8 +458,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
     return (
         <>
             <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-3">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-3">
                         <div className="space-y-1">
                             <Link
                                 href={backHref}
@@ -468,16 +468,16 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                                 <ArrowLeft className="size-3" />
                                 Visão geral
                             </Link>
-                            <h1 className="text-xl font-semibold tracking-tight">{account.alias}</h1>
+                            <h1 className="truncate text-xl font-semibold tracking-tight">{account.alias}</h1>
                             <p className="text-sm uppercase text-muted-foreground">{account.provider}</p>
                         </div>
                         <FinopsSubnav />
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                         <SearchableSelect
                             mode="single"
-                            className="w-[170px]"
+                            className="w-full sm:w-[170px]"
                             value={period}
                             options={DASHBOARD_PERIODS.map((item) => ({
                                 value: item,

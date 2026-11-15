@@ -20,14 +20,14 @@ export function GovernanceSummaryCards({ score, canRunScan, scanning, hasRunning
     const tc = useTranslations('common');
     return (
         <div className="rounded-xl border">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-                <div className="space-y-0.5">
+            <div className="flex min-w-0 flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-0.5">
                     <p className="text-sm font-medium">{tg.overviewTitle}</p>
                     <p className="text-xs text-muted-foreground">
                         {score ? tg.lastScan.replace('{date}', formatDate(score.evaluatedAt)) : tg.noScanYet}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     {canRunScan && (
                         <Button size="sm" onClick={onStartScan} isLoading={scanning || hasRunningJob} disabled={scanning || hasRunningJob}>
                             <PlayCircle className="size-4" />

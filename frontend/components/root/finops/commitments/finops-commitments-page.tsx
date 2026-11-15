@@ -643,11 +643,11 @@ export function FinopsCommitmentsPage() {
     const commitments = overview?.commitments;
 
     return (
-        <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
-                        <Landmark className="size-5 text-muted-foreground" />
+                        <Landmark className="size-5 shrink-0 text-muted-foreground" />
                         <h1 className="text-xl font-semibold tracking-tight">{t.commitmentsTitle}</h1>
                     </div>
                     <p className="max-w-2xl text-sm text-muted-foreground">{t.commitmentsDesc}</p>

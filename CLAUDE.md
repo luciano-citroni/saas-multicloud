@@ -2,6 +2,13 @@
 
 This file contains the coding rules and conventions for this project. Always follow these instructions when generating or modifying code.
 
+Monorepo roots:
+
+- `frontend/` — Next.js 16 App Router (UI + BFF `app/api`)
+- `backend/` — NestJS API (`/api` prefix)
+
+Paths below are relative to those roots unless noted.
+
 ---
 
 # Frontend Development Instructions
@@ -124,29 +131,49 @@ export async function enqueueGeneralSync(
 Rules:
 
 - Client components NEVER call the backend directly — always go through `app/api/` route handlers.
-- Route handlers ALWAYS use `backendFetch`, `resolveAccessToken`, `setAuthCookies` from `lib/auth/session`.
+- Prefer shared BFF helpers from `lib/api/proxy-request.ts`: `resolveAccessToken`, `proxyToBackend`, `unauthorizedResponse`, `hasTrustedOrigin`.
+- Cookie helpers and `backendFetch` live in `lib/auth/session.ts` (`setAuthCookies`, `clearAuthCookies`, `refreshAccessToken`).
 - Never construct bearer tokens or read cookies manually inside components.
 - Always pass `organizationId` as a query param when the route requires tenant context.
+- Mutating BFF routes (`POST` / `PUT` / `PATCH` / `DELETE`) must call `hasTrustedOrigin(request)` and return **403** when false (`proxyToBackend` already does this for non-GET).
 
 ## Authentication
 
 Sessions are managed via **httpOnly cookies** (`smc_access_token` / `smc_refresh_token`). Tokens are never exposed to client-side JS.
 
 ```typescript
-// lib/auth/session.ts - utilities you must reuse
+// lib/auth/session.ts - cookie + backend fetch helpers
 getAccessTokenFromCookies();
 getRefreshTokenFromCookies();
 setAuthCookies(response, tokens);
 clearAuthCookies(response);
 refreshAccessToken(refreshToken);
 backendFetch(path, options); // always use this instead of raw fetch to backend
+
+// lib/api/proxy-request.ts - prefer for new BFF routes
+resolveAccessToken();
+proxyToBackend(path, options);
+hasTrustedOrigin(request);
 ```
 
-Route protection is handled by the middleware in `proxy.ts` — unauthenticated requests to protected routes are redirected to `/auth/sign-in`.
+Cookie policy (`lib/auth/session.ts` + `lib/auth/constants.ts`):
+
+- Flags: `httpOnly: true`, `sameSite: 'lax'`, `secure` only in production, `path: '/'`.
+- TTLs: access **15 minutes**, refresh **7 days**.
+- Access tokens within ~30s of expiry are treated as missing (proactive refresh).
+- Prefer `getBackendInternalUrl()` / `BACKEND_URL` for server→API calls; do not use `NEXT_PUBLIC_BACKEND_URL` for secrets or internal routing.
+
+Route protection (`frontend/proxy.ts`):
+
+- Session = presence of access **or** refresh cookie (not JWT validation in the proxy).
+- Unauthenticated requests to protected routes redirect to `/auth/sign-in?next=<pathname>`.
+- Public: `/auth/*`, `/invite/*` (verify-email always allowed). Authenticated users are redirected away from sign-in/sign-up.
+- Matcher excludes `api`, `_next/static`, `_next/image`, favicon, sitemap, robots — API auth is cookie + BFF, not this proxy.
+- Post-login redirects must use `getSafeNextPath()` (`lib/auth/request-origin.ts`) — relative paths only; reject `//`, `://`, `\`, newlines (open-redirect hardening).
 
 ## Forms
 
-All forms use **`react-hook-form`** with a **Zod schema** via `zodResolver`:
+All data-entry forms use **`react-hook-form`** with a **Zod schema** via `zodResolver`. Types come from `z.infer<typeof schema>`.
 
 ```typescript
 'use client';
@@ -204,9 +231,12 @@ export function MyForm() {
 
 Rules:
 
-- Always define Zod schemas in the same file or a sibling `schema.ts` file.
-- Never use uncontrolled inputs; always use `FormField` + `FormControl` + `FormMessage`.
+- Prefer a sibling `schema.ts` file (canonical name). Inline schemas are acceptable for tiny dialogs.
+- When messages are i18n-driven, use a factory `createXSchema(msgs)` + `useMemo(() => createXSchema(...), [deps])`.
+- Never use uncontrolled inputs for form fields; always use `FormField` + `FormControl` + `FormMessage`.
+- Do not invent ad-hoc field validation outside Zod (`if (!email)` style checks).
 - Use `form.formState.isSubmitting` to disable the submit button while loading.
+- Controlled non-RHF UIs (e.g. automation resource config) must still validate with Zod (`safeParse` / shared schema modules) until migrated to RHF.
 
 ## Error Handling & Translations
 
@@ -268,6 +298,46 @@ Rules:
 - Respect the design token variables: `--color-primary`, `--color-destructive`, `--color-muted`, etc.
 - Use `bg-background`, `text-foreground`, `border`, `text-muted-foreground` for semantic colors.
 
+## Responsive Layout
+
+Authenticated shell lives in `frontend/app/(root)/layout.tsx` (sidebar + `SiteHeader` + padded scroll region). Auth/invite pages stay centered cards — do not force the dashboard shell on them.
+
+### Breakpoints
+
+| Viewport | Tailwind | Behavior |
+|----------|----------|----------|
+| Mobile | `< md` (768) | Sidebar as Sheet (`useIsMobile`); stacked headers/toolbars; scrollable subnavs |
+| Tablet | `md`–`lg` | Fixed/collapsible sidebar; 2-col grids; dense filters may still use Sheet |
+| Desktop | `lg+` | Inline dense filters; master–detail side-by-side |
+
+### Shared primitives (`components/root/layout/`)
+
+- **`PageHeader`** — title + optional description/eyebrow/actions (`flex-col` → `sm:flex-row`).
+- **`ScrollableSubnav`** — horizontal scroll, no wrap, hidden scrollbar (FinOps/CI subnavs).
+- **`PageToolbar`** — filter/action row that stacks on mobile; nested inputs use `w-full sm:w-*`.
+
+### Rules
+
+- Page headers: `flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between`.
+- KPI / form grids: mobile-first `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3|4`.
+- Dense filter bars: desktop grid `hidden lg:block`; mobile bottom **Sheet** + chips (see `FinopsFilterBar`).
+- Master–detail: `lg:grid` split + `lg:hidden` stacked mobile view.
+- Tables: use `components/ui/table` (built-in `overflow-x-auto`) or wrap custom tables; cells use `min-w-0` / `truncate`.
+- Breadcrumbs (`SiteHeader`): must not overflow — `min-w-0`, truncate last crumb, horizontal scroll if needed.
+- Automation builders: palette/config as **Sheet** below `lg`; canvas full-width; adaptive heights (`h-[70dvh]`, not fixed side-by-side panels on mobile).
+- Always put `min-w-0` on flex children that truncate or scroll.
+- Prefer existing patterns over one-off fixed widths (`w-50`, `w-[170px]` without `w-full sm:`).
+
+## Frontend Security
+
+- Never store access/refresh tokens or session payloads in `localStorage` / `sessionStorage` / client-readable cookies.
+- `localStorage` is only for non-sensitive UI prefs (e.g. `ACTIVE_ORG_STORAGE_KEY`). Active org in storage is UX only — backend membership is authoritative.
+- Client components call only same-origin `/api/...` (or `app/actions`); never call the Nest backend URL from the browser.
+- Route handlers attach `Authorization` and `x-organization-id` server-side only.
+- Mutating BFF routes require `hasTrustedOrigin` before cookie-authenticated work.
+- Prefer `proxyToBackend` over copy-pasted auth boilerplate per route.
+- Frontend RBAC helpers hide UI only — the backend always enforces authorization.
+
 ## State Management
 
 - Prefer **local component state** (`useState`, `useReducer`) for UI state.
@@ -323,17 +393,19 @@ Rules:
 
 ## Authentication & Guards
 
-Guards must always be applied in this exact order:
+`JwtGuard` is registered as a **global** `APP_GUARD`. Controllers still apply tenant + roles:
 
 ```typescript
-@UseGuards(JwtGuard, TenantGuard, RolesGuard)
+@UseGuards(TenantGuard, RolesGuard)
 ```
 
-- **JwtGuard** — validates JWT signature, checks session exists in DB (`user_sessions` table), loads `request.user`
-- **TenantGuard** — reads `x-organization-id` header, verifies user membership, loads `request.organization` and `request.membership`
+- **JwtGuard** (global) — validates JWT signature, checks session exists in DB (`user_sessions` table), loads `request.user`
+- **TenantGuard** — reads `x-organization-id` header, verifies UUID + membership, loads `request.organization` and `request.membership`
 - **RolesGuard** — checks RBAC role hierarchy against `@Roles()` metadata
 
 Public routes must be annotated with `@Public()`. Never skip guards on protected routes.
+
+Escape hatches (use sparingly): `@SkipTenant()`, `@AllowMissingOrganization()` — see `auth/decorators.ts`. Global `TenantContextInterceptor` fails closed if an authenticated request lacks org/membership unless one of those (or `@Public()`) applies.
 
 ### JWT Payload Structure
 
@@ -355,6 +427,7 @@ Every protected endpoint operates within a tenant context:
 - Use `@CurrentMembership()` to inject the `OrganizationMember` (includes role).
 - All database queries **must** include the organization scope: `WHERE organization_id = :orgId`.
 - Never return data from other organizations. Tenant isolation is enforced at the service layer.
+- BFF routes: pass `organizationId` as query param → set `x-organization-id` header server-side; never trust org id from the body alone without that header path.
 
 ```typescript
 async listResources(orgId: string): Promise<ResourceEntity[]> {
@@ -382,9 +455,19 @@ Rules:
 
 - No `@Roles()` = accessible by all authenticated org members.
 - Read-only endpoints (GET) = generally no role restriction.
-- Mutations (create/update/delete) require at minimum `MEMBER`.
-- Administrative operations (invite/remove members, manage cloud accounts) require `ADMIN`.
-- Sensitive operations (delete org, manage billing) require `OWNER`.
+- Mutations (create/update/delete) require at minimum `MEMBER` (mutating methods reject `VIEWER` unless `@Roles` explicitly includes it).
+- Administrative operations (invite/remove members, manage cloud accounts, manage billing UI) require `ADMIN` — matches frontend helpers in `lib/organization-rbac.ts` (`canManageCloudAccounts`, `canManageBilling`, etc.).
+- Ownership-sensitive operations (delete org, transfer ownership) require `OWNER`.
+- Sync cloud accounts: frontend allows `MEMBER` (`canSyncCloudAccounts`); backend must still enforce.
+
+## HTTP Hardening (Helmet, CORS, Throttling)
+
+Configured in `backend/src/main.ts` and `app.module.ts`:
+
+- **Helmet**: enabled; CSP on in production (Helmet defaults), disabled in non-production; `crossOriginEmbedderPolicy: false`; `referrerPolicy: 'no-referrer'`; `x-powered-by` disabled; `trust proxy: 1`.
+- **CORS**: `credentials: true`; allowed origins from `FRONTEND_URL` and `GOOGLE_ALLOWED_REDIRECT_ORIGINS` (comma lists); localhost allowed in development; missing Origin allowed (OAuth / server-to-server). Allowed headers include `Authorization`, `Content-Type`, `x-organization-id`.
+- **Throttling**: global **300 req / 60s** via `UserThrottlerGuard` (tracker `user:{sub}` or IP). Stricter `@Throttle` on auth endpoints (e.g. login/register ~10/min, refresh ~120/min).
+- **Swagger** (`/api/docs`): disabled in production.
 
 ## DTO and Validation
 
@@ -597,12 +680,14 @@ Response format (auto-generated by interceptor):
 
 ## Cloud Credentials Security
 
-- AWS and Azure credentials are **always encrypted** with AES-256-GCM before storage.
-- Use the existing `encryptCredentials` / `decryptCredentials` utilities in `cloud/cloud.service.ts`.
-- The encryption key comes from `CREDENTIALS_ENCRYPTION_KEY` env var (32-byte hex).
-- Credential format stored: `ivHex:authTagHex:ciphertextHex`.
-- Never log, return, or expose raw credentials in API responses.
-- Credential fields on entities must be annotated with `@Exclude()`.
+- Cloud credentials (AWS, Azure, GCP) and AI FinOps BYOK secrets are **always encrypted** with AES-256-GCM before storage.
+- Shared crypto lives in `backend/src/common/crypto/credentials-cipher.ts`: `encryptCredentialsJson` / `decryptCredentialsJson` / `maskSecret`. Domain services may wrap these (e.g. cloud service, AI FinOps connection service).
+- Key: `CREDENTIALS_ENCRYPTION_KEY` = **64 hex chars** (32 bytes).
+- Stored format: Base64 encoding of `ivHex:authTagHex:ciphertextHex`.
+- Never log, return, or expose decrypted secrets in API responses.
+- Persist encrypted columns with `select: false` (do not rely only on `@Exclude()`).
+- Client responses must use redaction helpers (`redactCredentialsForClient` / flags like `hasClientSecret`, `hasPrivateKey`) — never return raw secrets.
+- On update, merge via helpers that preserve stored secrets when the client sends blank fields (`mergeCredentialsPreservingSecrets`).
 
 ### Cloud Credential Schemas (Zod)
 
@@ -634,7 +719,7 @@ Every module must be fully documented:
 - `@ApiResponse()` for all relevant status codes: 200/201 (success), 400 (validation), 401 (auth), 403 (permission), 404 (not found), 409 (conflict).
 - `@ApiBody({ type: SwaggerDto })` for all POST/PATCH endpoints.
 - All Swagger response/request types have a corresponding DTO class in `swagger.dto.ts` with `@ApiProperty()`.
-- The Swagger UI is available at `http://localhost:3000/api/docs`.
+- The Swagger UI is available at `http://localhost:3000/api/docs` in non-production only.
 
 ## Code Quality
 

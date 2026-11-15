@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { automationNodeTypes, type AutomationNodeData } from './automation-nodes';
 import { Ec2ConfigForm } from './ec2-config-form';
 import type { FlowDefinition, FlowNode, ResourceType } from '@/app/actions/automation';
@@ -264,42 +265,112 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
         onEdgesChange(changes);
     }, [onEdgesChange]);
 
-    return (
-        <div className="flex h-140 overflow-hidden rounded-xl border">
-            {/* Node palette */}
-            <div className="flex w-52 shrink-0 flex-col gap-2 border-r bg-muted/30 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t.paletteResources}</p>
-                {PALETTE_ITEMS.map(({ type, label, icon: Icon, color }) => (
-                    <button
-                        key={type}
-                        onClick={() => addNode(type)}
-                        className="group flex cursor-pointer items-center gap-2.5 rounded-lg border bg-background p-2.5 text-left shadow-sm transition-all hover:border-primary hover:shadow-md"
+    const [paletteOpen, setPaletteOpen] = useState(false);
+    const [configOpen, setConfigOpen] = useState(false);
+
+    const paletteItems = (
+        <div className="flex flex-col gap-2 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t.paletteResources}
+            </p>
+            {PALETTE_ITEMS.map(({ type, label, icon: Icon, color }) => (
+                <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                        addNode(type);
+                        setPaletteOpen(false);
+                    }}
+                    className="group flex cursor-pointer items-center gap-2.5 rounded-lg border bg-background p-2.5 text-left shadow-sm transition-all hover:border-primary hover:shadow-md"
+                >
+                    <div
+                        className={cn(
+                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white',
+                            color,
+                        )}
                     >
-                        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white', color)}>
-                            <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold">{label}</p>
-                            <p className="truncate text-[10px] text-muted-foreground">
-                                {type === 'ec2' ? t.paletteEc2 : type === 's3' ? t.paletteS3 : type === 'rds' ? t.paletteRds : t.paletteLambda}
-                            </p>
-                        </div>
-                    </button>
-                ))}
-                {nodes.length === 0 && (
-                    <p className="mt-4 text-center text-[11px] text-muted-foreground">{t.paletteEmptyHint}</p>
-                )}
+                        <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs font-semibold">{label}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                            {type === 'ec2'
+                                ? t.paletteEc2
+                                : type === 's3'
+                                  ? t.paletteS3
+                                  : type === 'rds'
+                                    ? t.paletteRds
+                                    : t.paletteLambda}
+                        </p>
+                    </div>
+                </button>
+            ))}
+            {nodes.length === 0 && (
+                <p className="mt-4 text-center text-[11px] text-muted-foreground">{t.paletteEmptyHint}</p>
+            )}
+        </div>
+    );
+
+    const configForm = selectedNode
+        ? (() => {
+              const data = selectedNode.data as AutomationNodeData;
+              const config = data.config;
+              const handleChange = updateNodeConfig;
+              switch (data.resourceType) {
+                  case 'ec2':
+                      return (
+                          <Ec2ConfigForm
+                              config={config}
+                              onChange={handleChange}
+                              cloudAccountId={cloudAccountId}
+                              organizationId={organizationId}
+                          />
+                      );
+                  case 's3':
+                      return <S3ConfigForm config={config} onChange={handleChange} />;
+                  case 'rds':
+                      return <RdsConfigForm config={config} onChange={handleChange} />;
+                  case 'lambda':
+                      return <LambdaConfigForm config={config} onChange={handleChange} />;
+                  default:
+                      return null;
+              }
+          })()
+        : null;
+
+    return (
+        <div className="relative flex h-[70dvh] min-h-[360px] overflow-hidden rounded-xl border lg:h-140">
+            <div className="absolute top-2 left-2 z-10 flex gap-2 lg:hidden">
+                <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
+                    <SheetTrigger asChild>
+                        <Button type="button" size="sm" variant="secondary">
+                            {t.paletteResources}
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-[min(20rem,90vw)] p-0">
+                        <SheetHeader className="border-b px-3 py-3">
+                            <SheetTitle className="text-sm">{t.paletteResources}</SheetTitle>
+                        </SheetHeader>
+                        {paletteItems}
+                    </SheetContent>
+                </Sheet>
             </div>
 
-            {/* Canvas */}
-            <div ref={reactFlowWrapper} className="flex-1">
+            <div className="hidden w-52 shrink-0 flex-col gap-2 border-r bg-muted/30 lg:flex">
+                {paletteItems}
+            </div>
+
+            <div ref={reactFlowWrapper} className="min-w-0 flex-1">
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
                     onNodesChange={onNodesChange}
                     onEdgesChange={handleEdgesChange}
                     onConnect={onConnect}
-                    onNodeClick={(_e, node) => setSelectedNodeId(node.id)}
+                    onNodeClick={(_e, node) => {
+                        setSelectedNodeId(node.id);
+                        setConfigOpen(true);
+                    }}
                     onPaneClick={() => setSelectedNodeId(null)}
                     nodeTypes={automationNodeTypes}
                     defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
@@ -311,43 +382,54 @@ export function AutomationBuilder({ onFlowChange, cloudAccountId, organizationId
                 </ReactFlow>
             </div>
 
-            {/* Config panel */}
             {selectedNode && (
-                <div className="flex w-64 shrink-0 flex-col border-l">
-                    <div className="flex items-center justify-between border-b px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                            <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-semibold">{t.configureResource}</span>
+                <>
+                    <div className="hidden w-64 shrink-0 flex-col border-l lg:flex">
+                        <div className="flex items-center justify-between border-b px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                                <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-xs font-semibold">{t.configureResource}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => deleteNode(selectedNode.id)}
+                                className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => deleteNode(selectedNode.id)}
-                            className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        >
-                            <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex-1 overflow-y-auto p-3">{configForm}</div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3">
-                        {(() => {
-                            const data = selectedNode.data as AutomationNodeData;
-                            const config = data.config;
-                            const handleChange = updateNodeConfig;
-                            switch (data.resourceType) {
-                                case 'ec2': return <Ec2ConfigForm config={config} onChange={handleChange} cloudAccountId={cloudAccountId} organizationId={organizationId} />;
-                                case 's3': return <S3ConfigForm config={config} onChange={handleChange} />;
-                                case 'rds': return <RdsConfigForm config={config} onChange={handleChange} />;
-                                case 'lambda': return <LambdaConfigForm config={config} onChange={handleChange} />;
-                                default: return null;
-                            }
-                        })()}
-                    </div>
-                </div>
+                    <Sheet
+                        open={configOpen}
+                        onOpenChange={(open) => {
+                            setConfigOpen(open);
+                            if (!open) setSelectedNodeId(null);
+                        }}
+                    >
+                        <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto lg:hidden">
+                            <SheetHeader className="flex-row items-center justify-between space-y-0 border-b pb-3">
+                                <SheetTitle className="text-sm">{t.configureResource}</SheetTitle>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => deleteNode(selectedNode.id)}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </SheetHeader>
+                            <div className="p-3">{configForm}</div>
+                        </SheetContent>
+                    </Sheet>
+                </>
             )}
 
             {!selectedNode && nodes.length > 0 && (
-                <div className="flex w-56 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center">
+                <div className="hidden w-56 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center lg:flex">
                     <ChevronRight className="h-6 w-6 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground px-4">{t.clickNodeToConfigure}</p>
+                    <p className="px-4 text-xs text-muted-foreground">{t.clickNodeToConfigure}</p>
                 </div>
             )}
         </div>

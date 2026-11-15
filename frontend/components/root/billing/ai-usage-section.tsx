@@ -79,8 +79,8 @@ export function AiUsageSection({
     return (
         <Card size="sm" className="border-border/70 shadow-xs">
             <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
                         <CardTitle className="flex items-center gap-2">
                             <BrainCircuit className="size-4" />
                             {t.aiUsageTitle}

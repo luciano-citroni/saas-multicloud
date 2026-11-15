@@ -61,9 +61,9 @@ export default function PlanCard({
             className={isCurrent ? 'border-primary shadow-xs' : 'border-border/70 shadow-xs'}
         >
             <CardHeader className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-lg">{plan.name}</CardTitle>
-                    <div className="flex flex-wrap items-center justify-end gap-1">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <CardTitle className="min-w-0 truncate text-lg" title={plan.name}>{plan.name}</CardTitle>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1 sm:justify-end">
                         {aiTier ? (
                             <Badge variant="secondary" className="uppercase">
                                 {t.aiTier}: {aiTier}

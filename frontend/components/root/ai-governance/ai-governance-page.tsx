@@ -133,7 +133,7 @@ function Panel({
     return (
         <section className={cn('rounded-xl border', className)}>
             <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                     <h2 className="text-sm font-medium">{title}</h2>
                     {description ? <p className="text-muted-foreground text-xs">{description}</p> : null}
                 </div>
@@ -363,17 +363,17 @@ export function AiGovernancePage() {
 
     const header = (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
                 <div className="text-muted-foreground flex items-center gap-2">
                     <Shield className="size-4" />
                     <span className="text-xs font-medium tracking-wide uppercase">{t.eyebrow}</span>
                 </div>
-                <h1 className="text-xl font-semibold tracking-tight text-balance">{t.title}</h1>
+                <h1 className="truncate text-xl font-semibold tracking-tight" title={t.title}>{t.title}</h1>
                 <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed text-pretty">
                     {t.subtitle}
                 </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                 <Button asChild variant="outline" size="sm">
                     <Link href="/finops/budgets?kind=ai">{t.openAiBudgets}</Link>
                 </Button>
@@ -407,7 +407,7 @@ export function AiGovernancePage() {
                 {t.byokNote}
             </p>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[
                     { label: t.connections, value: connections.length, icon: KeyRound },
                     { label: t.kpiActiveConnections, value: activeConnections, icon: Check },

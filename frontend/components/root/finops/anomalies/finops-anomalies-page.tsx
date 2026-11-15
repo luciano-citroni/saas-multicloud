@@ -508,8 +508,8 @@ export function FinopsAnomaliesPage() {
 
     return (
         <div className="flex flex-col gap-6 pb-24">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-3">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">{t.anomaliesTitle}</h1>
                         <p className="text-sm text-muted-foreground">{t.anomaliesDesc}</p>
@@ -884,7 +884,7 @@ export function FinopsAnomaliesPage() {
                     )}
 
                     {pagination && pagination.totalItems > 0 ? (
-                        <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8 sm:pr-32 md:pr-36">
+                        <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                             <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
                                 <span className="shrink-0 whitespace-nowrap">{tCommon.rowsPerPage}</span>
                                 <Select

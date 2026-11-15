@@ -439,7 +439,7 @@ export function NotificationEmailsSettings() {
 
                 <div className="flex flex-col gap-4 px-4 py-4">
                     <Tabs defaultValue="email">
-                        <TabsList>
+                        <TabsList className="max-w-full justify-start overflow-x-auto">
                             <TabsTrigger value="email" className="gap-1.5">
                                 <Mail className="size-3.5" />
                                 {t.tabEmail}
@@ -451,8 +451,8 @@ export function NotificationEmailsSettings() {
                         </TabsList>
 
                         <TabsContent value="email" className="mt-4 space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="space-y-0.5">
+                            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0 space-y-0.5">
                                     <p className="text-sm font-medium">{t.emailGroupsTitle}</p>
                                     <p className="text-xs text-muted-foreground">{t.emailGroupsDesc}</p>
                                 </div>
@@ -483,7 +483,7 @@ export function NotificationEmailsSettings() {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="overflow-hidden rounded-lg border">
+                                    <div className="overflow-x-auto rounded-lg border">
                                         <Table>
                                             <TableHeader className="bg-muted/50">
                                                 <TableRow>
@@ -596,12 +596,13 @@ export function NotificationEmailsSettings() {
                                                             {isOpen && (
                                                                 <TableRow className="bg-muted/20 hover:bg-muted/20">
                                                                     <TableCell colSpan={5} className="p-0">
-                                                                        <div className="border-t px-4 py-3">
+                                                                        <div className="min-w-0 border-t px-4 py-3">
                                                                             {(group.emails?.length ?? 0) === 0 ? (
                                                                                 <p className="text-muted-foreground text-sm">
                                                                                     {t.emptyGroupEmails}
                                                                                 </p>
                                                                             ) : (
+                                                                                <div className="overflow-x-auto">
                                                                                 <Table>
                                                                                     <TableHeader>
                                                                                         <TableRow>
@@ -690,6 +691,7 @@ export function NotificationEmailsSettings() {
                                                                                         ))}
                                                                                     </TableBody>
                                                                                 </Table>
+                                                                                </div>
                                                                             )}
                                                                         </div>
                                                                     </TableCell>

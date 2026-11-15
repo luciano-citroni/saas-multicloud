@@ -77,38 +77,38 @@ export function AssessmentToolbar({
 
     return (
         <div className="rounded-xl border">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                <div className="space-y-0.5">
-                    <p className="text-sm font-medium">{title}</p>
+            <div className="flex min-w-0 flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-0.5">
+                    <p className="truncate text-sm font-medium" title={title}>{title}</p>
                     <p className="text-xs text-muted-foreground">{subtitle}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{ta.nodesBadge.replace('{count}', String(nodeCount))}</Badge>
                     <Badge variant="outline">{ta.edgesBadge.replace('{count}', String(edgeCount))}</Badge>
                     <Badge variant="outline">{ta.visualGroupsBadge.replace('{count}', String(groupCount))}</Badge>
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 p-4">
-                <Button type="button" onClick={onRun} isLoading={running} disabled={!canRun}>
+            <div className="flex flex-col gap-2 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button type="button" className="w-full sm:w-auto" onClick={onRun} isLoading={running} disabled={!canRun}>
                     <Play className="size-4" />
                     {ta.runAssessment}
                 </Button>
-                <Button type="button" variant="outline" onClick={onReorganize} disabled={nodeCount === 0 || running}>
+                <Button type="button" className="w-full sm:w-auto" variant="outline" onClick={onReorganize} disabled={nodeCount === 0 || running}>
                     <LayoutGrid className="size-4" />
                     {ta.reorganizeGraph}
                 </Button>
-                <Button type="button" variant="outline" onClick={onDownload} isLoading={downloading} disabled={nodeCount === 0}>
+                <Button type="button" className="w-full sm:w-auto" variant="outline" onClick={onDownload} isLoading={downloading} disabled={nodeCount === 0}>
                     <Download className="size-4" />
                     {ta.downloadDiagram}
                 </Button>
                 {showExcelButton && (
-                    <Button type="button" variant="outline" onClick={onExcelDownload} isLoading={generatingExcel} disabled={!canRun || running}>
+                    <Button type="button" className="w-full sm:w-auto" variant="outline" onClick={onExcelDownload} isLoading={generatingExcel} disabled={!canRun || running}>
                         <FileSpreadsheet className="size-4" />
                         {generatingExcel ? ta.queueingReport : ta.generateExcel}
                     </Button>
                 )}
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1">
+                <div className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1 sm:w-auto">
                     <Button
                         type="button"
                         size="sm"
@@ -144,7 +144,7 @@ export function AssessmentToolbar({
                         );
                     })}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/20 p-1.5">
+                <div className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/20 p-1.5 sm:w-auto">
                     <span className="px-2 text-xs font-medium text-muted-foreground">{ta.hideLabel}</span>
                     {RESOURCE_VISIBILITY_FILTER_OPTIONS.map((option) => {
                         const selected = hiddenResourceFilterIds.has(option.id);
@@ -168,6 +168,7 @@ export function AssessmentToolbar({
                     <Button
                         type="button"
                         variant="outline"
+                        className="w-full sm:w-auto"
                         onClick={onConnectCloudAccount}
                         disabled={!canCreateCloudAccount}
                         title={!canCreateCloudAccount ? ta.connectCloudPermission : ta.connectCloudTooltip}

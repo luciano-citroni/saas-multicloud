@@ -12,8 +12,8 @@ export default function SettingsPage() {
 
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-            <div className="space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
+            <div className="min-w-0 space-y-1">
+                <h1 className="truncate text-2xl font-semibold tracking-tight">{t.title}</h1>
                 <p className="text-sm text-muted-foreground">{t.description}</p>
             </div>
 

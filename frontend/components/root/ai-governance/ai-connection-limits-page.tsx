@@ -496,14 +496,14 @@ export function AiConnectionLimitsPage() {
     return (
         <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                     <Button variant="ghost" size="sm" asChild className="-ml-2 w-fit px-2">
                         <Link href={backHref}>
                             <ArrowLeft className="size-4" />
                             {tc.back}
                         </Link>
                     </Button>
-                    <h1 className="text-xl font-semibold tracking-tight">
+                    <h1 className="truncate text-xl font-semibold tracking-tight" title={t.connectionLimitsTitle}>
                         {t.connectionLimitsTitle}
                     </h1>
                     <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
@@ -514,7 +514,7 @@ export function AiConnectionLimitsPage() {
                         <Badge variant="secondary">{connection.providerSlug}</Badge>
                     </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                     <Button variant="outline" size="sm" isLoading={pending} onClick={refresh}>
                         <RefreshCw className="size-3.5" />
                         {tc.refresh}

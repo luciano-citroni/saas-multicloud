@@ -538,8 +538,8 @@ export function NotificationWhatsappSettings({
                 </Accordion>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="space-y-0.5">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-0.5">
                     <p className="flex items-center gap-2 text-sm font-medium">
                         <MessageCircle className="size-4" />
                         {t.waGroupsTitle}
@@ -573,7 +573,7 @@ export function NotificationWhatsappSettings({
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="overflow-hidden rounded-lg border">
+                    <div className="overflow-x-auto rounded-lg border">
                         <Table>
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
@@ -697,7 +697,7 @@ export function NotificationWhatsappSettings({
                                                                     {t.emptyTargets}
                                                                 </p>
                                                             ) : (
-                                                                <div className="overflow-hidden rounded-md border">
+                                                                <div className="overflow-x-auto rounded-md border">
                                                                     <Table>
                                                                         <TableHeader>
                                                                             <TableRow>

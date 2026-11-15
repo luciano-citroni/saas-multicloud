@@ -712,7 +712,7 @@ export function GovernanceAnalysis() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8 sm:pr-32 md:pr-36">
+                    <div className="flex flex-col gap-4 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-8">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-medium sm:flex-nowrap">
                             <span className="shrink-0 whitespace-nowrap">{tc.rowsPerPage}</span>
                             <Select

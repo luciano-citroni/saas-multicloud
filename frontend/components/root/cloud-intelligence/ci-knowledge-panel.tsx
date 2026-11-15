@@ -495,7 +495,7 @@ export function CiKnowledgePanel() {
 
     return (
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
-            <aside className="border-border bg-card flex min-h-[32rem] flex-col overflow-hidden rounded-xl border shadow-xs">
+            <aside className="border-border bg-card flex min-h-[20rem] flex-col overflow-hidden rounded-xl border shadow-xs lg:min-h-[32rem]">
                 <div className="border-border flex items-center justify-between gap-2 border-b px-3 py-3">
                     <div className="min-w-0">
                         <p className="text-sm font-medium">{t.knowledgeLibrary}</p>
@@ -659,7 +659,7 @@ export function CiKnowledgePanel() {
                 ) : null}
             </aside>
 
-            <section className="border-border bg-card flex min-h-[32rem] flex-col gap-4 overflow-hidden rounded-xl border p-4 shadow-xs sm:p-5">
+            <section className="border-border bg-card flex min-h-[20rem] flex-col gap-4 overflow-hidden rounded-xl border p-4 shadow-xs sm:p-5 lg:min-h-[32rem]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <p className="text-sm font-medium">

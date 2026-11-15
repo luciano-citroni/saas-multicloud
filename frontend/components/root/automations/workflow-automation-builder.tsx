@@ -33,6 +33,7 @@ import {
     Globe,
     Search,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     Item,
@@ -44,6 +45,7 @@ import {
 } from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { automationNodeTypes, type AutomationNodeData } from '@/components/root/automation/automation-nodes';
 import {
     fetchAutomationTemplate,
@@ -151,6 +153,8 @@ function BuilderCanvas({
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [blockSearch, setBlockSearch] = useState('');
     const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+    const [paletteOpen, setPaletteOpen] = useState(false);
+    const [configOpen, setConfigOpen] = useState(false);
     const initialized = useRef(false);
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
@@ -247,25 +251,141 @@ function BuilderCanvas({
         return leftIndex - rightIndex;
     });
 
+    const paletteHeader = (
+        <div className="sticky top-0 z-10 space-y-2 border-b bg-muted/30 p-3 backdrop-blur">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.blocks}</p>
+            <div className="relative">
+                <Search className="pointer-events-none absolute top-2.5 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                    className="h-8 pl-8 text-xs"
+                    placeholder={t.blockSearchPlaceholder}
+                    value={blockSearch}
+                    onChange={(event) => setBlockSearch(event.target.value)}
+                />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+                {t.blocksCount
+                    .replace('{count}', String(filteredActions.length))
+                    .replace('{total}', String(actions.length))}
+            </p>
+        </div>
+    );
+
     return (
-        <div className="flex h-[70vh] min-h-[520px] overflow-hidden rounded-xl border">
+        <div className="relative flex h-[70dvh] min-h-[360px] overflow-hidden rounded-xl border lg:min-h-[520px]">
             {!readOnly && (
-                <div className="flex w-64 shrink-0 flex-col border-r bg-muted/30">
-                    <div className="sticky top-0 z-10 space-y-2 border-b bg-muted/30 p-3 backdrop-blur">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.blocks}</p>
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute top-2.5 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                                className="h-8 pl-8 text-xs"
-                                placeholder={t.blockSearchPlaceholder}
-                                value={blockSearch}
-                                onChange={(event) => setBlockSearch(event.target.value)}
-                            />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">
-                            {t.blocksCount.replace('{count}', String(filteredActions.length)).replace('{total}', String(actions.length))}
-                        </p>
+                <>
+                    <div className="absolute top-2 left-2 z-10 lg:hidden">
+                        <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
+                            <SheetTrigger asChild>
+                                <Button type="button" size="sm" variant="secondary">
+                                    {t.blocks}
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="left" className="flex w-[min(20rem,90vw)] flex-col p-0">
+                                <SheetHeader className="border-b px-3 py-3">
+                                    <SheetTitle className="text-sm">{t.blocks}</SheetTitle>
+                                </SheetHeader>
+                                {paletteHeader}
+                                <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
+                                    {actions.length === 0 ? (
+                                        <p className="text-[11px] text-muted-foreground">{t.noBlocksAvailable}</p>
+                                    ) : filteredActions.length === 0 ? (
+                                        <p className="text-[11px] text-muted-foreground">{t.noBlocksMatch}</p>
+                                    ) : (
+                                        orderedCategories.map((category) => {
+                                            const categoryActions = actionsByCategory[category] ?? [];
+                                            const collapsed =
+                                                collapsedCategories[category] === true && !search;
+                                            return (
+                                                <div key={`mobile-${category}`} className="space-y-1.5">
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full items-center justify-between rounded-md px-1 py-0.5 text-left hover:bg-muted"
+                                                        onClick={() =>
+                                                            setCollapsedCategories((current) => ({
+                                                                ...current,
+                                                                [category]: !current[category],
+                                                            }))
+                                                        }
+                                                    >
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                            {category}
+                                                            <span className="ml-1 text-muted-foreground/70">
+                                                                ({categoryActions.length})
+                                                            </span>
+                                                        </span>
+                                                        {collapsed ? (
+                                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        ) : (
+                                                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        )}
+                                                    </button>
+                                                    {!collapsed && (
+                                                        <ItemGroup className="gap-1.5">
+                                                            {categoryActions.map((action) => {
+                                                                const meta =
+                                                                    ACTION_ICONS[action.type] ?? {
+                                                                        icon: Cloud,
+                                                                        color: 'bg-muted text-muted-foreground',
+                                                                    };
+                                                                const Icon = meta.icon;
+                                                                return (
+                                                                    <Item
+                                                                        key={`mobile-${action.type}`}
+                                                                        role="listitem"
+                                                                        tabIndex={0}
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="cursor-pointer bg-background shadow-sm hover:border-primary"
+                                                                        onClick={() => {
+                                                                            addNode(action.type, action.name);
+                                                                            setPaletteOpen(false);
+                                                                        }}
+                                                                        onKeyDown={(event) => {
+                                                                            if (
+                                                                                event.key === 'Enter' ||
+                                                                                event.key === ' '
+                                                                            ) {
+                                                                                event.preventDefault();
+                                                                                addNode(action.type, action.name);
+                                                                                setPaletteOpen(false);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <ItemMedia
+                                                                            variant="icon"
+                                                                            className={cn(
+                                                                                'flex size-8 items-center justify-center rounded-lg',
+                                                                                meta.color,
+                                                                            )}
+                                                                        >
+                                                                            <Icon className="size-4" />
+                                                                        </ItemMedia>
+                                                                        <ItemContent className="min-w-0">
+                                                                            <ItemTitle className="text-xs font-semibold">
+                                                                                {action.name}
+                                                                            </ItemTitle>
+                                                                            <ItemDescription className="truncate text-[10px]">
+                                                                                {action.kind ?? 'native'}
+                                                                            </ItemDescription>
+                                                                        </ItemContent>
+                                                                    </Item>
+                                                                );
+                                                            })}
+                                                        </ItemGroup>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </SheetContent>
+                        </Sheet>
                     </div>
+
+                    <div className="hidden w-64 shrink-0 flex-col border-r bg-muted/30 lg:flex">
+                    {paletteHeader}
                     <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
                         {actions.length === 0 ? (
                             <p className="text-[11px] text-muted-foreground">{t.noBlocksAvailable}</p>
@@ -362,6 +482,7 @@ function BuilderCanvas({
                         )}
                     </div>
                 </div>
+                </>
             )}
 
             <div className="min-w-0 flex-1">
@@ -385,7 +506,10 @@ function BuilderCanvas({
                         if (!type) return;
                         addNode(type, name || type, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
                     }}
-                    onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+                    onNodeClick={(_event, node) => {
+                        setSelectedNodeId(node.id);
+                        setConfigOpen(true);
+                    }}
                     onPaneClick={() => setSelectedNodeId(null)}
                     nodeTypes={automationNodeTypes}
                     defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
@@ -404,7 +528,7 @@ function BuilderCanvas({
             {selected && !readOnly && (
                 <div
                     className={cn(
-                        'flex shrink-0 flex-col border-l',
+                        'hidden shrink-0 flex-col border-l lg:flex',
                         (selected.data as AutomationNodeData).resourceType === 'AWS_CLOUDFORMATION_STACK' ? 'w-[28rem]' : 'w-80',
                     )}
                 >
@@ -458,10 +582,85 @@ function BuilderCanvas({
             )}
 
             {!selected && nodes.length > 0 && !readOnly && (
-                <div className="flex w-48 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center">
+                <div className="hidden w-48 shrink-0 flex-col items-center justify-center gap-2 border-l bg-muted/20 text-center lg:flex">
                     <ChevronRight className="h-6 w-6 text-muted-foreground" />
                     <p className="px-4 text-xs text-muted-foreground">{t.dragBlockHint}</p>
                 </div>
+            )}
+
+            {selected && !readOnly && (
+                <Sheet
+                    open={configOpen}
+                    onOpenChange={(open) => {
+                        setConfigOpen(open);
+                        if (!open) setSelectedNodeId(null);
+                    }}
+                >
+                    <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto lg:hidden">
+                        <SheetHeader className="flex-row items-center justify-between space-y-0 border-b pb-3">
+                            <SheetTitle className="text-sm">{t.properties}</SheetTitle>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                    setNodes((current) => current.filter((node) => node.id !== selected.id));
+                                    setEdges((current) =>
+                                        current.filter(
+                                            (edge) => edge.source !== selected.id && edge.target !== selected.id,
+                                        ),
+                                    );
+                                    setSelectedNodeId(null);
+                                    setConfigOpen(false);
+                                }}
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                        </SheetHeader>
+                        <div className="space-y-3 p-3">
+                            {(selectedAction?.fields ?? [])
+                                .filter(
+                                    (field) =>
+                                        !(
+                                            field.key === 'parameters' &&
+                                            (selectedAction?.fields ?? []).some((item) => item.input === 'template')
+                                        ),
+                                )
+                                .map((field) => (
+                                    <FieldEditor
+                                        key={`mobile-${field.key}`}
+                                        field={field}
+                                        value={(selected.data as AutomationNodeData).config[field.key]}
+                                        nodes={nodes}
+                                        edges={edges}
+                                        nodeId={selected.id}
+                                        actions={actions}
+                                        variables={variables}
+                                        templates={templates}
+                                        organizationId={organizationId}
+                                        cloudAccountId={cloudAccountId}
+                                        onChange={(value) => updateConfig(field.key, value)}
+                                        onPatch={(patch) => {
+                                            setNodes((current) =>
+                                                current.map((node) => {
+                                                    if (node.id !== selected.id) return node;
+                                                    const data = node.data as AutomationNodeData;
+                                                    return {
+                                                        ...node,
+                                                        data: {
+                                                            ...data,
+                                                            config: { ...data.config, ...patch },
+                                                            configured: true,
+                                                        },
+                                                    };
+                                                }),
+                                            );
+                                        }}
+                                    />
+                                ))}
+                        </div>
+                    </SheetContent>
+                </Sheet>
             )}
         </div>
     );

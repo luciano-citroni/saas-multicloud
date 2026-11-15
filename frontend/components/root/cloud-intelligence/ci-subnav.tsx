@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BookOpen, LayoutDashboard, MessageSquare, Sparkles } from 'lucide-react';
+import { ScrollableSubnav } from '@/components/root/layout';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -53,13 +54,7 @@ export function CiSubnav({ className }: CiSubnavProps) {
     const pathname = usePathname();
 
     return (
-        <nav
-            aria-label={t.navAria}
-            className={cn(
-                'inline-flex w-fit max-w-full flex-wrap items-center rounded-lg border border-border p-0.5',
-                className,
-            )}
-        >
+        <ScrollableSubnav aria-label={t.navAria} className={className}>
             {LINKS.map((link) => {
                 const active = link.match(pathname);
                 const Icon = link.icon;
@@ -68,7 +63,7 @@ export function CiSubnav({ className }: CiSubnavProps) {
                         key={link.href}
                         href={link.href}
                         className={cn(
-                            'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
+                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium whitespace-nowrap transition-colors',
                             active
                                 ? 'bg-muted text-foreground'
                                 : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
@@ -79,6 +74,6 @@ export function CiSubnav({ className }: CiSubnavProps) {
                     </Link>
                 );
             })}
-        </nav>
+        </ScrollableSubnav>
     );
 }

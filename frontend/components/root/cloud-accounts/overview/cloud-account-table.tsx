@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CloudAccountColumns } from './cloud-account-columns';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageToolbar } from '@/components/root/layout';
 import { useTranslations } from '@/lib/i18n';
 import { useLocale } from '@/components/providers/locale-provider';
 
@@ -150,19 +151,44 @@ export function CloudAccountTable({
 
     return (
         <div className="flex flex-col gap-4">
-            {/* Barra de filtros */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                        value={nameFilter}
-                        onChange={(e) => {
-                            setNameFilter(e.target.value);
-                            setPageIndex(0);
-                        }}
-                        placeholder={tca.filterPlaceholder}
-                        className="h-8 w-50"
-                    />
+            <PageToolbar
+                actions={
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="hidden sm:inline">{tc.columns}</span>
+                                <ChevronDown className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            {table
+                                .getAllColumns()
+                                .filter((col) => col.getCanHide() && col.id !== 'actions')
+                                .map((col) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={col.id}
+                                        checked={col.getIsVisible()}
+                                        onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                                    >
+                                        {String(col.columnDef.header)}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                }
+            >
+                <Input
+                    value={nameFilter}
+                    onChange={(e) => {
+                        setNameFilter(e.target.value);
+                        setPageIndex(0);
+                    }}
+                    placeholder={tca.filterPlaceholder}
+                    className="h-8 w-full sm:w-50"
+                />
 
+                <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <Tabs
                         value={statusFilter}
                         onValueChange={(value) => {
@@ -177,31 +203,7 @@ export function CloudAccountTable({
                         </TabsList>
                     </Tabs>
                 </div>
-
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                            <SlidersHorizontal className="h-4 w-4" />
-                            <span className="hidden sm:inline">{tc.columns}</span>
-                            <ChevronDown className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                        {table
-                            .getAllColumns()
-                            .filter((col) => col.getCanHide() && col.id !== 'actions')
-                            .map((col) => (
-                                <DropdownMenuCheckboxItem
-                                    key={col.id}
-                                    checked={col.getIsVisible()}
-                                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                                >
-                                    {String(col.columnDef.header)}
-                                </DropdownMenuCheckboxItem>
-                            ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+            </PageToolbar>
 
             {/* Tabela */}
             <div className="rounded-lg border">

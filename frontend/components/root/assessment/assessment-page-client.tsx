@@ -934,12 +934,12 @@ export function AssessmentPageClient() {
 
             {activeProvider !== 'unknown' ? (
                 <div className="rounded-xl border">
-                    <div className="flex items-center justify-between border-b px-4 py-3">
-                        <div>
+                    <div className="flex min-w-0 flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                             <p className="text-sm font-medium">{ta.excelQueueTitle}</p>
                             <p className="text-xs text-muted-foreground">{ta.excelQueueDesc}</p>
                         </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => void loadAssessmentExcelJobs()}>
+                        <Button type="button" className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => void loadAssessmentExcelJobs()}>
                             {tc.refresh}
                         </Button>
                     </div>
@@ -953,8 +953,8 @@ export function AssessmentPageClient() {
                                 const canDownload = job.status === 'completed' && Boolean(job.excelDownloadUrl) && !expired;
 
                                 return (
-                                    <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                                        <div className="space-y-1">
+                                    <div key={job.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="min-w-0 space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <Badge variant="outline">{getJobStatusLabel(job.status, ta)}</Badge>
                                                 {job.status === 'completed' && expired ? <Badge variant="secondary">{ta.expired}</Badge> : null}
@@ -964,7 +964,7 @@ export function AssessmentPageClient() {
                                             <p className="text-xs text-muted-foreground">{formatDateTime(job.excelExpiresAt)}</p>
                                             {job.status === 'failed' && job.error ? <p className="text-xs text-destructive">{job.error}</p> : null}
                                         </div>
-                                        <Button type="button" size="sm" onClick={() => downloadExcelJob(job.id)} disabled={!canDownload}>
+                                        <Button type="button" className="w-full sm:w-auto" size="sm" onClick={() => downloadExcelJob(job.id)} disabled={!canDownload}>
                                             {ta.downloadXlsx}
                                         </Button>
                                     </div>

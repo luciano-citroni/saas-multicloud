@@ -104,8 +104,8 @@ export function TenantSettingsTable({ data, onDelete }: TenantSettingsTableProps
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center">
                     <Input
                         value={nameFilter}
                         onChange={(event) => {
@@ -113,24 +113,26 @@ export function TenantSettingsTable({ data, onDelete }: TenantSettingsTableProps
                             setPageIndex(0);
                         }}
                         placeholder={t.tenantsFilterPlaceholder}
-                        className="h-8 w-50"
+                        className="h-8 w-full sm:w-50"
                     />
 
-                    <Tabs
-                        value={roleFilter}
-                        onValueChange={(value) => {
-                            setRoleFilter(value as RoleFilter);
-                            setPageIndex(0);
-                        }}
-                    >
-                        <TabsList>
-                            <TabsTrigger value="all">{t.tenantsTabAll}</TabsTrigger>
-                            <TabsTrigger value="owner">{tm.roleOwner}</TabsTrigger>
-                            <TabsTrigger value="admin">{tm.roleAdmin}</TabsTrigger>
-                            <TabsTrigger value="member">{tm.roleMember}</TabsTrigger>
-                            <TabsTrigger value="viewer">{tm.roleViewer}</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
+                    <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <Tabs
+                            value={roleFilter}
+                            onValueChange={(value) => {
+                                setRoleFilter(value as RoleFilter);
+                                setPageIndex(0);
+                            }}
+                        >
+                            <TabsList>
+                                <TabsTrigger value="all">{t.tenantsTabAll}</TabsTrigger>
+                                <TabsTrigger value="owner">{tm.roleOwner}</TabsTrigger>
+                                <TabsTrigger value="admin">{tm.roleAdmin}</TabsTrigger>
+                                <TabsTrigger value="member">{tm.roleMember}</TabsTrigger>
+                                <TabsTrigger value="viewer">{tm.roleViewer}</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                    </div>
                 </div>
 
                 <DropdownMenu>

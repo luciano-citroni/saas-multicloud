@@ -186,13 +186,13 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
     return (
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                    <div className="space-y-0.5">
+                <div className="flex min-w-0 flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-0.5">
                         <p className="text-sm font-medium">{t.groupsTitle}</p>
                         <p className="text-xs text-muted-foreground">{t.groupsDesc}</p>
                     </div>
                     {canManage && (
-                        <Button size="sm" onClick={() => { createForm.reset(); setShowCreate(true); }}>
+                        <Button className="w-full sm:w-auto" size="sm" onClick={() => { createForm.reset(); setShowCreate(true); }}>
                             <Plus className="h-4 w-4" />
                             {t.newGroup}
                         </Button>
@@ -217,17 +217,17 @@ export function TenantOrganizationsPage({ tenantId, currentRole }: Props) {
                     ) : (
                         <>
                             {/* Barra de filtros */}
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row">
                                 <Input
                                     value={nameFilter}
                                     onChange={(e) => { setNameFilter(e.target.value); setPageIndex(0); }}
                                     placeholder={t.groupsFilterPlaceholder}
-                                    className="h-8 w-60"
+                                    className="h-8 w-full sm:w-60"
                                 />
                             </div>
 
                             {/* Tabela */}
-                            <div className="rounded-lg border">
+                            <div className="overflow-x-auto rounded-lg border">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>

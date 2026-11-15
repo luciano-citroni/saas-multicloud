@@ -28,8 +28,8 @@ export function ThemeSelection() {
         return (
             <div className="flex flex-col w-full gap-3">
                 <Label className="text-base font-semibold">{t.selectTheme}</Label>
-                <div className="flex flex-col md:flex-row gap-2 w-full">
-                    <label htmlFor="theme-light" className="h-48 w-52 md:h-44 md:w-48 flex flex-col" aria-label={t.lightAriaLabel}>
+                <div className="flex w-full flex-col gap-2 sm:flex-row">
+                    <label htmlFor="theme-light" className="flex h-48 w-full flex-col sm:max-w-52 md:h-44 md:max-w-48" aria-label={t.lightAriaLabel}>
                         <div className="items-center rounded-md border-2 border-muted p-1 hover:border-accent transition-colors w-full h-full">
                             <div className="space-y-2 rounded-sm bg-[#ecedef] p-2">
                                 <div className="space-y-2 rounded-md bg-white p-2 shadow-sm">
@@ -46,7 +46,7 @@ export function ThemeSelection() {
                         </div>
                         <span className="block w-full p-2 text-center font-normal">{t.light}</span>
                     </label>
-                    <label htmlFor="theme-dark" className="h-48 w-52 md:h-44 md:w-48 flex flex-col" aria-label={t.darkAriaLabel}>
+                    <label htmlFor="theme-dark" className="flex h-48 w-full flex-col sm:max-w-52 md:h-44 md:max-w-48" aria-label={t.darkAriaLabel}>
                         <div className="items-center rounded-md border-2 border-muted bg-popover p-1 hover:border-accent hover:text-accent-foreground transition-colors w-full h-full">
                             <div className="space-y-2 rounded-sm bg-slate-950 p-2">
                                 <div className="space-y-2 rounded-md bg-slate-800 p-2 shadow-sm">
@@ -71,10 +71,10 @@ export function ThemeSelection() {
     return (
         <div className="flex flex-col w-full gap-3">
             <Label className="text-base font-semibold">{t.selectTheme}</Label>
-            <RadioGroup value={selectedTheme} onValueChange={handleChangeTheme} className="flex flex-col md:flex-row gap-2 w-full">
+            <RadioGroup value={selectedTheme} onValueChange={handleChangeTheme} className="flex w-full flex-col gap-2 sm:flex-row">
                 <label
                     htmlFor="theme-light"
-                    className="h-48 w-52 md:h-44 md:w-48 flex flex-col [&:has([data-state=checked])>div]:border-primary cursor-pointer"
+                    className="flex h-48 w-full cursor-pointer flex-col sm:max-w-52 md:h-44 md:max-w-48 [&:has([data-state=checked])>div]:border-primary"
                     aria-label={t.lightAriaLabel}
                 >
                     <RadioGroupItem id="theme-light" value="light" className="sr-only" />
@@ -96,7 +96,7 @@ export function ThemeSelection() {
                 </label>
                 <label
                     htmlFor="theme-dark"
-                    className="h-48 w-52 md:h-44 md:w-48 flex flex-col [&:has([data-state=checked])>div]:border-primary cursor-pointer"
+                    className="flex h-48 w-full cursor-pointer flex-col sm:max-w-52 md:h-44 md:max-w-48 [&:has([data-state=checked])>div]:border-primary"
                     aria-label={t.darkAriaLabel}
                 >
                     <RadioGroupItem id="theme-dark" value="dark" className="sr-only" />

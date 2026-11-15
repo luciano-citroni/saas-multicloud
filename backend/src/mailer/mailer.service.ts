@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 import {
     EMAIL_BRAND,
@@ -10,21 +10,26 @@ import {
     renderEmailLayout,
 } from './email-layout';
 
+type SendRawAttachment = {
+    filename: string;
+    content: string;
+    contentType?: string;
+};
+
+type SendRawParams = {
+    to: string | string[];
+    subject: string;
+    html: string;
+    attachments?: SendRawAttachment[];
+};
+
 @Injectable()
 export class MailerService {
     private readonly logger = new Logger(MailerService.name);
-    private readonly transporter: nodemailer.Transporter;
+    private readonly resend: Resend;
 
     constructor(private readonly config: ConfigService) {
-        this.transporter = nodemailer.createTransport({
-            host: this.config.get<string>('SMTP_HOST'),
-            port: this.config.get<number>('SMTP_PORT') ?? 587,
-            secure: this.config.get<string>('SMTP_SECURE') === 'true',
-            auth: {
-                user: this.config.get<string>('SMTP_USER'),
-                pass: this.config.get<string>('SMTP_PASS'),
-            },
-        });
+        this.resend = new Resend(this.config.getOrThrow<string>('RESEND_API_KEY'));
     }
 
     private get frontendUrl(): string {
@@ -32,7 +37,32 @@ export class MailerService {
     }
 
     private get fromAddress(): string {
-        return this.config.get<string>('SMTP_FROM') ?? 'noreply@saas.com';
+        return (
+            this.config.get<string>('EMAIL_FROM') ??
+            this.config.get<string>('SMTP_FROM') ??
+            'noreply@saas.com'
+        );
+    }
+
+    private async sendRaw(params: SendRawParams): Promise<void> {
+        const { data, error } = await this.resend.emails.send({
+            from: this.fromAddress,
+            to: params.to,
+            subject: params.subject,
+            html: params.html,
+            attachments: params.attachments?.map((attachment) => ({
+                filename: attachment.filename,
+                content: attachment.content,
+                contentType: attachment.contentType,
+            })),
+        });
+
+        if (error) {
+            this.logger.error(`Resend send failed: ${error.message}`);
+            throw new Error(error.message);
+        }
+
+        this.logger.debug(`Resend email sent id=${data?.id ?? 'unknown'}`);
     }
 
     async sendOrganizationInvite(params: {
@@ -61,8 +91,7 @@ export class MailerService {
             )}
         `;
 
-        await this.transporter.sendMail({
-            from: this.fromAddress,
+        await this.sendRaw({
             to: params.to,
             subject: `Convite para ${params.organizationName} · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
@@ -99,8 +128,7 @@ export class MailerService {
             )}
         `;
 
-        await this.transporter.sendMail({
-            from: this.fromAddress,
+        await this.sendRaw({
             to: params.to,
             subject: `Confirme seu e-mail · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
@@ -143,8 +171,7 @@ export class MailerService {
             </p>
         `;
 
-        await this.transporter.sendMail({
-            from: this.fromAddress,
+        await this.sendRaw({
             to: params.to,
             subject: `E-mail de teste · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
@@ -207,9 +234,8 @@ export class MailerService {
             </p>
         `;
 
-            await this.transporter.sendMail({
-            from: this.fromAddress,
-            to: params.to.join(', '),
+        await this.sendRaw({
+            to: params.to,
             subject: `Alerta de orçamento: ${params.budgetName} · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
                 title: 'Alerta de orçamento',
@@ -271,9 +297,8 @@ export class MailerService {
             </p>
         `;
 
-        await this.transporter.sendMail({
-            from: this.fromAddress,
-            to: params.to.join(', '),
+        await this.sendRaw({
+            to: params.to,
             subject: `Digest de anomalias (${count}) · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
                 title: 'Anomalias de custo',
@@ -295,9 +320,8 @@ export class MailerService {
         pdf: { filename: string; content: Buffer };
     }): Promise<void> {
         const reportUrl = `${this.frontendUrl}/finops/reports/commercial?month=${encodeURIComponent(params.month)}`;
-        await this.transporter.sendMail({
-            from: this.fromAddress,
-            to: params.to.join(', '),
+        await this.sendRaw({
+            to: params.to,
             subject: `Relatório comercial ${params.monthLabel} · ${params.organizationName}`,
             html: renderEmailLayout({
                 title: 'Relatório comercial de custos',
@@ -310,7 +334,7 @@ export class MailerService {
             attachments: [
                 {
                     filename: params.pdf.filename,
-                    content: params.pdf.content,
+                    content: params.pdf.content.toString('base64'),
                     contentType: 'application/pdf',
                 },
             ],
@@ -334,9 +358,8 @@ export class MailerService {
             </p>
         `;
 
-        await this.transporter.sendMail({
-            from: this.fromAddress,
-            to: params.to.join(', '),
+        await this.sendRaw({
+            to: params.to,
             subject: `Daily Cloud Intelligence · ${EMAIL_BRAND.name}`,
             html: renderEmailLayout({
                 title: 'Daily Cloud Intelligence',

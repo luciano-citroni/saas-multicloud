@@ -17,10 +17,10 @@ export function TenantUsersPage({ organizationId, organizationName, currentRole,
     return (
         <div className="flex flex-col gap-4">
             <div className="rounded-xl border">
-                <div className="border-b px-4 py-3">
-                    <p className="text-sm font-medium">{tm.title}</p>
+                <div className="min-w-0 border-b px-4 py-3">
+                    <p className="truncate text-sm font-medium">{tm.title}</p>
                     {organizationName && (
-                        <p className="text-xs text-muted-foreground">{organizationName}</p>
+                        <p className="truncate text-xs text-muted-foreground" title={organizationName}>{organizationName}</p>
                     )}
                 </div>
                 <div className="min-w-0 px-4 py-4">

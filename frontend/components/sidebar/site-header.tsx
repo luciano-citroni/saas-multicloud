@@ -106,27 +106,47 @@ export function SiteHeader() {
 
     return (
         <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-            <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-                <SidebarTrigger className="-ml-1" />
+            <div className="flex w-full min-w-0 items-center gap-1 px-4 lg:gap-2 lg:px-6">
+                <SidebarTrigger className="-ml-1 shrink-0" />
 
-                <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+                <Separator
+                    orientation="vertical"
+                    className="mx-2 shrink-0 data-[orientation=vertical]:h-4"
+                />
 
-                <nav aria-label="Breadcrumb" className="text-base font-medium flex items-center gap-2">
-                    {breadcrumbs.length === 0 && <span>{nav.dashboard}</span>}
+                <nav
+                    aria-label="Breadcrumb"
+                    className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto text-base font-medium [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                >
+                    {breadcrumbs.length === 0 && (
+                        <span className="truncate">{nav.dashboard}</span>
+                    )}
 
-                    {breadcrumbs.map((crumb, index) => (
-                        <span key={`${crumb.url}-${index}`} className="flex items-center gap-2">
-                            {index > 0 && <span aria-hidden="true">/</span>}
+                    {breadcrumbs.map((crumb, index) => {
+                        const isLast = index === breadcrumbs.length - 1;
+                        return (
+                            <span
+                                key={`${crumb.url}-${index}`}
+                                className="flex min-w-0 shrink-0 items-center gap-2 last:min-w-0 last:shrink"
+                            >
+                                {index > 0 && (
+                                    <span aria-hidden="true" className="text-muted-foreground shrink-0">
+                                        /
+                                    </span>
+                                )}
 
-                            {index === breadcrumbs.length - 1 ? (
-                                <span aria-current="page">{crumb.title}</span>
-                            ) : (
-                                <Link href={crumb.url} className="hover:underline">
-                                    {crumb.title}
-                                </Link>
-                            )}
-                        </span>
-                    ))}
+                                {isLast ? (
+                                    <span aria-current="page" className="truncate">
+                                        {crumb.title}
+                                    </span>
+                                ) : (
+                                    <Link href={crumb.url} className="hover:underline shrink-0">
+                                        {crumb.title}
+                                    </Link>
+                                )}
+                            </span>
+                        );
+                    })}
                 </nav>
             </div>
         </header>

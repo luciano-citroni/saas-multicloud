@@ -513,12 +513,12 @@ export function GcpInventoryPage({ cloudAccountId, accountAlias }: GcpInventoryP
 
         return (
             <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <Input
                         value={nameFilter}
                         onChange={(e) => { setNameFilter(e.target.value); }}
                         placeholder={tgi.filterPlaceholder}
-                        className="h-8 w-50"
+                        className="h-8 w-full sm:w-50"
                     />
                 </div>
                 {q !== '' && filtered.length === 0 ? (

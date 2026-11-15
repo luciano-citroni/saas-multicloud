@@ -386,8 +386,8 @@ export function FinopsSavingsPage() {
 
     return (
         <div className="flex flex-col gap-6 pb-24">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-3">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">{t.potentialSavings}</h1>
                         <p className="text-sm text-muted-foreground">{t.savingsDesc}</p>

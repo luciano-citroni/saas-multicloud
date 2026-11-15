@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useOrganizationColumns } from './organization-columns';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageToolbar } from '@/components/root/layout';
 import { useTranslations } from '@/lib/i18n';
 
 type RoleFilter = 'all' | 'owner' | 'admin' | 'member' | 'viewer';
@@ -79,19 +80,44 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
 
     return (
         <div className="flex flex-col gap-4">
-            {/* Barra de filtros */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                        value={nameFilter}
-                        onChange={(e) => {
-                            setNameFilter(e.target.value);
-                            setPageIndex(0);
-                        }}
-                        placeholder={t.filterByName}
-                        className="h-8 w-50"
-                    />
+            <PageToolbar
+                actions={
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="hidden sm:inline">{tc.columns}</span>
+                                <ChevronDown className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            {table
+                                .getAllColumns()
+                                .filter((column) => column.getCanHide() && column.id !== 'actions')
+                                .map((column) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={column.id}
+                                        checked={column.getIsVisible()}
+                                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                                    >
+                                        {String(column.columnDef.header)}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                }
+            >
+                <Input
+                    value={nameFilter}
+                    onChange={(e) => {
+                        setNameFilter(e.target.value);
+                        setPageIndex(0);
+                    }}
+                    placeholder={t.filterByName}
+                    className="h-8 w-full sm:w-50"
+                />
 
+                <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <Tabs
                         value={roleFilter}
                         onValueChange={(value) => {
@@ -108,31 +134,7 @@ export function OrganizationTable({ data, onEditOrganization, onViewCloudAccount
                         </TabsList>
                     </Tabs>
                 </div>
-
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                            <SlidersHorizontal className="h-4 w-4" />
-                            <span className="hidden sm:inline">{tc.columns}</span>
-                            <ChevronDown className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                        {table
-                            .getAllColumns()
-                            .filter((column) => column.getCanHide() && column.id !== 'actions')
-                            .map((column) => (
-                                <DropdownMenuCheckboxItem
-                                    key={column.id}
-                                    checked={column.getIsVisible()}
-                                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                                >
-                                    {String(column.columnDef.header)}
-                                </DropdownMenuCheckboxItem>
-                            ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+            </PageToolbar>
 
             {/* Tabela */}
             <div className="rounded-lg border">

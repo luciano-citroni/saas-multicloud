@@ -240,16 +240,16 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                         <p className="py-6 text-center text-sm text-muted-foreground">{t.noMembers}</p>
                     ) : (
                         <div className="flex flex-col gap-4">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                                 <Input
                                     value={memberNameFilter}
                                     onChange={(e) => { setMemberNameFilter(e.target.value); setMemberPageIndex(0); }}
                                     placeholder="Filtrar por nome ou e-mail..."
-                                    className="h-8 w-50"
+                                    className="h-8 w-full sm:w-50"
                                 />
                                 <SearchableSelect
                                     mode="single"
-                                    className="w-36"
+                                    className="w-full sm:w-36"
                                     value={memberRoleFilter}
                                     options={[
                                         { value: 'ALL', label: 'Todos os cargos' },
@@ -370,16 +370,16 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                         <p className="py-6 text-center text-sm text-muted-foreground">{t.noInvites}</p>
                     ) : (
                         <div className="flex flex-col gap-4">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                                 <Input
                                     value={inviteEmailFilter}
                                     onChange={(e) => { setInviteEmailFilter(e.target.value); setInvitePageIndex(0); }}
                                     placeholder="Filtrar por e-mail..."
-                                    className="h-8 w-50"
+                                    className="h-8 w-full sm:w-50"
                                 />
                                 <SearchableSelect
                                     mode="single"
-                                    className="w-36"
+                                    className="w-full sm:w-36"
                                     value={inviteRoleFilter}
                                     options={[
                                         { value: 'ALL', label: 'Todos os cargos' },

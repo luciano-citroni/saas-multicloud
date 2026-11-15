@@ -130,16 +130,16 @@ export function FinopsRecommendations({ recommendations, previewLimit, actionHre
                 </div>
             ) : (
                 <div className="flex flex-col gap-4 px-4 py-4">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                         <Input
                             value={resourceFilter}
                             onChange={(e) => { setResourceFilter(e.target.value); setPageIndex(0); }}
                             placeholder="Filtrar por recurso..."
-                            className="h-8 w-50"
+                            className="h-8 w-full sm:w-50"
                         />
                         <SearchableSelect
                             mode="single"
-                            className="w-44"
+                            className="w-full sm:w-44"
                             value={priorityFilter}
                             options={[
                                 { value: 'ALL', label: 'Todas as prioridades' },

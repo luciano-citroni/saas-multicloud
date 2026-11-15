@@ -640,7 +640,7 @@ function KpiStrip({ t, model, dateLocale }: { t: HomeCopy; model: DashboardModel
     const growthDown = (finops?.momGrowth ?? 0) <= 0;
 
     return (
-        <div className="grid auto-rows-fr grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <MetricCard
                 label={t.kpiCost}
                 value={finops ? formatMoney(finops.cost, finops.currency, dateLocale) : '—'}
@@ -992,7 +992,7 @@ function GovernancePanel({
                 ) : null}
 
                 {worst?.score && avg != null ? (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="rounded-lg bg-muted/50 p-3">
                             <p className="text-xs text-muted-foreground">{t.worstScore}</p>
                             <p
@@ -1195,7 +1195,7 @@ function ErrorState({ message }: { message: string }) {
 function DashboardSkeleton() {
     return (
         <div className="flex flex-col gap-4" aria-hidden="true">
-            <div className="grid auto-rows-fr grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
+            <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 {Array.from({ length: 6 }).map((_, index) => (
                     <Skeleton key={index} className="min-h-28 rounded-xl" />
                 ))}
