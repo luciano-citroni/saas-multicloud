@@ -1,19 +1,29 @@
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
+const LG_BREAKPOINT = 1024
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+function useMatchMaxWidth(maxWidthPx: number) {
+  const [matches, setMatches] = React.useState<boolean | undefined>(undefined)
 
   React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+    const mql = window.matchMedia(`(max-width: ${maxWidthPx - 1}px)`)
     const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+      setMatches(window.innerWidth < maxWidthPx)
     }
     mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    onChange()
     return () => mql.removeEventListener("change", onChange)
-  }, [])
+  }, [maxWidthPx])
 
-  return !!isMobile
+  return !!matches
+}
+
+export function useIsMobile() {
+  return useMatchMaxWidth(MOBILE_BREAKPOINT)
+}
+
+/** Viewports below Tailwind `lg` (1024) — mobile + tablet. */
+export function useIsBelowLg() {
+  return useMatchMaxWidth(LG_BREAKPOINT)
 }

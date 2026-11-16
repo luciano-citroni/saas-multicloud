@@ -644,7 +644,7 @@ export function FinopsCommitmentsPage() {
 
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                         <Landmark className="size-5 shrink-0 text-muted-foreground" />
@@ -652,7 +652,13 @@ export function FinopsCommitmentsPage() {
                     </div>
                     <p className="max-w-2xl text-sm text-muted-foreground">{t.commitmentsDesc}</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => void loadData()} isLoading={loading}>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-center gap-2 lg:w-auto"
+                    onClick={() => void loadData()}
+                    isLoading={loading}
+                >
                     <RefreshCw className="size-3.5" />
                     {tCommon.refresh}
                 </Button>

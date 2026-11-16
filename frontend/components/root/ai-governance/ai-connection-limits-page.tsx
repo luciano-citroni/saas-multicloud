@@ -63,6 +63,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -178,6 +179,7 @@ export function AiConnectionLimitsPage() {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [pending, startTransition] = useTransition();
+    const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState<ConnectionLimitsPolicy | null>(null);
     const [deletePolicy, setDeletePolicy] = useState<ConnectionLimitsPolicy | null>(null);
@@ -280,6 +282,43 @@ export function AiConnectionLimitsPage() {
     const clearFilters = () => {
         patchQuery({ q: null, scope: null, action: null, page: '1' });
     };
+
+    const connectionLimitsFilterFields = (
+        <>
+            <div className="relative">
+                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                <Input
+                    value={searchParams.get('q') ?? ''}
+                    onChange={(event) => patchQuery({ q: event.target.value || null })}
+                    placeholder={t.connectionLimitsSearchPlaceholder}
+                    className="pl-8"
+                />
+            </div>
+            <SearchableSelect
+                mode="single"
+                value={scopeFilter}
+                placeholder={t.connectionLimitsFilterScope}
+                onValueChange={(value) => patchQuery({ scope: value })}
+                options={[
+                    { value: 'all', label: t.connectionLimitsFilterAll },
+                    { value: 'connection', label: t.connectionLimitsWholeConnection },
+                    { value: 'user', label: t.connectionLimitsProviderUser },
+                ]}
+            />
+            <SearchableSelect
+                mode="single"
+                value={actionFilter}
+                placeholder={t.connectionLimitsFilterAction}
+                onValueChange={(value) => patchQuery({ action: value })}
+                options={[
+                    { value: 'all', label: t.connectionLimitsFilterAll },
+                    { value: 'block', label: t.connectionLimitsActionBlock },
+                    { value: 'notify', label: t.connectionLimitsActionNotify },
+                    { value: 'rate_limit', label: t.connectionLimitsActionRateLimit },
+                ]}
+            />
+        </>
+    );
 
     const refresh = () => {
         const orgId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
@@ -534,52 +573,31 @@ export function AiConnectionLimitsPage() {
             </div>
 
             <section className="space-y-3 rounded-xl border p-3 sm:p-4">
-                <div className="flex items-center gap-2">
-                    <Search className="text-muted-foreground size-4" />
-                    <p className="text-sm font-medium">{t.connectionLimitsFilters}</p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                    <div className="relative md:col-span-1">
-                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-                        <Input
-                            value={searchParams.get('q') ?? ''}
-                            onChange={(event) => patchQuery({ q: event.target.value || null })}
-                            placeholder={t.connectionLimitsSearchPlaceholder}
-                            className="pl-8"
-                        />
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Search className="text-muted-foreground size-4 shrink-0" />
+                        <p className="truncate text-sm font-medium">{t.connectionLimitsFilters}</p>
                     </div>
-                    <SearchableSelect
-                        mode="single"
-                        value={scopeFilter}
-                        placeholder={t.connectionLimitsFilterScope}
-                        onValueChange={(value) => patchQuery({ scope: value })}
-                        options={[
-                            { value: 'all', label: t.connectionLimitsFilterAll },
-                            { value: 'connection', label: t.connectionLimitsWholeConnection },
-                            { value: 'user', label: t.connectionLimitsProviderUser },
-                        ]}
-                    />
-                    <SearchableSelect
-                        mode="single"
-                        value={actionFilter}
-                        placeholder={t.connectionLimitsFilterAction}
-                        onValueChange={(value) => patchQuery({ action: value })}
-                        options={[
-                            { value: 'all', label: t.connectionLimitsFilterAll },
-                            { value: 'block', label: t.connectionLimitsActionBlock },
-                            { value: 'notify', label: t.connectionLimitsActionNotify },
-                            { value: 'rate_limit', label: t.connectionLimitsActionRateLimit },
-                        ]}
-                    />
-                </div>
-                {hasActiveFilters ? (
-                    <div className="flex justify-end">
-                        <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
-                            <X className="size-3.5" />
-                            {t.connectionLimitsClearFilters}
-                        </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {hasActiveFilters ? (
+                            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                                <X className="size-3.5" />
+                                {t.connectionLimitsClearFilters}
+                            </Button>
+                        ) : null}
+                        <MobileFiltersDrawer
+                            open={filtersDrawerOpen}
+                            onOpenChange={setFiltersDrawerOpen}
+                            title={t.connectionLimitsFilters}
+                            triggerLabel={tc.adjustFilters}
+                            applyLabel={tc.applyFilters}
+                            activeCount={hasActiveFilters ? 1 : 0}
+                        >
+                            {connectionLimitsFilterFields}
+                        </MobileFiltersDrawer>
                     </div>
-                ) : null}
+                </div>
+                <div className="hidden gap-3 lg:grid lg:grid-cols-3">{connectionLimitsFilterFields}</div>
             </section>
 
             <section className="rounded-xl border">

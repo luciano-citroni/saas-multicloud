@@ -131,15 +131,21 @@ function Panel({
     className?: string;
 }) {
     return (
-        <section className={cn('rounded-xl border', className)}>
-            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className={cn('min-w-0 rounded-xl border', className)}>
+            <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 space-y-1">
                     <h2 className="text-sm font-medium">{title}</h2>
-                    {description ? <p className="text-muted-foreground text-xs">{description}</p> : null}
+                    {description ? (
+                        <p className="text-muted-foreground text-xs text-pretty">{description}</p>
+                    ) : null}
                 </div>
-                {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+                {actions ? (
+                    <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
+                        {actions}
+                    </div>
+                ) : null}
             </div>
-            <div className="p-4">{children}</div>
+            <div className="min-w-0 p-3 sm:p-4">{children}</div>
         </section>
     );
 }
@@ -362,25 +368,33 @@ export function AiGovernancePage() {
     }, [searchParams, router]);
 
     const header = (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 space-y-1">
                 <div className="text-muted-foreground flex items-center gap-2">
                     <Shield className="size-4" />
                     <span className="text-xs font-medium tracking-wide uppercase">{t.eyebrow}</span>
                 </div>
-                <h1 className="truncate text-xl font-semibold tracking-tight" title={t.title}>{t.title}</h1>
+                <h1 className="truncate text-xl font-semibold tracking-tight" title={t.title}>
+                    {t.title}
+                </h1>
                 <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed text-pretty">
                     {t.subtitle}
                 </p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-                <Button asChild variant="outline" size="sm">
+            <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
+                <Button asChild variant="outline" size="sm" className="w-full justify-center lg:w-auto">
                     <Link href="/finops/budgets?kind=ai">{t.openAiBudgets}</Link>
                 </Button>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="w-full justify-center lg:w-auto">
                     <Link href="/finops/ai">{t.openAiCosts}</Link>
                 </Button>
-                <Button variant="outline" size="sm" isLoading={pending} onClick={() => refresh()}>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="col-span-2 w-full justify-center lg:col-span-1 lg:w-auto"
+                    isLoading={pending}
+                    onClick={() => refresh()}
+                >
                     <RefreshCw className="size-3.5" />
                     {tc.refresh}
                 </Button>
@@ -429,10 +443,12 @@ export function AiGovernancePage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={(value) => setTab(parseTab(value))} className="gap-4">
-                <TabsList className="bg-muted/40 h-auto w-full flex-wrap justify-start gap-1 p-1">
-                    <TabsTrigger value="connections">{t.tabConnections}</TabsTrigger>
-                    <TabsTrigger value="limits">{t.tabLimits}</TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto">
+                    <TabsList className="bg-muted/40 inline-flex h-auto min-w-full w-max justify-start gap-1 p-1">
+                        <TabsTrigger value="connections">{t.tabConnections}</TabsTrigger>
+                        <TabsTrigger value="limits">{t.tabLimits}</TabsTrigger>
+                    </TabsList>
+                </div>
 
                 <TabsContent value="connections" className="space-y-4">
                     <Panel title={t.capabilityMatrix} description={t.capabilityMatrixDesc}>

@@ -53,6 +53,14 @@ export const ErrorMessages = {
             en: 'Please wait before requesting another verification email',
             pt: 'Aguarde um momento antes de solicitar outro e-mail de confirmação',
         },
+        EMAIL_NOT_VERIFIED: {
+            en: 'Please verify your email before signing in. Check your inbox for the confirmation link.',
+            pt: 'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada pelo link de confirmação.',
+        },
+        ACCOUNT_TEMPORARILY_LOCKED: {
+            en: 'Too many failed sign-in attempts. Please wait a few minutes and try again.',
+            pt: 'Muitas tentativas de login falharam. Aguarde alguns minutos e tente novamente.',
+        },
     },
 
     // Users

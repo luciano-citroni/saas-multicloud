@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { Filter, RotateCcw, X } from 'lucide-react';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { OrganizationCloudAccount } from '@/app/actions/organization';
 import type { DashboardPeriod } from '@/components/root/finops/overview/types';
 import {
@@ -46,6 +46,7 @@ function FilterFields({
     onAccountsChange,
     onProvidersChange,
     onServicesChange,
+    compact = false,
 }: {
     period: DashboardPeriod;
     accountIds: string[];
@@ -59,6 +60,7 @@ function FilterFields({
     onAccountsChange: (accountIds: string[]) => void;
     onProvidersChange: (providers: string[]) => void;
     onServicesChange: (services: string[]) => void;
+    compact?: boolean;
 }) {
     const t = useTranslations('finops');
     const tCommon = useTranslations('common');
@@ -86,8 +88,10 @@ function FilterFields({
     return (
         <div
             className={cn(
-                'grid grid-cols-1 items-end gap-3 sm:grid-cols-2',
-                showServiceFilter ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+                'grid grid-cols-1 items-end gap-3',
+                compact
+                    ? 'grid-cols-1'
+                    : cn('sm:grid-cols-2', showServiceFilter ? 'lg:grid-cols-4' : 'lg:grid-cols-3'),
             )}
         >
             <SearchableSelect
@@ -159,7 +163,7 @@ export function FinopsFilterBar({
     className,
 }: FinopsFilterBarProps) {
     const t = useTranslations('finops');
-    const [sheetOpen, setSheetOpen] = useState(false);
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
     const providerOptions = useMemo(() => {
         const set = new Set<string>();
@@ -205,12 +209,27 @@ export function FinopsFilterBar({
         ? cloudAccounts.find((account) => account.id === sidebarAccountId)
         : null;
 
+    const fieldProps = {
+        period,
+        accountIds,
+        providers,
+        services,
+        cloudAccounts,
+        serviceOptions,
+        providerOptions,
+        showServiceFilter,
+        onPeriodChange,
+        onAccountsChange,
+        onProvidersChange,
+        onServicesChange,
+    } as const;
+
     return (
         <section className={cn('space-y-3 rounded-xl border bg-card/60 p-3 sm:p-4', className)}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    <Filter className="size-4 text-muted-foreground" />
-                    {t.filtersTitle}
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Filter className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{t.filtersTitle}</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -219,6 +238,7 @@ export function FinopsFilterBar({
                             type="button"
                             size="sm"
                             variant="outline"
+                            className="hidden sm:inline-flex"
                             onClick={() => onAccountsChange([...accountIds, sidebarAccount.id])}
                         >
                             {t.filterUseSidebarAccount}
@@ -232,67 +252,42 @@ export function FinopsFilterBar({
                         </Button>
                     )}
 
-                    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-                        <SheetTrigger asChild>
-                            <Button type="button" size="sm" variant="outline" className="lg:hidden">
-                                <Filter className="size-3.5" />
-                                {t.filterAdjust}
-                                {hasActiveFilters ? ` (${activeChips.length})` : ''}
+                    <MobileFiltersDrawer
+                        open={drawerOpen}
+                        onOpenChange={setDrawerOpen}
+                        title={t.filterSheetTitle}
+                        triggerLabel={t.filterAdjust}
+                        applyLabel={t.filterApply}
+                        activeCount={activeChips.length}
+                    >
+                        {sidebarAccount && !accountIds.includes(sidebarAccount.id) ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => onAccountsChange([...accountIds, sidebarAccount.id])}
+                            >
+                                {t.filterUseSidebarAccount}
                             </Button>
-                        </SheetTrigger>
-                        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-                            <SheetHeader>
-                                <SheetTitle>{t.filterSheetTitle}</SheetTitle>
-                            </SheetHeader>
-                            <div className="mt-4 space-y-4 pb-6">
-                                <FilterFields
-                                    period={period}
-                                    accountIds={accountIds}
-                                    providers={providers}
-                                    services={services}
-                                    cloudAccounts={cloudAccounts}
-                                    serviceOptions={serviceOptions}
-                                    providerOptions={providerOptions}
-                                    showServiceFilter={showServiceFilter}
-                                    onPeriodChange={onPeriodChange}
-                                    onAccountsChange={onAccountsChange}
-                                    onProvidersChange={onProvidersChange}
-                                    onServicesChange={onServicesChange}
-                                />
-                                <Button type="button" className="w-full" onClick={() => setSheetOpen(false)}>
-                                    {t.filterApply}
-                                </Button>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                        ) : null}
+                        <FilterFields {...fieldProps} compact />
+                    </MobileFiltersDrawer>
                 </div>
             </div>
 
             <div className="hidden lg:block">
-                <FilterFields
-                    period={period}
-                    accountIds={accountIds}
-                    providers={providers}
-                    services={services}
-                    cloudAccounts={cloudAccounts}
-                    serviceOptions={serviceOptions}
-                    providerOptions={providerOptions}
-                    showServiceFilter={showServiceFilter}
-                    onPeriodChange={onPeriodChange}
-                    onAccountsChange={onAccountsChange}
-                    onProvidersChange={onProvidersChange}
-                    onServicesChange={onServicesChange}
-                />
+                <FilterFields {...fieldProps} />
             </div>
 
             {hasActiveFilters && (
                 <div className="flex flex-wrap gap-2">
                     {activeChips.map((chip) => (
-                        <Badge key={chip.key} variant="secondary" className="gap-1 pr-1">
-                            {chip.label}
+                        <Badge key={chip.key} variant="secondary" className="max-w-full gap-1 pr-1">
+                            <span className="truncate">{chip.label}</span>
                             <button
                                 type="button"
-                                className="rounded-full p-0.5 hover:bg-muted"
+                                className="shrink-0 rounded-full p-0.5 hover:bg-muted"
                                 onClick={chip.onClear}
                                 aria-label={t.filterRemove.replace('{label}', chip.label)}
                             >

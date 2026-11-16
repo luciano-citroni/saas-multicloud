@@ -333,10 +333,14 @@ Authenticated shell lives in `frontend/app/(root)/layout.tsx` (sidebar + `SiteHe
 - Never store access/refresh tokens or session payloads in `localStorage` / `sessionStorage` / client-readable cookies.
 - `localStorage` is only for non-sensitive UI prefs (e.g. `ACTIVE_ORG_STORAGE_KEY`). Active org in storage is UX only — backend membership is authoritative.
 - Client components call only same-origin `/api/...` (or `app/actions`); never call the Nest backend URL from the browser.
-- Route handlers attach `Authorization` and `x-organization-id` server-side only.
-- Mutating BFF routes require `hasTrustedOrigin` before cookie-authenticated work.
+- Route handlers attach `Authorization` and `x-organization-id` server-side only (including org path routes such as `/api/organization/[organizationId]`).
+- Mutating BFF routes require `hasTrustedOrigin` before cookie-authenticated work (`proxyToBackend` enforces this for non-GET).
+- CSRF allowlist (`lib/auth/request-origin.ts`): request URL origin + configured env origins (`FRONTEND_URL`, `NEXT_PUBLIC_*`, `ALLOWED_AUTH_ORIGINS`). **Never** trust client-supplied `X-Forwarded-Host` / `X-Forwarded-Proto` to expand the allowlist.
+- Post-login redirects must use `getSafeNextPath()` (relative paths only; reject `//`, `://`, `\`, newlines, and encoded `/%2f%2f…` tricks).
+- Auth BFF routes (login / refresh / Google / invite-register) must set httpOnly cookies and return `{ success: true }` (or equivalent) — **never** forward raw backend token payloads to the client.
 - Prefer `proxyToBackend` over copy-pasted auth boilerplate per route.
 - Frontend RBAC helpers hide UI only — the backend always enforces authorization.
+- Security headers are set in `frontend/next.config.ts` (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, CSP baseline). Do not weaken `frame-ancestors 'none'` without an explicit product need.
 
 ## State Management
 
@@ -399,13 +403,21 @@ Rules:
 @UseGuards(TenantGuard, RolesGuard)
 ```
 
-- **JwtGuard** (global) — validates JWT signature, checks session exists in DB (`user_sessions` table), loads `request.user`
-- **TenantGuard** — reads `x-organization-id` header, verifies UUID + membership, loads `request.organization` and `request.membership`
+- **JwtGuard** (global) — validates JWT signature, checks session exists in DB (`user_sessions` table), loads `request.user` (`sub` + `sessionId` required). Rejects revoked/expired sessions and inactive users.
+- **TenantGuard** — reads `x-organization-id` header, verifies UUID + membership, loads `request.organization` and `request.membership`. Baseline: mutating methods require at least `MEMBER` unless `@Roles(OrgRole.VIEWER)` explicitly allows write.
 - **RolesGuard** — checks RBAC role hierarchy against `@Roles()` metadata
+- **UserThrottlerGuard** (global) — rate limit by `user:{sub}` or IP
+- **TenantContextInterceptor** (global) — fails closed if an authenticated request lacks org/membership unless `@Public()`, `@SkipTenant()`, or `@AllowMissingOrganization()` applies
 
 Public routes must be annotated with `@Public()`. Never skip guards on protected routes.
 
-Escape hatches (use sparingly): `@SkipTenant()`, `@AllowMissingOrganization()` — see `auth/decorators.ts`. Global `TenantContextInterceptor` fails closed if an authenticated request lacks org/membership unless one of those (or `@Public()`) applies.
+Escape hatches (use sparingly; document why):
+
+| Decorator | Typical use |
+|-----------|-------------|
+| `@Public()` | login, register, refresh, Google OAuth, email verify, Stripe webhook, AI FinOps gateway (API-key auth) |
+| `@AllowMissingOrganization()` | authenticated routes that run before an org is selected (sessions, me) |
+| `@SkipTenant()` | org bootstrap (create/list orgs), invites, billing tenant setup, selected members cross-org ops |
 
 ### JWT Payload Structure
 
@@ -416,7 +428,16 @@ Escape hatches (use sparingly): `@SkipTenant()`, `@AllowMissingOrganization()` �
 }
 ```
 
-Sessions have a 7-day TTL and can be revoked by deleting the DB record.
+JWT does **not** embed roles — membership role is loaded from the DB on each request via `TenantGuard`.
+
+### Session & password security
+
+- Access token ~15 minutes; refresh opaque token stored as **SHA-256** hash in `user_sessions`; 7-day TTL; rotation with short grace / successor token.
+- Logout and password change revoke sessions (password change invalidates other sessions).
+- Passwords: **bcrypt cost 12**. Never return `password` / `sessions` in API responses (`sanitizeUser`).
+- Password login requires `emailVerified === true`. Unverified users get `AUTH.EMAIL_NOT_VERIFIED` and can use public `POST /auth/email/resend-by-email` (anti-enumeration). Invite signup and verified Google accounts mark email as verified automatically.
+- Login lockout: after **5** failed password attempts, lock for **15 minutes** (`failed_login_attempts` / `locked_until`). Never expose these fields in API responses.
+- Stripe webhooks: `@Public()` + signature verification with `rawBody: true` in Nest bootstrap.
 
 ## Multi-tenancy
 
@@ -453,12 +474,13 @@ updateSettings() {}
 
 Rules:
 
-- No `@Roles()` = accessible by all authenticated org members.
+- No `@Roles()` = accessible by all authenticated org members (VIEWER still blocked on writes by `TenantGuard`).
 - Read-only endpoints (GET) = generally no role restriction.
 - Mutations (create/update/delete) require at minimum `MEMBER` (mutating methods reject `VIEWER` unless `@Roles` explicitly includes it).
 - Administrative operations (invite/remove members, manage cloud accounts, manage billing UI) require `ADMIN` — matches frontend helpers in `lib/organization-rbac.ts` (`canManageCloudAccounts`, `canManageBilling`, etc.).
 - Ownership-sensitive operations (delete org, transfer ownership) require `OWNER`.
 - Sync cloud accounts: frontend allows `MEMBER` (`canSyncCloudAccounts`); backend must still enforce.
+- **Do not encrypt roles** in the database. Roles are authorization metadata (`organization_members.role` varchar enum). Encrypting them does not prevent IDOR and forces decrypt-on-every-request. Protect access via membership checks + `@Roles`, not ciphertext.
 
 ## HTTP Hardening (Helmet, CORS, Throttling)
 
@@ -614,7 +636,8 @@ Rules:
 - All entities must have `id` (UUID, PK), `created_at`, and `updated_at`.
 - Use **snake_case** for all column names (`organization_id`, not `organizationId`).
 - Always use `onDelete: 'CASCADE'` on foreign keys to prevent orphaned records.
-- Never expose encrypted fields in responses — annotate with `@Exclude()`.
+- Never expose encrypted fields in responses — annotate with `@Exclude()` and prefer `select: false` on secret columns (`password`, `credentials_encrypted`, session token hashes, etc.).
+- Global `SensitiveResponseInterceptor` strips encrypted blobs / password hashes from JSON responses as a last line of defense — do not rely on it alone; sanitize in the service.
 - After entity changes, run: `npm run migration:generate src/db/migrations/MigrationName`. Never modify existing migrations.
 
 ## Error Handling
@@ -678,16 +701,22 @@ Response format (auto-generated by interceptor):
 }
 ```
 
-## Cloud Credentials Security
+## Cloud Credentials & Secrets Security
 
 - Cloud credentials (AWS, Azure, GCP) and AI FinOps BYOK secrets are **always encrypted** with AES-256-GCM before storage.
 - Shared crypto lives in `backend/src/common/crypto/credentials-cipher.ts`: `encryptCredentialsJson` / `decryptCredentialsJson` / `maskSecret`. Domain services may wrap these (e.g. cloud service, AI FinOps connection service).
+- Automation execution parameters use the same algorithm via `backend/src/automation/parameter-cipher.ts` (`parameters_encrypted`, `select: false`); clear encrypted params after successful runs; redact sensitive keys in API/audit payloads (`redactSensitive`).
 - Key: `CREDENTIALS_ENCRYPTION_KEY` = **64 hex chars** (32 bytes).
 - Stored format: Base64 encoding of `ivHex:authTagHex:ciphertextHex`.
 - Never log, return, or expose decrypted secrets in API responses.
-- Persist encrypted columns with `select: false` (do not rely only on `@Exclude()`).
-- Client responses must use redaction helpers (`redactCredentialsForClient` / flags like `hasClientSecret`, `hasPrivateKey`) — never return raw secrets.
+- Persist encrypted columns with `select: false` (do not rely only on `@Exclude()`). Same for `users.password` and session token hash columns.
+- Global `SensitiveResponseInterceptor` + `redactSensitiveData()` strip encrypted blobs / password hashes from JSON as a last line of defense (does not strip intentional one-time secrets like Stripe `clientSecret`, issued AI API keys, or auth tokens for the BFF).
+- Client responses must use redaction helpers (`redactCredentialsForClient` / flags like `hasClientSecret`, `hasPrivateKey`, `hasApiKey`, or AI FinOps `maskedCredential`) — never return raw secrets.
+- User API payloads must not include `password` or raw `googleId` — expose `hasPassword` / `hasGoogleLinked` flags instead.
+- Secret field names to strip/merge include at least: `clientSecret`, `privateKey`, `secretAccessKey`, `apiKey`, `adminApiKey`, `password`, `secret` (and snake_case variants).
 - On update, merge via helpers that preserve stored secrets when the client sends blank fields (`mergeCredentialsPreservingSecrets`).
+- AI FinOps gateway API keys: store **one-way hash** (`key_hash`) only — never persist the raw key after issuance.
+- Platform roles (`OWNER`/`ADMIN`/`MEMBER`/`VIEWER`) are **not** encrypted — see RBAC rules above.
 
 ### Cloud Credential Schemas (Zod)
 
@@ -709,6 +738,19 @@ const azureCredentialSchema = z.object({
   subscriptionIds: z.array(z.string().uuid()).optional(),
 });
 ```
+
+## LGPD / Privacy
+
+Practices already enforced in this codebase — follow them in new features:
+
+- **Minimization / no secret leakage**: never log credentials, refresh tokens, API keys, or passwords. Prefer Nest `Logger` with redacted context.
+- **FinOps consent (opt-in)**: cost collection requires accepted consent per cloud account/provider (`finops_consents`, versioned). Collect endpoints must return 409/`CONSENT_REQUIRED` when missing. Revoke stops future collection; historical cost rows may be retained (document in API descriptions).
+- **User responses**: always sanitize — strip `password`, sessions, and other internal relations before returning user objects.
+- **Session control**: users can list/revoke their sessions; password change invalidates other sessions.
+- **Account deletion**: hard-delete via users service (cascades memberships/sessions where FKs use `onDelete: CASCADE`). When adding personal data tables, define cascade/cleanup explicitly.
+- **AI FinOps / automation audit**: prefer audit logs for sensitive mutations (connections, budgets, policies, automation runs) without storing secret values.
+- **PII in validators**: reuse shared validators (e.g. `passwordValidator`). Do not invent new CPF/PII columns without a retention + access plan.
+- **Not yet a full LGPD product surface**: there is no dedicated data-export / portability API or formal retention job. If you add subject-rights endpoints, keep them authenticated, tenant-scoped, and audited — do not invent compliance UI that the backend cannot fulfill.
 
 ## Swagger Documentation
 

@@ -621,7 +621,7 @@ export function FinopsOverview() {
     return (
         <>
             <div className="flex flex-col gap-6">
-                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div>
                             <h1 className="text-xl font-semibold tracking-tight">FinOps</h1>
@@ -630,21 +630,35 @@ export function FinopsOverview() {
                         <FinopsSubnav />
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
-                            <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                            {tc.refresh}
+                    <div
+                        className={cn(
+                            'grid w-full gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center',
+                            canSync ? 'grid-cols-2' : 'grid-cols-1',
+                        )}
+                    >
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                            onClick={() => void handleRefresh()}
+                            disabled={refreshing}
+                            aria-label={tc.refresh}
+                        >
+                            <RefreshCw className={cn('size-4 shrink-0', refreshing && 'animate-spin')} />
+                            <span className="truncate">{tc.refresh}</span>
                         </Button>
 
                         {canSync && (
                             <Button
                                 size="sm"
+                                className="w-full min-w-0 justify-center gap-2 lg:w-auto"
                                 onClick={() => void handleSyncClick()}
                                 isLoading={syncing}
                                 disabled={syncing || !syncTargetAccount}
+                                aria-label="Sincronizar"
                             >
-                                <PlayCircle className="size-4" />
-                                Sincronizar
+                                <PlayCircle className="size-4 shrink-0" />
+                                <span className="truncate">Sincronizar</span>
                             </Button>
                         )}
                     </div>

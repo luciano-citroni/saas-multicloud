@@ -18,16 +18,19 @@ export class UserSession {
     @Column({ type: 'uuid', name: 'user_id' })
     userId!: string;
 
-    @Column({ type: 'varchar', length: 255 })
+    /** SHA-256 of refresh token — never selected by default. */
+    @Column({ type: 'varchar', length: 255, select: false })
     token!: string;
 
-    @Column({ type: 'varchar', length: 64, name: 'previous_token_hash', nullable: true })
+    /** Previous refresh hash for rotation replay — never selected by default. */
+    @Column({ type: 'varchar', length: 64, name: 'previous_token_hash', nullable: true, select: false })
     previousTokenHash!: string | null;
 
     @Column({ type: 'timestamp', name: 'rotated_at', nullable: true })
     rotatedAt!: Date | null;
 
-    @Column({ type: 'text', name: 'successor_token', nullable: true })
+    /** Sealed refresh for rotation grace window — never selected by default. */
+    @Column({ type: 'text', name: 'successor_token', nullable: true, select: false })
     successorToken!: string | null;
 
     @Column({ type: 'timestamp', name: 'expires_at' })

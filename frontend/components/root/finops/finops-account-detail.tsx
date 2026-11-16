@@ -458,7 +458,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
     return (
         <>
             <div className="flex flex-col gap-6">
-                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div className="space-y-1">
                             <Link
@@ -474,10 +474,10 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                         <FinopsSubnav />
                     </div>
 
-                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    <div className="flex w-full min-w-0 flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center">
                         <SearchableSelect
                             mode="single"
-                            className="w-full sm:w-[170px]"
+                            className="w-full lg:w-[170px]"
                             value={period}
                             options={DASHBOARD_PERIODS.map((item) => ({
                                 value: item,
@@ -496,44 +496,55 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                             }}
                         />
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (!organizationId) return;
-                                setRefreshing(true);
-                                void loadOverview(organizationId, { silent: true }).finally(() => setRefreshing(false));
-                                if (tab === 'optimize') void loadOptimize(organizationId);
-                            }}
-                            disabled={refreshing || hasConsent !== true}
+                        <div
+                            className={cn(
+                                'grid w-full gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center',
+                                canSync ? 'grid-cols-2' : 'grid-cols-1',
+                            )}
                         >
-                            <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                            {tc.refresh}
-                        </Button>
-
-                        {canSync && (
                             <Button
+                                variant="outline"
                                 size="sm"
+                                className="w-full min-w-0 justify-center gap-2 lg:w-auto"
                                 onClick={() => {
-                                    if (hasConsent !== true) {
-                                        setShowConsentDialog(true);
-                                        return;
-                                    }
-                                    setShowSyncDialog(true);
+                                    if (!organizationId) return;
+                                    setRefreshing(true);
+                                    void loadOverview(organizationId, { silent: true }).finally(() => setRefreshing(false));
+                                    if (tab === 'optimize') void loadOptimize(organizationId);
                                 }}
-                                isLoading={syncing}
-                                disabled={syncing || revokingConsent}
+                                disabled={refreshing || hasConsent !== true}
+                                aria-label={tc.refresh}
                             >
-                                <PlayCircle className="size-4" />
-                                {hasConsent ? 'Sincronizar' : 'Aceitar termos'}
+                                <RefreshCw className={cn('size-4 shrink-0', refreshing && 'animate-spin')} />
+                                <span className="truncate">{tc.refresh}</span>
                             </Button>
-                        )}
+
+                            {canSync && (
+                                <Button
+                                    size="sm"
+                                    className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                                    onClick={() => {
+                                        if (hasConsent !== true) {
+                                            setShowConsentDialog(true);
+                                            return;
+                                        }
+                                        setShowSyncDialog(true);
+                                    }}
+                                    isLoading={syncing}
+                                    disabled={syncing || revokingConsent}
+                                    aria-label={hasConsent ? 'Sincronizar' : 'Aceitar termos'}
+                                >
+                                    <PlayCircle className="size-4 shrink-0" />
+                                    <span className="truncate">{hasConsent ? 'Sincronizar' : 'Aceitar termos'}</span>
+                                </Button>
+                            )}
+                        </div>
 
                         {canSync && hasConsent === true && (
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive lg:w-auto"
                                 onClick={() => setShowRevokeDialog(true)}
                                 disabled={revokingConsent || syncing}
                             >

@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { createRegisterSchema, type RegisterFormValues } from './scheme';
-import { registerAction } from '@/lib/auth/actions';
 import { useRouter } from 'next/navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
@@ -16,6 +15,7 @@ import { GoogleButton } from '@/components/auth/google-button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useTranslations } from '@/lib/i18n';
+import { extractErrorMessage } from '@/lib/error-messages';
 
 export function RegisterForm() {
     const [viewPassword, setViewPassword] = useState(false);
@@ -53,15 +53,27 @@ export function RegisterForm() {
     const onSubmit = async (data: RegisterFormValues) => {
         setLoading(true);
         try {
-            const result = await registerAction(data);
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: data.name,
+                    email: data.email,
+                    password: data.password,
+                }),
+            });
 
-            if (!result.success) {
-                toast.error(result.error || t.registerError);
+            const body = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                toast.error(extractErrorMessage(body) || t.registerError);
                 return;
             }
 
-            toast.success(t.registerSuccess);
-            router.push('/auth/sign-in');
+            toast.success(t.registerSuccessVerifyEmail);
+            router.push(`/auth/sign-in?registered=1&email=${encodeURIComponent(data.email)}`);
+        } catch {
+            toast.error(tc.connectionError);
         } finally {
             setLoading(false);
         }

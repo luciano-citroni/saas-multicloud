@@ -16,6 +16,7 @@ import {
     RefreshCw,
     RotateCcw,
 } from 'lucide-react';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -191,6 +192,7 @@ export function FinopsAnomaliesPage() {
     const [accountsReady, setAccountsReady] = useState(false);
     const [data, setData] = useState<AnomaliesListResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
     const [acknowledging, setAcknowledging] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [contributorsById, setContributorsById] = useState<Record<string, AnomalyResourceContributor[]>>({});
@@ -506,9 +508,130 @@ export function FinopsAnomaliesPage() {
         });
     };
 
+    const anomaliesFilterFields = (
+        <>
+            <SearchableSelect
+                mode="single"
+                id="anomalies-cloud-account"
+                label={t.cloudAccountLabel}
+                className="sm:col-span-2 lg:col-span-1"
+                value={
+                    urlFilters.accountId && scopedAccountIds.includes(urlFilters.accountId)
+                        ? urlFilters.accountId
+                        : ACCOUNT_FILTER_ALL
+                }
+                options={[
+                    { value: ACCOUNT_FILTER_ALL, label: t.allAccounts },
+                    ...cloudAccounts.map((account) => ({
+                        value: account.id,
+                        label: `${account.alias}${account.provider ? ` · ${account.provider.toUpperCase()}` : ''}`,
+                    })),
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                disabled={!accountsReady}
+                onValueChange={(value) => {
+                    if (value !== ACCOUNT_FILTER_ALL) {
+                        window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
+                    }
+                    syncUrlState({
+                        account: value === ACCOUNT_FILTER_ALL ? null : value,
+                        page: null,
+                    });
+                }}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="anomalies-status"
+                label={tCommon.status}
+                value={statusFilter}
+                options={(['open', 'acknowledged', 'resolved', 'all'] as const).map((s) => ({
+                    value: s,
+                    label: statusLabel(t, s),
+                }))}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => syncUrlState({ status: value, page: null })}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="anomalies-severity"
+                label={t.severity}
+                value={severityFilter}
+                options={[
+                    { value: 'all', label: t.allSeverities },
+                    { value: 'critical', label: t.severityCritical },
+                    { value: 'high', label: t.severityHigh },
+                    { value: 'medium', label: t.severityMedium },
+                    { value: 'low', label: t.severityLow },
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => syncUrlState({ severity: value, page: null })}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="anomalies-period"
+                label={t.budgetPeriod}
+                value={periodFilter}
+                options={PERIOD_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: t[option.labelKey],
+                }))}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => syncUrlState({ period: value, page: null })}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="anomalies-provider"
+                label={t.providerLabel}
+                value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
+                options={[
+                    { value: PROVIDER_FILTER_ALL, label: t.allProviders },
+                    { value: 'aws', label: 'AWS' },
+                    { value: 'azure', label: 'Azure' },
+                    { value: 'gcp', label: 'GCP' },
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) =>
+                    syncUrlState({
+                        provider: value === PROVIDER_FILTER_ALL ? null : value,
+                        page: null,
+                    })
+                }
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="anomalies-sort"
+                label={t.sortByLabel}
+                value={sortFilter}
+                options={SORT_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: t[option.labelKey],
+                }))}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => syncUrlState({ sort: value, page: null })}
+            />
+        </>
+    );
+
     return (
         <div className="flex flex-col gap-6 pb-24">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">{t.anomaliesTitle}</h1>
@@ -516,12 +639,15 @@ export function FinopsAnomaliesPage() {
                     </div>
                     <FinopsSubnav />
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <FinopsAnomalyAlertsCard organizationId={organizationId} />
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
+                    <div className="min-w-0 sm:col-span-1">
+                        <FinopsAnomalyAlertsCard organizationId={organizationId} />
+                    </div>
                     <Button
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="w-full justify-center gap-2 lg:w-auto"
                         onClick={() =>
                             organizationId && accountsReady && void loadAnomalies(organizationId, scopedAccountIds)
                         }
@@ -564,135 +690,33 @@ export function FinopsAnomaliesPage() {
 
             <Card>
                 <CardHeader className="gap-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
                             <CardTitle className="text-base">{t.filtersTitle}</CardTitle>
-                            <CardDescription>{t.filtersUrlHint}</CardDescription>
+                            <CardDescription className="hidden sm:block">{t.filtersUrlHint}</CardDescription>
                         </div>
-                        {hasActiveFilters ? (
-                            <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" onClick={clearFilters}>
-                                <RotateCcw className="size-3.5" />
-                                {t.clearFilters}
-                            </Button>
-                        ) : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {hasActiveFilters ? (
+                                <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" onClick={clearFilters}>
+                                    <RotateCcw className="size-3.5" />
+                                    {t.clearFilters}
+                                </Button>
+                            ) : null}
+                            <MobileFiltersDrawer
+                                open={filtersDrawerOpen}
+                                onOpenChange={setFiltersDrawerOpen}
+                                title={t.filtersTitle}
+                                description={t.filtersUrlHint}
+                                triggerLabel={t.filterAdjust}
+                                applyLabel={t.filterApply}
+                                activeCount={hasActiveFilters ? 1 : 0}
+                            >
+                                {anomaliesFilterFields}
+                            </MobileFiltersDrawer>
+                        </div>
                     </div>
-                    <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-cloud-account"
-                            label={t.cloudAccountLabel}
-                            className="sm:col-span-2 lg:col-span-1"
-                            value={
-                                urlFilters.accountId && scopedAccountIds.includes(urlFilters.accountId)
-                                    ? urlFilters.accountId
-                                    : ACCOUNT_FILTER_ALL
-                            }
-                            options={[
-                                { value: ACCOUNT_FILTER_ALL, label: t.allAccounts },
-                                ...cloudAccounts.map((account) => ({
-                                    value: account.id,
-                                    label: `${account.alias}${account.provider ? ` · ${account.provider.toUpperCase()}` : ''}`,
-                                })),
-                            ]}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            disabled={!accountsReady}
-                            onValueChange={(value) => {
-                                if (value !== ACCOUNT_FILTER_ALL) {
-                                    window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
-                                }
-                                syncUrlState({
-                                    account: value === ACCOUNT_FILTER_ALL ? null : value,
-                                    page: null,
-                                });
-                            }}
-                        />
-
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-status"
-                            label={tCommon.status}
-                            value={statusFilter}
-                            options={(['open', 'acknowledged', 'resolved', 'all'] as const).map((s) => ({
-                                value: s,
-                                label: statusLabel(t, s),
-                            }))}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            onValueChange={(value) => syncUrlState({ status: value, page: null })}
-                        />
-
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-severity"
-                            label={t.severity}
-                            value={severityFilter}
-                            options={[
-                                { value: 'all', label: t.allSeverities },
-                                { value: 'critical', label: t.severityCritical },
-                                { value: 'high', label: t.severityHigh },
-                                { value: 'medium', label: t.severityMedium },
-                                { value: 'low', label: t.severityLow },
-                            ]}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            onValueChange={(value) => syncUrlState({ severity: value, page: null })}
-                        />
-
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-period"
-                            label={t.budgetPeriod}
-                            value={periodFilter}
-                            options={PERIOD_OPTIONS.map((option) => ({
-                                value: option.value,
-                                label: t[option.labelKey],
-                            }))}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            onValueChange={(value) => syncUrlState({ period: value, page: null })}
-                        />
-
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-provider"
-                            label={t.providerLabel}
-                            value={urlFilters.provider ?? PROVIDER_FILTER_ALL}
-                            options={[
-                                { value: PROVIDER_FILTER_ALL, label: t.allProviders },
-                                { value: 'aws', label: 'AWS' },
-                                { value: 'azure', label: 'Azure' },
-                                { value: 'gcp', label: 'GCP' },
-                            ]}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            onValueChange={(value) =>
-                                syncUrlState({
-                                    provider: value === PROVIDER_FILTER_ALL ? null : value,
-                                    page: null,
-                                })
-                            }
-                        />
-
-                        <SearchableSelect
-                            mode="single"
-                            id="anomalies-sort"
-                            label={t.sortByLabel}
-                            value={sortFilter}
-                            options={SORT_OPTIONS.map((option) => ({
-                                value: option.value,
-                                label: t[option.labelKey],
-                            }))}
-                            searchPlaceholder={tCommon.search}
-                            emptyText={t.filterSearchEmpty}
-                            clearLabel={t.clearFilters}
-                            onValueChange={(value) => syncUrlState({ sort: value, page: null })}
-                        />
+                    <div className="hidden items-end gap-3 lg:grid lg:grid-cols-3 xl:grid-cols-6">
+                        {anomaliesFilterFields}
                     </div>
                 </CardHeader>
             </Card>

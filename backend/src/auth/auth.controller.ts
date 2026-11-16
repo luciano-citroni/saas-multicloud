@@ -20,6 +20,7 @@ import {
     refreshTokenSchema,
     registerSchema,
     registerWithInviteSchema,
+    resendEmailByAddressSchema,
     updateMeSchema,
     updateMyPasswordSchema,
     verifyEmailSchema,
@@ -31,6 +32,7 @@ import type {
     RefreshTokenDto,
     RegisterDto,
     RegisterWithInviteDto,
+    ResendEmailByAddressDto,
     UpdateMeDto,
     UpdateMyPasswordDto,
     VerifyEmailDto,
@@ -55,6 +57,7 @@ import {
     ActiveSessionResponseDto,
     RemoveSessionResponseDto,
     VerifyEmailRequestDto,
+    ResendEmailByAddressRequestDto,
     EmailVerificationActionResponseDto,
 } from './swagger.dto';
 
@@ -304,6 +307,25 @@ export class AuthController {
         body: VerifyEmailDto
     ) {
         return this.authService.verifyEmail(body.token);
+    }
+
+    @Public()
+    @Post('email/resend-by-email')
+    @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 5, ttl: 60_000 } })
+    @ApiOperation({
+        summary: 'Reenviar confirmação de e-mail sem sessão (anti-enumeração)',
+        description:
+            'Aceita um e-mail e, se existir conta não verificada, reenvia o link. Sempre responde success para não revelar se o e-mail existe.',
+    })
+    @ApiBody({ type: ResendEmailByAddressRequestDto })
+    @ApiResponse({ status: 200, description: 'Pedido aceito', type: EmailVerificationActionResponseDto })
+    @ApiResponse({ status: 429, description: 'Cooldown de reenvio ativo' })
+    resendEmailVerificationByAddress(
+        @Body(new ZodValidationPipe(resendEmailByAddressSchema))
+        body: ResendEmailByAddressDto,
+    ) {
+        return this.authService.requestEmailVerificationByEmail(body.email);
     }
 
     @Post('email/resend')

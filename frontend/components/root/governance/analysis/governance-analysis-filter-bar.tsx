@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Filter, RotateCcw, Search, X } from 'lucide-react';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { translateGovernanceResourceType, translateGovernanceSeverity } from '@/lib/governance-translations';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,7 @@ function FilterFields({
     onDraftNameChange,
     onSeverityChange,
     onResourceTypeChange,
+    compact = false,
 }: {
     draftName: string;
     severityFilter: SeverityFilter;
@@ -49,6 +50,7 @@ function FilterFields({
     onDraftNameChange: (value: string) => void;
     onSeverityChange: (value: SeverityFilter) => void;
     onResourceTypeChange: (value: ResourceTypeFilter) => void;
+    compact?: boolean;
 }) {
     const tg = useTranslations('governance');
     const tc = useTranslations('common');
@@ -68,8 +70,8 @@ function FilterFields({
     ];
 
     return (
-        <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+        <div className={cn('grid items-end gap-3', compact ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3')}>
+            <div className={cn('space-y-1.5', !compact && 'sm:col-span-2 lg:col-span-1')}>
                 <label htmlFor="governance-findings-search" className="text-xs font-medium text-muted-foreground">
                     {tg.searchLabel}
                 </label>
@@ -80,7 +82,7 @@ function FilterFields({
                         value={draftName}
                         onChange={(event) => onDraftNameChange(event.target.value)}
                         placeholder={tg.searchPlaceholder}
-                        className="h-8 w-full pr-9 pl-9"
+                        className="h-9 w-full pr-9 pl-9"
                     />
                     {draftName.trim().length > 0 && (
                         <button
@@ -134,7 +136,7 @@ export function GovernanceAnalysisFilterBar({
     className,
 }: GovernanceAnalysisFilterBarProps) {
     const tg = useTranslations('governance');
-    const [sheetOpen, setSheetOpen] = useState(false);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [draftName, setDraftName] = useState(nameFilter);
     const onNameChangeRef = useRef(onNameChange);
 
@@ -196,12 +198,24 @@ export function GovernanceAnalysisFilterBar({
         onClear();
     };
 
+    const fields = (
+        <FilterFields
+            draftName={draftName}
+            severityFilter={severityFilter}
+            resourceTypeFilter={resourceTypeFilter}
+            resourceTypeOptions={resourceTypeOptions}
+            onDraftNameChange={setDraftName}
+            onSeverityChange={onSeverityChange}
+            onResourceTypeChange={onResourceTypeChange}
+        />
+    );
+
     return (
         <section className={cn('space-y-3 border-b px-4 py-3', className)}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    <Filter className="size-4 text-muted-foreground" />
-                    {tg.filters}
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Filter className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{tg.filters}</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -216,57 +230,38 @@ export function GovernanceAnalysisFilterBar({
                         </Button>
                     )}
 
-                    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-                        <SheetTrigger asChild>
-                            <Button type="button" size="sm" variant="outline" className="lg:hidden">
-                                <Filter className="size-3.5" />
-                                {tg.adjust}
-                                {hasActiveFilters ? ` (${activeChips.length})` : ''}
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-                            <SheetHeader>
-                                <SheetTitle>{tg.analysisFiltersTitle}</SheetTitle>
-                            </SheetHeader>
-                            <div className="mt-4 space-y-4 pb-6">
-                                <FilterFields
-                                    draftName={draftName}
-                                    severityFilter={severityFilter}
-                                    resourceTypeFilter={resourceTypeFilter}
-                                    resourceTypeOptions={resourceTypeOptions}
-                                    onDraftNameChange={setDraftName}
-                                    onSeverityChange={onSeverityChange}
-                                    onResourceTypeChange={onResourceTypeChange}
-                                />
-                                <Button type="button" className="w-full" onClick={() => setSheetOpen(false)}>
-                                    {tg.apply}
-                                </Button>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                    <MobileFiltersDrawer
+                        open={drawerOpen}
+                        onOpenChange={setDrawerOpen}
+                        title={tg.analysisFiltersTitle}
+                        triggerLabel={tg.adjust}
+                        applyLabel={tg.apply}
+                        activeCount={activeChips.length}
+                    >
+                        <FilterFields
+                            draftName={draftName}
+                            severityFilter={severityFilter}
+                            resourceTypeFilter={resourceTypeFilter}
+                            resourceTypeOptions={resourceTypeOptions}
+                            onDraftNameChange={setDraftName}
+                            onSeverityChange={onSeverityChange}
+                            onResourceTypeChange={onResourceTypeChange}
+                            compact
+                        />
+                    </MobileFiltersDrawer>
                 </div>
             </div>
 
-            <div className="hidden lg:block">
-                <FilterFields
-                    draftName={draftName}
-                    severityFilter={severityFilter}
-                    resourceTypeFilter={resourceTypeFilter}
-                    resourceTypeOptions={resourceTypeOptions}
-                    onDraftNameChange={setDraftName}
-                    onSeverityChange={onSeverityChange}
-                    onResourceTypeChange={onResourceTypeChange}
-                />
-            </div>
+            <div className="hidden lg:block">{fields}</div>
 
             {hasActiveFilters && (
                 <div className="flex flex-wrap gap-2">
                     {activeChips.map((chip) => (
-                        <Badge key={chip.key} variant="secondary" className="gap-1 pr-1">
-                            {chip.label}
+                        <Badge key={chip.key} variant="secondary" className="max-w-full gap-1 pr-1">
+                            <span className="truncate">{chip.label}</span>
                             <button
                                 type="button"
-                                className="rounded-full p-0.5 hover:bg-muted"
+                                className="shrink-0 rounded-full p-0.5 hover:bg-muted"
                                 onClick={chip.onClear}
                                 aria-label={tg.removeFilter.replace('{label}', chip.label)}
                             >

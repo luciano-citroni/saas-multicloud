@@ -25,12 +25,57 @@ export class UsersService {
     ) {}
 
     async findByEmail(email: string): Promise<User | null> {
-        return this.userRepository.findOne({ where: { email: email.toLowerCase() } });
+        return this.userRepository
+            .createQueryBuilder('user')
+            .addSelect('user.password')
+            .where('user.email = :email', { email: email.toLowerCase() })
+            .getOne();
     }
 
-    private sanitizeUser(user: User): Omit<User, 'password' | 'sessions' | 'organizationMemberships'> {
-        const { password: _password, sessions: _sessions, organizationMemberships: _members, ...sanitized } = user;
-        return sanitized;
+    private sanitizeUser(
+        user: User,
+    ): Omit<
+        User,
+        | 'password'
+        | 'sessions'
+        | 'organizationMemberships'
+        | 'googleId'
+        | 'failedLoginAttempts'
+        | 'lockedUntil'
+    > & { hasGoogleLinked: boolean } {
+        const {
+            password: _password,
+            sessions: _sessions,
+            organizationMemberships: _members,
+            googleId,
+            failedLoginAttempts: _failedLoginAttempts,
+            lockedUntil: _lockedUntil,
+            ...sanitized
+        } = user;
+        return {
+            ...sanitized,
+            hasGoogleLinked: Boolean(googleId),
+        };
+    }
+
+    async recordFailedLogin(userId: string, maxAttempts: number, lockDurationMs: number): Promise<void> {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        if (!user) return;
+
+        const attempts = (user.failedLoginAttempts ?? 0) + 1;
+        const patch: Partial<User> = { failedLoginAttempts: attempts };
+        if (attempts >= maxAttempts) {
+            patch.lockedUntil = new Date(Date.now() + lockDurationMs);
+            patch.failedLoginAttempts = 0;
+        }
+        await this.userRepository.update({ id: userId }, patch);
+    }
+
+    async clearLoginFailures(userId: string): Promise<void> {
+        await this.userRepository.update(
+            { id: userId },
+            { failedLoginAttempts: 0, lockedUntil: null },
+        );
     }
 
     private canManageOtherUsers(role: string): boolean {
@@ -66,18 +111,18 @@ export class UsersService {
         return userInOrg;
     }
 
-    async findById(id: string): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>> {
+    async findById(id: string) {
         const user = await this.userRepository.findOne({ where: { id } });
         if (!user) throw new NotFoundException(ErrorMessages.USERS.NOT_FOUND);
         return this.sanitizeUser(user);
     }
 
-    async findByIdInScope(id: string, context: UserScopeContext): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>> {
+    async findByIdInScope(id: string, context: UserScopeContext) {
         const user = await this.ensureScopedAccess(id, context);
         return this.sanitizeUser(user);
     }
 
-    async create(dto: CreateUserDto): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>> {
+    async create(dto: CreateUserDto) {
         const hashedPassword = await bcrypt.hash(dto.password, 12);
         const user = this.userRepository.create({
             ...dto,
@@ -90,7 +135,7 @@ export class UsersService {
         return this.sanitizeUser(savedUser);
     }
 
-    async findAll(tenantId: string): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>[]> {
+    async findAll(tenantId: string) {
         const users = await this.userRepository
             .createQueryBuilder('user')
             .innerJoin(OrganizationMembership, 'membership', 'membership.user_id = user.id')
@@ -103,7 +148,7 @@ export class UsersService {
         return users.map((user) => this.sanitizeUser(user));
     }
 
-    async update(id: string, payload: UpdateUserDto): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>> {
+    async update(id: string, payload: UpdateUserDto) {
         const updateData = { ...payload };
         if (updateData.email) {
             updateData.email = updateData.email.toLowerCase();
@@ -118,11 +163,7 @@ export class UsersService {
         return this.sanitizeUser(savedUser);
     }
 
-    async updateInScope(
-        id: string,
-        payload: UpdateUserDto,
-        context: UserScopeContext
-    ): Promise<Omit<User, 'password' | 'sessions' | 'organizationMemberships'>> {
+    async updateInScope(id: string, payload: UpdateUserDto, context: UserScopeContext) {
         await this.ensureScopedAccess(id, context);
         return this.update(id, payload);
     }
@@ -163,8 +204,18 @@ export class UsersService {
         return user;
     }
 
+    async findEntityByIdWithPassword(id: string): Promise<User> {
+        const user = await this.userRepository
+            .createQueryBuilder('user')
+            .addSelect('user.password')
+            .where('user.id = :id', { id })
+            .getOne();
+        if (!user) throw new NotFoundException(ErrorMessages.USERS.NOT_FOUND);
+        return user;
+    }
+
     async validatePassword(userId: string, password: string): Promise<boolean> {
-        const user = await this.findEntityById(userId);
+        const user = await this.findEntityByIdWithPassword(userId);
         if (!user.password) {
             return false;
         }
@@ -176,17 +227,32 @@ export class UsersService {
         await this.findEntityById(userId);
         const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-        await this.userRepository.update({ id: userId }, { password: hashedPassword });
+        await this.userRepository.update(
+            { id: userId },
+            {
+                password: hashedPassword,
+                failedLoginAttempts: 0,
+                lockedUntil: null,
+            },
+        );
     }
 
-    async createWithGoogle(dto: { email: string; name: string; googleId: string }): Promise<User> {
+    async createWithGoogle(dto: {
+        email: string;
+        name: string;
+        googleId: string;
+        emailVerified?: boolean;
+    }): Promise<User> {
         const user = this.userRepository.create({
             email: dto.email.toLowerCase(),
             name: dto.name,
             googleId: dto.googleId,
             password: null,
             isActive: true,
-            emailVerified: false,
+            // Google already verified the mailbox when emailVerified !== false.
+            emailVerified: dto.emailVerified !== false,
+            failedLoginAttempts: 0,
+            lockedUntil: null,
         });
         return this.userRepository.save(user);
     }

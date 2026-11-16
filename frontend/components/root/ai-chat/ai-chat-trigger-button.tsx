@@ -28,14 +28,14 @@ export function AiChatTriggerButton({ variant = 'header', className, onClick }: 
                 type="button"
                 size="lg"
                 className={cn(
-                    'fixed right-4 bottom-4 z-[100] h-12 gap-2 rounded-full px-4 shadow-lg md:right-6 md:bottom-6',
+                    'fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] size-12 rounded-full p-0 shadow-lg sm:right-6 sm:bottom-6 sm:h-12 sm:w-auto sm:gap-2 sm:px-4',
                     className,
                 )}
                 aria-label={t.open}
                 onClick={handleClick}
             >
                 <MessageCircle className="size-5" />
-                <span className="font-medium">{t.openShort}</span>
+                <span className="hidden font-medium sm:inline">{t.openShort}</span>
             </Button>
         );
     }

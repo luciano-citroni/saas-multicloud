@@ -52,11 +52,11 @@ type Props = {
 
 export function AiChatSuggestions({ locale, title, onSelect, disabled }: Props) {
     return (
-        <div className="mt-2 w-full max-w-2xl space-y-3">
+        <div className="mt-1 w-full max-w-xl space-y-2.5 px-1">
             <p className="text-muted-foreground text-center text-[11px] font-medium tracking-wide uppercase">
                 {title}
             </p>
-            <ItemGroup className="grid gap-2 sm:grid-cols-2">
+            <ItemGroup className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((item) => {
                     const Icon = item.icon;
                     const prompt = locale === 'en' ? item.en : item.pt;

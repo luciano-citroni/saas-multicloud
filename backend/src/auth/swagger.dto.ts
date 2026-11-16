@@ -208,6 +208,12 @@ export class AuthUserResponseDto {
 
     @ApiProperty({
         example: false,
+        description: 'Indica se a conta está vinculada ao Google (sem expor o googleId)',
+    })
+    hasGoogleLinked: boolean;
+
+    @ApiProperty({
+        example: false,
         description: 'Indica se o e-mail do usuário foi confirmado',
     })
     emailVerified: boolean;
@@ -219,6 +225,14 @@ export class VerifyEmailRequestDto {
         description: 'Token opaco enviado no e-mail de confirmação',
     })
     token: string;
+}
+
+export class ResendEmailByAddressRequestDto {
+    @ApiProperty({
+        example: 'user@example.com',
+        description: 'E-mail da conta que precisa reenviar a confirmação',
+    })
+    email: string;
 }
 
 export class EmailVerificationActionResponseDto {

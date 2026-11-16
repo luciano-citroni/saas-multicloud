@@ -36,6 +36,11 @@ export const ErrorMessages = {
         INVALID_OR_EXPIRED_EMAIL_TOKEN: 'Email verification token is invalid or expired',
 
         EMAIL_VERIFICATION_RESEND_COOLDOWN: 'Please wait before requesting another verification email',
+
+        EMAIL_NOT_VERIFIED: 'Please verify your email before signing in. Check your inbox for the confirmation link.',
+
+        ACCOUNT_TEMPORARILY_LOCKED:
+            'Too many failed sign-in attempts. Please wait a few minutes and try again.',
     },
 
     // Users

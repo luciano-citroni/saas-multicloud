@@ -8,6 +8,8 @@ import { ROLES_KEY } from './roles.decorator';
 
 import { OrgRole, ROLE_HIERARCHY } from './roles.enum';
 
+import { ErrorMessages } from '../common/messages/error-messages';
+
 /**
 
 
@@ -90,7 +92,8 @@ export class RolesGuard implements CanActivate {
         const minimumRequired = Math.min(...requiredRoles.map((r) => ROLE_HIERARCHY[r] ?? 0));
 
         if (userLevel < minimumRequired) {
-            throw new ForbiddenException(`Insufficient permissions. Required: ${requiredRoles.join(' or ')}. Your role: ${userRole}.`);
+            // Do not leak required roles / caller role in the API body.
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
 
         return true;

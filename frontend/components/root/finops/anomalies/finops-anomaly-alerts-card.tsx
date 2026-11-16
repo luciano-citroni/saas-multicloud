@@ -1,22 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Bell } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+    Drawer,
+    DrawerClose,
+    DrawerContent,
+    DrawerDescription,
+    DrawerFooter,
+    DrawerHeader,
+    DrawerTitle,
+} from '@/components/ui/drawer';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
@@ -27,10 +28,16 @@ import {
 } from '@/app/actions/finops';
 import { fetchNotificationGroups } from '@/app/actions/notifications';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useIsBelowLg } from '@/hooks/use-mobile';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
+import { notifyMobileFiltersDrawer } from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { useTranslations, type Translations } from '@/lib/i18n';
+
+const ALERTS_SNAP_POINTS = [0.58, 1] as const;
+
+type DrawerDirection = 'bottom' | 'right';
 
 type NotificationGroupOption = {
     id: string;
@@ -135,6 +142,11 @@ function settingsToForm(
     };
 }
 
+function restoreBodyPointerEvents() {
+    if (typeof document === 'undefined') return;
+    document.body.style.pointerEvents = '';
+}
+
 function GroupChecklist({
     groups,
     loading,
@@ -168,7 +180,7 @@ function GroupChecklist({
     }
 
     return (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 lg:grid-cols-2">
             {groups.map((group) => {
                 const checked = value.includes(group.id);
                 return (
@@ -201,17 +213,26 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
     const t = useTranslations('finops');
     const tCommon = useTranslations('common');
     const schema = useMemo(() => createSchema(t), [t]);
+    const isBelowLg = useIsBelowLg();
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
     const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
 
     const [open, setOpen] = useState(false);
+    const [snapPoint, setSnapPoint] = useState<number | string | null>(ALERTS_SNAP_POINTS[0]);
     const [loading, setLoading] = useState(false);
     const [loadingGroups, setLoadingGroups] = useState(false);
     const [alertsEnabled, setAlertsEnabled] = useState(false);
     const [statusReady, setStatusReady] = useState(false);
     const [emailGroups, setEmailGroups] = useState<NotificationGroupOption[]>([]);
     const [whatsappGroups, setWhatsappGroups] = useState<NotificationGroupOption[]>([]);
+
+    const directionRef = useRef<DrawerDirection>(isBelowLg ? 'bottom' : 'right');
+    if (!open) {
+        directionRef.current = isBelowLg ? 'bottom' : 'right';
+    }
+    const direction = directionRef.current;
+    const isBottom = direction === 'bottom';
 
     const form = useForm<FormData>({
         resolver: zodResolver(schema),
@@ -228,6 +249,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
     const enabled = useWatch({ control: form.control, name: 'enabled' });
     const watchedEmailChannel = useWatch({ control: form.control, name: 'alertChannelEmail' });
     const watchedWhatsappChannel = useWatch({ control: form.control, name: 'alertChannelWhatsapp' });
+    const isFullHeight = isBottom && (snapPoint === 1 || snapPoint === '1');
 
     const loadStatus = useCallback(async () => {
         try {
@@ -238,7 +260,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
             setAlertsEnabled(Boolean(settings.enabled));
             setStatusReady(true);
         } catch {
-            // Status do botão é best-effort; o dialog carrega de novo ao abrir.
+            // Status do botão é best-effort; o painel carrega de novo ao abrir.
         }
     }, [organizationId]);
 
@@ -283,9 +305,26 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
         void loadStatus();
     }, [loadStatus]);
 
+    useEffect(() => {
+        notifyMobileFiltersDrawer(open);
+        return () => {
+            if (open) notifyMobileFiltersDrawer(false);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (open) {
+            setSnapPoint(ALERTS_SNAP_POINTS[0]);
+            return;
+        }
+        const timer = window.setTimeout(restoreBodyPointerEvents, 0);
+        return () => window.clearTimeout(timer);
+    }, [open]);
+
     const handleOpenChange = (next: boolean) => {
         setOpen(next);
         if (next) void loadDialogData();
+        if (!next) restoreBodyPointerEvents();
     };
 
     const onSubmit = async (data: FormData) => {
@@ -318,6 +357,164 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
         toast.success(saved.enabled ? t.alertsEnabledToast : t.alertsDisabledToast);
     };
 
+    const statusBadge: ReactNode = statusReady ? (
+        <span
+            className={cn(
+                'rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
+                alertsEnabled
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-muted text-muted-foreground',
+            )}
+        >
+            {alertsEnabled ? t.alertsOn : t.alertsOff}
+        </span>
+    ) : null;
+
+    const formFields = loading ? (
+        <p className="text-sm text-muted-foreground">{t.alertsLoadingPrefs}</p>
+    ) : (
+        <Form {...form}>
+            <form id="anomaly-alerts-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <FormField
+                    control={form.control}
+                    name="enabled"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-start gap-3 rounded-lg border px-3 py-3">
+                            <FormControl>
+                                <Checkbox
+                                    className="mt-0.5"
+                                    checked={field.value}
+                                    disabled={!canManage}
+                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                />
+                            </FormControl>
+                            <div className="space-y-0.5">
+                                <FormLabel className="text-sm font-medium">{t.alertsEnableDigest}</FormLabel>
+                                <p className="text-xs text-muted-foreground">
+                                    {canManage ? t.alertsDigestHint : t.alertsAdminOnly}
+                                </p>
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="minSeverity"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>{t.alertsMinSeverityLabel}</FormLabel>
+                            <SearchableSelect
+                                mode="single"
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                disabled={!canManage || !enabled}
+                                options={[
+                                    { value: 'critical', label: t.alertsMinSeverityCritical },
+                                    { value: 'high', label: t.alertsMinSeverityHigh },
+                                    { value: 'medium', label: t.alertsMinSeverityMedium },
+                                    { value: 'low', label: t.alertsMinSeverityAll },
+                                ]}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                {t.alertsSeverityNote.replace('{severity}', severityNoteLabel(t, field.value))}
+                            </p>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                {enabled ? (
+                    <>
+                        <Separator />
+                        <div className="space-y-3">
+                            <p className="text-sm font-medium">{t.channelsLabel}</p>
+                            <div className="flex flex-wrap gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="alertChannelEmail"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    disabled={!canManage}
+                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                />
+                                            </FormControl>
+                                            <FormLabel className="font-normal">{tCommon.email}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="alertChannelWhatsapp"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    disabled={!canManage}
+                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                />
+                                            </FormControl>
+                                            <FormLabel className="font-normal">WhatsApp</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                            <FormMessage>{form.formState.errors.alertChannelEmail?.message}</FormMessage>
+                        </div>
+
+                        {watchedEmailChannel ? (
+                            <FormField
+                                control={form.control}
+                                name="alertEmailGroupIds"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{t.emailGroupsLabel}</FormLabel>
+                                        <GroupChecklist
+                                            groups={emailGroups}
+                                            loading={loadingGroups}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            emptyLabel={t.noEmailGroups}
+                                            disabled={!canManage}
+                                            t={t}
+                                        />
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        ) : null}
+
+                        {watchedWhatsappChannel ? (
+                            <FormField
+                                control={form.control}
+                                name="alertWhatsappGroupIds"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{t.whatsappGroupsLabel}</FormLabel>
+                                        <GroupChecklist
+                                            groups={whatsappGroups}
+                                            loading={loadingGroups}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            emptyLabel={t.noWhatsappGroups}
+                                            disabled={!canManage}
+                                            t={t}
+                                        />
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        ) : null}
+                    </>
+                ) : null}
+            </form>
+        </Form>
+    );
+
     return (
         <>
             <Button
@@ -325,222 +522,85 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                 variant="outline"
                 size="sm"
                 onClick={() => handleOpenChange(true)}
-                className="gap-2"
+                className="w-full justify-center gap-2 lg:w-auto"
             >
-                <Bell className="size-4" />
-                {t.alertsButton}
-                {statusReady ? (
-                    <span
-                        className={cn(
-                            'rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
-                            alertsEnabled
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                                : 'bg-muted text-muted-foreground',
-                        )}
-                    >
-                        {alertsEnabled ? t.alertsOn : t.alertsOff}
-                    </span>
-                ) : null}
+                <Bell className="size-3.5 shrink-0" />
+                <span className="truncate">{t.alertsButton}</span>
+                {statusBadge}
             </Button>
 
-            <Dialog open={open} onOpenChange={handleOpenChange}>
-                <DialogContent
-                    showCloseButton
-                    className="flex max-h-[min(90vh,720px)] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+            <Drawer
+                open={open}
+                direction={direction}
+                shouldScaleBackground={false}
+                dismissible
+                onOpenChange={handleOpenChange}
+                {...(isBottom
+                    ? {
+                          snapPoints: [...ALERTS_SNAP_POINTS],
+                          activeSnapPoint: snapPoint,
+                          setActiveSnapPoint: setSnapPoint,
+                          fadeFromIndex: 1,
+                      }
+                    : {})}
+            >
+                <DrawerContent
+                    className={cn(
+                        'flex flex-col gap-0 overflow-hidden bg-background p-0',
+                        isBottom
+                            ? cn('h-full max-h-[100dvh]', isFullHeight ? 'rounded-none' : 'rounded-t-xl')
+                            : 'h-full max-h-none w-full rounded-none sm:max-w-lg',
+                    )}
                 >
-                    <DialogHeader className="shrink-0 border-b px-4 py-4">
-                        <DialogTitle>{t.alertsDialogTitle}</DialogTitle>
-                        <DialogDescription>
+                    <DrawerHeader className="relative shrink-0 border-b px-4 py-3 pr-14 text-left">
+                        <DrawerTitle>{t.alertsDialogTitle}</DrawerTitle>
+                        <DrawerDescription>
                             {t.alertsDialogDescPrefix}{' '}
                             <Link href="/tenant/notifications">{t.notificationsLink}</Link>.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                        {loading ? (
-                            <p className="text-sm text-muted-foreground">{t.alertsLoadingPrefs}</p>
-                        ) : (
-                            <Form {...form}>
-                                <form
-                                    id="anomaly-alerts-form"
-                                    onSubmit={form.handleSubmit(onSubmit)}
-                                    className="space-y-5"
-                                >
-                                    <FormField
-                                        control={form.control}
-                                        name="enabled"
-                                        render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start gap-3 rounded-lg border px-3 py-3">
-                                                <FormControl>
-                                                    <Checkbox
-                                                        className="mt-0.5"
-                                                        checked={field.value}
-                                                        disabled={!canManage}
-                                                        onCheckedChange={(checked) =>
-                                                            field.onChange(checked === true)
-                                                        }
-                                                    />
-                                                </FormControl>
-                                                <div className="space-y-0.5">
-                                                    <FormLabel className="text-sm font-medium">
-                                                        {t.alertsEnableDigest}
-                                                    </FormLabel>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {canManage ? t.alertsDigestHint : t.alertsAdminOnly}
-                                                    </p>
-                                                </div>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    <FormField
-                                        control={form.control}
-                                        name="minSeverity"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>{t.alertsMinSeverityLabel}</FormLabel>
-                                                <SearchableSelect
-                                                    mode="single"
-                                                    value={field.value}
-                                                    onValueChange={field.onChange}
-                                                    disabled={!canManage || !enabled}
-                                                    options={[
-                                                        { value: 'critical', label: t.alertsMinSeverityCritical },
-                                                        { value: 'high', label: t.alertsMinSeverityHigh },
-                                                        { value: 'medium', label: t.alertsMinSeverityMedium },
-                                                        { value: 'low', label: t.alertsMinSeverityAll },
-                                                    ]}
-                                                />
-                                                <p className="text-xs text-muted-foreground">
-                                                    {t.alertsSeverityNote.replace(
-                                                        '{severity}',
-                                                        severityNoteLabel(t, field.value),
-                                                    )}
-                                                </p>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    {enabled ? (
-                                        <>
-                                            <Separator />
-                                            <div className="space-y-3">
-                                                <p className="text-sm font-medium">{t.channelsLabel}</p>
-                                                <div className="flex flex-wrap gap-4">
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="alertChannelEmail"
-                                                        render={({ field }) => (
-                                                            <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                                                                <FormControl>
-                                                                    <Checkbox
-                                                                        checked={field.value}
-                                                                        disabled={!canManage}
-                                                                        onCheckedChange={(checked) =>
-                                                                            field.onChange(checked === true)
-                                                                        }
-                                                                    />
-                                                                </FormControl>
-                                                                <FormLabel className="font-normal">
-                                                                    {tCommon.email}
-                                                                </FormLabel>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="alertChannelWhatsapp"
-                                                        render={({ field }) => (
-                                                            <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                                                                <FormControl>
-                                                                    <Checkbox
-                                                                        checked={field.value}
-                                                                        disabled={!canManage}
-                                                                        onCheckedChange={(checked) =>
-                                                                            field.onChange(checked === true)
-                                                                        }
-                                                                    />
-                                                                </FormControl>
-                                                                <FormLabel className="font-normal">
-                                                                    WhatsApp
-                                                                </FormLabel>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                </div>
-                                                <FormMessage>
-                                                    {form.formState.errors.alertChannelEmail?.message}
-                                                </FormMessage>
-                                            </div>
-
-                                            {watchedEmailChannel ? (
-                                                <FormField
-                                                    control={form.control}
-                                                    name="alertEmailGroupIds"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t.emailGroupsLabel}</FormLabel>
-                                                            <GroupChecklist
-                                                                groups={emailGroups}
-                                                                loading={loadingGroups}
-                                                                value={field.value}
-                                                                onChange={field.onChange}
-                                                                emptyLabel={t.noEmailGroups}
-                                                                disabled={!canManage}
-                                                                t={t}
-                                                            />
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            ) : null}
-
-                                            {watchedWhatsappChannel ? (
-                                                <FormField
-                                                    control={form.control}
-                                                    name="alertWhatsappGroupIds"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t.whatsappGroupsLabel}</FormLabel>
-                                                            <GroupChecklist
-                                                                groups={whatsappGroups}
-                                                                loading={loadingGroups}
-                                                                value={field.value}
-                                                                onChange={field.onChange}
-                                                                emptyLabel={t.noWhatsappGroups}
-                                                                disabled={!canManage}
-                                                                t={t}
-                                                            />
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            ) : null}
-                                        </>
-                                    ) : null}
-                                </form>
-                            </Form>
-                        )}
+                        </DrawerDescription>
+                        <DrawerClose asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="absolute top-3 right-3"
+                                aria-label={tCommon.close}
+                            >
+                                <X className="size-4" />
+                            </Button>
+                        </DrawerClose>
+                    </DrawerHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+                        <div className="mx-auto w-full max-w-lg">{formFields}</div>
                     </div>
-
-                    <DialogFooter className="mx-0 mb-0 shrink-0">
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    <DrawerFooter
+                        className={cn(
+                            'shrink-0 border-t',
+                            isBottom ? 'grid grid-cols-1 gap-2 sm:grid-cols-2' : 'flex flex-row justify-end gap-2',
+                        )}
+                    >
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className={cn(isBottom && 'w-full')}
+                            onClick={() => setOpen(false)}
+                        >
                             {tCommon.cancel}
                         </Button>
                         {canManage ? (
                             <Button
                                 type="submit"
                                 form="anomaly-alerts-form"
+                                className={cn(isBottom && 'w-full')}
                                 isLoading={form.formState.isSubmitting}
                                 disabled={loading}
                             >
                                 {tCommon.save}
                             </Button>
                         ) : null}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    </DrawerFooter>
+                </DrawerContent>
+            </Drawer>
         </>
     );
 }

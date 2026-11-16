@@ -36,16 +36,16 @@ export function AiChatComposer({
     const canSend = Boolean(value.trim()) && !disabled && !isStreaming;
 
     return (
-        <div className="border-border bg-background border-t p-3 sm:p-4">
+        <div className="border-border bg-background border-t px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {noOrgHint ? <p className="text-muted-foreground mb-2 text-xs">{noOrgHint}</p> : null}
-            <InputGroup className="border-border bg-muted/30 h-auto min-h-16 items-stretch shadow-none">
+            <InputGroup className="border-border bg-muted/30 h-auto min-h-12 items-stretch shadow-none">
                 <InputGroupTextarea
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                     placeholder={placeholder}
                     disabled={disabled || isStreaming}
                     aria-label={placeholder}
-                    className="min-h-14 px-3"
+                    className="min-h-11 max-h-32 px-3 py-2.5 text-sm"
                     onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
@@ -55,8 +55,10 @@ export function AiChatComposer({
                         }
                     }}
                 />
-                <InputGroupAddon align="block-end" className="justify-between gap-2 pt-1">
-                    <span className="text-muted-foreground px-1 text-[11px]">Enter · Shift+Enter</span>
+                <InputGroupAddon align="block-end" className="justify-end gap-2 pt-0.5 pb-1.5">
+                    <span className="text-muted-foreground mr-auto hidden px-1 text-[11px] lg:inline">
+                        Enter · Shift+Enter
+                    </span>
                     {isStreaming ? (
                         <InputGroupButton
                             type="button"

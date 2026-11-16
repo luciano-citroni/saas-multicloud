@@ -14,8 +14,13 @@ import {
     DrawerTitle,
 } from '@/components/ui/drawer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { AI_CHAT_OPEN_EVENT } from '@/lib/sidebar-context';
+import { useIsBelowLg } from '@/hooks/use-mobile';
+import { useTranslations } from '@/lib/i18n';
+import {
+    AI_CHAT_OPEN_EVENT,
+    MOBILE_FILTERS_DRAWER_EVENT,
+    type MobileFiltersDrawerEventDetail,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { AiChatComposer } from './ai-chat-composer';
 import { AiChatConversationList } from './ai-chat-conversation-list';
@@ -25,6 +30,8 @@ import { useAiChatController } from './use-ai-chat-controller';
 
 type ChatTab = 'chat' | 'history';
 type DrawerDirection = 'bottom' | 'right';
+
+const CHAT_SNAP_POINTS = [0.7, 1] as const;
 
 function restoreBodyPointerEvents() {
     if (typeof document === 'undefined') {
@@ -37,14 +44,19 @@ export function AiChatDrawer() {
     const [open, setOpen] = useState(false);
     const [visited, setVisited] = useState(false);
     const [tab, setTab] = useState<ChatTab>('chat');
-    const isMobile = useIsMobile();
+    const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
+    const [snapPoint, setSnapPoint] = useState<number | string | null>(CHAT_SNAP_POINTS[0]);
+    const isBelowLg = useIsBelowLg();
+    const tc = useTranslations('common');
     const chat = useAiChatController({ enabled: open });
-    const directionRef = useRef<DrawerDirection>(isMobile ? 'bottom' : 'right');
+    const directionRef = useRef<DrawerDirection>(isBelowLg ? 'bottom' : 'right');
     if (!open) {
-        directionRef.current = isMobile ? 'bottom' : 'right';
+        directionRef.current = isBelowLg ? 'bottom' : 'right';
     }
     const direction = directionRef.current;
     const isBottom = direction === 'bottom';
+    const isFullHeight = isBottom && (snapPoint === 1 || snapPoint === '1');
+    const showFab = !open && !filtersDrawerOpen;
 
     useEffect(() => {
         const openChat = () => {
@@ -59,6 +71,17 @@ export function AiChatDrawer() {
     }, []);
 
     useEffect(() => {
+        const onFiltersDrawer = (event: Event) => {
+            const detail = (event as CustomEvent<MobileFiltersDrawerEventDetail>).detail;
+            setFiltersDrawerOpen(Boolean(detail?.open));
+        };
+        window.addEventListener(MOBILE_FILTERS_DRAWER_EVENT, onFiltersDrawer);
+        return () => {
+            window.removeEventListener(MOBILE_FILTERS_DRAWER_EVENT, onFiltersDrawer);
+        };
+    }, []);
+
+    useEffect(() => {
         if (!chat.deleteTarget) {
             const timer = window.setTimeout(restoreBodyPointerEvents, 0);
             return () => window.clearTimeout(timer);
@@ -68,6 +91,7 @@ export function AiChatDrawer() {
     const handleOpenChange = (nextOpen: boolean) => {
         if (nextOpen) {
             setVisited(true);
+            setSnapPoint(CHAT_SNAP_POINTS[0]);
         }
         setOpen(nextOpen);
         if (!nextOpen) {
@@ -78,7 +102,7 @@ export function AiChatDrawer() {
 
     return (
         <>
-            {!open ? <AiChatTriggerButton variant="fab" onClick={() => handleOpenChange(true)} /> : null}
+            {showFab ? <AiChatTriggerButton variant="fab" onClick={() => handleOpenChange(true)} /> : null}
 
             <Drawer
                 open={open}
@@ -86,20 +110,33 @@ export function AiChatDrawer() {
                 shouldScaleBackground={false}
                 dismissible
                 onOpenChange={handleOpenChange}
+                {...(isBottom
+                    ? {
+                          snapPoints: [...CHAT_SNAP_POINTS],
+                          activeSnapPoint: snapPoint,
+                          setActiveSnapPoint: setSnapPoint,
+                          fadeFromIndex: 1,
+                      }
+                    : {})}
             >
                 {visited ? (
                     <DrawerContent
                         className={cn(
                             'bg-background flex flex-col gap-0 overflow-hidden p-0',
                             isBottom
-                                ? 'mt-0 h-[95dvh] max-h-[95dvh] rounded-t-xl'
-                                : 'h-full max-h-none w-full rounded-none sm:max-w-lg md:max-w-2xl',
+                                ? cn(
+                                      'h-full max-h-[100dvh]',
+                                      isFullHeight ? 'rounded-none' : 'rounded-t-xl',
+                                  )
+                                : 'h-full max-h-none w-full rounded-none sm:max-w-md lg:max-w-lg',
                         )}
                     >
                         <div className="flex h-full min-h-0 flex-1 flex-col">
-                            <DrawerHeader className="border-border bg-background relative shrink-0 border-b px-4 py-3 pr-14 text-left">
-                                <DrawerTitle className="text-base">{chat.t.title}</DrawerTitle>
-                                <DrawerDescription className="text-xs leading-relaxed">
+                            <DrawerHeader className="border-border relative shrink-0 gap-1 border-b px-4 py-3 pr-12 text-left">
+                                <DrawerTitle className="text-base leading-tight">
+                                    {chat.t.title}
+                                </DrawerTitle>
+                                <DrawerDescription className="line-clamp-2 text-xs leading-snug">
                                     {chat.t.description}
                                 </DrawerDescription>
                                 <DrawerClose asChild>
@@ -107,8 +144,8 @@ export function AiChatDrawer() {
                                         type="button"
                                         variant="ghost"
                                         size="icon-sm"
-                                        className="absolute top-3 right-3"
-                                        aria-label="Close"
+                                        className="absolute top-2.5 right-2.5"
+                                        aria-label={tc.close}
                                     >
                                         <X className="size-4" />
                                     </Button>
@@ -120,15 +157,18 @@ export function AiChatDrawer() {
                                 onValueChange={(value) => setTab(value as ChatTab)}
                                 className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden"
                             >
-                                <div className="border-border bg-background flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
-                                    <TabsList className="grid h-9 min-w-0 flex-1 grid-cols-2">
-                                        <TabsTrigger value="chat" className="gap-1.5 px-3">
-                                            <MessageSquare className="size-3.5" />
-                                            {chat.t.tabChat}
+                                <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
+                                    <TabsList className="grid h-8 min-w-0 flex-1 grid-cols-2">
+                                        <TabsTrigger value="chat" className="gap-1.5 px-2 text-xs sm:text-sm">
+                                            <MessageSquare className="size-3.5 shrink-0" />
+                                            <span className="truncate">{chat.t.tabChat}</span>
                                         </TabsTrigger>
-                                        <TabsTrigger value="history" className="gap-1.5 px-3">
-                                            <History className="size-3.5" />
-                                            {chat.t.tabHistory}
+                                        <TabsTrigger
+                                            value="history"
+                                            className="gap-1.5 px-2 text-xs sm:text-sm"
+                                        >
+                                            <History className="size-3.5 shrink-0" />
+                                            <span className="truncate">{chat.t.tabHistory}</span>
                                             {chat.conversations.length > 0 ? (
                                                 <Badge
                                                     variant="secondary"
@@ -142,13 +182,14 @@ export function AiChatDrawer() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        size="lg"
-                                        className="h-9 shrink-0 gap-1.5 rounded-lg px-3"
+                                        size="icon-sm"
+                                        className="shrink-0"
                                         onClick={() => void chat.handleNewConversation()}
                                         disabled={!chat.organizationId}
+                                        aria-label={chat.t.newConversation}
+                                        title={chat.t.newConversation}
                                     >
                                         <Plus className="size-3.5" />
-                                        <span className="hidden sm:inline">{chat.t.newConversation}</span>
                                     </Button>
                                 </div>
 
@@ -187,7 +228,9 @@ export function AiChatDrawer() {
                                                 placeholder={chat.t.placeholder}
                                                 sendLabel={chat.t.send}
                                                 stopLabel={chat.t.stop}
-                                                noOrgHint={!chat.organizationId ? chat.t.selectOrganization : null}
+                                                noOrgHint={
+                                                    !chat.organizationId ? chat.t.selectOrganization : null
+                                                }
                                             />
                                         </div>
                                     </div>

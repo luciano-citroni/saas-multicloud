@@ -62,10 +62,11 @@ async function resolveAccessToken() {
     };
 }
 
-function withAuthHeaders(accessToken: string, headers?: HeadersInit): HeadersInit {
+function withAuthHeaders(accessToken: string, organizationId: string, headers?: HeadersInit): HeadersInit {
     return {
         ...(headers ?? {}),
         Authorization: `Bearer ${accessToken}`,
+        'x-organization-id': organizationId,
     };
 }
 
@@ -94,7 +95,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     let response = await backendFetch(`/api/organization/${encodeURIComponent(organizationId)}/leave`, {
         method: 'DELETE',
-        headers: withAuthHeaders(resolved.accessToken),
+        headers: withAuthHeaders(resolved.accessToken, organizationId),
     });
 
     let rotatedTokens = resolved.rotatedTokens;
@@ -110,7 +111,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
         response = await backendFetch(`/api/organization/${encodeURIComponent(organizationId)}/leave`, {
             method: 'DELETE',
-            headers: withAuthHeaders(refreshResult.accessToken),
+            headers: withAuthHeaders(refreshResult.accessToken, organizationId),
         });
     }
 

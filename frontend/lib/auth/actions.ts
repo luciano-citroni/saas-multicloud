@@ -3,8 +3,6 @@
 import { extractErrorMessage, type ApiErrorResponse } from '@/lib/error-messages';
 import { z } from 'zod';
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4880';
-
 /**
  * Esquema de validação para registro
  */
@@ -25,16 +23,13 @@ interface ActionResult<T = null> {
 }
 
 /**
- * Ação para registro
- * @param data - Dados de registro (name, email, password, confirmPassword)
- * @returns Resultado da ação com sucesso ou erro traduzido
+ * @deprecated Prefer client fetch to `/api/auth/register` (BFF + CSRF).
+ * Kept for compatibility; still avoids calling the Nest URL from the browser.
  */
 export async function registerAction(data: unknown): Promise<ActionResult> {
     try {
-        // Validar dados
         const validatedData = registerSchema.parse(data);
 
-        // Validar se as senhas coincidem
         if (validatedData.password !== validatedData.confirmPassword) {
             return {
                 success: false,
@@ -42,8 +37,13 @@ export async function registerAction(data: unknown): Promise<ActionResult> {
             };
         }
 
-        // Fazer requisição para o backend
-        const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
+        // Server Actions run on the server — call same-origin BFF via absolute backend URL is avoided.
+        // Callers should use `/api/auth/register` from the client. This path is a safe fallback
+        // that still goes through Nest only from the server process.
+        const { getBackendInternalUrl } = await import('@/lib/auth/session');
+        const backendUrl = getBackendInternalUrl();
+
+        const response = await fetch(`${backendUrl}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -53,31 +53,25 @@ export async function registerAction(data: unknown): Promise<ActionResult> {
             }),
         });
 
-        const body = await response.json();
-
         if (!response.ok) {
-            const errorMessage = extractErrorMessage(body as ApiErrorResponse);
+            const body = await response.json().catch(() => null);
             return {
                 success: false,
-                error: errorMessage,
+                error: extractErrorMessage((body ?? {}) as ApiErrorResponse),
             };
         }
 
-        return {
-            success: true,
-            data: body,
-        };
+        await response.json().catch(() => null);
+
+        return { success: true };
     } catch (error) {
-        // Erro de validação
         if (error instanceof z.ZodError) {
-            const firstError = error.issues[0];
             return {
                 success: false,
-                error: firstError.message,
+                error: error.issues[0]?.message ?? 'Dados inválidos',
             };
         }
 
-        // Erro de rede ou outro erro
         return {
             success: false,
             error: 'Erro de conexão. Tente novamente.',

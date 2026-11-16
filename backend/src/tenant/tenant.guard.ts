@@ -5,6 +5,7 @@ import { SKIP_TENANT_KEY } from './tenant.decorators';
 import { TenantService } from './tenant.service';
 import { OrgRole, ROLE_HIERARCHY } from '../rbac/roles.enum';
 import { ROLES_KEY } from '../rbac/roles.decorator';
+import { ErrorMessages } from '../common/messages/error-messages';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -56,7 +57,7 @@ export class TenantGuard implements CanActivate {
             const allowsViewerWrite = Boolean(requiredRoles?.includes(OrgRole.VIEWER));
 
             if (roleLevel < ROLE_HIERARCHY[OrgRole.MEMBER] && !allowsViewerWrite) {
-                throw new ForbiddenException('Insufficient permissions for write operations.');
+                throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
             }
         }
 

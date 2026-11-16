@@ -120,7 +120,7 @@ export function CommercialFinancePanels({
                     <CardContent className="flex flex-col gap-5 pt-4">
                         {credits.hasCredits ? (
                             <>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                     <Stat label={t.commercialCreditsGranted} value={money(credits.granted)} />
                                     <Stat label={t.commercialCreditsConsumed} value={money(credits.consumed)} />
                                     <Stat label={t.commercialCreditsRemaining} value={money(credits.remaining)} />

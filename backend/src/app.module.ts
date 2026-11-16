@@ -17,6 +17,7 @@ import { CloudModule } from './cloud/cloud.module';
 import { AwsModule } from './aws/aws.module';
 import { AzureModule } from './azure/azure.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
+import { SensitiveResponseInterceptor } from './common/interceptors/sensitive-response.interceptor';
 import { BillingModule } from './billing/billing.module';
 import { GovernanceModule } from './governance/governance.module';
 import { FinopsModule } from './finops/finops.module';
@@ -89,6 +90,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         { provide: APP_GUARD, useClass: JwtGuard },
         { provide: APP_GUARD, useClass: UserThrottlerGuard },
         { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
+        { provide: APP_INTERCEPTOR, useClass: SensitiveResponseInterceptor },
     ],
 })
 export class AppModule {}

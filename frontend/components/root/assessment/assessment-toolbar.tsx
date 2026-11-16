@@ -108,7 +108,7 @@ export function AssessmentToolbar({
                         {generatingExcel ? ta.queueingReport : ta.generateExcel}
                     </Button>
                 )}
-                <div className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-1 sm:w-auto">
+                <div className="grid w-full grid-cols-2 gap-1 rounded-lg border border-border/80 bg-muted/30 p-1 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                     <Button
                         type="button"
                         size="sm"
@@ -119,10 +119,10 @@ export function AssessmentToolbar({
                             }
                         }}
                         disabled={nodeCount === 0 || running}
-                        className="rounded-md"
+                        className="h-9 min-w-0 justify-center rounded-md px-2 text-xs sm:h-8 sm:w-auto sm:justify-start sm:px-3 sm:text-sm"
                     >
-                        <ScanSearch className="size-4" />
-                        {ta.noGroups}
+                        <ScanSearch className="size-3.5 shrink-0 sm:size-4" />
+                        <span className="truncate">{ta.noGroups}</span>
                     </Button>
                     {GROUPING_MODE_OPTIONS.map((option) => {
                         const Icon = option.icon;
@@ -136,33 +136,35 @@ export function AssessmentToolbar({
                                 variant={selected ? 'default' : 'ghost'}
                                 onClick={() => onToggleGroupingMode(option.value)}
                                 disabled={nodeCount === 0 || running}
-                                className="rounded-md"
+                                className="h-9 min-w-0 justify-center rounded-md px-2 text-xs sm:h-8 sm:w-auto sm:justify-start sm:px-3 sm:text-sm"
                             >
-                                <Icon className="size-4" />
-                                {groupingLabels[option.value]}
+                                <Icon className="size-3.5 shrink-0 sm:size-4" />
+                                <span className="truncate">{groupingLabels[option.value]}</span>
                             </Button>
                         );
                     })}
                 </div>
-                <div className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/20 p-1.5 sm:w-auto">
+                <div className="flex w-full min-w-0 flex-col gap-1.5 rounded-lg border border-border/80 bg-muted/20 p-1.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
                     <span className="px-2 text-xs font-medium text-muted-foreground">{ta.hideLabel}</span>
-                    {RESOURCE_VISIBILITY_FILTER_OPTIONS.map((option) => {
-                        const selected = hiddenResourceFilterIds.has(option.id);
+                    <div className="grid grid-cols-2 gap-1 sm:contents">
+                        {RESOURCE_VISIBILITY_FILTER_OPTIONS.map((option) => {
+                            const selected = hiddenResourceFilterIds.has(option.id);
 
-                        return (
-                            <Button
-                                key={option.id}
-                                type="button"
-                                size="sm"
-                                variant={selected ? 'secondary' : 'ghost'}
-                                onClick={() => onToggleResourceFilter(option.id)}
-                                disabled={nodeCount === 0 || running}
-                                className="rounded-md"
-                            >
-                                {option.label}
-                            </Button>
-                        );
-                    })}
+                            return (
+                                <Button
+                                    key={option.id}
+                                    type="button"
+                                    size="sm"
+                                    variant={selected ? 'secondary' : 'ghost'}
+                                    onClick={() => onToggleResourceFilter(option.id)}
+                                    disabled={nodeCount === 0 || running}
+                                    className="h-9 min-w-0 justify-center rounded-md px-2 text-xs sm:h-8 sm:w-auto sm:justify-start sm:px-3 sm:text-sm"
+                                >
+                                    <span className="truncate">{option.label}</span>
+                                </Button>
+                            );
+                        })}
+                    </div>
                 </div>
                 {!canRun ? (
                     <Button

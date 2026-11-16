@@ -918,14 +918,15 @@ export function AiBudgetsPanel({
 
             {showPolicies ? (
             <div className={cn('space-y-3', mode === 'all' && 'border-t pt-6')}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 space-y-1">
                         <p className="text-sm font-medium">{t.aiPoliciesTitle}</p>
-                        <p className="text-muted-foreground text-xs">{t.aiPoliciesDesc}</p>
+                        <p className="text-muted-foreground text-xs text-pretty">{t.aiPoliciesDesc}</p>
                     </div>
                     {canManage ? (
                         <Button
                             size="sm"
+                            className="w-full justify-center lg:w-auto"
                             variant={showPolicyForm ? 'outline' : 'default'}
                             onClick={() => setShowPolicyForm((v) => !v)}
                         >
@@ -939,15 +940,17 @@ export function AiBudgetsPanel({
                     <Form {...policyForm}>
                         <form
                             onSubmit={onCreatePolicy}
-                            className="space-y-4 rounded-xl border p-4"
+                            className="space-y-4 rounded-xl border p-3 sm:p-4"
                         >
-                            <p className="text-muted-foreground text-xs">{t.aiPoliciesGatewayNote}</p>
-                            <div className="grid gap-3 md:grid-cols-2">
+                            <p className="text-muted-foreground text-xs text-pretty">
+                                {t.aiPoliciesGatewayNote}
+                            </p>
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                 <FormField
                                     control={policyForm.control}
                                     name="name"
                                     render={({ field }) => (
-                                        <FormItem className="md:col-span-2">
+                                        <FormItem className="lg:col-span-2">
                                             <FormLabel>{tc.name}</FormLabel>
                                             <FormControl>
                                                 <Input
@@ -1022,8 +1025,13 @@ export function AiBudgetsPanel({
                                     )}
                                 />
                             </div>
-                            <div className="flex justify-end">
-                                <Button type="submit" size="sm" isLoading={pending}>
+                            <div className="flex justify-stretch lg:justify-end">
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="w-full justify-center lg:w-auto"
+                                    isLoading={pending}
+                                >
                                     {t.aiCreatePolicy}
                                 </Button>
                             </div>
@@ -1038,34 +1046,43 @@ export function AiBudgetsPanel({
                         {policies.map((policy) => (
                             <li
                                 key={policy.id}
-                                className="flex min-w-0 flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+                                className="flex min-w-0 flex-col gap-3 rounded-xl border px-3 py-3 sm:px-4 lg:flex-row lg:items-start lg:justify-between"
                             >
-                                <div className="min-w-0 space-y-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <p className="font-medium">{policy.name}</p>
-                                        <Badge variant="outline">{policy.onLimitAction}</Badge>
+                                <div className="min-w-0 space-y-2">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                        <p className="min-w-0 break-words font-medium">{policy.name}</p>
+                                        <Badge variant="outline" className="shrink-0">
+                                            {policy.onLimitAction}
+                                        </Badge>
                                     </div>
-                                    <p className="text-muted-foreground text-xs">
-                                        {[
-                                            policy.maxTokens != null
-                                                ? `${t.aiPolicyMaxTokens}: ${policy.maxTokens}`
-                                                : null,
-                                            policy.maxCost != null
-                                                ? `${t.aiPolicyMaxCost}: ${policy.maxCost}`
-                                                : null,
-                                            policy.maxRequestsPerMinute != null
-                                                ? `${t.aiPolicyMaxRpm}: ${policy.maxRequestsPerMinute}`
-                                                : null,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ') || t.aiBudgetScopeOrganization}
-                                    </p>
+                                    <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                                        <div className="rounded-lg bg-muted/40 px-2.5 py-2">
+                                            <p className="text-muted-foreground">{t.aiPolicyMaxTokens}</p>
+                                            <p className="font-medium tabular-nums">
+                                                {policy.maxTokens != null ? String(policy.maxTokens) : '—'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg bg-muted/40 px-2.5 py-2">
+                                            <p className="text-muted-foreground">{t.aiPolicyMaxCost}</p>
+                                            <p className="font-medium tabular-nums">
+                                                {policy.maxCost != null ? String(policy.maxCost) : '—'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg bg-muted/40 px-2.5 py-2">
+                                            <p className="text-muted-foreground">{t.aiPolicyMaxRpm}</p>
+                                            <p className="font-medium tabular-nums">
+                                                {policy.maxRequestsPerMinute != null
+                                                    ? String(policy.maxRequestsPerMinute)
+                                                    : '—'}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                                 {canManage ? (
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="text-destructive shrink-0"
+                                        className="text-destructive w-full justify-center shrink-0 lg:w-auto"
                                         disabled={pending}
                                         onClick={() =>
                                             startTransition(async () => {

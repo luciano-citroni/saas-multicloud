@@ -26,6 +26,10 @@ const pt = {
         back: 'Voltar',
         search: 'Buscar',
         filter: 'Filtrar',
+        filters: 'Filtros',
+        adjustFilters: 'Ajustar',
+        applyFilters: 'Aplicar',
+        clearFilters: 'Limpar filtros',
         all: 'Todos',
         yes: 'Sim',
         no: 'Não',
@@ -417,6 +421,12 @@ const pt = {
         passStrength: 'A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula, 1 número e 1 caractere especial',
         passMismatch: 'As senhas não coincidem',
         registerSuccess: 'Conta criada com sucesso! Faça login para continuar.',
+        registerSuccessVerifyEmail:
+            'Conta criada! Enviamos um link de confirmação para o seu e-mail. Confirme antes de entrar.',
+        loginNeedsVerificationHint:
+            'Sua conta ainda não confirmou o e-mail. Reenvie o link de confirmação para continuar.',
+        verifyEmailResentPublic:
+            'Se existir uma conta pendente para este e-mail, enviamos um novo link de confirmação.',
         registerError: 'Erro ao criar conta',
         registerNameLabel: 'Nome',
         registerPasswordLabel: 'Senha',
@@ -2921,6 +2931,10 @@ const en: TranslationMap<typeof pt> = {
         back: 'Back',
         search: 'Search',
         filter: 'Filter',
+        filters: 'Filters',
+        adjustFilters: 'Adjust',
+        applyFilters: 'Apply',
+        clearFilters: 'Clear filters',
         all: 'All',
         yes: 'Yes',
         no: 'No',
@@ -3312,6 +3326,12 @@ const en: TranslationMap<typeof pt> = {
         passStrength: 'Password must have at least 8 characters, 1 uppercase letter, 1 number and 1 special character',
         passMismatch: 'Passwords do not match',
         registerSuccess: 'Account created successfully! Please log in to continue.',
+        registerSuccessVerifyEmail:
+            'Account created! We sent a confirmation link to your email. Verify it before signing in.',
+        loginNeedsVerificationHint:
+            'Your account has not confirmed the email yet. Resend the confirmation link to continue.',
+        verifyEmailResentPublic:
+            'If a pending account exists for this email, we sent a new confirmation link.',
         registerError: 'Error creating account',
         registerNameLabel: 'Name',
         registerPasswordLabel: 'Password',

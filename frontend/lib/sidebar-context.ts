@@ -21,6 +21,11 @@ export const ACTIVE_ORG_CHANGED_EVENT = 'smc:active-organization-changed';
 export const ACTIVE_MID_ORG_CHANGED_EVENT = 'smc:active-mid-org-changed';
 export const ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT = 'smc:active-cloud-account-changed';
 export const AI_CHAT_OPEN_EVENT = 'smc:ai-chat-open';
+export const MOBILE_FILTERS_DRAWER_EVENT = 'smc:mobile-filters-drawer';
+
+export type MobileFiltersDrawerEventDetail = {
+    open: boolean;
+};
 
 export function notifySidebarContextUpdated() {
     window.dispatchEvent(new Event(SIDEBAR_CONTEXT_UPDATED_EVENT));
@@ -40,4 +45,12 @@ export function notifyActiveCloudAccountChanged() {
 
 export function notifyAiChatOpen() {
     window.dispatchEvent(new Event(AI_CHAT_OPEN_EVENT));
+}
+
+export function notifyMobileFiltersDrawer(open: boolean) {
+    window.dispatchEvent(
+        new CustomEvent<MobileFiltersDrawerEventDetail>(MOBILE_FILTERS_DRAWER_EVENT, {
+            detail: { open },
+        }),
+    );
 }

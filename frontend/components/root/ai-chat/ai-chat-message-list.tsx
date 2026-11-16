@@ -185,15 +185,15 @@ export function AiChatMessageList({
 }: Props) {
     if (!messages.length && !streamingContent && !isStreaming) {
         return (
-            <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto px-6 py-10 text-center">
-                <Avatar size="lg" className="bg-primary/10 ring-border size-12 ring-1">
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-4 py-6 text-center sm:gap-5 sm:px-6 sm:py-10">
+                <Avatar size="lg" className="bg-primary/10 ring-border size-11 ring-1 sm:size-12">
                     <AvatarFallback className="bg-primary/10 text-primary">
                         <MessageCircleDashed className="size-5" />
                     </AvatarFallback>
                 </Avatar>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                     <p className="text-base font-semibold tracking-tight">{emptyTitle}</p>
-                    <p className="text-muted-foreground mx-auto max-w-md text-sm leading-relaxed">
+                    <p className="text-muted-foreground mx-auto max-w-sm text-sm leading-relaxed text-pretty">
                         {emptyDescription}
                     </p>
                 </div>
@@ -214,7 +214,7 @@ export function AiChatMessageList({
             <div className="min-h-0 flex-1 overflow-hidden">
                 <MessageScroller className="h-full">
                     <MessageScrollerViewport>
-                        <MessageScrollerContent className="gap-6 px-4 py-5">
+                        <MessageScrollerContent className="gap-4 px-3 py-4 sm:gap-5 sm:px-4 sm:py-5">
                             {messages.map((message) => {
                                 if (message.role === 'user') {
                                     return (

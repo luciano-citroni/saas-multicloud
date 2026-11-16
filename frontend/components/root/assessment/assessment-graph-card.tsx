@@ -507,7 +507,7 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
     );
 
     const handleWheel = useCallback(
-        (event: React.WheelEvent<SVGSVGElement>) => {
+        (event: WheelEvent) => {
             event.preventDefault();
             event.stopPropagation();
 
@@ -518,6 +518,17 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
         },
         [zoomAtPoint]
     );
+
+    // React registers onWheel as passive, so preventDefault must use a native listener.
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg || !graphModel) {
+            return;
+        }
+
+        svg.addEventListener('wheel', handleWheel, { passive: false });
+        return () => svg.removeEventListener('wheel', handleWheel);
+    }, [graphModel, handleWheel]);
 
     const handlePointerDown = useCallback(
         (event: React.PointerEvent<SVGSVGElement>) => {
@@ -735,11 +746,6 @@ export function AssessmentGraphCard({ nodes, edges, groupingModeLabel, colorMode
                                         shapeRendering="geometricPrecision"
                                         textRendering="optimizeLegibility"
                                         preserveAspectRatio="xMidYMid meet"
-                                        onWheelCapture={(event) => {
-                                            event.preventDefault();
-                                            event.stopPropagation();
-                                        }}
-                                        onWheel={handleWheel}
                                         onPointerDown={handlePointerDown}
                                         onPointerMove={handlePointerMove}
                                         onPointerUp={handlePointerUp}

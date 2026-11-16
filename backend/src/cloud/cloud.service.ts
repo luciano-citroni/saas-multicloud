@@ -812,6 +812,10 @@ export class CloudService {
         'private_key',
         'secretAccessKey',
         'secret_access_key',
+        'apiKey',
+        'api_key',
+        'adminApiKey',
+        'admin_api_key',
         'password',
         'secret',
     ] as const;
@@ -828,6 +832,9 @@ export class CloudService {
                 }
                 if (key === 'privateKey' || key === 'private_key') {
                     redacted.hasPrivateKey = true;
+                }
+                if (key === 'apiKey' || key === 'api_key' || key === 'adminApiKey' || key === 'admin_api_key') {
+                    redacted.hasApiKey = true;
                 }
             }
         }
@@ -852,6 +859,7 @@ export class CloudService {
 
         delete merged.hasClientSecret;
         delete merged.hasPrivateKey;
+        delete merged.hasApiKey;
 
         return merged;
     }

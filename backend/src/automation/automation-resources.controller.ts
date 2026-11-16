@@ -2,6 +2,8 @@
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
+import { Roles } from '../rbac/roles.decorator';
+import { OrgRole } from '../rbac/roles.enum';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
 import { Tenant } from '../db/entites/tenant.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -98,9 +100,11 @@ export class AutomationResourcesController {
     }
 
     @Post('key-pairs')
+    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Criar novo Key Pair e retornar PEM' })
     @ApiResponse({ status: 201 })
+    @ApiResponse({ status: 403, description: 'Requer role ADMIN ou OWNER' })
     async createKeyPair(
         @CurrentOrganization() org: Tenant,
         @Body(new ZodValidationPipe(createKeyPairSchema)) body: z.infer<typeof createKeyPairSchema>,

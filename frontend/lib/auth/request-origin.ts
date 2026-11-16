@@ -65,16 +65,12 @@ function getForwardedOrigin(request: Request): string | null {
 function getAllowedOrigins(request: Request): Set<string> {
     const allowedOrigins = new Set<string>();
 
-    // Runtime URL da request.
+    // Runtime URL da request (host que o Next enxerga nesta chamada).
     addOrigin(allowedOrigins, request.url);
 
-    // Host público propagado por proxy/load balancer.
-    const forwardedOrigin = getForwardedOrigin(request);
-    if (forwardedOrigin) {
-        allowedOrigins.add(forwardedOrigin);
-    }
-
     // Origens públicas configuradas para o frontend.
+    // Do NOT trust X-Forwarded-Host / X-Forwarded-Proto for CSRF allowlisting —
+    // a client can spoof those headers and expand the allowlist to an attacker origin.
     for (const origin of getConfiguredOrigins()) {
         allowedOrigins.add(origin);
     }
@@ -132,11 +128,20 @@ export function hasTrustedOrigin(request: Request): boolean {
 export function getSafeNextPath(rawNext: string | null | undefined, fallback = '/'): string {
     if (!rawNext) return fallback;
     const trimmed = rawNext.trim();
-    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('://')) {
+    let decoded = trimmed;
+    try {
+        decoded = decodeURIComponent(trimmed);
+    } catch {
         return fallback;
     }
-    if (trimmed.includes('\\') || trimmed.includes('\n') || trimmed.includes('\r')) {
-        return fallback;
+    // Validate both raw and decoded forms (blocks /%2f%2fevil.com style tricks).
+    for (const candidate of [trimmed, decoded]) {
+        if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('://')) {
+            return fallback;
+        }
+        if (candidate.includes('\\') || candidate.includes('\n') || candidate.includes('\r')) {
+            return fallback;
+        }
     }
     return trimmed;
 }

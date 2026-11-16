@@ -10,10 +10,10 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
-    Filter,
     Pencil,
     Plus,
     RefreshCw,
+    RotateCcw,
     Target,
     Trash2,
 } from 'lucide-react';
@@ -32,6 +32,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { AiBudgetCreateDialog } from '@/components/root/finops/ai-budget-create-dialog';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { buildFinopsQuery, parseFinopsUrlFilters } from '@/components/root/finops/finops-filter-utils';
 import { formatCurrency } from '@/components/root/finops/overview/helpers';
 import type { NotificationGroupOption } from '@/components/root/finops/finops-budget-form';
@@ -253,6 +254,7 @@ export function FinopsBudgets() {
     const [aiDeleteTarget, setAiDeleteTarget] = useState<AiBudgetRow | null>(null);
     const [aiCreateOpen, setAiCreateOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
 
     const syncUrlState = useCallback(
         (
@@ -778,17 +780,100 @@ export function FinopsBudgets() {
         return <FinopsLoadingSkeleton />;
     }
 
+    const hasActiveFilters =
+        budgetKind !== 'all' || viewPeriod !== 'all' || Boolean(scopeFilter);
+
+    const clearFilters = () => {
+        syncUrlState({
+            kind: 'all',
+            view: 'all',
+            account: null,
+            page: null,
+        });
+    };
+
+    const budgetsFilterFields = (
+        <>
+            <SearchableSelect
+                mode="single"
+                id="budgets-kind"
+                label={t.budgetsKindLabel}
+                value={budgetKind}
+                options={[
+                    { value: 'all', label: t.budgetsKindAll },
+                    { value: 'cloud', label: t.budgetsKindCloud },
+                    { value: 'ai', label: t.budgetsKindAi },
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => syncUrlState({ kind: parseBudgetKind(value), page: null })}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="budgets-scope"
+                label={t.scopeLabel}
+                value={scopeFilter ?? ORG_SCOPE_VALUE}
+                options={[
+                    { value: ORG_SCOPE_VALUE, label: t.budgetsAllBudgets },
+                    ...cloudAccounts.map((account) => ({
+                        value: account.id,
+                        label: `${account.alias} (${account.provider.toUpperCase()})`,
+                    })),
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                disabled={budgetKind === 'ai'}
+                onValueChange={(value) => {
+                    if (value !== ORG_SCOPE_VALUE) {
+                        window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
+                    }
+                    syncUrlState({ account: value, page: null });
+                }}
+            />
+
+            <SearchableSelect
+                mode="single"
+                id="budgets-view"
+                label={t.budgetsViewPlaceholder}
+                value={viewPeriod}
+                options={[
+                    { value: 'all', label: t.budgetsAllCadences },
+                    { value: 'daily', label: t.budgetsAlertTwiceDaily },
+                    { value: 'monthly', label: t.budgetsAlertMonthly },
+                ]}
+                searchPlaceholder={tCommon.search}
+                emptyText={t.filterSearchEmpty}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => {
+                    syncUrlState({
+                        view: value === 'daily' ? 'daily' : value === 'monthly' ? 'monthly' : 'all',
+                        page: null,
+                    });
+                }}
+            />
+        </>
+    );
+
     return (
         <div className="flex flex-col gap-6 pb-16">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-1">
                     <h1 className="text-xl font-semibold tracking-tight text-balance">{t.budgetsTitle}</h1>
                     <p className="text-muted-foreground max-w-2xl text-sm text-pretty">{t.budgetsDesc}</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div
+                    className={cn(
+                        'grid w-full gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center',
+                        canManage ? 'grid-cols-2' : 'grid-cols-1',
+                    )}
+                >
                     <Button
                         variant="outline"
                         size="sm"
+                        className="w-full justify-center gap-2 lg:w-auto"
                         onClick={refreshAll}
                         disabled={refreshing || (!scopeFilter && !showAi)}
                     >
@@ -798,7 +883,7 @@ export function FinopsBudgets() {
                     {canManage ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button size="sm">
+                                <Button size="sm" className="w-full justify-center gap-2 lg:w-auto">
                                     <Plus className="size-3.5" />
                                     {t.newBudget}
                                 </Button>
@@ -821,78 +906,42 @@ export function FinopsBudgets() {
 
             <FinopsSubnav />
 
-            <section className="space-y-3 rounded-xl border p-3 sm:p-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    <Filter className="text-muted-foreground size-4" />
-                    {t.filtersTitle}
-                </div>
-                <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <SearchableSelect
-                        mode="single"
-                        label={t.budgetsKindLabel}
-                        value={budgetKind}
-                        options={[
-                            { value: 'all', label: t.budgetsKindAll },
-                            { value: 'cloud', label: t.budgetsKindCloud },
-                            { value: 'ai', label: t.budgetsKindAi },
-                        ]}
-                        searchPlaceholder={tCommon.search}
-                        emptyText={t.filterSearchEmpty}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            syncUrlState({ kind: parseBudgetKind(value), page: null })
-                        }
-                    />
-
-                    <SearchableSelect
-                        mode="single"
-                        label={t.scopeLabel}
-                        value={scopeFilter ?? ORG_SCOPE_VALUE}
-                        options={[
-                            { value: ORG_SCOPE_VALUE, label: t.budgetsAllBudgets },
-                            ...cloudAccounts.map((account) => ({
-                                value: account.id,
-                                label: `${account.alias} (${account.provider.toUpperCase()})`,
-                            })),
-                        ]}
-                        searchPlaceholder={tCommon.search}
-                        emptyText={t.filterSearchEmpty}
-                        clearLabel={t.clearFilters}
-                        disabled={budgetKind === 'ai'}
-                        onValueChange={(value) => {
-                            if (value !== ORG_SCOPE_VALUE) {
-                                window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, value);
-                            }
-                            syncUrlState({ account: value, page: null });
-                        }}
-                    />
-
-                    <SearchableSelect
-                        mode="single"
-                        label={t.budgetsViewPlaceholder}
-                        value={viewPeriod}
-                        options={[
-                            { value: 'all', label: t.budgetsAllCadences },
-                            { value: 'daily', label: t.budgetsAlertTwiceDaily },
-                            { value: 'monthly', label: t.budgetsAlertMonthly },
-                        ]}
-                        searchPlaceholder={tCommon.search}
-                        emptyText={t.filterSearchEmpty}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) => {
-                            syncUrlState({
-                                view:
-                                    value === 'daily'
-                                        ? 'daily'
-                                        : value === 'monthly'
-                                          ? 'monthly'
-                                          : 'all',
-                                page: null,
-                            });
-                        }}
-                    />
-                </div>
-            </section>
+            <Card>
+                <CardHeader className="gap-4">
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <CardTitle className="text-base">{t.filtersTitle}</CardTitle>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {hasActiveFilters ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 gap-1.5"
+                                    onClick={clearFilters}
+                                >
+                                    <RotateCcw className="size-3.5" />
+                                    {t.clearFilters}
+                                </Button>
+                            ) : null}
+                            <MobileFiltersDrawer
+                                open={filtersDrawerOpen}
+                                onOpenChange={setFiltersDrawerOpen}
+                                title={t.filtersTitle}
+                                triggerLabel={t.filterAdjust}
+                                applyLabel={t.filterApply}
+                                activeCount={hasActiveFilters ? 1 : 0}
+                            >
+                                {budgetsFilterFields}
+                            </MobileFiltersDrawer>
+                        </div>
+                    </div>
+                    <div className="hidden items-end gap-3 lg:grid lg:grid-cols-3">
+                        {budgetsFilterFields}
+                    </div>
+                </CardHeader>
+            </Card>
 
             {activeAlerts.length > 0 && (
                 <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">

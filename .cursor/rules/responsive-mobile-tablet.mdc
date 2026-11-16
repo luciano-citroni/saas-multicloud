@@ -1,0 +1,25 @@
+---
+description: Sempre otimizar UI frontend para mobile e tablet; desktop compacto só em lg+
+globs: "{frontend/components/**,frontend/app/**}"
+alwaysApply: false
+---
+
+# Responsive: mobile + tablet first
+
+Breakpoints do produto:
+
+| Viewport | Tailwind | Comportamento |
+|----------|----------|---------------|
+| Mobile | `< md` (768) | Stack, drawers/sheets, full-width actions |
+| Tablet | `md`–`< lg` | Ainda stacked/full-width; grids 2 cols; filtros densos em Sheet |
+| Desktop | `lg+` | Inline compacto, toolbars densas, master–detail |
+
+## Regras
+
+- Não trate tablet como desktop. Preferir `lg:` (não `sm:`) para passar de layout stacked/full-width para inline compacto.
+- Ações de header (Atualizar, Sincronizar, export, etc.): `grid w-full gap-2` + `w-full` com `size="sm"` até `lg:`; em `lg+` usar `lg:flex lg:w-auto`. Não forçar `h-10`/botões altos.
+- Headers de página: `flex-col gap-3` até `lg:flex-row lg:items-start lg:justify-between`.
+- Filtros densos: desktop `hidden lg:block`; mobile/tablet Sheet + chips (não liberar barra densa no `md`).
+- Inputs/selects em toolbars: `w-full` até `lg:w-*`.
+- Sempre `min-w-0` em filhos flex que truncam ou scrollam.
+- Testar mentalmente 390px, 768px e 1024px — não só “mobile vs desktop”.

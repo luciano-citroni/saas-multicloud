@@ -44,6 +44,7 @@ import {
     ItemMedia,
     ItemTitle,
 } from '@/components/ui/item';
+import { MobileFiltersDrawer } from '@/components/root/layout';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
 import { useLocale } from '@/components/providers/locale-provider';
@@ -157,6 +158,7 @@ export function CloudIntelligenceRecommendationsPanel() {
     const [loaded, setLoaded] = useState(false);
     const [actionPending, setActionPending] = useState<string | null>(null);
     const [mobilePane, setMobilePane] = useState<'list' | 'detail'>('list');
+    const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
     const [draftSearch, setDraftSearch] = useState(qFromUrl);
     const selectedId = searchParams.get('id') ?? undefined;
 
@@ -611,6 +613,73 @@ export function CloudIntelligenceRecommendationsPanel() {
         });
     }
 
+    const recommendationFilterFields = (
+        <>
+            <SearchableSelect
+                mode="single"
+                value={status ?? 'all'}
+                options={[
+                    { value: 'all', label: t.filterAllStatuses },
+                    ...STATUS_KEYS.map((value) => ({ value, label: statusLabel(value) })),
+                ]}
+                placeholder={t.filterStatus}
+                searchPlaceholder={tCommon.search}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => replaceRecsUrl({ status: value === 'all' ? null : value })}
+            />
+            <SearchableSelect
+                mode="single"
+                value={category ?? 'all'}
+                options={[
+                    { value: 'all', label: t.filterAllCategories },
+                    ...CATEGORY_KEYS.map((value) => ({ value, label: categoryLabel(value) })),
+                ]}
+                placeholder={t.filterCategory}
+                searchPlaceholder={tCommon.search}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => replaceRecsUrl({ category: value === 'all' ? null : value })}
+            />
+            <SearchableSelect
+                mode="single"
+                value={severity ?? 'all'}
+                options={[
+                    { value: 'all', label: t.filterAllSeverities },
+                    ...SEVERITY_KEYS.map((value) => ({ value, label: severityLabel(value) })),
+                ]}
+                placeholder={t.filterSeverity}
+                searchPlaceholder={tCommon.search}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => replaceRecsUrl({ severity: value === 'all' ? null : value })}
+            />
+            <SearchableSelect
+                mode="single"
+                value={source ?? 'all'}
+                options={[
+                    { value: 'all', label: t.filterAllSources },
+                    ...SOURCE_KEYS.map((value) => ({ value, label: sourceLabel(value) })),
+                ]}
+                placeholder={t.filterSource}
+                searchPlaceholder={tCommon.search}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => replaceRecsUrl({ source: value === 'all' ? null : value })}
+            />
+            <SearchableSelect
+                mode="single"
+                className="col-span-2"
+                value={automatable}
+                options={[
+                    { value: 'all', label: t.filterAutomatableAll },
+                    { value: 'yes', label: t.filterAutomatableYes },
+                    { value: 'no', label: t.filterAutomatableNo },
+                ]}
+                placeholder={t.filterAutomatable}
+                searchPlaceholder={tCommon.search}
+                clearLabel={t.clearFilters}
+                onValueChange={(value) => replaceRecsUrl({ automatable: value as AutomatableFilter })}
+            />
+        </>
+    );
+
     const listPane = (
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className="flex shrink-0 flex-col gap-3 px-3 py-3">
@@ -628,9 +697,19 @@ export function CloudIntelligenceRecommendationsPanel() {
                                 onClick={clearFilters}
                             >
                                 <RotateCcw className="size-3.5" />
-                                {t.clearFilters}
+                                <span className="hidden sm:inline">{t.clearFilters}</span>
                             </Button>
                         ) : null}
+                        <MobileFiltersDrawer
+                            open={filtersDrawerOpen}
+                            onOpenChange={setFiltersDrawerOpen}
+                            title={tCommon.filters}
+                            triggerLabel={tCommon.adjustFilters}
+                            applyLabel={tCommon.applyFilters}
+                            activeCount={hasActiveFilters ? 1 : 0}
+                        >
+                            {recommendationFilterFields}
+                        </MobileFiltersDrawer>
                         <Button
                             type="button"
                             size="sm"
@@ -640,7 +719,7 @@ export function CloudIntelligenceRecommendationsPanel() {
                             onClick={() => load()}
                         >
                             <RefreshCw className={cn('size-3.5', pending && 'animate-spin')} />
-                            {t.refreshList}
+                            <span className="hidden sm:inline">{t.refreshList}</span>
                         </Button>
                     </div>
                 </div>
@@ -656,79 +735,8 @@ export function CloudIntelligenceRecommendationsPanel() {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 items-end gap-2">
-                    <SearchableSelect
-                        mode="single"
-                        value={status ?? 'all'}
-                        options={[
-                            { value: 'all', label: t.filterAllStatuses },
-                            ...STATUS_KEYS.map((value) => ({ value, label: statusLabel(value) })),
-                        ]}
-                        placeholder={t.filterStatus}
-                        searchPlaceholder={tCommon.search}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            replaceRecsUrl({ status: value === 'all' ? null : value })
-                        }
-                    />
-                    <SearchableSelect
-                        mode="single"
-                        value={category ?? 'all'}
-                        options={[
-                            { value: 'all', label: t.filterAllCategories },
-                            ...CATEGORY_KEYS.map((value) => ({ value, label: categoryLabel(value) })),
-                        ]}
-                        placeholder={t.filterCategory}
-                        searchPlaceholder={tCommon.search}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            replaceRecsUrl({ category: value === 'all' ? null : value })
-                        }
-                    />
-                    <SearchableSelect
-                        mode="single"
-                        value={severity ?? 'all'}
-                        options={[
-                            { value: 'all', label: t.filterAllSeverities },
-                            ...SEVERITY_KEYS.map((value) => ({ value, label: severityLabel(value) })),
-                        ]}
-                        placeholder={t.filterSeverity}
-                        searchPlaceholder={tCommon.search}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            replaceRecsUrl({ severity: value === 'all' ? null : value })
-                        }
-                    />
-                    <SearchableSelect
-                        mode="single"
-                        value={source ?? 'all'}
-                        options={[
-                            { value: 'all', label: t.filterAllSources },
-                            ...SOURCE_KEYS.map((value) => ({ value, label: sourceLabel(value) })),
-                        ]}
-                        placeholder={t.filterSource}
-                        searchPlaceholder={tCommon.search}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            replaceRecsUrl({ source: value === 'all' ? null : value })
-                        }
-                    />
-                    <SearchableSelect
-                        mode="single"
-                        className="col-span-2"
-                        value={automatable}
-                        options={[
-                            { value: 'all', label: t.filterAutomatableAll },
-                            { value: 'yes', label: t.filterAutomatableYes },
-                            { value: 'no', label: t.filterAutomatableNo },
-                        ]}
-                        placeholder={t.filterAutomatable}
-                        searchPlaceholder={tCommon.search}
-                        clearLabel={t.clearFilters}
-                        onValueChange={(value) =>
-                            replaceRecsUrl({ automatable: value as AutomatableFilter })
-                        }
-                    />
+                <div className="hidden grid-cols-2 items-end gap-2 lg:grid">
+                    {recommendationFilterFields}
                 </div>
 
                 {activeFilterChips.length > 0 ? (

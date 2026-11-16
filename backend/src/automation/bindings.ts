@@ -91,7 +91,8 @@ export function hasRuntimeOutputBinding(value: unknown): boolean {
     return found;
 }
 
-const SENSITIVE_KEY = /password|secretvalue|clientsecret|sessiontoken/i;
+const SENSITIVE_KEY =
+    /password|secretvalue|clientsecret|sessiontoken|privatekey|secretaccesskey|apikey|adminapikey|masteruserpassword|accesskey|refreshtoken|credentialsencrypted|encryptedvalue/i;
 
 export function redactSensitive(value: unknown, sensitiveKeys: Set<string>): unknown {
     if (Array.isArray(value)) {

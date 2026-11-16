@@ -18,9 +18,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
             statusCode: normalized.statusCode,
             error: normalized.error,
             message: normalized.message,
-            path: request.url,
+            path: this.safeRequestPath(request),
             timestamp: new Date().toISOString(),
         });
+    }
+
+    /** Pathname only — query strings may contain tokens/codes. */
+    private safeRequestPath(request: Request): string {
+        const raw = request.originalUrl || request.url || '/';
+        const q = raw.indexOf('?');
+        return q === -1 ? raw : raw.slice(0, q);
     }
 
     private logException(exception: unknown, normalized: { statusCode: number; error: string; message: string | string[] }, request: Request) {
@@ -29,7 +36,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
             error: normalized.error,
             message: normalized.message,
             method: request.method,
-            path: request.url,
+            path: this.safeRequestPath(request),
             ip: request.ip,
             userAgent: request.headers['user-agent'],
         };

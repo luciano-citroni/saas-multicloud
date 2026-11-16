@@ -21,7 +21,8 @@ export class User {
     @Column({ type: 'varchar', length: 255 })
     name!: string;
 
-    @Column({ type: 'varchar', length: 255, nullable: true })
+    /** bcrypt hash — never selected by default; use addSelect when authenticating. */
+    @Column({ type: 'varchar', length: 255, nullable: true, select: false })
     password!: string | null;
 
     @Column({ type: 'varchar', length: 255, unique: true, nullable: true, name: 'google_id' })
@@ -32,6 +33,12 @@ export class User {
 
     @Column({ type: 'boolean', default: false, name: 'email_verified' })
     emailVerified!: boolean;
+
+    @Column({ type: 'int', default: 0, name: 'failed_login_attempts' })
+    failedLoginAttempts!: number;
+
+    @Column({ type: 'timestamptz', nullable: true, name: 'locked_until' })
+    lockedUntil!: Date | null;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt!: Date;

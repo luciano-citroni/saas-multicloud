@@ -92,6 +92,12 @@ export class UserResponseDto {
         description: 'Status de ativação do usuário',
     })
     isActive: boolean;
+
+    @ApiProperty({
+        example: false,
+        description: 'Indica se a conta está vinculada ao Google (sem expor o googleId)',
+    })
+    hasGoogleLinked: boolean;
 }
 
 export class DeleteUserResponseDto {

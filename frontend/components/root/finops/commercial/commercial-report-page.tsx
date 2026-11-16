@@ -41,6 +41,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLocale } from '@/components/providers/locale-provider';
+import { useIsBelowLg } from '@/hooks/use-mobile';
 import { collapseResourceLabels } from '@/lib/finops/resource-label';
 import { friendlyServiceLabel } from '@/lib/finops/service-label';
 import { extractErrorMessage } from '@/lib/error-messages';
@@ -49,6 +50,7 @@ import { toIntlLocale } from '@/lib/i18n/format';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import { cn } from '@/lib/utils';
 
 type Point = { date: string; cost: number };
 type NamedAmount = { name: string; amount: number; alternate?: string };
@@ -188,21 +190,23 @@ function ChartCard({
     description,
     span = 'half',
     group = 'after',
+    contentClassName,
     children,
 }: {
     title: string;
     description?: string;
     span?: 'half' | 'third' | 'full';
     group?: 'before' | 'after';
+    contentClassName?: string;
     children: React.ReactNode;
 }) {
     return (
-        <Card data-pdf-chart="" data-pdf-span={span} data-pdf-group={group} className="break-inside-avoid">
-            <CardHeader>
-                <CardTitle className="text-base">{title}</CardTitle>
-                {description ? <CardDescription>{description}</CardDescription> : null}
+        <Card data-pdf-chart="" data-pdf-span={span} data-pdf-group={group} className="min-w-0 break-inside-avoid">
+            <CardHeader className="gap-1.5">
+                <CardTitle className="text-base text-balance">{title}</CardTitle>
+                {description ? <CardDescription className="text-pretty">{description}</CardDescription> : null}
             </CardHeader>
-            <CardContent className="h-72">{children}</CardContent>
+            <CardContent className={cn('min-w-0', contentClassName ?? 'h-64 lg:h-72')}>{children}</CardContent>
         </Card>
     );
 }
@@ -385,7 +389,9 @@ export function CommercialReportPage() {
                         break-inside: avoid;
                         box-shadow: none !important;
                     }
+                    .commercial-report [data-slot="card-content"].h-64,
                     .commercial-report [data-slot="card-content"].h-72,
+                    .commercial-report [data-slot="card-content"].lg\\:h-72,
                     .commercial-report .recharts-responsive-container {
                         height: 18rem !important;
                         min-height: 18rem !important;
@@ -393,20 +399,20 @@ export function CommercialReportPage() {
                     }
                 }
             `}</style>
-            <div className="commercial-no-print flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-3">
+            <div className="commercial-no-print flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">{tf.commercialTitle}</h1>
                         <p className="text-sm text-muted-foreground">{tf.commercialDesc}</p>
                     </div>
                     <FinopsSubnav />
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
-                    <div className="space-y-1">
+                <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-end">
+                    <div className="col-span-2 space-y-1 sm:col-span-1 lg:w-auto">
                         <Label htmlFor="commercial-month">{tf.commercialMonth}</Label>
                         <select
                             id="commercial-month"
-                            className="border-input bg-background h-8 rounded-lg border px-2 text-sm"
+                            className="border-input bg-background h-8 w-full rounded-lg border px-2 text-sm lg:w-auto"
                             value={selectedMonth}
                             onChange={(event) => updateFilters({ month: event.target.value })}
                         >
@@ -417,12 +423,12 @@ export function CommercialReportPage() {
                             ))}
                         </select>
                     </div>
-                    <div className="space-y-1">
+                    <div className="col-span-2 space-y-1 sm:col-span-1 lg:w-auto">
                         <Label>{tf.commercialCurrencyLabel}</Label>
-                        <div className="flex h-8 overflow-hidden rounded-lg border">
+                        <div className="flex h-8 w-full overflow-hidden rounded-lg border lg:w-auto">
                             <button
                                 type="button"
-                                className={`px-3 text-sm ${activeCurrency === 'BRL' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+                                className={`flex-1 px-3 text-sm lg:flex-none ${activeCurrency === 'BRL' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                                 disabled={report?.exchangeRate == null && report?.displayCurrency !== 'BRL'}
                                 onClick={() => updateFilters({ currency: 'BRL' })}
                             >
@@ -430,7 +436,7 @@ export function CommercialReportPage() {
                             </button>
                             <button
                                 type="button"
-                                className={`border-l px-3 text-sm ${activeCurrency === 'USD' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+                                className={`flex-1 border-l px-3 text-sm lg:flex-none ${activeCurrency === 'USD' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                                 disabled={report?.exchangeRate == null && report?.displayCurrency !== 'USD'}
                                 onClick={() => updateFilters({ currency: 'USD' })}
                             >
@@ -438,7 +444,12 @@ export function CommercialReportPage() {
                             </button>
                         </div>
                     </div>
-                    <Button onClick={() => void exportPdf()} disabled={!report} isLoading={exportingPdf}>
+                    <Button
+                        className="col-span-2 w-full justify-center lg:w-auto"
+                        onClick={() => void exportPdf()}
+                        disabled={!report}
+                        isLoading={exportingPdf}
+                    >
                         <FileText className="size-4" />
                         {tf.commercialExportPdf}
                     </Button>
@@ -456,7 +467,7 @@ export function CommercialReportPage() {
                         <CardTitle>{tf.commercialDeliveryTitle}</CardTitle>
                         <CardDescription>{tf.commercialEmailsHint}</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
+                    <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
                         <CommercialReportDelivery
                             organizationId={organizationId}
                             delivery={report?.delivery}
@@ -467,6 +478,7 @@ export function CommercialReportPage() {
                         <Button
                             type="button"
                             size="sm"
+                            className="w-full justify-center gap-2 lg:w-auto"
                             isLoading={sending}
                             onClick={async () => {
                                 if (!selectedMonth) return;
@@ -580,7 +592,7 @@ function ReportBody({
                 </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 print:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 print:grid-cols-3">
                 <Kpi
                     title={copy.commercialKpiTotal}
                     value={money(report.kpis.totalCost)}
@@ -614,117 +626,236 @@ function ReportBody({
                 </ChartCard>
             </div>
 
-            <ChartCard title={copy.commercialAccountEvolution} group="before" span="full" description={report.months.map((month) => labelOf(month.key)).join(' · ')}>
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={accountSeries} layout="vertical" margin={{ left: 16, right: 88, top: 8 }}>
-                        <CartesianGrid stroke={FINOPS_CHART_GRID} horizontal={false} />
-                        <XAxis type="number" tick={finopsChartTickProps} />
-                        <YAxis type="category" dataKey="alias" width={110} tick={finopsChartTickProps} />
-                        <Tooltip {...finopsChartTooltipStyles} formatter={(value) => formatCurrency(Number(value), viewCurrency)} />
-                        <Legend />
-                        {monthKeys.map((month, index) => (
-                            <Bar key={month} dataKey={month} name={labelOf(month)} fill={FINOPS_CHART_COLORS[index % FINOPS_CHART_COLORS.length]}>
-                                <LabelList dataKey={month} position="right" offset={6} formatter={(value) => formatChartValue(value, viewCurrency)} style={chartValueLabelStyle} />
-                            </Bar>
-                        ))}
-                    </BarChart>
-                </ResponsiveContainer>
+            <ChartCard
+                title={copy.commercialAccountEvolution}
+                group="before"
+                span="full"
+                description={report.months.map((month) => labelOf(month.key)).join(' · ')}
+                contentClassName="h-auto min-h-64 lg:min-h-72"
+            >
+                <GroupedAccountChart
+                    data={accountSeries}
+                    seriesKeys={monthKeys}
+                    seriesLabels={monthKeys.map((month) => labelOf(month))}
+                    currency={viewCurrency}
+                />
             </ChartCard>
 
-            <Card className="break-inside-avoid">
+            <Card className="min-w-0 break-inside-avoid">
                 <CardHeader>
-                    <CardTitle className="text-base">{copy.commercialDetail.replace('{from}', labelOf(report.months[0].key)).replace('{to}', labelOf(report.referenceMonth))}</CardTitle>
+                    <CardTitle className="text-base text-balance">
+                        {copy.commercialDetail
+                            .replace('{from}', labelOf(report.months[0].key))
+                            .replace('{to}', labelOf(report.referenceMonth))}
+                    </CardTitle>
                     <CardDescription>{copy.commercialVariationNote}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{copy.commercialColAccount}</TableHead>
-                                <TableHead>{labelOf(report.months[0].key)}</TableHead>
-                                <TableHead>{labelOf(report.months[1].key)}</TableHead>
-                                <TableHead>{copy.commercialColVar}</TableHead>
-                                <TableHead>{labelOf(report.months[2].key)}</TableHead>
-                                <TableHead>{copy.commercialColVar}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {report.subscriptionTable.map((row) => (
-                                <TableRow key={row.accountId}>
-                                    <TableCell>{row.alias}</TableCell>
-                                    <TableCell>{money(row.costs[0])}</TableCell>
-                                    <TableCell>{money(row.costs[1])}</TableCell>
-                                    <TableCell><Variation value={row.change12} /></TableCell>
-                                    <TableCell>{money(row.costs[2])}</TableCell>
-                                    <TableCell><Variation value={row.change23} /></TableCell>
+                    <div className="divide-y rounded-xl border lg:hidden">
+                        {report.subscriptionTable.map((row) => (
+                            <div key={row.accountId} className="space-y-2 px-3 py-3">
+                                <p className="text-sm font-medium">{row.alias}</p>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                        <p className="text-muted-foreground">{labelOf(report.months[0].key)}</p>
+                                        <p className="tabular-nums">{money(row.costs[0])}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground">{labelOf(report.months[1].key)}</p>
+                                        <p className="tabular-nums">{money(row.costs[1])}</p>
+                                        <p className="text-muted-foreground">
+                                            <Variation value={row.change12} />
+                                        </p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-muted-foreground">{labelOf(report.months[2].key)}</p>
+                                        <p className="tabular-nums">{money(row.costs[2])}</p>
+                                        <p className="text-muted-foreground">
+                                            <Variation value={row.change23} />
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        <div className="space-y-2 bg-muted/30 px-3 py-3">
+                            <p className="text-sm font-medium">{copy.commercialTotalRow}</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <p className="text-muted-foreground">{labelOf(report.months[0].key)}</p>
+                                    <p className="tabular-nums">{money(totals[0])}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">{labelOf(report.months[1].key)}</p>
+                                    <p className="tabular-nums">{money(totals[1])}</p>
+                                    <p className="text-muted-foreground">
+                                        <Variation value={change(totals[1], totals[0])} />
+                                    </p>
+                                </div>
+                                <div className="col-span-2">
+                                    <p className="text-muted-foreground">{labelOf(report.months[2].key)}</p>
+                                    <p className="tabular-nums">{money(totals[2])}</p>
+                                    <p className="text-muted-foreground">
+                                        <Variation value={change(totals[2], totals[1])} />
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="hidden lg:block">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>{copy.commercialColAccount}</TableHead>
+                                    <TableHead>{labelOf(report.months[0].key)}</TableHead>
+                                    <TableHead>{labelOf(report.months[1].key)}</TableHead>
+                                    <TableHead>{copy.commercialColVar}</TableHead>
+                                    <TableHead>{labelOf(report.months[2].key)}</TableHead>
+                                    <TableHead>{copy.commercialColVar}</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                        <TableFooter>
-                            <TableRow>
-                                <TableCell>{copy.commercialTotalRow}</TableCell>
-                                <TableCell>{money(totals[0])}</TableCell>
-                                <TableCell>{money(totals[1])}</TableCell>
-                                <TableCell><Variation value={change(totals[1], totals[0])} /></TableCell>
-                                <TableCell>{money(totals[2])}</TableCell>
-                                <TableCell><Variation value={change(totals[2], totals[1])} /></TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {report.subscriptionTable.map((row) => (
+                                    <TableRow key={row.accountId}>
+                                        <TableCell>{row.alias}</TableCell>
+                                        <TableCell>{money(row.costs[0])}</TableCell>
+                                        <TableCell>{money(row.costs[1])}</TableCell>
+                                        <TableCell>
+                                            <Variation value={row.change12} />
+                                        </TableCell>
+                                        <TableCell>{money(row.costs[2])}</TableCell>
+                                        <TableCell>
+                                            <Variation value={row.change23} />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                            <TableFooter>
+                                <TableRow>
+                                    <TableCell>{copy.commercialTotalRow}</TableCell>
+                                    <TableCell>{money(totals[0])}</TableCell>
+                                    <TableCell>{money(totals[1])}</TableCell>
+                                    <TableCell>
+                                        <Variation value={change(totals[1], totals[0])} />
+                                    </TableCell>
+                                    <TableCell>{money(totals[2])}</TableCell>
+                                    <TableCell>
+                                        <Variation value={change(totals[2], totals[1])} />
+                                    </TableCell>
+                                </TableRow>
+                            </TableFooter>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
 
-            <div className="grid gap-4 xl:grid-cols-3 print:grid-cols-3">
-                <ChartCard span="third" title={copy.commercialDailyClosed.replace('{month}', labelOf(previousMonth))} description={copy.commercialAvgDaily.replace('{amount}', money(report.kpis.previousAvgDaily))}>
-                    <DailyChart points={report.dailyPrevious.map((point) => ({ ...point, cost: convert(point.cost) }))} currency={viewCurrency} seriesName={copy.seriesCost} />
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 print:grid-cols-3">
+                <ChartCard
+                    span="third"
+                    title={copy.commercialDailyClosed.replace('{month}', labelOf(previousMonth))}
+                    description={copy.commercialAvgDaily.replace('{amount}', money(report.kpis.previousAvgDaily))}
+                >
+                    <DailyChart
+                        points={report.dailyPrevious.map((point) => ({ ...point, cost: convert(point.cost) }))}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                    />
                 </ChartCard>
-                <ChartCard span="third" title={copy.commercialDailyClosed.replace('{month}', labelOf(report.referenceMonth))} description={copy.commercialAvgDaily.replace('{amount}', money(report.kpis.avgDailyCost))}>
-                    <DailyChart points={report.dailyReference.map((point) => ({ ...point, cost: convert(point.cost) }))} currency={viewCurrency} seriesName={copy.seriesCost} />
+                <ChartCard
+                    span="third"
+                    title={copy.commercialDailyClosed.replace('{month}', labelOf(report.referenceMonth))}
+                    description={copy.commercialAvgDaily.replace('{amount}', money(report.kpis.avgDailyCost))}
+                >
+                    <DailyChart
+                        points={report.dailyReference.map((point) => ({ ...point, cost: convert(point.cost) }))}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                    />
                 </ChartCard>
                 <ChartCard span="third" title={openTitle}>
-                    <DailyChart points={report.inProgress.points.map((point) => ({ ...point, cost: convert(point.cost) }))} currency={viewCurrency} seriesName={copy.seriesCost} />
+                    <DailyChart
+                        points={report.inProgress.points.map((point) => ({ ...point, cost: convert(point.cost) }))}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                    />
                 </ChartCard>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-2">
-                <ChartCard title={copy.commercialReductions.replace('{current}', labelOf(report.referenceMonth)).replace('{previous}', labelOf(previousMonth))} description={`${copy.commercialReductionSum.replace('{amount}', money(report.reductionSum))} ${copy.commercialGroupedNote}`}>
-                    <RankChart rows={resourceRank(report.reductions)} currency={viewCurrency} seriesName={copy.seriesCost} empty={copy.commercialNoResources} axisWidth={168} />
+                <ChartCard
+                    title={copy.commercialReductions
+                        .replace('{current}', labelOf(report.referenceMonth))
+                        .replace('{previous}', labelOf(previousMonth))}
+                    description={`${copy.commercialReductionSum.replace('{amount}', money(report.reductionSum))} ${copy.commercialGroupedNote}`}
+                    contentClassName="h-auto"
+                >
+                    <RankChart
+                        rows={resourceRank(report.reductions)}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                        empty={copy.commercialNoResources}
+                        axisWidth={168}
+                    />
                 </ChartCard>
-                <ChartCard title={copy.commercialIncreases.replace('{current}', labelOf(report.referenceMonth)).replace('{previous}', labelOf(previousMonth))} description={`${copy.commercialIncreaseSum.replace('{amount}', money(report.increaseSum))} ${copy.commercialGroupedNote}`}>
-                    <RankChart rows={resourceRank(report.increases)} currency={viewCurrency} seriesName={copy.seriesCost} empty={copy.commercialNoResources} axisWidth={168} />
+                <ChartCard
+                    title={copy.commercialIncreases
+                        .replace('{current}', labelOf(report.referenceMonth))
+                        .replace('{previous}', labelOf(previousMonth))}
+                    description={`${copy.commercialIncreaseSum.replace('{amount}', money(report.increaseSum))} ${copy.commercialGroupedNote}`}
+                    contentClassName="h-auto"
+                >
+                    <RankChart
+                        rows={resourceRank(report.increases)}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                        empty={copy.commercialNoResources}
+                        axisWidth={168}
+                    />
                 </ChartCard>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-2">
-                <ChartCard title={copy.commercialTopServices}>
-                    <RankChart rows={ranked(report.topServices.map((item) => ({ name: friendlyServiceLabel(item.service, locale), amount: item.cost })))} currency={viewCurrency} seriesName={copy.seriesCost} />
+                <ChartCard title={copy.commercialTopServices} contentClassName="h-auto">
+                    <RankChart
+                        rows={ranked(
+                            report.topServices.map((item) => ({
+                                name: friendlyServiceLabel(item.service, locale),
+                                amount: item.cost,
+                            })),
+                        )}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                    />
                 </ChartCard>
-                <ChartCard title={copy.commercialTopResources}>
-                    <RankChart rows={resourceRank(report.topResources.map((item) => ({ name: item.name, amount: item.cost })))} currency={viewCurrency} seriesName={copy.seriesCost} empty={copy.commercialNoResources} axisWidth={168} />
+                <ChartCard title={copy.commercialTopResources} contentClassName="h-auto">
+                    <RankChart
+                        rows={resourceRank(report.topResources.map((item) => ({ name: item.name, amount: item.cost })))}
+                        currency={viewCurrency}
+                        seriesName={copy.seriesCost}
+                        empty={copy.commercialNoResources}
+                        axisWidth={168}
+                    />
                 </ChartCard>
             </div>
 
-            <ChartCard span="full" title={copy.commercialCostByAccount}>
-                <RankChart rows={ranked(report.costByAccount.map((item) => ({ name: item.alias, amount: item.cost })))} currency={viewCurrency} seriesName={copy.seriesCost} />
+            <ChartCard span="full" title={copy.commercialCostByAccount} contentClassName="h-auto">
+                <RankChart
+                    rows={ranked(report.costByAccount.map((item) => ({ name: item.alias, amount: item.cost })))}
+                    currency={viewCurrency}
+                    seriesName={copy.seriesCost}
+                />
             </ChartCard>
 
-            <ChartCard span="full" title={copy.commercialAccountService}>
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={serviceSeries} layout="vertical" margin={{ left: 16, right: 88, top: 8 }}>
-                        <CartesianGrid stroke={FINOPS_CHART_GRID} horizontal={false} />
-                        <XAxis type="number" tick={finopsChartTickProps} />
-                        <YAxis type="category" dataKey="alias" width={110} tick={finopsChartTickProps} />
-                        <Tooltip {...finopsChartTooltipStyles} formatter={(value) => formatCurrency(Number(value), viewCurrency)} />
-                        <Legend />
-                        {report.accountByService.services.map((service, index) => (
-                            <Bar key={service} dataKey={service} name={friendlyServiceLabel(service, locale)} stackId="services" fill={FINOPS_CHART_COLORS[index % FINOPS_CHART_COLORS.length]}>
-                                {index === report.accountByService.services.length - 1 ? (
-                                    <LabelList dataKey="total" position="right" offset={6} formatter={(value) => formatChartValue(value, viewCurrency)} style={chartValueLabelStyle} />
-                                ) : null}
-                            </Bar>
-                        ))}
-                    </BarChart>
-                </ResponsiveContainer>
+            <ChartCard
+                span="full"
+                title={copy.commercialAccountService}
+                contentClassName="h-auto min-h-64 lg:min-h-72"
+            >
+                <StackedAccountServiceChart
+                    data={serviceSeries}
+                    services={report.accountByService.services}
+                    currency={viewCurrency}
+                    locale={locale}
+                />
             </ChartCard>
 
             <Card className="break-inside-avoid">
@@ -747,30 +878,75 @@ function ReportBody({
                         <p className="text-muted-foreground text-sm">{copy.commercialAnomaliesEmpty}</p>
                     ) : (
                         <>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>{copy.commercialAnomalyColService}</TableHead>
-                                        <TableHead>{copy.commercialAnomalyColAccount}</TableHead>
-                                        <TableHead>{copy.commercialAnomalyColDate}</TableHead>
-                                        <TableHead>{copy.commercialAnomalyColSeverity}</TableHead>
-                                        <TableHead>{copy.commercialAnomalyColStatus}</TableHead>
-                                        <TableHead className="text-right">{copy.commercialAnomalyColImpact}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {report.anomalies.items.map((item, index) => (
-                                        <TableRow key={`${item.date}-${item.accountAlias}-${item.service}-${index}`}>
-                                            <TableCell>{friendlyServiceLabel(item.service, locale)}</TableCell>
-                                            <TableCell>{item.accountAlias || item.provider.toUpperCase()}</TableCell>
-                                            <TableCell>{formatDay(item.date, toIntlLocale(locale))}</TableCell>
-                                            <TableCell>{anomalySeverityLabel(item.severity, copy)}</TableCell>
-                                            <TableCell>{anomalyStatusLabel(item.status, copy)}</TableCell>
-                                            <TableCell className="text-right">{money(item.impact)}</TableCell>
+                            <div className="divide-y rounded-xl border lg:hidden">
+                                {report.anomalies.items.map((item, index) => (
+                                    <div
+                                        key={`${item.date}-${item.accountAlias}-${item.service}-${index}`}
+                                        className="space-y-1.5 px-3 py-3"
+                                    >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium">
+                                                {anomalySeverityLabel(item.severity, copy)}
+                                            </span>
+                                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                                                {anomalyStatusLabel(item.status, copy)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {formatDay(item.date, toIntlLocale(locale))}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-medium break-words">
+                                            {friendlyServiceLabel(item.service, locale)}
+                                        </p>
+                                        <div className="flex items-center justify-between gap-3 text-xs">
+                                            <span className="min-w-0 truncate text-muted-foreground">
+                                                {item.accountAlias || item.provider.toUpperCase()}
+                                            </span>
+                                            <span className="shrink-0 font-semibold tabular-nums">
+                                                {money(item.impact)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="hidden lg:block">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>{copy.commercialAnomalyColService}</TableHead>
+                                            <TableHead>{copy.commercialAnomalyColAccount}</TableHead>
+                                            <TableHead>{copy.commercialAnomalyColDate}</TableHead>
+                                            <TableHead>{copy.commercialAnomalyColSeverity}</TableHead>
+                                            <TableHead>{copy.commercialAnomalyColStatus}</TableHead>
+                                            <TableHead className="text-right">
+                                                {copy.commercialAnomalyColImpact}
+                                            </TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {report.anomalies.items.map((item, index) => (
+                                            <TableRow
+                                                key={`${item.date}-${item.accountAlias}-${item.service}-${index}`}
+                                            >
+                                                <TableCell>
+                                                    {friendlyServiceLabel(item.service, locale)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {item.accountAlias || item.provider.toUpperCase()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {formatDay(item.date, toIntlLocale(locale))}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {anomalySeverityLabel(item.severity, copy)}
+                                                </TableCell>
+                                                <TableCell>{anomalyStatusLabel(item.status, copy)}</TableCell>
+                                                <TableCell className="text-right">{money(item.impact)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                             {report.anomalies.items.length < report.anomalies.total ? (
                                 <p className="text-muted-foreground text-xs">
                                     {copy.commercialAnomaliesMore
@@ -840,66 +1016,296 @@ function formatChartValue(value: unknown, currency: string): string {
     return formatCurrency(amount, currency);
 }
 
-function ColumnChart({ data, dataKey, seriesName, currency }: { data: Array<Record<string, string | number>>; dataKey: string; seriesName: string; currency: string }) {
+function compactTickProps(compact: boolean) {
+    return compact ? { ...finopsChartTickProps, fontSize: 10 } : finopsChartTickProps;
+}
+
+function ColumnChart({
+    data,
+    dataKey,
+    seriesName,
+    currency,
+}: {
+    data: Array<Record<string, string | number>>;
+    dataKey: string;
+    seriesName: string;
+    currency: string;
+}) {
+    const compact = useIsBelowLg();
     return (
-        <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 28, right: 8, left: 4, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
+            <BarChart
+                data={data}
+                margin={{ top: compact ? 8 : 28, right: compact ? 4 : 8, left: 0, bottom: 0 }}
+            >
                 <CartesianGrid stroke={FINOPS_CHART_GRID} vertical={false} />
-                <XAxis dataKey="label" tick={finopsChartTickProps} />
-                <YAxis tick={finopsChartTickProps} tickFormatter={(value) => formatChartValue(value, currency)} width={72} />
+                <XAxis dataKey="label" tick={compactTickProps(compact)} interval={0} />
+                <YAxis
+                    tick={compactTickProps(compact)}
+                    tickFormatter={(value) => formatChartValue(value, currency)}
+                    width={compact ? 44 : 72}
+                />
                 <Tooltip {...finopsChartTooltipStyles} formatter={(value) => formatChartValue(value, currency)} />
                 <Bar dataKey={dataKey} name={seriesName} fill={FINOPS_CHART_PRIMARY} radius={4}>
-                    <LabelList dataKey={dataKey} position="top" offset={8} formatter={(value) => formatChartValue(value, currency)} style={chartValueLabelStyle} />
+                    {!compact ? (
+                        <LabelList
+                            dataKey={dataKey}
+                            position="top"
+                            offset={8}
+                            formatter={(value) => formatChartValue(value, currency)}
+                            style={chartValueLabelStyle}
+                        />
+                    ) : null}
                 </Bar>
             </BarChart>
         </ResponsiveContainer>
     );
 }
 
-function DailyChart({ points, currency, seriesName }: { points: Point[]; currency: string; seriesName: string }) {
+function DailyChart({
+    points,
+    currency,
+    seriesName,
+}: {
+    points: Point[];
+    currency: string;
+    seriesName: string;
+}) {
+    const compact = useIsBelowLg();
     const data = points.map((point) => ({ ...point, label: point.date.slice(8) }));
     return (
-        <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
+            <LineChart data={data} margin={{ top: 8, right: compact ? 4 : 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={FINOPS_CHART_GRID} vertical={false} />
-                <XAxis dataKey="label" tick={finopsChartTickProps} />
-                <YAxis tick={finopsChartTickProps} tickFormatter={(value) => formatChartValue(value, currency)} width={72} />
-                <Tooltip {...finopsChartTooltipStyles} formatter={(value) => formatChartValue(value, currency)} labelFormatter={(_, payload) => String(payload?.[0]?.payload?.date ?? '')} />
-                <Line type="monotone" dataKey="cost" name={seriesName} stroke={FINOPS_CHART_PRIMARY} dot={false} strokeWidth={2} />
+                <XAxis
+                    dataKey="label"
+                    tick={compactTickProps(compact)}
+                    interval={compact ? 'equidistantPreserveStart' : 0}
+                    minTickGap={compact ? 12 : 4}
+                />
+                <YAxis
+                    tick={compactTickProps(compact)}
+                    tickFormatter={(value) => formatChartValue(value, currency)}
+                    width={compact ? 44 : 72}
+                />
+                <Tooltip
+                    {...finopsChartTooltipStyles}
+                    formatter={(value) => formatChartValue(value, currency)}
+                    labelFormatter={(_, payload) => String(payload?.[0]?.payload?.date ?? '')}
+                />
+                <Line
+                    type="monotone"
+                    dataKey="cost"
+                    name={seriesName}
+                    stroke={FINOPS_CHART_PRIMARY}
+                    dot={false}
+                    strokeWidth={2}
+                />
             </LineChart>
         </ResponsiveContainer>
     );
 }
 
-function RankChart({ rows, currency, seriesName, empty, axisWidth = 128 }: { rows: NamedAmount[]; currency: string; seriesName: string; empty?: string; axisWidth?: number }) {
+function RankChart({
+    rows,
+    currency,
+    seriesName,
+    empty,
+    axisWidth = 128,
+}: {
+    rows: NamedAmount[];
+    currency: string;
+    seriesName: string;
+    empty?: string;
+    axisWidth?: number;
+}) {
+    const compact = useIsBelowLg();
     if (rows.length === 0) {
-        return <p className="text-muted-foreground flex h-full items-center justify-center text-center text-sm">{empty}</p>;
+        return (
+            <p className="text-muted-foreground flex min-h-40 items-center justify-center text-center text-sm">
+                {empty}
+            </p>
+        );
     }
-    const maxChars = axisWidth >= 160 ? 24 : 18;
+
+    const resolvedAxisWidth = compact ? Math.min(axisWidth, 88) : axisWidth;
+    const maxChars = compact ? 12 : resolvedAxisWidth >= 160 ? 24 : 18;
+    const height = Math.max(compact ? 220 : 288, rows.length * (compact ? 34 : 38) + 24);
+
     return (
-        <div className="h-full min-h-72 w-full">
+        <div className="w-full min-w-0" style={{ height }}>
             <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
-                <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 88, top: 8, bottom: 0 }}>
+                <BarChart
+                    data={rows}
+                    layout="vertical"
+                    margin={{ left: 4, right: compact ? 8 : 88, top: 8, bottom: 0 }}
+                >
                     <CartesianGrid stroke={FINOPS_CHART_GRID} horizontal={false} />
-                    <XAxis type="number" tick={finopsChartTickProps} tickFormatter={(value) => formatChartValue(value, currency)} />
+                    <XAxis
+                        type="number"
+                        tick={compactTickProps(compact)}
+                        tickFormatter={(value) => formatChartValue(value, currency)}
+                    />
                     <YAxis
                         type="category"
                         dataKey="name"
-                        width={axisWidth}
-                        tick={finopsChartTickProps}
-                        tickFormatter={(value: string) => (value.length > maxChars ? `${value.slice(0, maxChars - 2)}…` : value)}
+                        width={resolvedAxisWidth}
+                        tick={compactTickProps(compact)}
+                        tickFormatter={(value: string) =>
+                            value.length > maxChars ? `${value.slice(0, maxChars - 1)}…` : value
+                        }
                     />
                     <Tooltip
                         {...finopsChartTooltipStyles}
                         formatter={(value, _name, item) => {
                             const formatted = formatChartValue(value, currency);
-                            const alternate = (item as { payload?: { alternate?: string } } | undefined)?.payload?.alternate;
+                            const alternate = (item as { payload?: { alternate?: string } } | undefined)?.payload
+                                ?.alternate;
                             return alternate ? `${formatted} · ${alternate}` : formatted;
                         }}
                     />
                     <Bar dataKey="amount" name={seriesName} fill={FINOPS_CHART_PRIMARY} radius={4}>
-                        <LabelList dataKey="amount" position="right" offset={6} formatter={(value) => formatChartValue(value, currency)} style={chartValueLabelStyle} />
+                        {!compact ? (
+                            <LabelList
+                                dataKey="amount"
+                                position="right"
+                                offset={6}
+                                formatter={(value) => formatChartValue(value, currency)}
+                                style={chartValueLabelStyle}
+                            />
+                        ) : null}
                     </Bar>
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+function GroupedAccountChart({
+    data,
+    seriesKeys,
+    seriesLabels,
+    currency,
+}: {
+    data: Array<Record<string, string | number>>;
+    seriesKeys: string[];
+    seriesLabels: string[];
+    currency: string;
+}) {
+    const compact = useIsBelowLg();
+    const height = Math.max(compact ? 240 : 288, data.length * (compact ? 44 : 52) + 48);
+
+    return (
+        <div className="w-full min-w-0" style={{ height }}>
+            <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
+                <BarChart
+                    data={data}
+                    layout="vertical"
+                    margin={{ left: 4, right: compact ? 8 : 88, top: 8, bottom: compact ? 28 : 8 }}
+                >
+                    <CartesianGrid stroke={FINOPS_CHART_GRID} horizontal={false} />
+                    <XAxis type="number" tick={compactTickProps(compact)} hide={compact} />
+                    <YAxis
+                        type="category"
+                        dataKey="alias"
+                        width={compact ? 72 : 110}
+                        tick={compactTickProps(compact)}
+                        tickFormatter={(value: string) =>
+                            compact && value.length > 10 ? `${value.slice(0, 9)}…` : value
+                        }
+                    />
+                    <Tooltip
+                        {...finopsChartTooltipStyles}
+                        formatter={(value) => formatCurrency(Number(value), currency)}
+                    />
+                    <Legend
+                        wrapperStyle={compact ? { fontSize: 11, paddingTop: 4 } : undefined}
+                        iconSize={compact ? 8 : 14}
+                    />
+                    {seriesKeys.map((key, index) => (
+                        <Bar
+                            key={key}
+                            dataKey={key}
+                            name={seriesLabels[index] ?? key}
+                            fill={FINOPS_CHART_COLORS[index % FINOPS_CHART_COLORS.length]}
+                        >
+                            {!compact ? (
+                                <LabelList
+                                    dataKey={key}
+                                    position="right"
+                                    offset={6}
+                                    formatter={(value) => formatChartValue(value, currency)}
+                                    style={chartValueLabelStyle}
+                                />
+                            ) : null}
+                        </Bar>
+                    ))}
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+function StackedAccountServiceChart({
+    data,
+    services,
+    currency,
+    locale,
+}: {
+    data: Array<Record<string, string | number>>;
+    services: string[];
+    currency: string;
+    locale: string;
+}) {
+    const compact = useIsBelowLg();
+    const height = Math.max(compact ? 240 : 288, data.length * (compact ? 40 : 48) + (compact ? 64 : 32));
+
+    return (
+        <div className="w-full min-w-0" style={{ height }}>
+            <ResponsiveContainer width="100%" height="100%" initialDimension={finopsChartInitialDimension}>
+                <BarChart
+                    data={data}
+                    layout="vertical"
+                    margin={{ left: 4, right: compact ? 8 : 88, top: 8, bottom: compact ? 36 : 8 }}
+                >
+                    <CartesianGrid stroke={FINOPS_CHART_GRID} horizontal={false} />
+                    <XAxis type="number" tick={compactTickProps(compact)} hide={compact} />
+                    <YAxis
+                        type="category"
+                        dataKey="alias"
+                        width={compact ? 72 : 110}
+                        tick={compactTickProps(compact)}
+                        tickFormatter={(value: string) =>
+                            compact && value.length > 10 ? `${value.slice(0, 9)}…` : value
+                        }
+                    />
+                    <Tooltip
+                        {...finopsChartTooltipStyles}
+                        formatter={(value) => formatCurrency(Number(value), currency)}
+                    />
+                    <Legend
+                        wrapperStyle={compact ? { fontSize: 10, paddingTop: 4 } : undefined}
+                        iconSize={compact ? 8 : 14}
+                    />
+                    {services.map((service, index) => (
+                        <Bar
+                            key={service}
+                            dataKey={service}
+                            name={friendlyServiceLabel(service, locale)}
+                            stackId="services"
+                            fill={FINOPS_CHART_COLORS[index % FINOPS_CHART_COLORS.length]}
+                        >
+                            {!compact && index === services.length - 1 ? (
+                                <LabelList
+                                    dataKey="total"
+                                    position="right"
+                                    offset={6}
+                                    formatter={(value) => formatChartValue(value, currency)}
+                                    style={chartValueLabelStyle}
+                                />
+                            ) : null}
+                        </Bar>
+                    ))}
                 </BarChart>
             </ResponsiveContainer>
         </div>

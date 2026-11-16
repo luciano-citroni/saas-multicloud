@@ -219,7 +219,7 @@ export function FinopsMulticloud() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">Multicloud</h1>
@@ -232,6 +232,7 @@ export function FinopsMulticloud() {
                 <Button
                     variant="outline"
                     size="sm"
+                    className="w-full justify-center gap-2 lg:w-auto"
                     disabled={refreshing}
                     onClick={async () => {
                         setRefreshing(true);

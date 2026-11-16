@@ -29,6 +29,11 @@ export const verifyEmailSchema = z.object({
 });
 export type VerifyEmailDto = z.infer<typeof verifyEmailSchema>;
 
+export const resendEmailByAddressSchema = z.object({
+    email: z.string().email(),
+});
+export type ResendEmailByAddressDto = z.infer<typeof resendEmailByAddressSchema>;
+
 export const registerWithInviteSchema = z.object({
     name: z.string().min(2).max(255),
     email: z.string().email(),

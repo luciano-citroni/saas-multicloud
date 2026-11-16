@@ -339,7 +339,7 @@ export function FinopsReports() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-3">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight">{tf.reportsTitle}</h1>
@@ -348,13 +348,19 @@ export function FinopsReports() {
                     <FinopsSubnav />
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" asChild>
+                <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                        asChild
+                    >
                         <Link href="/finops/reports/commercial">{tf.commercialOpen}</Link>
                     </Button>
                     <Button
                         variant="outline"
                         size="sm"
+                        className="w-full min-w-0 justify-center gap-2 lg:w-auto"
                         disabled={refreshing}
                         onClick={async () => {
                             setRefreshing(true);
@@ -362,16 +368,28 @@ export function FinopsReports() {
                             setRefreshing(false);
                         }}
                     >
-                        <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-                        {tc.refresh}
+                        <RefreshCw className={cn('size-4 shrink-0', refreshing && 'animate-spin')} />
+                        <span className="truncate">{tc.refresh}</span>
                     </Button>
-                    <Button size="sm" variant="outline" onClick={handleExport} disabled={!overview}>
-                        <Download className="size-4" />
-                        {tf.exportCsv}
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                        onClick={handleExport}
+                        disabled={!overview}
+                    >
+                        <Download className="size-4 shrink-0" />
+                        <span className="truncate">{tf.exportCsv}</span>
                     </Button>
-                    <Button size="sm" onClick={() => void handleExportPdf()} disabled={!overview} isLoading={exportingPdf}>
-                        <FileText className="size-4" />
-                        {tf.exportPdf}
+                    <Button
+                        size="sm"
+                        className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                        onClick={() => void handleExportPdf()}
+                        disabled={!overview}
+                        isLoading={exportingPdf}
+                    >
+                        <FileText className="size-4 shrink-0" />
+                        <span className="truncate">{tf.exportPdf}</span>
                     </Button>
                 </div>
             </div>
@@ -527,44 +545,98 @@ export function FinopsReports() {
                                 </table>
                             </div>
 
-                            <div className="overflow-x-auto">
-                                <h3 className="mb-2 text-sm font-semibold">{tf.reportOpportunities}</h3>
-                                <table className="w-full min-w-[720px] text-sm">
-                                    <thead>
-                                        <tr className="border-b text-left text-muted-foreground">
-                                            <th className="pb-2 font-medium">{tf.reportColType}</th>
-                                            <th className="pb-2 font-medium">{tf.reportAccount}</th>
-                                            <th className="pb-2 font-medium">{tf.reportColTitle}</th>
-                                            <th className="pb-2 font-medium">{tf.reportProvider}</th>
-                                            <th className="pb-2 text-right font-medium">{tf.reportColImpact}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredOptimizeItems.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                                                    {tf.noOpenOpportunity}
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredOptimizeItems.map((item) => (
-                                                <tr key={`${item.kind}-${item.id}`} className="border-b last:border-0">
-                                                    <td className="py-2 capitalize">{item.kind}</td>
-                                                    <td className="py-2 font-medium">
-                                                        {accountAliases[item.cloudAccountId] ?? item.cloudAccountId.slice(0, 8)}
-                                                    </td>
-                                                    <td className="py-2">{item.title}</td>
-                                                    <td className="py-2 uppercase text-muted-foreground">
-                                                        {item.cloudProvider}
-                                                    </td>
-                                                    <td className="py-2 text-right tabular-nums">
-                                                        {formatCurrency(item.impact, item.currency)}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold">{tf.reportOpportunities}</h3>
+
+                                {filteredOptimizeItems.length === 0 ? (
+                                    <p className="py-6 text-center text-sm text-muted-foreground">
+                                        {tf.noOpenOpportunity}
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div className="divide-y rounded-xl border lg:hidden">
+                                            {filteredOptimizeItems.map((item) => {
+                                                const kindLabel =
+                                                    item.kind === 'anomaly'
+                                                        ? tf.reportColAnomalies
+                                                        : tf.reportColRecs;
+                                                const alias =
+                                                    accountAliases[item.cloudAccountId] ??
+                                                    item.cloudAccountId.slice(0, 8);
+
+                                                return (
+                                                    <div
+                                                        key={`${item.kind}-${item.id}`}
+                                                        className="space-y-1.5 px-3 py-3"
+                                                    >
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium">
+                                                                {kindLabel}
+                                                            </span>
+                                                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] uppercase text-muted-foreground">
+                                                                {item.cloudProvider}
+                                                            </span>
+                                                            <span className="truncate text-xs text-muted-foreground">
+                                                                {alias}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm font-medium leading-snug break-words">
+                                                            {item.title}
+                                                        </p>
+                                                        <p className="text-right text-sm font-semibold tabular-nums">
+                                                            {formatCurrency(item.impact, item.currency)}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="hidden overflow-x-auto lg:block">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b text-left text-muted-foreground">
+                                                        <th className="pb-2 font-medium">{tf.reportColType}</th>
+                                                        <th className="pb-2 font-medium">{tf.reportAccount}</th>
+                                                        <th className="min-w-0 pb-2 font-medium">
+                                                            {tf.reportColTitle}
+                                                        </th>
+                                                        <th className="pb-2 font-medium">{tf.reportProvider}</th>
+                                                        <th className="pb-2 text-right font-medium">
+                                                            {tf.reportColImpact}
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredOptimizeItems.map((item) => (
+                                                        <tr
+                                                            key={`${item.kind}-${item.id}`}
+                                                            className="border-b last:border-0"
+                                                        >
+                                                            <td className="py-2 whitespace-nowrap">
+                                                                {item.kind === 'anomaly'
+                                                                    ? tf.reportColAnomalies
+                                                                    : tf.reportColRecs}
+                                                            </td>
+                                                            <td className="max-w-[10rem] truncate py-2 font-medium">
+                                                                {accountAliases[item.cloudAccountId] ??
+                                                                    item.cloudAccountId.slice(0, 8)}
+                                                            </td>
+                                                            <td className="min-w-0 py-2 break-words">
+                                                                {item.title}
+                                                            </td>
+                                                            <td className="py-2 uppercase text-muted-foreground">
+                                                                {item.cloudProvider}
+                                                            </td>
+                                                            <td className="py-2 text-right tabular-nums whitespace-nowrap">
+                                                                {formatCurrency(item.impact, item.currency)}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </>
                     )}

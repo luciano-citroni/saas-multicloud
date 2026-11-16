@@ -46,6 +46,9 @@ export interface JwtPayload {
     sessionId: string;
 }
 
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000;
+
 export interface AuthTokens {
     accessToken: string;
 
@@ -172,9 +175,8 @@ export class AuthService {
                 this.logger.warn(`Failed to accept invite for user ${user.id}: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            this.issueEmailVerification(user.id).catch((err: unknown) => {
-                this.logger.error(`Failed to send email verification for user ${user.id}`, err);
-            });
+            // Invite was delivered to this mailbox — treat as verified ownership.
+            await this.usersService.markEmailVerified(user.id);
 
             return {
                 user: {
@@ -182,7 +184,7 @@ export class AuthService {
                     email: user.email,
                     name: user.name,
                     isActive: user.isActive,
-                    emailVerified: false,
+                    emailVerified: true,
                 },
                 ...(await this.issueTokens(user.id)),
             };
@@ -206,25 +208,75 @@ export class AuthService {
 
         if (!user) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
 
+        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+            throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_TEMPORARILY_LOCKED);
+        }
+
         if (!user.password) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
 
         const passwordMatch = await bcrypt.compare(dto.password, user.password);
 
-        if (!passwordMatch) throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
+        if (!passwordMatch) {
+            await this.usersService.recordFailedLogin(user.id, MAX_FAILED_LOGIN_ATTEMPTS, LOGIN_LOCK_DURATION_MS);
+            throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
+        }
 
         if (!user.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
 
+        if (!user.emailVerified) {
+            // Best-effort resend so the user can complete verification without being logged in.
+            this.issueEmailVerification(user.id).catch((err: unknown) => {
+                this.logger.warn(
+                    `Could not auto-resend verification on blocked login for user ${user.id}: ${
+                        err instanceof Error ? err.message : String(err)
+                    }`,
+                );
+            });
+            throw new UnauthorizedException(ErrorMessages.AUTH.EMAIL_NOT_VERIFIED);
+        }
+
+        await this.usersService.clearLoginFailures(user.id);
+
         return this.issueTokens(user.id);
+    }
+
+    /**
+     * Public resend by email. Always returns success to avoid account enumeration.
+     */
+    async requestEmailVerificationByEmail(email: string): Promise<{ success: true }> {
+        const normalizedEmail = email.toLowerCase();
+        const user = await this.usersService.findByEmail(normalizedEmail);
+
+        if (!user || user.emailVerified) {
+            return { success: true };
+        }
+
+        try {
+            await this.resendEmailVerification(user.id);
+        } catch (error) {
+            if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+                throw error;
+            }
+            this.logger.warn(
+                `Public verification resend failed for ${normalizedEmail}: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        }
+
+        return { success: true };
     }
 
     async refresh(token: string) {
         const hashedRefreshToken = this.hashToken(token);
         const now = new Date();
 
-        const session = await this.sessionRepository.findOne({
-            where: { token: hashedRefreshToken },
-            relations: ['user'],
-        });
+        // `token` is select:false — look up via QB; column still usable in WHERE.
+        const session = await this.sessionRepository
+            .createQueryBuilder('session')
+            .leftJoinAndSelect('session.user', 'user')
+            .where('session.token = :token', { token: hashedRefreshToken })
+            .getOne();
 
         if (session) {
             if (session.expiresAt < now) {
@@ -370,7 +422,8 @@ export class AuthService {
         newPassword: string,
         currentSessionId?: string,
     ) {
-        const user = await this.usersService.findEntityById(userId);
+        // password is select:false — must load explicitly or Google-only users skip the check incorrectly.
+        const user = await this.usersService.findEntityByIdWithPassword(userId);
 
         if (user.password) {
             if (!currentPassword) {
@@ -461,22 +514,23 @@ export class AuthService {
 
             user = await this.usersService.createWithGoogle({
                 email: normalizedEmail,
-
                 name: googleUser.name,
-
                 googleId: googleUser.googleId,
+                emailVerified: true,
             });
 
             this.billingService.initializeSubscription(user).catch((err: unknown) => {
                 this.logger.error(`Failed to initialize subscription for Google user ${user?.id}`, err);
             });
-
-            this.issueEmailVerification(user.id).catch((err: unknown) => {
-                this.logger.error(`Failed to send email verification for Google user ${user?.id}`, err);
-            });
+        } else if (!user.emailVerified) {
+            // Returning Google users with a verified Google mailbox inherit verification.
+            await this.usersService.markEmailVerified(user.id);
+            user.emailVerified = true;
         }
 
         if (!user!.isActive) throw new UnauthorizedException(ErrorMessages.AUTH.ACCOUNT_INACTIVE);
+
+        await this.usersService.clearLoginFailures(user!.id);
 
         return user!;
     }
@@ -563,10 +617,12 @@ export class AuthService {
     }
 
     private async replayRotatedRefreshToken(hashedRefreshToken: string, now: Date): Promise<AuthTokens> {
-        const session = await this.sessionRepository.findOne({
-            where: { previousTokenHash: hashedRefreshToken },
-            relations: ['user'],
-        });
+        const session = await this.sessionRepository
+            .createQueryBuilder('session')
+            .addSelect('session.successorToken')
+            .leftJoinAndSelect('session.user', 'user')
+            .where('session.previous_token_hash = :hash', { hash: hashedRefreshToken })
+            .getOne();
 
         const rotatedAt = session?.rotatedAt?.getTime();
         const withinGrace = rotatedAt != null && now.getTime() - rotatedAt <= REFRESH_REUSE_GRACE_MS;
@@ -651,7 +707,7 @@ export class AuthService {
     }
 
     private async getAuthUserPayload(userId: string) {
-        const user = await this.usersService.findEntityById(userId);
+        const user = await this.usersService.findEntityByIdWithPassword(userId);
 
         return {
             id: user.id,
@@ -659,6 +715,7 @@ export class AuthService {
             name: user.name,
             isActive: user.isActive,
             hasPassword: Boolean(user.password),
+            hasGoogleLinked: Boolean(user.googleId),
             emailVerified: Boolean(user.emailVerified),
         };
     }
