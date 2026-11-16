@@ -333,7 +333,6 @@ export function CommercialReportDelivery({
                           snapPoints: [...DELIVERY_SNAP_POINTS],
                           activeSnapPoint: snapPoint,
                           setActiveSnapPoint: setSnapPoint,
-                          fadeFromIndex: 1,
                       }
                     : {})}
             >

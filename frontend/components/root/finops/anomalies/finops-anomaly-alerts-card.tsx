@@ -540,7 +540,6 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
                           snapPoints: [...ALERTS_SNAP_POINTS],
                           activeSnapPoint: snapPoint,
                           setActiveSnapPoint: setSnapPoint,
-                          fadeFromIndex: 1,
                       }
                     : {})}
             >

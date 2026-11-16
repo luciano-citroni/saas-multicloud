@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { History, MessageSquare, Plus, X } from 'lucide-react';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ import { useAiChatController } from './use-ai-chat-controller';
 
 type ChatTab = 'chat' | 'history';
 type DrawerDirection = 'bottom' | 'right';
+type AiChatController = ReturnType<typeof useAiChatController>;
 
 const CHAT_SNAP_POINTS = [0.7, 1] as const;
 
@@ -38,6 +39,145 @@ function restoreBodyPointerEvents() {
         return;
     }
     document.body.style.pointerEvents = '';
+}
+
+function AiChatDrawerBody({
+    chat,
+    tab,
+    setTab,
+    closeLabel,
+    onClose,
+}: {
+    chat: AiChatController;
+    tab: ChatTab;
+    setTab: Dispatch<SetStateAction<ChatTab>>;
+    closeLabel: string;
+    onClose: () => void;
+}) {
+    return (
+        <div className="flex h-full min-h-0 flex-1 flex-col">
+            <DrawerHeader className="border-border relative shrink-0 gap-1 border-b px-4 py-3 pr-12 text-left">
+                <DrawerTitle className="text-base leading-tight">{chat.t.title}</DrawerTitle>
+                <DrawerDescription className="line-clamp-2 text-xs leading-snug">
+                    {chat.t.description}
+                </DrawerDescription>
+                <DrawerClose asChild>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="absolute top-2.5 right-2.5"
+                        aria-label={closeLabel}
+                    >
+                        <X className="size-4" />
+                    </Button>
+                </DrawerClose>
+            </DrawerHeader>
+
+            <Tabs
+                value={tab}
+                onValueChange={(value) => setTab(value as ChatTab)}
+                className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden"
+            >
+                <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
+                    <TabsList className="grid h-8 min-w-0 flex-1 grid-cols-2">
+                        <TabsTrigger value="chat" className="gap-1.5 px-2 text-xs sm:text-sm">
+                            <MessageSquare className="size-3.5 shrink-0" />
+                            <span className="truncate">{chat.t.tabChat}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="history" className="gap-1.5 px-2 text-xs sm:text-sm">
+                            <History className="size-3.5 shrink-0" />
+                            <span className="truncate">{chat.t.tabHistory}</span>
+                            {chat.conversations.length > 0 ? (
+                                <Badge
+                                    variant="secondary"
+                                    className="h-4 min-w-4 justify-center px-1 text-[10px] tabular-nums"
+                                >
+                                    {chat.conversations.length}
+                                </Badge>
+                            ) : null}
+                        </TabsTrigger>
+                    </TabsList>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className="shrink-0"
+                        onClick={() => void chat.handleNewConversation()}
+                        disabled={!chat.organizationId}
+                        aria-label={chat.t.newConversation}
+                        title={chat.t.newConversation}
+                    >
+                        <Plus className="size-3.5" />
+                    </Button>
+                </div>
+
+                {tab === 'chat' ? (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        <AiChatMessageList
+                            messages={chat.messages}
+                            streamingContent={chat.streamingContent}
+                            toolSteps={chat.toolSteps}
+                            isStreaming={chat.isStreaming}
+                            sourcesLabel={chat.t.sources}
+                            openSourceLabel={chat.t.openSource}
+                            toolsLabel={chat.t.tools}
+                            researchingLabel={chat.t.researching}
+                            copyLabel={chat.t.copy}
+                            copiedLabel={chat.t.copied}
+                            emptyTitle={chat.t.emptyTitle}
+                            emptyDescription={chat.t.emptyDescription}
+                            suggestionsTitle={chat.t.suggestionsTitle}
+                            assistantLabel={chat.t.assistantLabel}
+                            youLabel={chat.t.youLabel}
+                            locale={chat.locale}
+                            onSuggestion={chat.handleSuggestion}
+                            suggestionsDisabled={!chat.organizationId || chat.isStreaming}
+                            onSourceNavigate={onClose}
+                        />
+
+                        <div className="shrink-0">
+                            <AiChatComposer
+                                value={chat.draft}
+                                onChange={chat.setDraft}
+                                onSubmit={() => void chat.handleSend()}
+                                onStop={() => void chat.handleStop()}
+                                disabled={!chat.organizationId}
+                                isStreaming={chat.isStreaming}
+                                placeholder={chat.t.placeholder}
+                                sendLabel={chat.t.send}
+                                stopLabel={chat.t.stop}
+                                noOrgHint={!chat.organizationId ? chat.t.selectOrganization : null}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        <AiChatConversationList
+                            conversations={chat.conversations}
+                            activeId={chat.activeConversationId}
+                            loading={chat.loading}
+                            locale={chat.locale}
+                            onSelect={(id) => {
+                                if (chat.organizationId) {
+                                    void chat.selectConversation(chat.organizationId, id);
+                                    setTab('chat');
+                                }
+                            }}
+                            onDelete={chat.requestDeleteConversation}
+                            labels={{
+                                empty: chat.t.noConversations,
+                                delete: chat.t.deleteConversation,
+                                today: chat.t.historyToday,
+                                yesterday: chat.t.historyYesterday,
+                                earlier: chat.t.historyEarlier,
+                            }}
+                        />
+                    </div>
+                )}
+            </Tabs>
+        </div>
+    );
 }
 
 export function AiChatDrawer() {
@@ -100,169 +240,58 @@ export function AiChatDrawer() {
         }
     };
 
+    const body = visited ? (
+        <AiChatDrawerBody
+            chat={chat}
+            tab={tab}
+            setTab={setTab}
+            closeLabel={tc.close}
+            onClose={() => handleOpenChange(false)}
+        />
+    ) : null;
+
     return (
         <>
             {showFab ? <AiChatTriggerButton variant="fab" onClick={() => handleOpenChange(true)} /> : null}
 
-            <Drawer
-                open={open}
-                direction={direction}
-                shouldScaleBackground={false}
-                dismissible
-                onOpenChange={handleOpenChange}
-                {...(isBottom
-                    ? {
-                          snapPoints: [...CHAT_SNAP_POINTS],
-                          activeSnapPoint: snapPoint,
-                          setActiveSnapPoint: setSnapPoint,
-                          fadeFromIndex: 1,
-                      }
-                    : {})}
-            >
-                {visited ? (
-                    <DrawerContent
-                        className={cn(
-                            'bg-background flex flex-col gap-0 overflow-hidden p-0',
-                            isBottom
-                                ? cn(
-                                      'h-full max-h-[100dvh]',
-                                      isFullHeight ? 'rounded-none' : 'rounded-t-xl',
-                                  )
-                                : 'h-full max-h-none w-full rounded-none sm:max-w-md lg:max-w-lg',
-                        )}
-                    >
-                        <div className="flex h-full min-h-0 flex-1 flex-col">
-                            <DrawerHeader className="border-border relative shrink-0 gap-1 border-b px-4 py-3 pr-12 text-left">
-                                <DrawerTitle className="text-base leading-tight">
-                                    {chat.t.title}
-                                </DrawerTitle>
-                                <DrawerDescription className="line-clamp-2 text-xs leading-snug">
-                                    {chat.t.description}
-                                </DrawerDescription>
-                                <DrawerClose asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="absolute top-2.5 right-2.5"
-                                        aria-label={tc.close}
-                                    >
-                                        <X className="size-4" />
-                                    </Button>
-                                </DrawerClose>
-                            </DrawerHeader>
-
-                            <Tabs
-                                value={tab}
-                                onValueChange={(value) => setTab(value as ChatTab)}
-                                className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden"
-                            >
-                                <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
-                                    <TabsList className="grid h-8 min-w-0 flex-1 grid-cols-2">
-                                        <TabsTrigger value="chat" className="gap-1.5 px-2 text-xs sm:text-sm">
-                                            <MessageSquare className="size-3.5 shrink-0" />
-                                            <span className="truncate">{chat.t.tabChat}</span>
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="history"
-                                            className="gap-1.5 px-2 text-xs sm:text-sm"
-                                        >
-                                            <History className="size-3.5 shrink-0" />
-                                            <span className="truncate">{chat.t.tabHistory}</span>
-                                            {chat.conversations.length > 0 ? (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="h-4 min-w-4 justify-center px-1 text-[10px] tabular-nums"
-                                                >
-                                                    {chat.conversations.length}
-                                                </Badge>
-                                            ) : null}
-                                        </TabsTrigger>
-                                    </TabsList>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon-sm"
-                                        className="shrink-0"
-                                        onClick={() => void chat.handleNewConversation()}
-                                        disabled={!chat.organizationId}
-                                        aria-label={chat.t.newConversation}
-                                        title={chat.t.newConversation}
-                                    >
-                                        <Plus className="size-3.5" />
-                                    </Button>
-                                </div>
-
-                                {tab === 'chat' ? (
-                                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                        <AiChatMessageList
-                                            messages={chat.messages}
-                                            streamingContent={chat.streamingContent}
-                                            toolSteps={chat.toolSteps}
-                                            isStreaming={chat.isStreaming}
-                                            sourcesLabel={chat.t.sources}
-                                            openSourceLabel={chat.t.openSource}
-                                            toolsLabel={chat.t.tools}
-                                            researchingLabel={chat.t.researching}
-                                            copyLabel={chat.t.copy}
-                                            copiedLabel={chat.t.copied}
-                                            emptyTitle={chat.t.emptyTitle}
-                                            emptyDescription={chat.t.emptyDescription}
-                                            suggestionsTitle={chat.t.suggestionsTitle}
-                                            assistantLabel={chat.t.assistantLabel}
-                                            youLabel={chat.t.youLabel}
-                                            locale={chat.locale}
-                                            onSuggestion={chat.handleSuggestion}
-                                            suggestionsDisabled={!chat.organizationId || chat.isStreaming}
-                                            onSourceNavigate={() => handleOpenChange(false)}
-                                        />
-
-                                        <div className="shrink-0">
-                                            <AiChatComposer
-                                                value={chat.draft}
-                                                onChange={chat.setDraft}
-                                                onSubmit={() => void chat.handleSend()}
-                                                onStop={() => void chat.handleStop()}
-                                                disabled={!chat.organizationId}
-                                                isStreaming={chat.isStreaming}
-                                                placeholder={chat.t.placeholder}
-                                                sendLabel={chat.t.send}
-                                                stopLabel={chat.t.stop}
-                                                noOrgHint={
-                                                    !chat.organizationId ? chat.t.selectOrganization : null
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                        <AiChatConversationList
-                                            conversations={chat.conversations}
-                                            activeId={chat.activeConversationId}
-                                            loading={chat.loading}
-                                            locale={chat.locale}
-                                            onSelect={(id) => {
-                                                if (chat.organizationId) {
-                                                    void chat.selectConversation(chat.organizationId, id);
-                                                    setTab('chat');
-                                                }
-                                            }}
-                                            onDelete={chat.requestDeleteConversation}
-                                            labels={{
-                                                empty: chat.t.noConversations,
-                                                delete: chat.t.deleteConversation,
-                                                today: chat.t.historyToday,
-                                                yesterday: chat.t.historyYesterday,
-                                                earlier: chat.t.historyEarlier,
-                                            }}
-                                        />
-                                    </div>
-                                )}
-                            </Tabs>
-                        </div>
-                    </DrawerContent>
-                ) : null}
-            </Drawer>
+            {isBottom ? (
+                <Drawer
+                    open={open}
+                    direction="bottom"
+                    shouldScaleBackground={false}
+                    dismissible
+                    onOpenChange={handleOpenChange}
+                    snapPoints={[...CHAT_SNAP_POINTS]}
+                    activeSnapPoint={snapPoint}
+                    setActiveSnapPoint={setSnapPoint}
+                    fadeFromIndex={1}
+                >
+                    {body ? (
+                        <DrawerContent
+                            className={cn(
+                                'bg-background flex h-full max-h-[100dvh] flex-col gap-0 overflow-hidden p-0',
+                                isFullHeight ? 'rounded-none' : 'rounded-t-xl',
+                            )}
+                        >
+                            {body}
+                        </DrawerContent>
+                    ) : null}
+                </Drawer>
+            ) : (
+                <Drawer
+                    open={open}
+                    direction="right"
+                    shouldScaleBackground={false}
+                    dismissible
+                    onOpenChange={handleOpenChange}
+                >
+                    {body ? (
+                        <DrawerContent className="bg-background flex h-full max-h-none w-full flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-md lg:max-w-lg">
+                            {body}
+                        </DrawerContent>
+                    ) : null}
+                </Drawer>
+            )}
 
             <ConfirmDeleteDialog
                 open={Boolean(chat.deleteTarget)}
