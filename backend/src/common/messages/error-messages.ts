@@ -193,6 +193,13 @@ export const ErrorMessages = {
 
         RECOMMENDATION_NOT_FOUND: 'FinOps recommendation not found.',
 
+        REALIZED_SAVING_NOT_FOUND: 'FinOps realized saving not found.',
+
+        RECOMMENDATION_ALREADY_REALIZED: 'This FinOps recommendation was already marked as realized.',
+
+        POTENTIAL_SAVING_REQUIRED:
+            'This recommendation has no estimated potential saving. Provide a monthly amount to mark it as realized.',
+
         ANOMALY_NOT_FOUND: 'FinOps anomaly not found.',
 
         BILLING_NOT_FOUND: 'FinOps billing record not found.',

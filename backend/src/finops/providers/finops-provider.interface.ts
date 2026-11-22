@@ -96,6 +96,42 @@ export interface FinopsCommitmentRecommendationEntry {
     rawMetadata?: Record<string, unknown>;
 }
 
+/** Contadores de chamadas oficiais por sync (auth + APIs cobradas/significativas). */
+export interface FinopsRequestMetrics {
+    auth: number;
+    api: number;
+}
+
+/**
+ * Sessão opaca reutilizada durante um sync (1 auth + clients compartilhados).
+ * Cada provider faz cast interno para o tipo concreto.
+ */
+export interface FinopsProviderSession {
+    readonly provider: string;
+    readonly metrics: FinopsRequestMetrics;
+}
+
+/** Pacote GCP: 1 job BigQuery cobre service + resource + credits + CUD util. */
+export interface FinopsBillingBundleResult {
+    service: FinopsCostCollectionResult;
+    resource: FinopsCostCollectionResult;
+    credits: FinopsCreditConsumptionEntry[];
+    utilization: FinopsCommitmentUtilizationEntry[];
+}
+
+export interface CollectCreditConsumptionOptions {
+    /** Azure: evita 2ª query de fallback quando ChargeType vem vazio. */
+    costEntriesFallback?: FinopsCostEntry[];
+}
+
+export function createEmptyRequestMetrics(): FinopsRequestMetrics {
+    return { auth: 0, api: 0 };
+}
+
+export function formatRequestMetrics(metrics: FinopsRequestMetrics): string {
+    return `auth=${metrics.auth} api=${metrics.api}`;
+}
+
 /**
  * Interface que todos os providers de FinOps devem implementar.
  * Permite estender facilmente para novos provedores (GCP, OCI, etc.).
@@ -105,17 +141,24 @@ export interface IFinopsProvider {
     readonly provider: string;
 
     /**
+     * Cria sessão com 1 auth (AssumeRole / AAD / impersonation) para o sync inteiro.
+     */
+    createSession?(creds: FinopsProviderCredentials): Promise<FinopsProviderSession>;
+
+    /**
      * Coleta custos do provedor para o período informado (nível serviço/região).
      * @param creds Credenciais descriptografadas da conta.
      * @param startDate Data de início no formato YYYY-MM-DD.
      * @param endDate Data de fim no formato YYYY-MM-DD.
      * @param granularity Granularidade da coleta (DAILY | MONTHLY).
+     * @param session Sessão compartilhada do sync (evita re-auth).
      */
     collectCosts(
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult>;
 
     /**
@@ -127,6 +170,7 @@ export interface IFinopsProvider {
         startDate: string,
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult>;
 
     /**
@@ -137,13 +181,18 @@ export interface IFinopsProvider {
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
+        session?: FinopsProviderSession,
+        options?: CollectCreditConsumptionOptions,
     ): Promise<FinopsCreditConsumptionEntry[]>;
 
     /**
      * Lista concessões de crédito do provedor (saldo, validade e serviços).
      * Opcional: só a AWS expõe isso hoje.
      */
-    collectCreditGrants?(creds: FinopsProviderCredentials): Promise<FinopsCreditGrantEntry[]>;
+    collectCreditGrants?(
+        creds: FinopsProviderCredentials,
+        session?: FinopsProviderSession,
+    ): Promise<FinopsCreditGrantEntry[]>;
 
     /**
      * Coleta utilização/coverage de compromissos (SP / Reservations / CUDs).
@@ -151,6 +200,7 @@ export interface IFinopsProvider {
     collectCommitmentUtilization(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentUtilizationEntry[]>;
 
     /**
@@ -159,7 +209,21 @@ export interface IFinopsProvider {
     collectCommitmentRecommendations(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentRecommendationEntry[]>;
+
+    /**
+     * GCP: um único job BigQuery com service + resource + credits + CUD.
+     * Quando presente, o processor usa este caminho em vez de 4 queries separadas.
+     */
+    collectBillingBundle?(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+        granularity: 'DAILY' | 'MONTHLY',
+        lookbackDays: number,
+        session?: FinopsProviderSession,
+    ): Promise<FinopsBillingBundleResult>;
 }
 
 /** Limites compartilhados da ingestão por recurso. */

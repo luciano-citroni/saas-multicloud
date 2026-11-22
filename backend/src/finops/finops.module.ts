@@ -22,6 +22,7 @@ import { FinopsResourceCostService } from './services/finops-resource-cost.servi
 import { FinopsAnomalyAlertService } from './services/finops-anomaly-alert.service';
 import { FinopsCommitmentsService } from './services/finops-commitments.service';
 import { FinopsCommercialReportService } from './services/finops-commercial-report.service';
+import { FinopsRealizedSavingsService } from './services/finops-realized-savings.service';
 
 // Processor
 import { FinopsProcessor } from './processors/finops.processor';
@@ -52,6 +53,7 @@ import { FinopsCreditGrant } from '../db/entites/finops-credit-grant.entity';
 import { FinopsCreditConsumption } from '../db/entites/finops-credit-consumption.entity';
 import { FinopsCommitmentSnapshot } from '../db/entites/finops-commitment-snapshot.entity';
 import { FinopsCommitmentRecommendation } from '../db/entites/finops-commitment-recommendation.entity';
+import { FinopsRealizedSaving } from '../db/entites/finops-realized-saving.entity';
 import { FinopsExchangeRate } from '../db/entites/finops-exchange-rate.entity';
 import { FinopsUsdQuote } from '../db/entites/finops-usd-quote.entity';
 import { FinopsCommercialReportSettings } from '../db/entites/finops-commercial-report-settings.entity';
@@ -110,6 +112,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
             FinopsCreditConsumption,
             FinopsCommitmentSnapshot,
             FinopsCommitmentRecommendation,
+            FinopsRealizedSaving,
             FinopsExchangeRate,
             FinopsUsdQuote,
             FinopsCommercialReportSettings,
@@ -152,6 +155,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
         FinopsAnomalyAlertService,
         FinopsCommitmentsService,
         FinopsCommercialReportService,
+        FinopsRealizedSavingsService,
         FinopsProcessor,
         AwsFinopsProvider,
         AzureFinopsProvider,

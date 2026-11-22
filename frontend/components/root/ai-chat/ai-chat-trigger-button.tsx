@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/lib/i18n';
@@ -14,6 +16,11 @@ type Props = {
 
 export function AiChatTriggerButton({ variant = 'header', className, onClick }: Props) {
     const t = useTranslations('aiChat');
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleClick = () => {
         onClick?.();
@@ -23,12 +30,13 @@ export function AiChatTriggerButton({ variant = 'header', className, onClick }: 
     };
 
     if (variant === 'fab') {
-        return (
+        const fab = (
             <Button
                 type="button"
                 size="lg"
                 className={cn(
-                    'fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] size-12 rounded-full p-0 shadow-lg sm:right-6 sm:bottom-6 sm:h-12 sm:w-auto sm:gap-2 sm:px-4',
+                    'fixed top-auto right-4 bottom-4 z-[100] size-12 rounded-full p-0 shadow-lg',
+                    'sm:right-6 sm:bottom-6 sm:h-12 sm:w-auto sm:gap-2 sm:px-4',
                     className,
                 )}
                 aria-label={t.open}
@@ -38,6 +46,11 @@ export function AiChatTriggerButton({ variant = 'header', className, onClick }: 
                 <span className="hidden font-medium sm:inline">{t.openShort}</span>
             </Button>
         );
+
+        // Portal avoids flex/transform ancestors in the authenticated shell
+        // stealing the fixed containing block and pinning the FAB to the top.
+        if (!mounted) return null;
+        return createPortal(fab, document.body);
     }
 
     return (

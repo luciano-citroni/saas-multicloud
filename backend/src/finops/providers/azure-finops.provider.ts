@@ -4,14 +4,17 @@ import { ClientSecretCredential } from '@azure/identity';
 
 import type {
     IFinopsProvider,
+    CollectCreditConsumptionOptions,
     FinopsCommitmentRecommendationEntry,
     FinopsCommitmentUtilizationEntry,
     FinopsCostCollectionResult,
+    FinopsCostEntry,
     FinopsCreditConsumptionEntry,
     FinopsProviderCredentials,
+    FinopsProviderSession,
     ProviderCostForecast,
 } from './finops-provider.interface';
-import { capResourceEntriesByDay } from './finops-provider.interface';
+import { capResourceEntriesByDay, createEmptyRequestMetrics } from './finops-provider.interface';
 import { readForecastCache, writeForecastCache } from './forecast-cache';
 
 interface AzureCostQueryColumn {
@@ -32,38 +35,66 @@ interface AzureCostQueryResult {
     };
 }
 
+export type AzureFinopsSession = FinopsProviderSession & {
+    provider: 'azure';
+    token: string;
+    subscriptionId: string;
+};
+
 @Injectable()
 export class AzureFinopsProvider implements IFinopsProvider {
     readonly provider = 'azure';
 
     private readonly logger = new Logger(AzureFinopsProvider.name);
 
+    async createSession(creds: FinopsProviderCredentials): Promise<AzureFinopsSession> {
+        const { tenantId, clientId, clientSecret, subscriptionId } = creds.credentials as {
+            tenantId?: string;
+            clientId?: string;
+            clientSecret?: string;
+            subscriptionId?: string;
+        };
+        if (!tenantId || !clientId || !clientSecret || !subscriptionId) {
+            throw new Error('[Azure FinOps] Credencial incompleta.');
+        }
+
+        const metrics = createEmptyRequestMetrics();
+        const token = await this.getAccessToken(tenantId, clientId, clientSecret);
+        metrics.auth += 1;
+
+        return {
+            provider: 'azure',
+            metrics,
+            token,
+            subscriptionId,
+        };
+    }
+
+    private async resolveSession(
+        creds: FinopsProviderCredentials,
+        session?: FinopsProviderSession,
+    ): Promise<AzureFinopsSession> {
+        if (session?.provider === 'azure') return session as AzureFinopsSession;
+        return this.createSession(creds);
+    }
+
+    private costQueryUrl(subscriptionId: string): string {
+        return `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-11-01`;
+    }
+
     async collectCosts(
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult> {
-        const { credentials, cloudAccountId } = creds;
-        const { tenantId, clientId, clientSecret, subscriptionId } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId: string;
-        };
+        const { cloudAccountId } = creds;
+        const azure = await this.resolveSession(creds, session);
 
         this.logger.log(`[Azure FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
-        const azureCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-        const token = await azureCredential.getToken('https://management.azure.com/.default');
-
-        if (!token?.token) {
-            throw new Error('[Azure FinOps] Falha ao obter token do Azure AD');
-        }
-
-        const scope = `subscriptions/${subscriptionId}`;
-        const apiVersion = '2023-11-01';
-        const url = `https://management.azure.com/${scope}/providers/Microsoft.CostManagement/query?api-version=${apiVersion}`;
+        const url = this.costQueryUrl(azure.subscriptionId);
 
         const body = {
             type: 'ActualCost',
@@ -83,7 +114,7 @@ export class AzureFinopsProvider implements IFinopsProvider {
             },
         };
 
-        const pages = await this.fetchAllCostPages(url, token.token, body);
+        const pages = await this.fetchAllCostPages(url, azure.token, body, azure);
         const entries: FinopsCostCollectionResult['entries'] = [];
         let currency = 'USD';
 
@@ -141,29 +172,16 @@ export class AzureFinopsProvider implements IFinopsProvider {
         startDate: string,
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult> {
-        const { credentials, cloudAccountId } = creds;
-        const { tenantId, clientId, clientSecret, subscriptionId } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId: string;
-        };
+        const { cloudAccountId } = creds;
+        const azure = await this.resolveSession(creds, session);
 
         this.logger.log(
             `[Azure FinOps] Coletando custos por recurso para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`,
         );
 
-        const azureCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-        const token = await azureCredential.getToken('https://management.azure.com/.default');
-
-        if (!token?.token) {
-            throw new Error('[Azure FinOps] Falha ao obter token do Azure AD');
-        }
-
-        const scope = `subscriptions/${subscriptionId}`;
-        const apiVersion = '2023-11-01';
-        const url = `https://management.azure.com/${scope}/providers/Microsoft.CostManagement/query?api-version=${apiVersion}`;
+        const url = this.costQueryUrl(azure.subscriptionId);
 
         const body = {
             type: 'ActualCost',
@@ -184,7 +202,7 @@ export class AzureFinopsProvider implements IFinopsProvider {
 
         let pages: AzureCostQueryResult[];
         try {
-            pages = await this.fetchAllCostPages(url, token.token, body);
+            pages = await this.fetchAllCostPages(url, azure.token, body, azure);
         } catch (error) {
             this.logger.warn(
                 `[Azure FinOps] collectResourceCosts falhou (continuando sem recursos): ${
@@ -252,23 +270,18 @@ export class AzureFinopsProvider implements IFinopsProvider {
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
+        session?: FinopsProviderSession,
+        options?: CollectCreditConsumptionOptions,
     ): Promise<FinopsCreditConsumptionEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { tenantId, clientId, clientSecret, subscriptionId } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId: string;
-        };
+        const { cloudAccountId } = creds;
+        const azure = await this.resolveSession(creds, session);
 
         this.logger.log(
             `[Azure FinOps] Coletando consumo de créditos para conta ${cloudAccountId} (${startDate} → ${endDate})`,
         );
 
         try {
-            const token = await this.getAccessToken(tenantId, clientId, clientSecret);
-            const scope = `subscriptions/${subscriptionId}`;
-            const url = `https://management.azure.com/${scope}/providers/Microsoft.CostManagement/query?api-version=2023-11-01`;
+            const url = this.costQueryUrl(azure.subscriptionId);
 
             const body = {
                 type: 'ActualCost',
@@ -293,7 +306,7 @@ export class AzureFinopsProvider implements IFinopsProvider {
                 },
             };
 
-            const pages = await this.fetchAllCostPages(url, token, body);
+            const pages = await this.fetchAllCostPages(url, azure.token, body, azure);
             const entries: FinopsCreditConsumptionEntry[] = [];
 
             for (const data of pages) {
@@ -328,45 +341,12 @@ export class AzureFinopsProvider implements IFinopsProvider {
                 }
             }
 
-            // Fallback: any negative cost lines if ChargeType filter yielded nothing
-            if (entries.length === 0) {
-                const fallbackBody = {
-                    type: 'ActualCost',
-                    timeframe: 'Custom',
-                    timePeriod: { from: `${startDate}T00:00:00Z`, to: `${endDate}T23:59:59Z` },
-                    dataset: {
-                        granularity: 'Daily',
-                        aggregation: { totalCost: { name: 'Cost', function: 'Sum' } },
-                        grouping: [{ type: 'Dimension', name: 'ServiceName' }],
-                    },
-                };
-                const fallbackPages = await this.fetchAllCostPages(url, token, fallbackBody);
-                for (const data of fallbackPages) {
-                    const columns = data.properties?.columns ?? [];
-                    const rows = data.properties?.rows ?? [];
-                    const colIndex = (name: string) =>
-                        columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
-                    const costIdx = colIndex('Cost');
-                    const serviceIdx = colIndex('ServiceName');
-                    const dateIdx = colIndex('UsageDate');
-                    const currencyIdx = colIndex('Currency');
-                    for (const row of rows) {
-                        const cost = Number(row[costIdx] ?? 0);
-                        if (cost >= 0) continue;
-                        const rawDate = String(row[dateIdx] ?? startDate);
-                        const formattedDate =
-                            rawDate.length === 8
-                                ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
-                                : rawDate.slice(0, 10);
-                        entries.push({
-                            date: formattedDate,
-                            amount: Math.abs(cost),
-                            currency: currencyIdx >= 0 ? String(row[currencyIdx] ?? 'USD') : 'USD',
-                            label: String(row[serviceIdx] ?? 'Credit'),
-                            rawMetadata: { rawCost: cost },
-                        });
-                    }
-                }
+            // Fallback sem 2ª query: deriva de linhas negativas já coletadas em collectCosts.
+            if (entries.length === 0 && options?.costEntriesFallback?.length) {
+                entries.push(...this.deriveCreditFallbackFromCostEntries(options.costEntriesFallback));
+                this.logger.log(
+                    `[Azure FinOps] Fallback de crédito derivado de collectCosts (${entries.length} entradas) — sem query extra`,
+                );
             }
 
             this.logger.log(`[Azure FinOps] ${entries.length} entradas de crédito para ${cloudAccountId}`);
@@ -381,17 +361,37 @@ export class AzureFinopsProvider implements IFinopsProvider {
         }
     }
 
+    /** Deriva consumo de crédito a partir de custos negativos já coletados (evita 2ª query CM). */
+    private deriveCreditFallbackFromCostEntries(costEntries: FinopsCostEntry[]): FinopsCreditConsumptionEntry[] {
+        const byDayLabel = new Map<string, FinopsCreditConsumptionEntry>();
+        for (const entry of costEntries) {
+            if (entry.cost >= 0) continue;
+            if (entry.resourceId?.trim()) continue; // só nível serviço
+            const label = entry.service || 'Credit';
+            const key = `${entry.date}\u0000${label}\u0000${entry.currency}`;
+            const current = byDayLabel.get(key);
+            if (current) {
+                current.amount += Math.abs(entry.cost);
+            } else {
+                byDayLabel.set(key, {
+                    date: entry.date,
+                    amount: Math.abs(entry.cost),
+                    currency: entry.currency || 'USD',
+                    label,
+                    rawMetadata: { rawCost: entry.cost, source: 'cost_entries_fallback' },
+                });
+            }
+        }
+        return [...byDayLabel.values()];
+    }
+
     async collectCommitmentUtilization(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentUtilizationEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { tenantId, clientId, clientSecret, subscriptionId } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId: string;
-        };
+        const { cloudAccountId } = creds;
+        const azure = await this.resolveSession(creds, session);
 
         const { startDate, endDate } = this.lookbackRange(lookbackDays);
         this.logger.log(
@@ -399,16 +399,16 @@ export class AzureFinopsProvider implements IFinopsProvider {
         );
 
         try {
-            const token = await this.getAccessToken(tenantId, clientId, clientSecret);
             const grain = 'daily';
             const url =
-                `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.Consumption/reservationSummaries` +
+                `https://management.azure.com/subscriptions/${azure.subscriptionId}/providers/Microsoft.Consumption/reservationSummaries` +
                 `?api-version=2023-05-01&$filter=properties/usageDate ge ${startDate} AND properties/usageDate le ${endDate}` +
                 `&grain=${grain}`;
 
             const response = await fetch(url, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${azure.token}` },
             });
+            azure.metrics.api += 1;
 
             if (!response.ok) {
                 const body = await response.text();
@@ -517,27 +517,23 @@ export class AzureFinopsProvider implements IFinopsProvider {
     async collectCommitmentRecommendations(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentRecommendationEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { tenantId, clientId, clientSecret, subscriptionId } = credentials as {
-            tenantId: string;
-            clientId: string;
-            clientSecret: string;
-            subscriptionId: string;
-        };
+        const { cloudAccountId } = creds;
+        const azure = await this.resolveSession(creds, session);
 
         this.logger.log(`[Azure FinOps] Coletando recomendações de Reservations para ${cloudAccountId}`);
 
         try {
-            const token = await this.getAccessToken(tenantId, clientId, clientSecret);
             // Shared scope recommendations for the subscription
             const url =
-                `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.Consumption/reservationRecommendations` +
+                `https://management.azure.com/subscriptions/${azure.subscriptionId}/providers/Microsoft.Consumption/reservationRecommendations` +
                 `?api-version=2023-05-01`;
 
             const response = await fetch(url, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${azure.token}` },
             });
+            azure.metrics.api += 1;
 
             if (!response.ok) {
                 const body = await response.text();
@@ -739,6 +735,7 @@ export class AzureFinopsProvider implements IFinopsProvider {
         initialUrl: string,
         accessToken: string,
         body: Record<string, unknown>,
+        session?: AzureFinopsSession,
     ): Promise<AzureCostQueryResult[]> {
         const pages: AzureCostQueryResult[] = [];
         let url: string | undefined = initialUrl;
@@ -767,6 +764,8 @@ export class AzureFinopsProvider implements IFinopsProvider {
             pages.push(data);
             url = data.properties?.nextLink || data.nextLink;
         }
+
+        if (session) session.metrics.api += pageCount;
 
         if (pageCount >= maxPages) {
             this.logger.warn(`[Azure FinOps] Limite de ${maxPages} páginas atingido — resultados podem estar incompletos.`);

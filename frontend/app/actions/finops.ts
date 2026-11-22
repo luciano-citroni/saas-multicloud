@@ -193,6 +193,127 @@ export async function fetchFinopsOrgSavings(
     return fetch(`/api/finops/savings?${params.toString()}`, { cache: 'no-store' });
 }
 
+export type CreateRealizedSavingPayload = {
+    cloudAccountId: string;
+    resourceNames: string[];
+    monthlyAmount: number;
+    currency?: string;
+    description: string;
+    executedAt: string;
+};
+
+export type UpdateRealizedSavingPayload = {
+    resourceNames?: string[];
+    monthlyAmount?: number;
+    currency?: string;
+    description?: string;
+    executedAt?: string;
+};
+
+export type RealizeRecommendationPayload = {
+    executedAt?: string;
+    monthlyAmount?: number;
+    description?: string;
+};
+
+export async function fetchFinopsRealizedSavings(
+    organizationId: string,
+    options?: {
+        cloudAccountId?: string;
+        cloudAccountIds?: string[];
+        provider?: string;
+        periodStart?: string;
+        periodEnd?: string;
+        page?: number;
+        limit?: number;
+    },
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    if (options?.provider) params.set('provider', options.provider);
+    if (options?.periodStart) params.set('periodStart', options.periodStart);
+    if (options?.periodEnd) params.set('periodEnd', options.periodEnd);
+    if (options?.page !== undefined) params.set('page', String(options.page));
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+    return fetch(`/api/finops/realized-savings?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchFinopsSavingsProjection(
+    organizationId: string,
+    options?: {
+        cloudAccountId?: string;
+        cloudAccountIds?: string[];
+        provider?: string;
+        periodStart?: string;
+        periodEnd?: string;
+    },
+) {
+    const params = new URLSearchParams({ organizationId });
+    if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    if (options?.provider) params.set('provider', options.provider);
+    if (options?.periodStart) params.set('periodStart', options.periodStart);
+    if (options?.periodEnd) params.set('periodEnd', options.periodEnd);
+    return fetch(`/api/finops/savings/projection?${params.toString()}`, { cache: 'no-store' });
+}
+
+export async function createFinopsRealizedSaving(organizationId: string, payload: CreateRealizedSavingPayload) {
+    return fetch(`/api/finops/realized-savings?organizationId=${encodeURIComponent(organizationId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function updateFinopsRealizedSaving(
+    organizationId: string,
+    id: string,
+    payload: UpdateRealizedSavingPayload,
+) {
+    return fetch(
+        `/api/finops/realized-savings/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function deleteFinopsRealizedSaving(organizationId: string, id: string) {
+    return fetch(
+        `/api/finops/realized-savings/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' },
+    );
+}
+
+export async function realizeFinopsRecommendation(
+    organizationId: string,
+    recommendationId: string,
+    payload: RealizeRecommendationPayload = {},
+) {
+    return fetch(
+        `/api/finops/recommendations/${encodeURIComponent(recommendationId)}/realize?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function dismissFinopsRecommendation(
+    organizationId: string,
+    cloudAccountId: string,
+    recommendationId: string,
+) {
+    return fetch(
+        `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/recommendations/${encodeURIComponent(recommendationId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' },
+    );
+}
+
 export async function acknowledgeFinopsAnomaly(organizationId: string, cloudAccountId: string, anomalyId: string) {
     return fetch(
         `/api/finops/accounts/${encodeURIComponent(cloudAccountId)}/anomalies/${encodeURIComponent(anomalyId)}/acknowledge?organizationId=${encodeURIComponent(organizationId)}`,
@@ -498,6 +619,22 @@ export async function fetchFinopsCommitmentsRecommendations(
     const params = new URLSearchParams({ organizationId });
     appendCommitmentsFilter(params, options);
     return fetch(`/api/finops/commitments/recommendations?${params.toString()}`, { cache: 'no-store' });
+}
+
+export type FinopsCommitmentCandidatesFilter = FinopsCommitmentsFilter & {
+    lookbackDays?: number;
+    limit?: number;
+};
+
+export async function fetchFinopsCommitmentCandidates(
+    organizationId: string,
+    options?: FinopsCommitmentCandidatesFilter,
+) {
+    const params = new URLSearchParams({ organizationId });
+    appendCommitmentsFilter(params, options);
+    if (options?.lookbackDays != null) params.set('lookbackDays', String(options.lookbackDays));
+    if (options?.limit != null) params.set('limit', String(options.limit));
+    return fetch(`/api/finops/commitments/candidates?${params.toString()}`, { cache: 'no-store' });
 }
 
 export async function fetchFinopsCreditServices(organizationId: string, cloudAccountId: string) {

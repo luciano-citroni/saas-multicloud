@@ -729,3 +729,100 @@ export class CommitmentsOverviewDto {
         currency: string;
     };
 }
+
+export class CreateRealizedSavingRequestDto {
+    @ApiProperty({ format: 'uuid' })
+    cloudAccountId!: string;
+
+    @ApiProperty({ type: [String], example: ['i-0123456789abcdef0'] })
+    resourceNames!: string[];
+
+    @ApiProperty({ example: 120.5 })
+    monthlyAmount!: number;
+
+    @ApiPropertyOptional({ example: 'USD' })
+    currency?: string;
+
+    @ApiProperty({ example: 'Right-size EC2 from m5.xlarge to m5.large' })
+    description!: string;
+
+    @ApiProperty({ example: '2026-03-01' })
+    executedAt!: string;
+}
+
+export class UpdateRealizedSavingRequestDto {
+    @ApiPropertyOptional({ type: [String] })
+    resourceNames?: string[];
+
+    @ApiPropertyOptional({ example: 120.5 })
+    monthlyAmount?: number;
+
+    @ApiPropertyOptional({ example: 'USD' })
+    currency?: string;
+
+    @ApiPropertyOptional()
+    description?: string;
+
+    @ApiPropertyOptional({ example: '2026-03-01' })
+    executedAt?: string;
+}
+
+export class RealizeRecommendationRequestDto {
+    @ApiPropertyOptional({ example: '2026-03-15' })
+    executedAt?: string;
+
+    @ApiPropertyOptional({ example: 85.0, description: 'Override when potentialSaving is null' })
+    monthlyAmount?: number;
+
+    @ApiPropertyOptional()
+    description?: string;
+}
+
+export class RealizedSavingDto {
+    @ApiProperty({ format: 'uuid' })
+    id!: string;
+
+    @ApiProperty({ format: 'uuid' })
+    cloudAccountId!: string;
+
+    @ApiProperty({ example: 'aws' })
+    provider!: string;
+
+    @ApiProperty({ type: [String] })
+    resourceNames!: string[];
+
+    @ApiProperty({ example: 120.5 })
+    monthlyAmount!: number;
+
+    @ApiProperty({ example: 'USD' })
+    currency!: string;
+
+    @ApiProperty()
+    description!: string;
+
+    @ApiProperty({ example: '2026-03-01' })
+    executedAt!: string;
+
+    @ApiProperty({ example: 'manual', enum: ['manual', 'recommendation', 'commitment'] })
+    source!: string;
+}
+
+export class SavingsProjectionPointDto {
+    @ApiProperty({ example: '2026-03' })
+    month!: string;
+
+    @ApiProperty()
+    withoutSavings!: number;
+
+    @ApiProperty()
+    withSavings!: number;
+
+    @ApiProperty()
+    realizedSavings!: number;
+
+    @ApiProperty()
+    openPotential!: number;
+
+    @ApiProperty({ enum: ['historical', 'forecast'] })
+    phase!: 'historical' | 'forecast';
+}

@@ -12,6 +12,7 @@ import {
     GetCostAndUsageCommand,
     GetCostAndUsageWithResourcesCommand,
     GetCostForecastCommand,
+    GetReservationPurchaseRecommendationCommand,
     GetReservationUtilizationCommand,
     GetSavingsPlansCoverageCommand,
     GetSavingsPlansPurchaseRecommendationCommand,
@@ -33,12 +34,26 @@ import type {
     FinopsCreditConsumptionEntry,
     FinopsCreditGrantEntry,
     FinopsProviderCredentials,
+    FinopsProviderSession,
+    FinopsRequestMetrics,
     ProviderCostForecast,
     ProviderMonthForecast,
 } from './finops-provider.interface';
 import { readForecastCache, writeForecastCache } from './forecast-cache';
-import { capResourceEntriesByDay, dedupeCostEntries } from './finops-provider.interface';
+import {
+    capResourceEntriesByDay,
+    createEmptyRequestMetrics,
+    dedupeCostEntries,
+} from './finops-provider.interface';
 import { describeAwsUsageType } from './aws-usage-type';
+
+export type AwsFinopsSession = FinopsProviderSession & {
+    provider: 'aws';
+    roleArn: string;
+    costExplorer: CostExplorerClient;
+    billing: BillingClient;
+    accountScope?: 'PAYER' | 'LINKED';
+};
 
 @Injectable()
 export class AwsFinopsProvider implements IFinopsProvider {
@@ -48,25 +63,50 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
     constructor(private readonly configService: ConfigService) {}
 
-    async collectCosts(
-        creds: FinopsProviderCredentials,
-        startDate: string,
-        endDate: string,
-        granularity: 'DAILY' | 'MONTHLY'
-    ): Promise<FinopsCostCollectionResult> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as {
-            roleArn: string;
-            externalId?: string;
-        };
-
+    async createSession(creds: FinopsProviderCredentials): Promise<AwsFinopsSession> {
+        const { roleArn, externalId } = creds.credentials as { roleArn?: string; externalId?: string };
         if (!roleArn) {
             throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
         }
 
+        const metrics = createEmptyRequestMetrics();
+        const temporary = await this.assumeRole(roleArn, externalId);
+        metrics.auth += 1;
+
+        return {
+            provider: 'aws',
+            metrics,
+            roleArn,
+            costExplorer: new CostExplorerClient({ region: 'us-east-1', credentials: temporary }),
+            billing: new BillingClient({ region: 'us-east-1', credentials: temporary }),
+        };
+    }
+
+    private async resolveSession(
+        creds: FinopsProviderCredentials,
+        session?: FinopsProviderSession,
+    ): Promise<AwsFinopsSession> {
+        if (session?.provider === 'aws') return session as AwsFinopsSession;
+        return this.createSession(creds);
+    }
+
+    private trackApi(session: AwsFinopsSession, pages = 1): void {
+        session.metrics.api += pages;
+    }
+
+    async collectCosts(
+        creds: FinopsProviderCredentials,
+        startDate: string,
+        endDate: string,
+        granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
+    ): Promise<FinopsCostCollectionResult> {
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
+
         this.logger.log(`[AWS FinOps] Coletando custos para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`);
 
-        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const awsClient = aws.costExplorer;
         const exclusiveEndDate = this.toExclusiveEndDate(endDate);
 
         // AmortizedCost distribui RIs e Savings Plans proporcionalmente — mais preciso para FinOps
@@ -132,8 +172,9 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
                 nextPageToken = response.NextPageToken;
             } while (nextPageToken);
+            this.trackApi(aws, pageCount);
         } catch (error) {
-            throw this.mapAwsError(error, 'Cost Explorer', roleArn);
+            throw this.mapAwsError(error, 'Cost Explorer', aws.roleArn);
         }
 
         this.logger.log(
@@ -148,22 +189,16 @@ export class AwsFinopsProvider implements IFinopsProvider {
         startDate: string,
         endDate: string,
         granularity: 'DAILY' | 'MONTHLY',
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as {
-            roleArn: string;
-            externalId?: string;
-        };
-
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
 
         this.logger.log(
             `[AWS FinOps] Coletando custos por recurso para conta ${cloudAccountId} (${startDate} → ${endDate}, ${granularity})`,
         );
 
-        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const awsClient = aws.costExplorer;
         const exclusiveEndDate = this.toExclusiveEndDate(endDate);
 
         const baseInput: GetCostAndUsageWithResourcesCommandInput = {
@@ -239,6 +274,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
                 nextPageToken = response.NextPageToken;
             } while (nextPageToken);
+            this.trackApi(aws, pageCount);
         } catch (error) {
             // Contas sem permissão / dados de recurso: não quebra o sync de serviço.
             this.logger.warn(
@@ -265,14 +301,11 @@ export class AwsFinopsProvider implements IFinopsProvider {
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCostCollectionResult> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
-
-        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
+        const awsClient = aws.costExplorer;
         const exclusiveEndDate = this.toExclusiveEndDate(endDate);
         const baseInput: GetCostAndUsageCommandInput = {
             TimePeriod: { Start: startDate, End: exclusiveEndDate },
@@ -286,8 +319,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
         const entries: FinopsCostCollectionResult['entries'] = [];
         let nextPageToken: string | undefined;
+        let pageCount = 0;
 
         do {
+            pageCount += 1;
             const response = await awsClient.send(
                 new GetCostAndUsageCommand({
                     ...baseInput,
@@ -317,6 +352,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
             }
             nextPageToken = response.NextPageToken;
         } while (nextPageToken);
+        this.trackApi(aws, pageCount);
 
         const deduped = dedupeCostEntries(entries);
         this.logger.log(`[AWS FinOps] ${deduped.length} usage types para conta ${cloudAccountId} (${startDate} → ${endDate})`);
@@ -327,19 +363,17 @@ export class AwsFinopsProvider implements IFinopsProvider {
         creds: FinopsProviderCredentials,
         startDate: string,
         endDate: string,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCreditConsumptionEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
 
         this.logger.log(
             `[AWS FinOps] Coletando consumo de créditos para conta ${cloudAccountId} (${startDate} → ${endDate})`,
         );
 
         try {
-            const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+            const awsClient = aws.costExplorer;
             const exclusiveEndDate = this.toExclusiveEndDate(endDate);
             const baseInput: GetCostAndUsageCommandInput = {
                 TimePeriod: { Start: startDate, End: exclusiveEndDate },
@@ -356,8 +390,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
             const entries: FinopsCreditConsumptionEntry[] = [];
             let nextPageToken: string | undefined;
+            let pageCount = 0;
 
             do {
+                pageCount += 1;
                 const response = await awsClient.send(
                     new GetCostAndUsageCommand({
                         ...baseInput,
@@ -384,6 +420,7 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
                 nextPageToken = response.NextPageToken;
             } while (nextPageToken);
+            this.trackApi(aws, pageCount);
 
             this.logger.log(`[AWS FinOps] ${entries.length} entradas de crédito coletadas para ${cloudAccountId}`);
             return entries;
@@ -395,25 +432,25 @@ export class AwsFinopsProvider implements IFinopsProvider {
         }
     }
 
-    async collectCreditGrants(creds: FinopsProviderCredentials): Promise<FinopsCreditGrantEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
+    async collectCreditGrants(
+        creds: FinopsProviderCredentials,
+        session?: FinopsProviderSession,
+    ): Promise<FinopsCreditGrantEntry[]> {
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
 
-        const accountId = accountIdFromRoleArn(roleArn);
+        const accountId = accountIdFromRoleArn(aws.roleArn);
         if (!accountId) {
-            this.logger.warn(`[AWS FinOps] Não foi possível extrair o account id de ${roleArn}`);
+            this.logger.warn(`[AWS FinOps] Não foi possível extrair o account id de ${aws.roleArn}`);
             return [];
         }
 
         this.logger.log(`[AWS FinOps] Coletando concessões de crédito (Billing) para ${cloudAccountId}`);
 
         try {
-            const client = await this.buildBillingClient(roleArn, externalId);
+            const client = aws.billing;
             const startDate = new Date(Date.now() - 364 * 24 * 60 * 60 * 1000);
-            const credits = await this.fetchCredits(client, accountId, startDate);
+            const credits = await this.fetchCredits(client, accountId, startDate, aws.metrics);
             const grants: FinopsCreditGrantEntry[] = [];
 
             for (const credit of credits) {
@@ -436,19 +473,17 @@ export class AwsFinopsProvider implements IFinopsProvider {
     async collectCommitmentUtilization(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentUtilizationEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
 
         const { startDate, endDate } = this.lookbackRange(lookbackDays);
         this.logger.log(
             `[AWS FinOps] Coletando utilização de Savings Plans para ${cloudAccountId} (${startDate} → ${endDate})`,
         );
 
-        const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+        const awsClient = aws.costExplorer;
         const exclusiveEnd = this.toExclusiveEndDate(endDate);
         const timePeriod = { Start: startDate, End: exclusiveEnd };
         const entries: FinopsCommitmentUtilizationEntry[] = [];
@@ -462,8 +497,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     Granularity: 'DAILY',
                 }),
             );
+            this.trackApi(aws);
             utilization = response.Total?.Utilization ?? this.sumSavingsPlanUtilization(response.SavingsPlansUtilizationsByTime);
         } catch (error) {
+            this.trackApi(aws);
             this.logger.warn(`[AWS FinOps] GetSavingsPlansUtilization indisponível: ${this.awsErrorDetail(error)}`);
         }
 
@@ -476,8 +513,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     Metrics: ['SpendCoveredBySavingsPlans'],
                 }),
             );
+            this.trackApi(aws);
             coveragePct = this.averageSavingsPlanCoverage(coverage.SavingsPlansCoverages ?? []);
         } catch (error) {
+            this.trackApi(aws);
             this.logger.warn(`[AWS FinOps] GetSavingsPlansCoverage falhou: ${this.awsErrorDetail(error)}`);
         }
 
@@ -511,9 +550,11 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     Granularity: 'DAILY',
                 }),
             );
+            this.trackApi(aws);
             const reservationEntry = this.mapReservationUtilization(reservation.Total, cloudAccountId, lookbackDays, startDate, endDate);
             if (reservationEntry) entries.push(reservationEntry);
         } catch (error) {
+            this.trackApi(aws);
             this.logger.warn(`[AWS FinOps] GetReservationUtilization indisponível: ${this.awsErrorDetail(error)}`);
         }
 
@@ -524,12 +565,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
     async collectCommitmentRecommendations(
         creds: FinopsProviderCredentials,
         lookbackDays: number,
+        session?: FinopsProviderSession,
     ): Promise<FinopsCommitmentRecommendationEntry[]> {
-        const { credentials, cloudAccountId } = creds;
-        const { roleArn, externalId } = credentials as { roleArn: string; externalId?: string };
-        if (!roleArn) {
-            throw new BadRequestException('Credencial AWS inválida: roleArn ausente.');
-        }
+        const { cloudAccountId } = creds;
+        const aws = await this.resolveSession(creds, session);
 
         this.logger.log(`[AWS FinOps] Coletando recomendações de Savings Plans para ${cloudAccountId}`);
 
@@ -544,17 +583,18 @@ export class AwsFinopsProvider implements IFinopsProvider {
             ];
 
         try {
-            const awsClient = await this.buildCostExplorerClient(roleArn, externalId);
+            const awsClient = aws.costExplorer;
             const entries: FinopsCommitmentRecommendationEntry[] = [];
             let lastError = '';
 
             for (const cfg of configs) {
                 try {
-                    const summary = await this.fetchSavingsPlanRecommendation(awsClient, {
+                    const summary = await this.fetchSavingsPlanRecommendation(aws, awsClient, {
                         term: cfg.term,
                         payment: cfg.payment,
                         lookback: lookbackOption,
                     });
+                    this.trackApi(aws);
                     const hourly = summary?.HourlyCommitmentToPurchase
                         ? Number(summary.HourlyCommitmentToPurchase)
                         : null;
@@ -581,13 +621,13 @@ export class AwsFinopsProvider implements IFinopsProvider {
                         ineligibleReason: eligible
                             ? null
                             : 'Sem compromisso elegível adicional para este lookback/termo — cobertura já alta ou uso fora do escopo de Savings Plans.',
-                        summary: eligible
-                            ? `Compute SP ${cfg.term} / ${cfg.payment}: ~$${monthlySavings?.toFixed(2) ?? '0'}/mês`
-                            : 'Nenhuma compra adicional recomendada',
+                        // Keep summary machine-neutral; UI localizes via term/payment/type fields.
+                        summary: eligible ? null : 'Nenhuma compra adicional recomendada',
                         currency: 'USD',
                         rawMetadata: { summary: summary ?? null },
                     });
                 } catch (inner) {
+                    this.trackApi(aws);
                     lastError = this.awsErrorDetail(inner);
                     this.logger.warn(
                         `[AWS FinOps] SP recommendation ${cfg.term}/${cfg.payment} falhou: ${lastError}`,
@@ -614,6 +654,79 @@ export class AwsFinopsProvider implements IFinopsProvider {
                 });
             }
 
+            // Reserved Instances — lookback oficial da AWS (máx. SIXTY_DAYS).
+            const riConfigs: Array<{
+                term: 'ONE_YEAR' | 'THREE_YEARS';
+                payment: 'NO_UPFRONT' | 'PARTIAL_UPFRONT' | 'ALL_UPFRONT';
+            }> = [
+                { term: 'ONE_YEAR', payment: 'NO_UPFRONT' },
+                { term: 'ONE_YEAR', payment: 'PARTIAL_UPFRONT' },
+                { term: 'THREE_YEARS', payment: 'NO_UPFRONT' },
+            ];
+
+            let riLastError = '';
+            let riEligibleCount = 0;
+            for (const cfg of riConfigs) {
+                try {
+                    const summary = await this.fetchReservationPurchaseRecommendation(aws, awsClient, {
+                        term: cfg.term,
+                        payment: cfg.payment,
+                        lookback: lookbackOption,
+                    });
+                    this.trackApi(aws);
+                    const monthlySavings = summary?.EstimatedMonthlySavingsAmount
+                        ? Number(summary.EstimatedMonthlySavingsAmount)
+                        : null;
+                    const savingsPct = summary?.EstimatedSavingsPercentage
+                        ? Number(summary.EstimatedSavingsPercentage)
+                        : null;
+                    const eligible = (monthlySavings ?? 0) > 0;
+                    if (eligible) riEligibleCount += 1;
+
+                    entries.push({
+                        commitmentType: 'reservation',
+                        recommendationKey: `ec2_ri:${cfg.term}:${cfg.payment}:${lookbackOption}`,
+                        lookbackDays,
+                        term: cfg.term,
+                        paymentOption: cfg.payment,
+                        estimatedMonthlySavings: monthlySavings,
+                        estimatedSavingsPercentage: savingsPct,
+                        recommendedHourlyCommitment: null,
+                        eligible,
+                        ineligibleReason: eligible
+                            ? null
+                            : 'Sem compra adicional de Reserved Instance elegível para este lookback/termo.',
+                        // Keep summary machine-neutral; UI localizes via term/payment/type fields.
+                        summary: eligible ? null : 'Nenhuma compra adicional de RI recomendada',
+                        currency: 'USD',
+                        rawMetadata: { summary: summary ?? null, service: 'Amazon Elastic Compute Cloud - Compute' },
+                    });
+                } catch (inner) {
+                    this.trackApi(aws);
+                    riLastError = this.awsErrorDetail(inner);
+                    this.logger.warn(
+                        `[AWS FinOps] RI recommendation ${cfg.term}/${cfg.payment} falhou: ${riLastError}`,
+                    );
+                }
+            }
+
+            if (riEligibleCount === 0 && riLastError) {
+                entries.push({
+                    commitmentType: 'reservation',
+                    recommendationKey: `ec2_ri:none:${lookbackOption}`,
+                    lookbackDays,
+                    term: null,
+                    paymentOption: null,
+                    estimatedMonthlySavings: null,
+                    estimatedSavingsPercentage: null,
+                    recommendedHourlyCommitment: null,
+                    eligible: false,
+                    ineligibleReason: `Cost Explorer recusou a recomendação de Reserved Instances: ${riLastError}`,
+                    summary: 'Sem recomendações de RI disponíveis',
+                    currency: 'USD',
+                });
+            }
+
             return entries;
         } catch (error) {
             this.logger.warn(
@@ -627,8 +740,70 @@ export class AwsFinopsProvider implements IFinopsProvider {
 
     /**
      * Conta payer aceita AccountScope=PAYER. Conta vinculada só aceita LINKED.
+     * Detecta o scope na 1ª chamada do sync e reutiliza nas demais (sem retry por config).
      */
+    private async fetchReservationPurchaseRecommendation(
+        session: AwsFinopsSession,
+        client: CostExplorerClient,
+        input: {
+            term: 'ONE_YEAR' | 'THREE_YEARS';
+            payment: 'NO_UPFRONT' | 'PARTIAL_UPFRONT' | 'ALL_UPFRONT';
+            lookback: 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'SIXTY_DAYS';
+        },
+    ): Promise<{ EstimatedMonthlySavingsAmount?: string; EstimatedSavingsPercentage?: string } | undefined> {
+        const send = (accountScope: 'PAYER' | 'LINKED') =>
+            client.send(
+                new GetReservationPurchaseRecommendationCommand({
+                    Service: 'Amazon Elastic Compute Cloud - Compute',
+                    TermInYears: input.term,
+                    PaymentOption: input.payment,
+                    LookbackPeriodInDays: input.lookback,
+                    AccountScope: accountScope,
+                }),
+            );
+
+        const summarize = (
+            response: Awaited<ReturnType<typeof send>>,
+        ): { EstimatedMonthlySavingsAmount?: string; EstimatedSavingsPercentage?: string } | undefined => {
+            const details = (response.Recommendations ?? []).flatMap((rec) => rec.RecommendationDetails ?? []);
+            if (details.length === 0) return undefined;
+            let monthly = 0;
+            let pctSum = 0;
+            let pctCount = 0;
+            for (const detail of details) {
+                const amount = this.parseAwsAmount(detail.EstimatedMonthlySavingsAmount);
+                if (amount != null) monthly += amount;
+                const pct = this.parseAwsAmount(detail.EstimatedMonthlySavingsPercentage);
+                if (pct != null) {
+                    pctSum += pct;
+                    pctCount += 1;
+                }
+            }
+            return {
+                EstimatedMonthlySavingsAmount: String(monthly),
+                EstimatedSavingsPercentage: pctCount > 0 ? String(pctSum / pctCount) : undefined,
+            };
+        };
+
+        const scope = session.accountScope ?? 'PAYER';
+        try {
+            const result = summarize(await send(scope));
+            if (!session.accountScope) session.accountScope = scope;
+            return result;
+        } catch (error) {
+            const detail = this.awsErrorDetail(error);
+            if (session.accountScope || !/can only be LINKED/i.test(detail)) throw error;
+            this.logger.log(
+                `[AWS FinOps] Conta vinculada — AccountScope=LINKED para o restante do sync (RI ${input.term}/${input.payment})`,
+            );
+            session.accountScope = 'LINKED';
+            this.trackApi(session); // conta o PAYER rejeitado
+            return summarize(await send('LINKED'));
+        }
+    }
+
     private async fetchSavingsPlanRecommendation(
+        session: AwsFinopsSession,
         client: CostExplorerClient,
         input: {
             term: 'ONE_YEAR' | 'THREE_YEARS';
@@ -647,15 +822,19 @@ export class AwsFinopsProvider implements IFinopsProvider {
                 }),
             );
 
+        const scope = session.accountScope ?? 'PAYER';
         try {
-            const response = await send('PAYER');
+            const response = await send(scope);
+            if (!session.accountScope) session.accountScope = scope;
             return response.SavingsPlansPurchaseRecommendation?.SavingsPlansPurchaseRecommendationSummary;
         } catch (error) {
             const detail = this.awsErrorDetail(error);
-            if (!/can only be LINKED/i.test(detail)) throw error;
+            if (session.accountScope || !/can only be LINKED/i.test(detail)) throw error;
             this.logger.log(
-                `[AWS FinOps] Conta vinculada — repetindo recomendação SP ${input.term}/${input.payment} com AccountScope=LINKED`,
+                `[AWS FinOps] Conta vinculada — AccountScope=LINKED para o restante do sync (SP ${input.term}/${input.payment})`,
             );
+            session.accountScope = 'LINKED';
+            this.trackApi(session); // conta o PAYER rejeitado
             const response = await send('LINKED');
             return response.SavingsPlansPurchaseRecommendation?.SavingsPlansPurchaseRecommendationSummary;
         }
@@ -794,15 +973,12 @@ export class AwsFinopsProvider implements IFinopsProvider {
         return nextDay.toISOString().slice(0, 10);
     }
 
-    private async buildBillingClient(roleArn: string, externalId?: string): Promise<BillingClient> {
-        const temporary = await this.assumeRole(roleArn, externalId);
-        return new BillingClient({
-            region: 'us-east-1',
-            credentials: temporary,
-        });
-    }
-
-    private async fetchCredits(client: BillingClient, accountId: string, startDate: Date): Promise<CreditData[]> {
+    private async fetchCredits(
+        client: BillingClient,
+        accountId: string,
+        startDate: Date,
+        metrics?: FinopsRequestMetrics,
+    ): Promise<CreditData[]> {
         const merged = new Map<string, CreditData>();
         const absorb = (credits: CreditData[] | undefined) => {
             for (const credit of credits ?? []) {
@@ -821,8 +997,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     payerAccountFlag: false,
                 }),
             );
+            if (metrics) metrics.api += 1;
             absorb(own.credits);
         } catch (error) {
+            if (metrics) metrics.api += 1;
             this.logger.warn(
                 `[AWS FinOps] GetCredits da conta falhou: ${error instanceof Error ? error.message : String(error)}`,
             );
@@ -836,8 +1014,10 @@ export class AwsFinopsProvider implements IFinopsProvider {
                     payerAccountFlag: true,
                 }),
             );
+            if (metrics) metrics.api += 1;
             absorb(family.credits);
         } catch (error) {
+            if (metrics) metrics.api += 1;
             this.logger.warn(
                 `[AWS FinOps] GetCredits com payerAccountFlag falhou: ${
                     error instanceof Error ? error.message : String(error)

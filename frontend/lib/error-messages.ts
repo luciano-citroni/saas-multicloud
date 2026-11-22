@@ -656,6 +656,22 @@ export const ErrorMessages = {
             en: 'Select at least one service covered by the credit grant.',
             pt: 'Selecione ao menos um serviço coberto pela concessão de crédito.',
         },
+        RECOMMENDATION_NOT_FOUND: {
+            en: 'FinOps recommendation not found.',
+            pt: 'Recomendação FinOps não encontrada.',
+        },
+        REALIZED_SAVING_NOT_FOUND: {
+            en: 'FinOps realized saving not found.',
+            pt: 'Economia realizada FinOps não encontrada.',
+        },
+        RECOMMENDATION_ALREADY_REALIZED: {
+            en: 'This FinOps recommendation was already marked as realized.',
+            pt: 'Esta recomendação FinOps já foi marcada como realizada.',
+        },
+        POTENTIAL_SAVING_REQUIRED: {
+            en: 'This recommendation has no estimated potential saving. Provide a monthly amount to mark it as realized.',
+            pt: 'Esta recomendação não tem economia potencial estimada. Informe um valor mensal para marcá-la como realizada.',
+        },
         COMMERCIAL_REPORT_MONTH_OPEN: {
             en: 'Commercial report is available only for a closed month.',
             pt: 'O relatório comercial só fica disponível para um mês já fechado.',

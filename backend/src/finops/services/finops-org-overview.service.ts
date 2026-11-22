@@ -7,6 +7,7 @@ import { FinopsConsent } from '../../db/entites/finops-consent.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
 import { FinopsCostAnomaly } from '../../db/entites/finops-cost-anomaly.entity';
 import { FinopsRecommendation } from '../../db/entites/finops-recommendation.entity';
+import { FinopsCommitmentRecommendation } from '../../db/entites/finops-commitment-recommendation.entity';
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
 import type { CostByServiceItem } from './finops-analysis.service';
 import { FinopsForecastService } from './finops-forecast.service';
@@ -62,6 +63,13 @@ export type OrgOverviewRecommendation = {
     status: string;
     cloudProvider: string;
     createdAt: string;
+    kind?: 'waste' | 'reservation';
+    commitmentType?: string | null;
+    term?: string | null;
+    paymentOption?: string | null;
+    lookbackDays?: number | null;
+    eligible?: boolean;
+    ineligibleReason?: string | null;
 };
 
 export type OrgFinopsDataCoverage = {
@@ -180,6 +188,9 @@ export class FinopsOrgOverviewService {
 
         @InjectRepository(FinopsRecommendation)
         private readonly recommendationRepo: Repository<FinopsRecommendation>,
+
+        @InjectRepository(FinopsCommitmentRecommendation)
+        private readonly commitmentRecommendationRepo: Repository<FinopsCommitmentRecommendation>,
 
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>,
@@ -991,48 +1002,72 @@ export class FinopsOrgOverviewService {
             if (row.priority === 'medium') totals.medium += count;
             if (row.priority === 'low') totals.low += count;
         }
+
+        const includeReservations = statusFilter === 'open' || statusFilter === 'all';
+        let reservationItems: OrgOverviewRecommendation[] = [];
+        if (includeReservations) {
+            let commitQb = this.commitmentRecommendationRepo
+                .createQueryBuilder('c')
+                .where('c.organizationId = :organizationId', { organizationId })
+                .andWhere('c.cloudAccountId IN (:...accountIds)', { accountIds })
+                .andWhere('c.eligible = true')
+                .andWhere('c.estimatedMonthlySavings IS NOT NULL')
+                .andWhere('c.estimatedMonthlySavings > 0');
+            if (options.provider) {
+                commitQb = commitQb.andWhere('LOWER(c.provider) = :provider', {
+                    provider: options.provider.toLowerCase(),
+                });
+            }
+            if (search) {
+                commitQb = commitQb.andWhere(
+                    '(LOWER(c.summary) LIKE :q OR LOWER(c.commitmentType) LIKE :q OR LOWER(c.recommendationKey) LIKE :q)',
+                    { q: `%${search}%` },
+                );
+            }
+            const commitRows = await commitQb.getMany();
+            reservationItems = commitRows
+                .map((c) => this.mapCommitmentRecommendation(c))
+                .filter((item) => priorityFilter === 'all' || item.priority === priorityFilter);
+            for (const item of reservationItems) {
+                openSavings += Number(item.potentialSaving ?? 0);
+                totals.open += 1;
+                if (item.priority === 'high') totals.high += 1;
+                else if (item.priority === 'medium') totals.medium += 1;
+                else totals.low += 1;
+                if (item.currency) totals.currency = item.currency;
+            }
+        }
         totals.potentialSavings = openSavings;
 
-        const totalItems = await baseQb().getCount();
+        const wasteRows = await baseQb().getMany();
+        let merged: OrgOverviewRecommendation[] = [
+            ...wasteRows.map((r) => this.mapRecommendation(r)),
+            ...reservationItems,
+        ];
+
+        if (sortKey === 'priority') {
+            const rank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+            merged.sort((a, b) => {
+                const pr = (rank[b.priority] ?? 0) - (rank[a.priority] ?? 0);
+                if (pr !== 0) return pr;
+                return Number(b.potentialSaving ?? 0) - Number(a.potentialSaving ?? 0);
+            });
+        } else if (sortKey === 'date') {
+            merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        } else {
+            merged.sort(
+                (a, b) => Number(b.potentialSaving ?? 0) - Number(a.potentialSaving ?? 0),
+            );
+        }
+
+        const totalItems = merged.length;
         const totalPages = Math.max(1, Math.ceil(totalItems / limit));
         const safePage = Math.min(page, totalPages);
         const offset = (safePage - 1) * limit;
-
-        const listQb = baseQb();
-        if (sortKey === 'priority') {
-            listQb
-                .orderBy(
-                    `CASE LOWER(r.priority)
-                        WHEN 'high' THEN 3
-                        WHEN 'medium' THEN 2
-                        WHEN 'low' THEN 1
-                        ELSE 0
-                    END`,
-                    'DESC',
-                )
-                .addOrderBy('r.potentialSaving', 'DESC', 'NULLS LAST')
-                .addOrderBy('r.createdAt', 'DESC');
-        } else if (sortKey === 'date') {
-            listQb.orderBy('r.createdAt', 'DESC').addOrderBy('r.potentialSaving', 'DESC', 'NULLS LAST');
-        } else {
-            listQb
-                .orderBy('r.potentialSaving', 'DESC', 'NULLS LAST')
-                .addOrderBy(
-                    `CASE LOWER(r.priority)
-                        WHEN 'high' THEN 3
-                        WHEN 'medium' THEN 2
-                        WHEN 'low' THEN 1
-                        ELSE 0
-                    END`,
-                    'DESC',
-                )
-                .addOrderBy('r.createdAt', 'DESC');
-        }
-
-        const rows = await listQb.skip(offset).take(limit).getMany();
+        const items = merged.slice(offset, offset + limit);
 
         return {
-            items: rows.map((r) => this.mapRecommendation(r)),
+            items,
             pagination: {
                 page: safePage,
                 limit,
@@ -1176,6 +1211,37 @@ export class FinopsOrgOverviewService {
             status: r.status,
             cloudProvider: r.cloudProvider,
             createdAt: r.createdAt.toISOString(),
+            kind: 'waste',
+        };
+    }
+
+    private mapCommitmentRecommendation(c: FinopsCommitmentRecommendation): OrgOverviewRecommendation {
+        const saving = c.estimatedMonthlySavings != null ? Number(c.estimatedMonthlySavings) : null;
+        const priority =
+            saving != null && saving >= 500 ? 'high' : saving != null && saving >= 100 ? 'medium' : 'low';
+        // resourceType/resourceId/recommendation are codes or empty — the UI localizes via
+        // commitmentType + term + paymentOption + lookbackDays (never show raw recommendationKey).
+        return {
+            id: c.id,
+            cloudAccountId: c.cloudAccountId,
+            type: c.commitmentType,
+            resourceType: c.commitmentType,
+            resourceId: '',
+            description: '',
+            recommendation: '',
+            potentialSaving: saving,
+            currency: c.currency,
+            priority,
+            status: 'open',
+            cloudProvider: c.provider,
+            createdAt: c.syncedAt instanceof Date ? c.syncedAt.toISOString() : String(c.syncedAt),
+            kind: 'reservation',
+            commitmentType: c.commitmentType,
+            term: c.term,
+            paymentOption: c.paymentOption,
+            lookbackDays: c.lookbackDays,
+            eligible: c.eligible,
+            ineligibleReason: c.ineligibleReason,
         };
     }
 

@@ -71,6 +71,10 @@ import {
     type CreateCreditGrantPayload,
 } from '@/app/actions/finops';
 import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
+import {
+    commitmentApplicableServices,
+    commitmentAppliesToHint,
+} from '@/lib/finops/commitment-labels';
 import { cn } from '@/lib/utils';
 import { useTranslations, type Translations } from '@/lib/i18n';
 import { formatDate } from '@/lib/i18n/format';
@@ -1123,6 +1127,7 @@ export function FinopsCommitmentsPage() {
                                         <TableHead>{t.providerLabel}</TableHead>
                                         <TableHead>{t.creditsGrantAccount}</TableHead>
                                         <TableHead>Type</TableHead>
+                                        <TableHead>{t.commitmentAppliesTo}</TableHead>
                                         <TableHead>{t.commitmentsTerm}</TableHead>
                                         <TableHead>{t.commitmentsPayment}</TableHead>
                                         <TableHead>{t.commitmentsEstSavings}</TableHead>
@@ -1157,6 +1162,49 @@ export function FinopsCommitmentsPage() {
                                             <TableCell>{accountAlias(row.cloudAccountId)}</TableCell>
                                             <TableCell>
                                                 {commitmentTypeLabel(row.commitmentType, t)}
+                                            </TableCell>
+                                            <TableCell className="max-w-56 whitespace-normal align-top">
+                                                {(() => {
+                                                    const services = commitmentApplicableServices(
+                                                        {
+                                                            commitmentType: row.commitmentType,
+                                                            provider: row.provider,
+                                                        },
+                                                        t,
+                                                    );
+                                                    const hint = commitmentAppliesToHint(
+                                                        {
+                                                            commitmentType: row.commitmentType,
+                                                            provider: row.provider,
+                                                        },
+                                                        t,
+                                                    );
+                                                    if (services.length === 0) {
+                                                        return (
+                                                            <span className="text-muted-foreground">—</span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div className="space-y-1">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {services.map((service) => (
+                                                                    <Badge
+                                                                        key={service}
+                                                                        variant="secondary"
+                                                                        className="text-[10px] font-normal"
+                                                                    >
+                                                                        {service}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                            {hint ? (
+                                                                <p className="text-[11px] leading-snug text-muted-foreground">
+                                                                    {hint}
+                                                                </p>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </TableCell>
                                             <TableCell>
                                                 <TermBadge term={row.term} t={t} />

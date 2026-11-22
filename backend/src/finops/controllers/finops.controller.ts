@@ -36,8 +36,12 @@ import { FinopsOrgOverviewService } from '../services/finops-org-overview.servic
 import { FinopsResourceCostService } from '../services/finops-resource-cost.service';
 import { FinopsAnomalyAlertService } from '../services/finops-anomaly-alert.service';
 import { FinopsCommitmentsService } from '../services/finops-commitments.service';
+import { FinopsRealizedSavingsService } from '../services/finops-realized-savings.service';
 
 import { FinopsCostSyncRun } from '../../db/entites/finops-cost-sync-run.entity';
+
+import { CurrentUser } from '../../auth/decorators';
+import type { JwtPayload } from '../../auth/auth.service';
 
 import {
     FinopsConsentResponseDto,
@@ -66,6 +70,11 @@ import {
     UpdateCreditGrantRequestDto,
     CreditGrantDto,
     CommitmentsOverviewDto,
+    CreateRealizedSavingRequestDto,
+    UpdateRealizedSavingRequestDto,
+    RealizeRecommendationRequestDto,
+    RealizedSavingDto,
+    SavingsProjectionPointDto,
 } from '../dto/swagger.dto';
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
@@ -143,6 +152,35 @@ const creditGrantUpdateSchema = z.object({
     services: creditGrantServicesSchema.optional(),
 });
 
+const realizedSavingSchema = z.object({
+    cloudAccountId: z.string().uuid(),
+    resourceNames: z.array(z.string().trim().min(1).max(512)).min(1).max(50),
+    monthlyAmount: z.number().positive(),
+    currency: z.string().min(3).max(10).optional(),
+    description: z.string().trim().min(1).max(4000),
+    executedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD'),
+});
+
+const realizedSavingUpdateSchema = z.object({
+    resourceNames: z.array(z.string().trim().min(1).max(512)).min(1).max(50).optional(),
+    monthlyAmount: z.number().positive().optional(),
+    currency: z.string().min(3).max(10).optional(),
+    description: z.string().trim().min(1).max(4000).optional(),
+    executedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD')
+        .optional(),
+});
+
+const realizeRecommendationSchema = z.object({
+    executedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use formato YYYY-MM-DD')
+        .optional(),
+    monthlyAmount: z.number().positive().optional(),
+    description: z.string().trim().min(1).max(4000).optional(),
+});
+
 const budgetSchema = budgetBaseSchema.superRefine((data, ctx) => {
     if (data.alertType === 'resource' && !data.resourceId?.trim()) {
         ctx.addIssue({
@@ -206,6 +244,7 @@ export class FinopsController {
         private readonly resourceCostService: FinopsResourceCostService,
         private readonly anomalyAlertService: FinopsAnomalyAlertService,
         private readonly commitmentsService: FinopsCommitmentsService,
+        private readonly realizedSavingsService: FinopsRealizedSavingsService,
 
         @InjectRepository(FinopsCostSyncRun)
         private readonly syncRunRepo: Repository<FinopsCostSyncRun>
@@ -383,6 +422,129 @@ export class FinopsController {
         });
     }
 
+    @Get('savings/projection')
+    @ApiOperation({
+        summary: 'Projeção de fatura com/sem economias',
+        description:
+            'Série mensal histórica (gasto real ± economias realizadas) e forecast futuro (menos potencial aberto).',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'periodStart', required: false, description: 'YYYY-MM-DD' })
+    @ApiQuery({ name: 'periodEnd', required: false, description: 'YYYY-MM-DD' })
+    @ApiResponse({ status: 200, type: [SavingsProjectionPointDto] })
+    async getSavingsProjection(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
+        @Query('provider') provider: string,
+        @Query('periodStart') periodStart: string,
+        @Query('periodEnd') periodEnd: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.realizedSavingsService.getProjection(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: cloudAccountIds || undefined,
+            provider: provider || undefined,
+            periodStart: periodStart || undefined,
+            periodEnd: periodEnd || undefined,
+        });
+    }
+
+    @Get('realized-savings')
+    @ApiOperation({ summary: 'Listar economias realizadas (ledger)' })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'periodStart', required: false })
+    @ApiQuery({ name: 'periodEnd', required: false })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiResponse({ status: 200, description: 'Lista + totals.totalSaved' })
+    async listRealizedSavings(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
+        @Query('provider') provider: string,
+        @Query('periodStart') periodStart: string,
+        @Query('periodEnd') periodEnd: string,
+        @Query('page') page: string,
+        @Query('limit') limit: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.realizedSavingsService.list(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: cloudAccountIds || undefined,
+            provider: provider || undefined,
+            periodStart: periodStart || undefined,
+            periodEnd: periodEnd || undefined,
+            page,
+            limit,
+        });
+    }
+
+    @Post('realized-savings')
+    @Roles(OrgRole.MEMBER)
+    @HttpCode(201)
+    @ApiOperation({ summary: 'Cadastrar economia realizada manualmente' })
+    @ApiBody({ type: CreateRealizedSavingRequestDto })
+    @ApiResponse({ status: 201, type: RealizedSavingDto })
+    async createRealizedSaving(
+        @Body(new ZodValidationPipe(realizedSavingSchema)) body: z.infer<typeof realizedSavingSchema>,
+        @CurrentOrganization() org: Tenant,
+        @CurrentUser() user: JwtPayload,
+    ) {
+        return this.realizedSavingsService.create(org.id, user.sub, body);
+    }
+
+    @Patch('realized-savings/:id')
+    @Roles(OrgRole.MEMBER)
+    @ApiOperation({ summary: 'Atualizar economia realizada' })
+    @ApiParam({ name: 'id', type: String, format: 'uuid' })
+    @ApiBody({ type: UpdateRealizedSavingRequestDto })
+    @ApiResponse({ status: 200, type: RealizedSavingDto })
+    async updateRealizedSaving(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body(new ZodValidationPipe(realizedSavingUpdateSchema))
+        body: z.infer<typeof realizedSavingUpdateSchema>,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.realizedSavingsService.update(org.id, id, body);
+    }
+
+    @Delete('realized-savings/:id')
+    @Roles(OrgRole.MEMBER)
+    @HttpCode(204)
+    @ApiOperation({ summary: 'Remover economia realizada' })
+    @ApiParam({ name: 'id', type: String, format: 'uuid' })
+    @ApiResponse({ status: 204, description: 'Deleted' })
+    async deleteRealizedSaving(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        await this.realizedSavingsService.remove(org.id, id);
+    }
+
+    @Post('recommendations/:id/realize')
+    @Roles(OrgRole.MEMBER)
+    @HttpCode(201)
+    @ApiOperation({
+        summary: 'Marcar recomendação de economia como realizada',
+        description: 'Resolve a recomendação e cria um lançamento no ledger de economias realizadas.',
+    })
+    @ApiParam({ name: 'id', type: String, format: 'uuid' })
+    @ApiBody({ type: RealizeRecommendationRequestDto })
+    @ApiResponse({ status: 201, type: RealizedSavingDto })
+    @ApiResponse({ status: 409, description: 'Already realized' })
+    async realizeRecommendation(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body(new ZodValidationPipe(realizeRecommendationSchema))
+        body: z.infer<typeof realizeRecommendationSchema>,
+        @CurrentOrganization() org: Tenant,
+        @CurrentUser() user: JwtPayload,
+    ) {
+        return this.realizedSavingsService.realizeRecommendation(org.id, id, user.sub, body);
+    }
+
     // =========================================================================
     // Credits & Commitments (SP / Reservations / CUDs)
     // =========================================================================
@@ -531,6 +693,34 @@ export class FinopsController {
         return this.commitmentsService.listRecommendations(org.id, {
             cloudAccountId: cloudAccountId || undefined,
             provider: provider || undefined,
+        });
+    }
+
+    @Get('commitments/candidates')
+    @ApiOperation({
+        summary: 'Recursos candidatos a Savings Plan / reserva',
+        description:
+            'Heurística local: recursos de compute com gasto recorrente e estável no lookback (padrão 90 dias), para apoiar a decisão de compromisso.',
+    })
+    @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
+    @ApiQuery({ name: 'lookbackDays', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiResponse({ status: 200, description: 'Commitment resource candidates' })
+    async getCommitmentCandidates(
+        @Query('cloudAccountId') cloudAccountId: string,
+        @Query('provider') provider: string,
+        @Query('lookbackDays') lookbackDaysRaw: string,
+        @Query('limit') limitRaw: string,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        const lookbackParsed = Number.parseInt(lookbackDaysRaw ?? '', 10);
+        const limitParsed = Number.parseInt(limitRaw ?? '', 10);
+        return this.commitmentsService.listCommitmentCandidates(org.id, {
+            cloudAccountId: cloudAccountId || undefined,
+            provider: provider || undefined,
+            lookbackDays: Number.isFinite(lookbackParsed) ? lookbackParsed : undefined,
+            limit: Number.isFinite(limitParsed) ? limitParsed : undefined,
         });
     }
 

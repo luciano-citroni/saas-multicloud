@@ -16,7 +16,13 @@ import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { AzureFinopsProvider } from '../providers/azure-finops.provider';
 import { GcpFinopsProvider } from '../providers/gcp-finops.provider';
-import type { IFinopsProvider } from '../providers/finops-provider.interface';
+import type {
+    FinopsBillingBundleResult,
+    FinopsCostEntry,
+    FinopsProviderSession,
+    IFinopsProvider,
+} from '../providers/finops-provider.interface';
+import { formatRequestMetrics } from '../providers/finops-provider.interface';
 
 import { FinopsCostIngestionService } from '../services/finops-cost-ingestion.service';
 import { FinopsCostAggregationService } from '../services/finops-cost-aggregation.service';
@@ -82,8 +88,8 @@ export class FinopsProcessor extends WorkerHost {
                 throw new Error(`CloudAccount ${cloudAccountId} não encontrada`);
             }
 
-            // ── 2. Coletar custos via provider (serviço + região) ─────────────
-            this.logger.log(`[${jobId}] Fase 2/7: Coletando custos via ${cloudProvider}...`);
+            // ── 2. Sessão compartilhada (1 auth) + janela incremental ─────────
+            this.logger.log(`[${jobId}] Fase 2/7: Preparando sessão ${cloudProvider}...`);
             await job.updateProgress(20);
 
             const provider = this.resolveProvider(cloudProvider);
@@ -107,37 +113,76 @@ export class FinopsProcessor extends WorkerHost {
                 );
             }
 
-            const { entries } = await provider.collectCosts(providerCreds, collectStart, endDate, granularity);
+            // 1 auth / sessão compartilhada para o sync inteiro
+            const session: FinopsProviderSession | undefined = provider.createSession
+                ? await provider.createSession(providerCreds)
+                : undefined;
 
-            // ── 3. Recurso: fechamento AWS usa usage type do mês; o dia a dia usa RESOURCE_ID ───
-            this.logger.log(`[${jobId}] Fase 3/7: Coletando custos por recurso...`);
+            const lookbackDays = 30;
+            let entries: FinopsCostEntry[] = [];
+            let resourceEntries: FinopsCostEntry[] = [];
+            let gcpBundle: FinopsBillingBundleResult | null = null;
+
+            // ── 3. GCP: 1 BigQuery job; demais: custos || recursos em paralelo ───
+            this.logger.log(`[${jobId}] Fase 3/7: Coletando custos (serviço + recurso)...`);
             await job.updateProgress(30);
 
-            let resourceEntries: typeof entries = [];
-            try {
-                if (isMonthlyClose && cloudProvider === 'aws') {
-                    this.logger.log(`[${jobId}] Fechamento AWS: usage types de ${startDate} → ${endDate}`);
-                    resourceEntries = (await this.awsProvider.collectUsageTypeCosts(providerCreds, startDate, endDate)).entries;
-                } else {
-                    const resourceWindow = this.resolveResourceWindow(cloudProvider, collectStart, endDate);
-                    if (resourceWindow) {
+            if (cloudProvider === 'gcp' && provider.collectBillingBundle) {
+                gcpBundle = await provider.collectBillingBundle(
+                    providerCreds,
+                    collectStart,
+                    endDate,
+                    granularity,
+                    lookbackDays,
+                    session,
+                );
+                entries = gcpBundle.service.entries;
+                resourceEntries = gcpBundle.resource.entries;
+            } else {
+                const resourcePromise = (async (): Promise<FinopsCostEntry[]> => {
+                    try {
+                        if (isMonthlyClose && cloudProvider === 'aws') {
+                            this.logger.log(`[${jobId}] Fechamento AWS: usage types de ${startDate} → ${endDate}`);
+                            return (
+                                await this.awsProvider.collectUsageTypeCosts(
+                                    providerCreds,
+                                    startDate,
+                                    endDate,
+                                    session,
+                                )
+                            ).entries;
+                        }
+                        const resourceWindow = this.resolveResourceWindow(cloudProvider, collectStart, endDate);
+                        if (!resourceWindow) {
+                            this.logger.log(
+                                `[${jobId}] Custo por recurso fora da janela disponível para ${cloudProvider}.`,
+                            );
+                            return [];
+                        }
                         const resourceResult = await provider.collectResourceCosts(
                             providerCreds,
                             resourceWindow.start,
                             resourceWindow.end,
                             granularity,
+                            session,
                         );
-                        resourceEntries = resourceResult.entries;
-                    } else {
-                        this.logger.log(`[${jobId}] Custo por recurso fora da janela disponível para ${cloudProvider}.`);
+                        return resourceResult.entries;
+                    } catch (error) {
+                        this.logger.warn(
+                            `[${jobId}] Custo por recurso falhou (seguindo só com serviço): ${
+                                error instanceof Error ? error.message : String(error)
+                            }`,
+                        );
+                        return [];
                     }
-                }
-            } catch (error) {
-                this.logger.warn(
-                    `[${jobId}] Custo por recurso falhou (seguindo só com serviço): ${
-                        error instanceof Error ? error.message : String(error)
-                    }`,
-                );
+                })();
+
+                const [serviceResult, resources] = await Promise.all([
+                    provider.collectCosts(providerCreds, collectStart, endDate, granularity, session),
+                    resourcePromise,
+                ]);
+                entries = serviceResult.entries;
+                resourceEntries = resources;
             }
 
             const allEntries = [...entries, ...resourceEntries];
@@ -196,8 +241,14 @@ export class FinopsProcessor extends WorkerHost {
                     providerCreds,
                     collectStart,
                     endDate,
-                    30,
+                    lookbackDays,
                     isMonthlyClose,
+                    {
+                        session,
+                        costEntriesFallback: entries,
+                        prefetchedCredits: gcpBundle?.credits,
+                        prefetchedUtilization: gcpBundle?.utilization,
+                    },
                 );
             } catch (error) {
                 this.logger.warn(
@@ -234,7 +285,8 @@ export class FinopsProcessor extends WorkerHost {
 
             await job.updateProgress(100);
 
-            this.logger.log(`[${jobId}] Coleta concluída: ${recordsUpserted} registros`);
+            const metricsLog = session ? ` (${formatRequestMetrics(session.metrics)})` : '';
+            this.logger.log(`[${jobId}] Coleta concluída: ${recordsUpserted} registros${metricsLog}`);
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
             this.logger.error(`[${jobId}] Falha: ${error}`);

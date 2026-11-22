@@ -47,6 +47,13 @@ export type FinopsRecommendation = {
     status: 'open' | 'dismissed' | 'resolved';
     cloudProvider: string;
     createdAt: string;
+    kind?: 'waste' | 'reservation';
+    commitmentType?: string | null;
+    term?: string | null;
+    paymentOption?: string | null;
+    lookbackDays?: number | null;
+    eligible?: boolean;
+    ineligibleReason?: string | null;
 };
 
 export type CostByServiceItem = {
