@@ -58,6 +58,9 @@ export class InventoryOverviewResponseDto {
     @ApiProperty({ type: [String] })
     regions!: string[];
 
+    @ApiProperty({ type: [String], description: 'Tag pairs as key:value' })
+    tags!: string[];
+
     @ApiProperty({ type: [String] })
     resourceTypes!: string[];
 

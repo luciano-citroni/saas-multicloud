@@ -27,6 +27,7 @@ export type InventoryOverviewResult = {
     newThisMonth: number;
     byType: Record<string, number>;
     regions: string[];
+    tags: string[];
     resourceTypes: string[];
     monthlyNew: Array<{ month: string; count: number }>;
     provider: InventoryProvider;
@@ -59,11 +60,15 @@ export class CloudInventoryService {
 
         const byType: Record<string, number> = {};
         const regionSet = new Set<string>();
+        const tagSet = new Set<string>();
         let newThisMonth = 0;
 
         for (const resource of resources) {
             byType[resource.resourceType] = (byType[resource.resourceType] ?? 0) + 1;
             if (resource.region) regionSet.add(resource.region);
+            for (const [key, value] of Object.entries(resource.tags ?? {})) {
+                tagSet.add(`${key}:${value}`);
+            }
             if (new Date(resource.createdAt) >= monthStart) newThisMonth += 1;
         }
 
@@ -72,6 +77,7 @@ export class CloudInventoryService {
             newThisMonth,
             byType,
             regions: Array.from(regionSet).sort((a, b) => a.localeCompare(b)),
+            tags: Array.from(tagSet).sort((a, b) => a.localeCompare(b)),
             resourceTypes: Object.keys(byType).sort((a, b) => a.localeCompare(b)),
             monthlyNew: buildMonthlySeries(resources, period),
             provider,

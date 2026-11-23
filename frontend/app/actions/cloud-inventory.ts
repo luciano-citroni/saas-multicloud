@@ -22,6 +22,7 @@ export type InventoryOverview = {
     newThisMonth: number;
     byType: Record<string, number>;
     regions: string[];
+    tags: string[];
     resourceTypes: string[];
     monthlyNew: InventoryMonthlyPoint[];
     provider: 'aws' | 'azure' | 'gcp';

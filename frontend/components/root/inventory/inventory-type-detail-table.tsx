@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { InventoryResource } from '@/app/actions/cloud-inventory';
+import { InventoryTagList } from '@/components/root/inventory/inventory-tag-list';
 import { formatDateTime, useTranslations } from '@/lib/i18n';
 
 type PaginationMeta = {
@@ -23,10 +24,11 @@ type PaginationMeta = {
 };
 
 type InventoryTypeDetailTableProps = {
-    resourceType: string;
+    resourceType: string | null;
     items: InventoryResource[];
     pagination: PaginationMeta | null;
     isLoading?: boolean;
+    showTypeColumn?: boolean;
     onPageChange: (page: number) => void;
 };
 
@@ -66,33 +68,12 @@ function humanizeAttributeKey(key: string): string {
     return ATTRIBUTE_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 }
 
-function TagBadges({ tags }: { tags?: Record<string, string> }) {
-    const entries = Object.entries(tags ?? {}).slice(0, 3);
-    if (entries.length === 0) {
-        return <span className="text-muted-foreground">—</span>;
-    }
-    const remaining = Object.keys(tags ?? {}).length - entries.length;
-    return (
-        <div className="flex max-w-64 flex-wrap gap-1">
-            {entries.map(([key, value]) => (
-                <Badge key={`${key}:${value}`} variant="secondary" className="max-w-40 truncate font-normal">
-                    {key}:{value}
-                </Badge>
-            ))}
-            {remaining > 0 ? (
-                <Badge variant="outline" className="font-normal">
-                    +{remaining}
-                </Badge>
-            ) : null}
-        </div>
-    );
-}
-
 export function InventoryTypeDetailTable({
     resourceType,
     items,
     pagination,
     isLoading = false,
+    showTypeColumn = false,
     onPageChange,
 }: InventoryTypeDetailTableProps) {
     const t = useTranslations('inventory');
@@ -101,6 +82,7 @@ export function InventoryTypeDetailTable({
     const totalPages = Math.max(1, pagination?.totalPages ?? 1);
 
     const attributeKeys = useMemo(() => {
+        if (showTypeColumn) return [] as string[];
         const keys = new Set<string>();
         for (const item of items) {
             for (const [key, value] of Object.entries(item.attributes ?? {})) {
@@ -108,16 +90,18 @@ export function InventoryTypeDetailTable({
             }
         }
         return Array.from(keys).slice(0, 3);
-    }, [items]);
+    }, [items, showTypeColumn]);
 
-    const colSpan = 5 + attributeKeys.length;
+    const colSpan = 4 + (showTypeColumn ? 1 : 0) + attributeKeys.length;
 
     return (
         <div className="overflow-hidden rounded-lg border">
             <div className="border-b bg-muted/20 px-4 py-3">
                 <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
                     <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{resourceType}</p>
+                        <p className="truncate text-sm font-medium">
+                            {resourceType || t.browseResultsTitle}
+                        </p>
                         <p className="text-xs text-muted-foreground">{t.browseDetailDescription}</p>
                     </div>
                     {pagination ? (
@@ -133,6 +117,9 @@ export function InventoryTypeDetailTable({
                     <TableHeader>
                         <TableRow>
                             <TableHead className="min-w-40">{t.colName}</TableHead>
+                            {showTypeColumn ? (
+                                <TableHead className="min-w-32">{t.colType}</TableHead>
+                            ) : null}
                             <TableHead className="min-w-28">{t.colRegion}</TableHead>
                             <TableHead className="hidden min-w-28 lg:table-cell">{t.colStatus}</TableHead>
                             {attributeKeys.map((key) => (
@@ -140,7 +127,7 @@ export function InventoryTypeDetailTable({
                                     {humanizeAttributeKey(key)}
                                 </TableHead>
                             ))}
-                            <TableHead className="hidden min-w-48 md:table-cell">{t.colTags}</TableHead>
+                            <TableHead className="hidden min-w-52 md:table-cell">{t.colTags}</TableHead>
                             <TableHead className="min-w-36">{t.colCreatedAt}</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -164,11 +151,17 @@ export function InventoryTypeDetailTable({
                                         <div className="min-w-0">
                                             <p className="truncate font-medium">{item.name}</p>
                                             <p className="mt-0.5 truncate text-xs text-muted-foreground md:hidden">
+                                                {showTypeColumn ? `${item.resourceType} · ` : ''}
                                                 {item.region || '—'}
                                                 {item.status ? ` · ${item.status}` : ''}
                                             </p>
                                         </div>
                                     </TableCell>
+                                    {showTypeColumn ? (
+                                        <TableCell className="text-muted-foreground">
+                                            <span className="truncate">{item.resourceType}</span>
+                                        </TableCell>
+                                    ) : null}
                                     <TableCell className="text-muted-foreground">
                                         <span className="truncate">{item.region || '—'}</span>
                                     </TableCell>
@@ -189,8 +182,8 @@ export function InventoryTypeDetailTable({
                                             {item.attributes?.[key] || '—'}
                                         </TableCell>
                                     ))}
-                                    <TableCell className="hidden md:table-cell">
-                                        <TagBadges tags={item.tags} />
+                                    <TableCell className="hidden align-top md:table-cell">
+                                        <InventoryTagList tags={item.tags} max={3} />
                                     </TableCell>
                                     <TableCell className="whitespace-nowrap text-muted-foreground">
                                         {formatDateTime(item.createdAt)}

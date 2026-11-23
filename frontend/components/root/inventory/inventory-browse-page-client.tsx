@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Cloud, RefreshCw } from 'lucide-react';
+import { Cloud, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     fetchInventoryOverview,
@@ -69,6 +69,9 @@ export function InventoryBrowsePageClient() {
     const tc = useTranslations('common');
 
     const browseState = useMemo(() => parseBrowseState(searchParams), [searchParams]);
+    const hasListFilters = Boolean(
+        browseState.type || browseState.region || browseState.tag || browseState.q,
+    );
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
@@ -128,13 +131,12 @@ export function InventoryBrowsePageClient() {
     }, [browseState.q]);
 
     useEffect(() => {
-        if (!browseState.type) return;
         const timer = window.setTimeout(() => {
             if (nameDraft === browseState.q) return;
             syncUrlState({ q: nameDraft, page: DEFAULT_PAGE });
         }, 300);
         return () => window.clearTimeout(timer);
-    }, [browseState.q, browseState.type, nameDraft, syncUrlState]);
+    }, [browseState.q, nameDraft, syncUrlState]);
 
     const refreshContext = useCallback(() => {
         setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
@@ -188,7 +190,13 @@ export function InventoryBrowsePageClient() {
                 setOverview(null);
                 return;
             }
-            setOverview(body as InventoryOverview);
+            const payload = body as InventoryOverview;
+            setOverview(payload);
+            // Prefer overview facets on the catalog; resource response can refine them later.
+            setFacets({
+                regions: Array.isArray(payload.regions) ? payload.regions : [],
+                tags: Array.isArray(payload.tags) ? payload.tags : [],
+            });
         } catch {
             toast.error(t.loadError);
             setOverview(null);
@@ -198,16 +206,15 @@ export function InventoryBrowsePageClient() {
     }, [cloudAccountId, hasInventoryModule, organizationId, t.loadError]);
 
     const loadResources = useCallback(async () => {
-        if (!organizationId || !cloudAccountId || hasInventoryModule !== true || !browseState.type) {
+        if (!organizationId || !cloudAccountId || hasInventoryModule !== true || !hasListFilters) {
             setResources([]);
             setPagination(null);
-            setFacets({ regions: [], tags: [] });
             return;
         }
         setLoadingTable(true);
         try {
             const response = await fetchInventoryResources(organizationId, cloudAccountId, {
-                resourceType: browseState.type,
+                resourceType: browseState.type || undefined,
                 q: browseState.q || undefined,
                 region: browseState.region || undefined,
                 tag: browseState.tag || undefined,
@@ -220,7 +227,6 @@ export function InventoryBrowsePageClient() {
                 toast.error(extractErrorMessage(body));
                 setResources([]);
                 setPagination(null);
-                setFacets({ regions: [], tags: [] });
                 return;
             }
             const payload = body as {
@@ -230,15 +236,16 @@ export function InventoryBrowsePageClient() {
             };
             setResources(Array.isArray(payload.items) ? payload.items : []);
             setPagination(payload.pagination ?? null);
-            setFacets({
-                regions: Array.isArray(payload.facets?.regions) ? payload.facets.regions : [],
-                tags: Array.isArray(payload.facets?.tags) ? payload.facets.tags : [],
-            });
+            if (payload.facets) {
+                setFacets((prev) => ({
+                    regions: Array.isArray(payload.facets?.regions) ? payload.facets.regions : prev.regions,
+                    tags: Array.isArray(payload.facets?.tags) ? payload.facets.tags : prev.tags,
+                }));
+            }
         } catch {
             toast.error(t.loadError);
             setResources([]);
             setPagination(null);
-            setFacets({ regions: [], tags: [] });
         } finally {
             setLoadingTable(false);
         }
@@ -250,6 +257,7 @@ export function InventoryBrowsePageClient() {
         browseState.type,
         cloudAccountId,
         hasInventoryModule,
+        hasListFilters,
         organizationId,
         t.loadError,
     ]);
@@ -261,6 +269,10 @@ export function InventoryBrowsePageClient() {
     useEffect(() => {
         void loadResources();
     }, [loadResources]);
+
+    const regionOptions = facets.regions.length > 0 ? facets.regions : (overview?.regions ?? []);
+    const tagOptions = facets.tags.length > 0 ? facets.tags : (overview?.tags ?? []);
+    const resourceTypeOptions = overview?.resourceTypes ?? Object.keys(overview?.byType ?? {});
 
     if (isContextLoading || hasInventoryModule === null) {
         return (
@@ -321,72 +333,56 @@ export function InventoryBrowsePageClient() {
 
             <InventorySubnav />
 
-            {browseState.type ? (
-                <div className="space-y-4">
-                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="w-fit"
-                            onClick={() => {
-                                setNameDraft('');
-                                syncUrlState({
-                                    type: null,
-                                    q: '',
-                                    region: '',
-                                    tag: '',
-                                    page: DEFAULT_PAGE,
-                                });
-                            }}
-                        >
-                            <ArrowLeft className="size-4" />
-                            {t.browseBackToTypes}
-                        </Button>
-                        <p className="text-sm text-muted-foreground">
-                            {t.browseSelectedType.replace('{type}', browseState.type)}
-                        </p>
-                    </div>
+            <InventoryBrowseFilters
+                name={nameDraft}
+                resourceType={browseState.type ?? ''}
+                region={browseState.region}
+                tag={browseState.tag}
+                resourceTypeOptions={resourceTypeOptions}
+                regionOptions={regionOptions}
+                tagOptions={tagOptions}
+                onNameChange={setNameDraft}
+                onResourceTypeChange={(resourceType) =>
+                    syncUrlState({ type: resourceType || null, page: DEFAULT_PAGE })
+                }
+                onRegionChange={(region) => syncUrlState({ region, page: DEFAULT_PAGE })}
+                onTagChange={(tag) => syncUrlState({ tag, page: DEFAULT_PAGE })}
+                onClear={() => {
+                    setNameDraft('');
+                    syncUrlState({
+                        type: null,
+                        q: '',
+                        region: '',
+                        tag: '',
+                        page: DEFAULT_PAGE,
+                    });
+                }}
+            />
 
-                    <InventoryBrowseFilters
-                        name={nameDraft}
-                        region={browseState.region}
-                        tag={browseState.tag}
-                        regionOptions={facets.regions}
-                        tagOptions={facets.tags}
-                        onNameChange={setNameDraft}
-                        onRegionChange={(region) => syncUrlState({ region, page: DEFAULT_PAGE })}
-                        onTagChange={(tag) => syncUrlState({ tag, page: DEFAULT_PAGE })}
-                        onClear={() => {
-                            setNameDraft('');
-                            syncUrlState({ q: '', region: '', tag: '', page: DEFAULT_PAGE });
-                        }}
-                    />
-
-                    <InventoryTypeDetailTable
-                        resourceType={browseState.type}
-                        items={resources}
-                        pagination={pagination}
-                        isLoading={loadingTable}
-                        onPageChange={(page) => syncUrlState({ page })}
-                    />
-                </div>
-            ) : (
+            {!browseState.type ? (
                 <InventoryTypeCatalog
                     byType={overview?.byType ?? {}}
                     selectedType={browseState.type}
                     onSelect={(resourceType) =>
                         syncUrlState({
                             type: resourceType,
-                            q: '',
-                            region: '',
-                            tag: '',
                             page: DEFAULT_PAGE,
                         })
                     }
                     isLoading={loadingOverview}
                 />
-            )}
+            ) : null}
+
+            {hasListFilters ? (
+                <InventoryTypeDetailTable
+                    resourceType={browseState.type}
+                    items={resources}
+                    pagination={pagination}
+                    isLoading={loadingTable}
+                    showTypeColumn={!browseState.type}
+                    onPageChange={(page) => syncUrlState({ page })}
+                />
+            ) : null}
         </div>
     );
 }

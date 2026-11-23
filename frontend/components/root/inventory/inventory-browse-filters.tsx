@@ -13,11 +13,14 @@ import { useTranslations } from '@/lib/i18n';
 
 type InventoryBrowseFiltersProps = {
     name: string;
+    resourceType: string;
     region: string;
     tag: string;
+    resourceTypeOptions: string[];
     regionOptions: string[];
     tagOptions: string[];
     onNameChange: (name: string) => void;
+    onResourceTypeChange: (resourceType: string) => void;
     onRegionChange: (region: string) => void;
     onTagChange: (tag: string) => void;
     onClear: () => void;
@@ -26,21 +29,27 @@ type InventoryBrowseFiltersProps = {
 
 function FilterFields({
     name,
+    resourceType,
     region,
     tag,
+    resourceTypeOptions,
     regionOptions,
     tagOptions,
     onNameChange,
+    onResourceTypeChange,
     onRegionChange,
     onTagChange,
     compact = false,
 }: {
     name: string;
+    resourceType: string;
     region: string;
     tag: string;
+    resourceTypeOptions: string[];
     regionOptions: string[];
     tagOptions: string[];
     onNameChange: (name: string) => void;
+    onResourceTypeChange: (resourceType: string) => void;
     onRegionChange: (region: string) => void;
     onTagChange: (tag: string) => void;
     compact?: boolean;
@@ -52,19 +61,21 @@ function FilterFields({
         <div
             className={cn(
                 'grid grid-cols-1 items-end gap-3',
-                compact ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3',
+                compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-4',
             )}
         >
-            <div className="space-y-1.5">
-                <Label htmlFor="inventory-browse-name">{t.filterName}</Label>
-                <Input
-                    id="inventory-browse-name"
-                    value={name}
-                    onChange={(event) => onNameChange(event.target.value)}
-                    placeholder={t.filterNamePlaceholder}
-                    className="w-full"
-                />
-            </div>
+            <SearchableSelect
+                mode="single"
+                label={t.resourceType}
+                value={resourceType}
+                options={[
+                    { value: '', label: t.allTypes },
+                    ...resourceTypeOptions.map((item) => ({ value: item, label: item })),
+                ]}
+                onValueChange={onResourceTypeChange}
+                searchPlaceholder={t.browseSearchPlaceholder}
+                placeholder={t.allTypes}
+            />
             <SearchableSelect
                 mode="single"
                 label={t.region}
@@ -89,17 +100,30 @@ function FilterFields({
                 searchPlaceholder={tCommon.search}
                 placeholder={t.allTags}
             />
+            <div className="space-y-1.5">
+                <Label htmlFor="inventory-browse-name">{t.filterName}</Label>
+                <Input
+                    id="inventory-browse-name"
+                    value={name}
+                    onChange={(event) => onNameChange(event.target.value)}
+                    placeholder={t.filterNamePlaceholder}
+                    className="w-full"
+                />
+            </div>
         </div>
     );
 }
 
 export function InventoryBrowseFilters({
     name,
+    resourceType,
     region,
     tag,
+    resourceTypeOptions,
     regionOptions,
     tagOptions,
     onNameChange,
+    onResourceTypeChange,
     onRegionChange,
     onTagChange,
     onClear,
@@ -109,11 +133,11 @@ export function InventoryBrowseFilters({
     const [drawerOpen, setDrawerOpen] = useState(false);
 
     const chips = [
-        name
+        resourceType
             ? {
-                  key: 'name',
-                  label: `${t.filterName}: ${name}`,
-                  onClear: () => onNameChange(''),
+                  key: 'type',
+                  label: `${t.resourceType}: ${resourceType}`,
+                  onClear: () => onResourceTypeChange(''),
               }
             : null,
         region
@@ -130,6 +154,13 @@ export function InventoryBrowseFilters({
                   onClear: () => onTagChange(''),
               }
             : null,
+        name
+            ? {
+                  key: 'name',
+                  label: `${t.filterName}: ${name}`,
+                  onClear: () => onNameChange(''),
+              }
+            : null,
     ].filter(Boolean) as Array<{ key: string; label: string; onClear: () => void }>;
 
     const hasActiveFilters = chips.length > 0;
@@ -140,11 +171,14 @@ export function InventoryBrowseFilters({
                 <div className="rounded-lg border p-4">
                     <FilterFields
                         name={name}
+                        resourceType={resourceType}
                         region={region}
                         tag={tag}
+                        resourceTypeOptions={resourceTypeOptions}
                         regionOptions={regionOptions}
                         tagOptions={tagOptions}
                         onNameChange={onNameChange}
+                        onResourceTypeChange={onResourceTypeChange}
                         onRegionChange={onRegionChange}
                         onTagChange={onTagChange}
                     />
@@ -171,11 +205,14 @@ export function InventoryBrowseFilters({
                 >
                     <FilterFields
                         name={name}
+                        resourceType={resourceType}
                         region={region}
                         tag={tag}
+                        resourceTypeOptions={resourceTypeOptions}
                         regionOptions={regionOptions}
                         tagOptions={tagOptions}
                         onNameChange={onNameChange}
+                        onResourceTypeChange={onResourceTypeChange}
                         onRegionChange={onRegionChange}
                         onTagChange={onTagChange}
                         compact
