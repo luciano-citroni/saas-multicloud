@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Boxes, LayoutList } from 'lucide-react';
+import { Boxes, CalendarPlus, LayoutList } from 'lucide-react';
 import { ScrollableSubnav } from '@/components/root/layout';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
@@ -19,6 +19,12 @@ const LINKS = [
         labelKey: 'subnavBrowse' as const,
         icon: Boxes,
         match: (path: string) => path.startsWith('/inventory/browse'),
+    },
+    {
+        href: '/inventory/new-this-month',
+        labelKey: 'subnavNewThisMonth' as const,
+        icon: CalendarPlus,
+        match: (path: string) => path.startsWith('/inventory/new-this-month'),
     },
 ] as const;
 

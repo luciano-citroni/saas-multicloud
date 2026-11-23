@@ -31,8 +31,22 @@ COPY --from=builder --chown=nestjs:nodejs /app/package-lock.json ./
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 
+# Write entrypoint in-image (LF) so Windows CRLF checkouts cannot break Alpine.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'echo "[entrypoint] Running database migrations..."' \
+    'npm run migration:run:prod' \
+    'echo "[entrypoint] Migrations finished."' \
+    'echo "[entrypoint] Starting NestJS..."' \
+    'exec node dist/main' \
+    > /app/docker-entrypoint.sh \
+    && chmod +x /app/docker-entrypoint.sh \
+    && chown nestjs:nodejs /app/docker-entrypoint.sh
+
 USER nestjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run migration:run:prod && node dist/main"]
+# Always run pending TypeORM migrations on container start, then boot the API.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

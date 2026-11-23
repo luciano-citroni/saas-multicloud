@@ -28,6 +28,7 @@ export function SiteHeader() {
         assessment: nav.assessment,
         inventory: nav.inventory,
         browse: nav.inventoryBrowse,
+        'new-this-month': nav.inventoryNewThisMonth,
         governance: nav.governance,
         analysis: nav.breadcrumbAnalysis,
         finops: nav.finops,

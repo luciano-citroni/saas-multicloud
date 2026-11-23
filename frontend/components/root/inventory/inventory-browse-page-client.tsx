@@ -69,9 +69,8 @@ export function InventoryBrowsePageClient() {
     const tc = useTranslations('common');
 
     const browseState = useMemo(() => parseBrowseState(searchParams), [searchParams]);
-    const hasListFilters = Boolean(
-        browseState.type || browseState.region || browseState.tag || browseState.q,
-    );
+    const hasCatalogFilters = Boolean(browseState.region || browseState.tag || browseState.q);
+    const hasListFilters = Boolean(browseState.type || hasCatalogFilters);
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
@@ -93,6 +92,7 @@ export function InventoryBrowsePageClient() {
     const [resources, setResources] = useState<InventoryResource[]>([]);
     const [pagination, setPagination] = useState<PaginationMeta | null>(null);
     const [facets, setFacets] = useState<InventoryResourcesFacets>({ regions: [], tags: [] });
+    const [filteredByType, setFilteredByType] = useState<Record<string, number> | null>(null);
     const [loadingOverview, setLoadingOverview] = useState(false);
     const [loadingTable, setLoadingTable] = useState(false);
     const [nameDraft, setNameDraft] = useState(browseState.q);
@@ -209,6 +209,7 @@ export function InventoryBrowsePageClient() {
         if (!organizationId || !cloudAccountId || hasInventoryModule !== true || !hasListFilters) {
             setResources([]);
             setPagination(null);
+            setFilteredByType(null);
             return;
         }
         setLoadingTable(true);
@@ -227,15 +228,20 @@ export function InventoryBrowsePageClient() {
                 toast.error(extractErrorMessage(body));
                 setResources([]);
                 setPagination(null);
+                setFilteredByType(null);
                 return;
             }
             const payload = body as {
                 items?: InventoryResource[];
                 pagination?: PaginationMeta;
                 facets?: InventoryResourcesFacets;
+                byType?: Record<string, number>;
             };
             setResources(Array.isArray(payload.items) ? payload.items : []);
             setPagination(payload.pagination ?? null);
+            setFilteredByType(
+                payload.byType && typeof payload.byType === 'object' ? payload.byType : null,
+            );
             if (payload.facets) {
                 setFacets((prev) => ({
                     regions: Array.isArray(payload.facets?.regions) ? payload.facets.regions : prev.regions,
@@ -246,6 +252,7 @@ export function InventoryBrowsePageClient() {
             toast.error(t.loadError);
             setResources([]);
             setPagination(null);
+            setFilteredByType(null);
         } finally {
             setLoadingTable(false);
         }
@@ -272,7 +279,17 @@ export function InventoryBrowsePageClient() {
 
     const regionOptions = facets.regions.length > 0 ? facets.regions : (overview?.regions ?? []);
     const tagOptions = facets.tags.length > 0 ? facets.tags : (overview?.tags ?? []);
-    const resourceTypeOptions = overview?.resourceTypes ?? Object.keys(overview?.byType ?? {});
+    const catalogByType = useMemo(() => {
+        if (hasCatalogFilters && filteredByType) {
+            return filteredByType;
+        }
+        return overview?.byType ?? {};
+    }, [filteredByType, hasCatalogFilters, overview?.byType]);
+    const resourceTypeOptions = useMemo(() => {
+        const fromCatalog = Object.keys(catalogByType);
+        if (fromCatalog.length > 0) return fromCatalog.sort((a, b) => a.localeCompare(b));
+        return overview?.resourceTypes ?? Object.keys(overview?.byType ?? {});
+    }, [catalogByType, overview?.byType, overview?.resourceTypes]);
 
     if (isContextLoading || hasInventoryModule === null) {
         return (
@@ -361,7 +378,7 @@ export function InventoryBrowsePageClient() {
 
             {!browseState.type ? (
                 <InventoryTypeCatalog
-                    byType={overview?.byType ?? {}}
+                    byType={catalogByType}
                     selectedType={browseState.type}
                     onSelect={(resourceType) =>
                         syncUrlState({
@@ -369,7 +386,7 @@ export function InventoryBrowsePageClient() {
                             page: DEFAULT_PAGE,
                         })
                     }
-                    isLoading={loadingOverview}
+                    isLoading={loadingOverview || (hasCatalogFilters && loadingTable)}
                 />
             ) : null}
 

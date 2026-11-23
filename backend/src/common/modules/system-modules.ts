@@ -26,6 +26,9 @@ const systemModulesSet = new Set<string>(SYSTEM_MODULES);
 
 const MODULE_ALIAS_MAP: Record<string, string> = {
     assessement: 'assessment',
+    // Legacy Stripe metadata / docs used "resources" and "inventory" for cloud inventory.
+    resources: 'cloud_inventory',
+    inventory: 'cloud_inventory',
 };
 
 export function normalizeModuleName(moduleName: string): string {

@@ -1,8 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Filter, RotateCcw, X } from 'lucide-react';
 import { MobileFiltersDrawer } from '@/components/root/layout';
+import {
+    composeTagFilter,
+    formatTagLabel,
+    parseTagPair,
+    tagValuesForKey,
+    uniqueTagKeys,
+} from '@/components/root/inventory/inventory-tag-utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,11 +64,37 @@ function FilterFields({
     const t = useTranslations('inventory');
     const tCommon = useTranslations('common');
 
+    const { key: selectedKey, value: selectedValue } = useMemo(() => parseTagPair(tag), [tag]);
+    const tagKeys = useMemo(() => uniqueTagKeys(tagOptions), [tagOptions]);
+    const tagValues = useMemo(
+        () => tagValuesForKey(tagOptions, selectedKey),
+        [selectedKey, tagOptions],
+    );
+
+    const handleKeyChange = (nextKey: string) => {
+        if (!nextKey) {
+            onTagChange('');
+            return;
+        }
+
+        const values = tagValuesForKey(tagOptions, nextKey);
+        const keepValue = selectedValue && values.some((value) => value === selectedValue) ? selectedValue : '';
+        onTagChange(composeTagFilter(nextKey, keepValue));
+    };
+
+    const handleValueChange = (nextValue: string) => {
+        if (!selectedKey) {
+            onTagChange('');
+            return;
+        }
+        onTagChange(composeTagFilter(selectedKey, nextValue));
+    };
+
     return (
         <div
             className={cn(
                 'grid grid-cols-1 items-end gap-3',
-                compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-4',
+                compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5',
             )}
         >
             <SearchableSelect
@@ -90,15 +123,31 @@ function FilterFields({
             />
             <SearchableSelect
                 mode="single"
-                label={t.filterTag}
-                value={tag}
+                label={t.filterTagKey}
+                value={selectedKey}
                 options={[
-                    { value: '', label: t.allTags },
-                    ...tagOptions.map((item) => ({ value: item, label: item })),
+                    { value: '', label: t.allTagKeys },
+                    ...tagKeys.map((item) => ({ value: item, label: item })),
                 ]}
-                onValueChange={onTagChange}
+                onValueChange={handleKeyChange}
                 searchPlaceholder={tCommon.search}
-                placeholder={t.allTags}
+                placeholder={t.allTagKeys}
+            />
+            <SearchableSelect
+                mode="single"
+                label={t.filterTagValue}
+                value={selectedValue}
+                options={[
+                    { value: '', label: t.allTagValues },
+                    ...tagValues.map((item) => ({
+                        value: item,
+                        label: formatTagLabel(selectedKey, item),
+                    })),
+                ]}
+                onValueChange={handleValueChange}
+                searchPlaceholder={tCommon.search}
+                placeholder={selectedKey ? t.allTagValues : t.allTagKeys}
+                disabled={!selectedKey}
             />
             <div className="space-y-1.5">
                 <Label htmlFor="inventory-browse-name">{t.filterName}</Label>
@@ -131,6 +180,7 @@ export function InventoryBrowseFilters({
 }: InventoryBrowseFiltersProps) {
     const t = useTranslations('inventory');
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const parsedTag = useMemo(() => parseTagPair(tag), [tag]);
 
     const chips = [
         resourceType
@@ -150,7 +200,7 @@ export function InventoryBrowseFilters({
         tag
             ? {
                   key: 'tag',
-                  label: `${t.filterTag}: ${tag}`,
+                  label: `${t.filterTag}: ${formatTagLabel(parsedTag.key, parsedTag.value)}`,
                   onClear: () => onTagChange(''),
               }
             : null,
@@ -224,7 +274,7 @@ export function InventoryBrowseFilters({
                         {chips.map((chip) => (
                             <Badge key={chip.key} variant="secondary" className="gap-1 pr-1">
                                 <Filter className="size-3" />
-                                <span className="max-w-40 truncate">{chip.label}</span>
+                                <span className="max-w-48 truncate">{chip.label}</span>
                                 <button
                                     type="button"
                                     className="rounded-sm p-0.5 hover:bg-muted"

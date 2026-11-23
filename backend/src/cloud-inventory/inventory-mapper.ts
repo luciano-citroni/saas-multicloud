@@ -6,7 +6,8 @@ export type InventoryResource = {
     resourceType: string;
     region: string | null;
     status: string | null;
-    createdAt: string;
+    /** Provider birth date when known; never the DB sync `created_at`. */
+    createdAt: string | null;
     provider: InventoryProvider;
     /** Type-specific fields for browse detail tables (instance type, SKU, IPs, etc.). */
     attributes: Record<string, string | null>;
@@ -94,12 +95,13 @@ function pickStatus(record: RawRecord): string | null {
     return pickString(record, ['state', 'status', 'provisioningState', 'runtime']);
 }
 
-function pickBirthDate(record: RawRecord, nativeKeys: string[]): Date {
+function pickBirthDate(record: RawRecord, nativeKeys: string[]): Date | null {
     for (const key of nativeKeys) {
         const native = toDate(record[key]);
         if (native) return native;
     }
-    return toDate(record.createdAt) ?? new Date(0);
+    // Never fall back to DB `createdAt` — that is first-seen/sync time, not resource birth.
+    return null;
 }
 
 function pickAttributes(record: RawRecord, keys: string[]): Record<string, string | null> {
@@ -146,7 +148,7 @@ function mapItem(
         resourceType,
         region: pickRegion(record),
         status: pickStatus(record),
-        createdAt: createdAt.toISOString(),
+        createdAt: createdAt ? createdAt.toISOString() : null,
         provider,
         attributes: pickAttributes(record, attributeKeys),
         tags: pickTags(record),
@@ -181,9 +183,23 @@ export function flattenAwsInventory(data: Record<string, unknown[]>): InventoryR
             ['instanceType', 'awsInstanceId', 'privateIpAddress', 'publicIpAddress', 'availabilityZone', 'keyName'],
         ),
         ...mapCollection(data.ecsClusters, 'ECS Cluster', 'aws', [], [], ['status', 'clusterArn']),
-        ...mapCollection(data.ecsTaskDefinitions, 'ECS Task Definition', 'aws', [], ['family'], ['family', 'revision']),
-        ...mapCollection(data.ecsServices, 'ECS Service', 'aws', [], [], ['desiredCount', 'runningCount', 'launchType']),
-        ...mapCollection(data.eksClusters, 'EKS Cluster', 'aws', [], [], ['version', 'status']),
+        ...mapCollection(
+            data.ecsTaskDefinitions,
+            'ECS Task Definition',
+            'aws',
+            ['registeredAt'],
+            ['family'],
+            ['family', 'revision'],
+        ),
+        ...mapCollection(
+            data.ecsServices,
+            'ECS Service',
+            'aws',
+            ['createdAtAws'],
+            [],
+            ['desiredCount', 'runningCount', 'launchType'],
+        ),
+        ...mapCollection(data.eksClusters, 'EKS Cluster', 'aws', ['createdAtAws'], [], ['version', 'status']),
         ...mapCollection(data.loadBalancers, 'Load Balancer', 'aws', ['createdTime'], [], ['type', 'scheme', 'dnsName']),
         ...mapCollection(data.loadBalancerListeners, 'LB Listener', 'aws', [], ['listenerArn'], ['protocol', 'port']),
         ...mapCollection(
@@ -199,7 +215,7 @@ export function flattenAwsInventory(data: Record<string, unknown[]>): InventoryR
             data.rdsInstances,
             'RDS Instance',
             'aws',
-            [],
+            ['instanceCreateTime', 'createdAtAws'],
             ['dbInstanceIdentifier'],
             ['engine', 'engineVersion', 'dbInstanceClass', 'endpoint'],
         ),
@@ -226,27 +242,55 @@ export function flattenAwsInventory(data: Record<string, unknown[]>): InventoryR
             data.lambdaFunctions,
             'Lambda Function',
             'aws',
-            [],
+            ['lastModifiedAtAws'],
             ['functionName'],
             ['runtime', 'memorySize', 'timeout', 'handler'],
         ),
-        ...mapCollection(data.apiGatewayRestApis, 'API Gateway REST API', 'aws', [], ['name', 'apiName'], ['apiId']),
-        ...mapCollection(data.kmsKeys, 'KMS Key', 'aws', [], ['keyId', 'alias'], ['keyId', 'keyState', 'keyUsage']),
-        ...mapCollection(data.secretsManagerSecrets, 'Secrets Manager Secret', 'aws', [], ['name', 'secretName'], ['arn']),
-        ...mapCollection(data.ecrRepositories, 'ECR Repository', 'aws', [], ['repositoryName', 'name'], ['repositoryUri']),
-        ...mapCollection(data.dynamoDbTables, 'DynamoDB Table', 'aws', [], ['tableName', 'name'], ['tableStatus', 'billingMode']),
+        ...mapCollection(
+            data.apiGatewayRestApis,
+            'API Gateway REST API',
+            'aws',
+            ['createdAtAws'],
+            ['name', 'apiName'],
+            ['apiId'],
+        ),
+        ...mapCollection(data.kmsKeys, 'KMS Key', 'aws', ['createdAtAws'], ['keyId', 'alias'], ['keyId', 'keyState', 'keyUsage']),
+        ...mapCollection(
+            data.secretsManagerSecrets,
+            'Secrets Manager Secret',
+            'aws',
+            ['createdAtAws'],
+            ['name', 'secretName'],
+            ['arn'],
+        ),
+        ...mapCollection(
+            data.ecrRepositories,
+            'ECR Repository',
+            'aws',
+            ['createdAtAws'],
+            ['repositoryName', 'name'],
+            ['repositoryUri'],
+        ),
+        ...mapCollection(
+            data.dynamoDbTables,
+            'DynamoDB Table',
+            'aws',
+            ['createdAtAws'],
+            ['tableName', 'name'],
+            ['tableStatus', 'billingMode'],
+        ),
         ...mapCollection(
             data.elastiCacheClusters,
             'ElastiCache Cluster',
             'aws',
-            [],
+            ['createdAtAws'],
             ['cacheClusterId', 'name'],
             ['engine', 'cacheNodeType'],
         ),
-        ...mapCollection(data.sqsQueues, 'SQS Queue', 'aws', [], ['queueName', 'name'], ['queueUrl']),
+        ...mapCollection(data.sqsQueues, 'SQS Queue', 'aws', ['createdAtAws'], ['queueName', 'name'], ['queueUrl']),
         ...mapCollection(data.snsTopics, 'SNS Topic', 'aws', [], ['topicName', 'name'], ['topicArn']),
         ...mapCollection(data.wafWebAcls, 'WAF Web ACL', 'aws', [], ['name', 'webAclName'], ['scope']),
-        ...mapCollection(data.guardDutyDetectors, 'GuardDuty Detector', 'aws', [], ['detectorId'], ['status']),
+        ...mapCollection(data.guardDutyDetectors, 'GuardDuty Detector', 'aws', ['createdAtAws'], ['detectorId'], ['status']),
     ];
 }
 
@@ -297,7 +341,14 @@ export function flattenGcpInventory(data: Record<string, unknown[]>): InventoryR
         ...mapCollection(data.subnetworks, 'Subnetwork', 'gcp', ['creationTimestamp'], [], ['ipCidrRange', 'region', 'network']),
         ...mapCollection(data.firewallRules, 'Firewall Rule', 'gcp', ['creationTimestamp'], [], ['direction', 'priority', 'disabled']),
         ...mapCollection(data.storageBuckets, 'Storage Bucket', 'gcp', ['timeCreated'], [], ['location', 'storageClass']),
-        ...mapCollection(data.sqlInstances, 'Cloud SQL Instance', 'gcp', [], [], ['databaseVersion', 'tier', 'region', 'state']),
+        ...mapCollection(
+            data.sqlInstances,
+            'Cloud SQL Instance',
+            'gcp',
+            ['createTime'],
+            [],
+            ['databaseVersion', 'tier', 'region', 'state'],
+        ),
         ...mapCollection(
             data.serviceAccounts,
             'Service Account',
@@ -306,24 +357,34 @@ export function flattenGcpInventory(data: Record<string, unknown[]>): InventoryR
             ['email', 'displayName'],
             ['email', 'displayName', 'disabled'],
         ),
-        ...mapCollection(data.gkeClusters, 'GKE Cluster', 'gcp', [], [], ['location', 'status', 'currentMasterVersion']),
+        ...mapCollection(
+            data.gkeClusters,
+            'GKE Cluster',
+            'gcp',
+            ['createTime'],
+            [],
+            ['location', 'status', 'currentMasterVersion'],
+        ),
         ...mapCollection(data.cdnBackendServices, 'CDN Backend Service', 'gcp', [], [], ['protocol', 'loadBalancingScheme']),
-        ...mapCollection(data.cloudRunServices, 'Cloud Run Service', 'gcp', [], [], ['location', 'uri']),
-        ...mapCollection(data.cloudRunJobs, 'Cloud Run Job', 'gcp', [], [], ['location']),
+        ...mapCollection(data.cloudRunServices, 'Cloud Run Service', 'gcp', ['createTime'], [], ['location', 'uri']),
+        ...mapCollection(data.cloudRunJobs, 'Cloud Run Job', 'gcp', ['createTime'], [], ['location']),
     ];
 }
 
-export type InventoryPeriod = 'last6months' | 'last12months' | 'ytd' | 'all';
+export type InventoryPeriod = 'thismonth' | 'last6months' | 'last12months' | 'ytd' | 'all';
 
 export function resolvePeriodStart(period: InventoryPeriod, now = new Date()): Date | null {
     if (period === 'all') return null;
 
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    if (period === 'thismonth') {
+        return startOfCurrentMonth(now);
+    }
 
     if (period === 'ytd') {
         return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
     }
 
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const months = period === 'last6months' ? 6 : 12;
     start.setUTCMonth(start.getUTCMonth() - (months - 1));
     return start;
@@ -349,6 +410,7 @@ export function buildMonthlySeries(
     }
 
     for (const resource of resources) {
+        if (!resource.createdAt) continue;
         const created = toDate(resource.createdAt);
         if (!created) continue;
         const key = monthKey(created);

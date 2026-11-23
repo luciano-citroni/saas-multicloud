@@ -10,6 +10,9 @@ export enum PlanModule {
 
 export const MODULE_ALIAS_MAP: Partial<Record<string, PlanModule>> = {
     assessement: PlanModule.ASSESSMENT,
+    // Legacy Stripe metadata / docs used "resources" and "inventory" for cloud inventory.
+    resources: PlanModule.CLOUD_INVENTORY,
+    inventory: PlanModule.CLOUD_INVENTORY,
 };
 
 export const MODULE_LABEL_MAP: Record<PlanModule, string> = {

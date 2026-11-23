@@ -1,4 +1,4 @@
-export type InventoryPeriod = 'last6months' | 'last12months' | 'ytd' | 'all';
+export type InventoryPeriod = 'thismonth' | 'last6months' | 'last12months' | 'ytd' | 'all';
 
 export type InventoryResource = {
     id: string;
@@ -6,7 +6,8 @@ export type InventoryResource = {
     resourceType: string;
     region: string | null;
     status: string | null;
-    createdAt: string;
+    /** Provider birth date when known; null when only DB sync time exists. */
+    createdAt: string | null;
     provider: 'aws' | 'azure' | 'gcp';
     attributes?: Record<string, string | null>;
     tags?: Record<string, string>;
@@ -46,6 +47,8 @@ export type InventoryResourcesResponse = {
         hasPreviousPage: boolean;
     };
     facets?: InventoryResourcesFacets;
+    /** Counts by type after tag/region/name filters (selected type ignored). */
+    byType?: Record<string, number>;
 };
 
 export type InventoryResourcesQuery = {

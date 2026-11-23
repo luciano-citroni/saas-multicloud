@@ -42,7 +42,7 @@ export class CloudInventoryController {
     @ApiQuery({
         name: 'period',
         required: false,
-        enum: ['last6months', 'last12months', 'ytd', 'all'],
+        enum: ['thismonth', 'last6months', 'last12months', 'ytd', 'all'],
         description: 'Window used for the monthly new-resources chart (default: all → chart uses last 12 months)',
     })
     @ApiResponse({ status: 200, type: InventoryOverviewResponseDto })
@@ -69,13 +69,14 @@ export class CloudInventoryController {
     @ApiQuery({
         name: 'tag',
         required: false,
-        description: 'Filter by tag/label: key, key:value, or free text over tag pairs',
+        description: 'Filter by tag/label as `key` or `key:value` (split on the first `:`)',
     })
     @ApiQuery({
         name: 'period',
         required: false,
-        enum: ['last6months', 'last12months', 'ytd', 'all'],
-        description: 'Only include resources created/first-seen within the period (default: all)',
+        enum: ['thismonth', 'last6months', 'last12months', 'ytd', 'all'],
+        description:
+            'Only include resources with a known provider birth date within the period (default: all). DB sync time is never used.',
     })
     @ApiResponse({ status: 200, type: InventoryResourcesResponseDto })
     @ApiResponse({ status: 404, description: 'Cloud account not found' })

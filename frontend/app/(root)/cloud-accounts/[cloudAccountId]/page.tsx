@@ -32,19 +32,24 @@ export default function CloudAccountInventoryPage() {
 
     useEffect(() => {
         const stored = localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+        if (!stored) return;
 
-        const resolveOrg = async () => {
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored) as { id?: string };
-                    if (parsed?.id) setOrganizationId(parsed.id);
-                } catch {
-                    // ignore
-                }
+        // ACTIVE_ORG_STORAGE_KEY stores a raw tenant UUID. Older builds briefly
+        // used a JSON object — accept both shapes.
+        try {
+            const parsed = JSON.parse(stored) as { id?: string } | string;
+            if (typeof parsed === 'string' && parsed.trim()) {
+                setOrganizationId(parsed.trim());
+                return;
             }
-        };
-
-        void resolveOrg();
+            if (parsed && typeof parsed === 'object' && typeof parsed.id === 'string') {
+                setOrganizationId(parsed.id);
+            }
+        } catch {
+            if (stored.trim()) {
+                setOrganizationId(stored.trim());
+            }
+        }
     }, []);
 
     useEffect(() => {

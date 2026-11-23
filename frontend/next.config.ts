@@ -2,6 +2,20 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
     output: 'standalone',
+    async redirects() {
+        return [
+            {
+                source: '/inventario',
+                destination: '/inventory',
+                permanent: false,
+            },
+            {
+                source: '/inventario/:path*',
+                destination: '/inventory/:path*',
+                permanent: false,
+            },
+        ];
+    },
     async headers() {
         return [
             {

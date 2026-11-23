@@ -69,7 +69,7 @@ export class CloudInventoryService {
             for (const [key, value] of Object.entries(resource.tags ?? {})) {
                 tagSet.add(`${key}:${value}`);
             }
-            if (new Date(resource.createdAt) >= monthStart) newThisMonth += 1;
+            if (resource.createdAt && new Date(resource.createdAt) >= monthStart) newThisMonth += 1;
         }
 
         return {
@@ -93,13 +93,19 @@ export class CloudInventoryService {
     ): Promise<
         PaginatedResult<InventoryResource> & {
             facets: { regions: string[]; tags: string[] };
+            byType: Record<string, number>;
         }
     > {
         const account = await this.requireCloudAccount(cloudAccountId, organizationId);
         const provider = this.normalizeProvider(account.provider);
         const resources = await this.loadResources(cloudAccountId, provider);
 
-        // Facets are scoped to the selected resource type (before name/region/tag filters).
+        // Counts for the type catalog ignore the selected resource type so cards
+        // still update when filtering by tag / region / name.
+        const catalogScoped = this.applyFilters(resources, { ...query, resourceType: undefined });
+        const byType = this.buildByType(catalogScoped);
+
+        // Facets stay scoped to the selected resource type (before name/region/tag filters).
         const typeScoped = query.resourceType?.trim()
             ? resources.filter((resource) => resource.resourceType === query.resourceType?.trim())
             : resources;
@@ -111,7 +117,15 @@ export class CloudInventoryService {
         const offset = (pagination.page - 1) * limit;
         const items = filtered.slice(offset, offset + limit);
 
-        return { items, pagination, facets };
+        return { items, pagination, facets, byType };
+    }
+
+    private buildByType(resources: InventoryResource[]): Record<string, number> {
+        const byType: Record<string, number> = {};
+        for (const resource of resources) {
+            byType[resource.resourceType] = (byType[resource.resourceType] ?? 0) + 1;
+        }
+        return byType;
     }
 
     private buildFacets(resources: InventoryResource[]): { regions: string[]; tags: string[] } {
@@ -130,31 +144,25 @@ export class CloudInventoryService {
     }
 
     private matchesTagFilter(resource: InventoryResource, tagFilter: string): boolean {
-        const normalized = tagFilter.trim().toLowerCase();
-        if (!normalized) return true;
+        const trimmed = tagFilter.trim();
+        if (!trimmed) return true;
+
         const entries = Object.entries(resource.tags ?? {});
         if (entries.length === 0) return false;
 
-        const colonIndex = normalized.indexOf(':');
-        if (colonIndex > 0) {
-            const key = normalized.slice(0, colonIndex).trim();
-            const value = normalized.slice(colonIndex + 1).trim();
-            return entries.some(([entryKey, entryValue]) => {
-                const keyMatch = entryKey.toLowerCase() === key;
-                if (!keyMatch) return false;
-                if (!value) return true;
-                return entryValue.toLowerCase() === value || entryValue.toLowerCase().includes(value);
-            });
-        }
+        // Always split on the first `:`. `Environment` or `Environment:prod` both work.
+        const colonIndex = trimmed.indexOf(':');
+        const key =
+            colonIndex >= 0 ? trimmed.slice(0, colonIndex).trim().toLowerCase() : trimmed.toLowerCase();
+        const value = colonIndex >= 0 ? trimmed.slice(colonIndex + 1).trim().toLowerCase() : '';
+
+        if (!key) return true;
 
         return entries.some(([entryKey, entryValue]) => {
-            const pair = `${entryKey}:${entryValue}`.toLowerCase();
-            return (
-                entryKey.toLowerCase() === normalized ||
-                entryKey.toLowerCase().includes(normalized) ||
-                entryValue.toLowerCase().includes(normalized) ||
-                pair.includes(normalized)
-            );
+            if (entryKey.toLowerCase() !== key) return false;
+            if (!value) return true;
+            const normalizedValue = entryValue.toLowerCase();
+            return normalizedValue === value || normalizedValue.includes(value);
         });
     }
 
@@ -168,14 +176,21 @@ export class CloudInventoryService {
 
         return resources
             .filter((resource) => {
-                if (periodStart && new Date(resource.createdAt) < periodStart) return false;
+                if (periodStart) {
+                    if (!resource.createdAt) return false;
+                    if (new Date(resource.createdAt) < periodStart) return false;
+                }
                 if (resourceType && resource.resourceType !== resourceType) return false;
                 if (region && resource.region !== region) return false;
                 if (tag && !this.matchesTagFilter(resource, tag)) return false;
                 if (q && !resource.name.toLowerCase().includes(q)) return false;
                 return true;
             })
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            .sort((a, b) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return bTime - aTime;
+            });
     }
 
     private async loadResources(cloudAccountId: string, provider: InventoryProvider): Promise<InventoryResource[]> {

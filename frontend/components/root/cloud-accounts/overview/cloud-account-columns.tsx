@@ -9,6 +9,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CloudAccountSyncStatus } from '@/components/root/cloud-accounts/cloud-account-sync-status';
+import {
+    ACTIVE_ORG_STORAGE_KEY,
+    notifyActiveCloudAccountChanged,
+} from '@/lib/sidebar-context';
+
+const ACTIVE_CLOUD_STORAGE_KEY_PREFIX = 'smc_active_cloud_account_id:';
+const ACTIVE_CLOUD_GLOBAL_KEY = 'smc_active_cloud_account_id';
+
+function setActiveCloudAccount(cloudAccountId: string) {
+    if (typeof window === 'undefined') return;
+
+    const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+    if (organizationId) {
+        window.localStorage.setItem(`${ACTIVE_CLOUD_STORAGE_KEY_PREFIX}${organizationId}`, cloudAccountId);
+    }
+    window.localStorage.setItem(ACTIVE_CLOUD_GLOBAL_KEY, cloudAccountId);
+    notifyActiveCloudAccountChanged();
+}
 
 type ColumnTranslations = {
     notSynced: string;
@@ -162,14 +180,16 @@ export const CloudAccountColumns = ({
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            {row.original.provider?.toLowerCase() === 'gcp' && (
-                                <DropdownMenuItem asChild className="cursor-pointer">
-                                    <Link href={`/cloud-accounts/${row.original.id}`} className="flex items-center gap-2">
-                                        <LayoutList className="size-4" />
-                                        {t.viewInventory}
-                                    </Link>
-                                </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem asChild className="cursor-pointer">
+                                <Link
+                                    href="/inventory"
+                                    className="flex items-center gap-2"
+                                    onClick={() => setActiveCloudAccount(row.original.id)}
+                                >
+                                    <LayoutList className="size-4" />
+                                    {t.viewInventory}
+                                </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="cursor-pointer"
                                 onSelect={() => onEditAccount(row.original.id)}

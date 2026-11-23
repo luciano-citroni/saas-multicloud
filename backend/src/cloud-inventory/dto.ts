@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
-export const inventoryPeriodSchema = z.enum(['last6months', 'last12months', 'ytd', 'all']).default('all');
+export const inventoryPeriodSchema = z
+    .enum(['thismonth', 'last6months', 'last12months', 'ytd', 'all'])
+    .default('all');
 
 export const inventoryResourcesQuerySchema = z.object({
     q: z.string().trim().max(200).optional(),
     resourceType: z.string().trim().max(100).optional(),
     region: z.string().trim().max(100).optional(),
-    /** Tag filter: `key`, `key:value`, or free text matched against tag pairs. */
+    /** Tag filter: `key` or `key:value` (always split on the first `:`). */
     tag: z.string().trim().max(200).optional(),
     period: inventoryPeriodSchema,
     page: z.coerce.number().int().min(1).optional(),

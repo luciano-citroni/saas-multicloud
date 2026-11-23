@@ -16,8 +16,12 @@ export class InventoryResourceDto {
     @ApiPropertyOptional({ nullable: true })
     status!: string | null;
 
-    @ApiProperty({ format: 'date-time' })
-    createdAt!: string;
+    @ApiPropertyOptional({
+        format: 'date-time',
+        nullable: true,
+        description: 'Provider birth date when available; null when only DB sync time exists',
+    })
+    createdAt!: string | null;
 
     @ApiProperty({ enum: ['aws', 'azure', 'gcp'] })
     provider!: string;
@@ -114,4 +118,11 @@ export class InventoryResourcesResponseDto {
 
     @ApiProperty({ type: InventoryResourcesFacetsDto })
     facets!: InventoryResourcesFacetsDto;
+
+    @ApiProperty({
+        type: 'object',
+        additionalProperties: { type: 'number' },
+        description: 'Resource counts by type after tag/region/name filters (ignores selected type)',
+    })
+    byType!: Record<string, number>;
 }
