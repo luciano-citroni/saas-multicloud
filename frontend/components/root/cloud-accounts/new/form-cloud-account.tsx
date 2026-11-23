@@ -102,9 +102,9 @@ resource.service == 'iam.googleapis.com' ||
 resource.service == 'compute.backendServices.list' ||
 resource.service == 'run.googleapis.com'`;
 
-const GCP_ROLE_CLI = `gcloud iam roles create SaaSMultiCloudRole \\
+const GCP_ROLE_CLI = `gcloud iam roles create Cloud3FinOpsRole \\
   --project=SEU_PROJECT_ID \\
-  --title="SaaS MultiCloud" \\
+  --title="Cloud3 FinOps" \\
   --description="Role somente leitura para assessments" \\
   --stage=GA \\
   --permissions=compute.instances.list,compute.disks.list,compute.networks.list,compute.subnetworks.list,compute.firewalls.list,compute.addresses.list,compute.backendServices.list,storage.buckets.list,storage.buckets.get,storage.objects.list,cloudsql.instances.list,container.clusters.list,iam.serviceAccounts.list,cloudkms.keyRings.list,cloudkms.cryptoKeys.list,dns.managedZones.list,run.services.list,run.jobs.list`;
@@ -486,7 +486,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                 Permissions Policy abaixo.
                                             </li>
                                             <li>
-                                                Dê um nome à role (ex: <code className="bg-muted px-1 rounded">SaaSMultiCloudRole</code>) e clique em{' '}
+                                                Dê um nome à role (ex: <code className="bg-muted px-1 rounded">Cloud3FinOpsRole</code>) e clique em{' '}
                                                 <strong>Create role</strong>.
                                             </li>
                                             <li>
@@ -642,7 +642,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                         <strong>App registrations</strong> → <strong>New registration</strong>.
                                                     </li>
                                                     <li>
-                                                        Dê um nome ao app (ex: <code className="bg-muted px-1 rounded">saas-multicloud</code>), mantenha os
+                                                        Dê um nome ao app (ex: <code className="bg-muted px-1 rounded">cloud3-finops</code>), mantenha os
                                                         demais campos padrão e clique em <strong>Register</strong>.
                                                     </li>
                                                     <li>
@@ -797,7 +797,7 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                         <strong>Service Accounts</strong> → <strong>Create Service Account</strong>.
                                                     </li>
                                                     <li>
-                                                        Dê um nome (ex: <code className="bg-muted px-1 rounded">saas-multicloud</code>), clique em{' '}
+                                                        Dê um nome (ex: <code className="bg-muted px-1 rounded">cloud3-finops</code>), clique em{' '}
                                                         <strong>Create and continue</strong> e depois em <strong>Done</strong> (sem atribuir roles agora —
                                                         faremos isso no passo seguinte).
                                                     </li>
@@ -828,8 +828,8 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                         <ol className="flex flex-col gap-2 text-sm text-muted-foreground list-decimal list-inside mb-3">
                                                             <li>
                                                                 Preencha os campos: <strong>Title</strong> ={' '}
-                                                                <code className="bg-muted px-1 rounded">SaaS MultiCloud</code>, <strong>Role ID</strong> ={' '}
-                                                                <code className="bg-muted px-1 rounded">SaaSMultiCloudRole</code>,{' '}
+                                                                <code className="bg-muted px-1 rounded">Cloud3 FinOps</code>, <strong>Role ID</strong> ={' '}
+                                                                <code className="bg-muted px-1 rounded">Cloud3FinOpsRole</code>,{' '}
                                                                 <strong>Role launch stage</strong> ={' '}
                                                                 <code className="bg-muted px-1 rounded">General Availability</code>.
                                                             </li>
@@ -883,14 +883,14 @@ export function FormCloudAccount({ organizationId }: Props) {
                                                             </li>
                                                             <li>
                                                                 Em <strong>Role</strong>, selecione{' '}
-                                                                <code className="bg-muted px-1 rounded">SaaS MultiCloud</code> (seção <em>Custom</em>).
+                                                                <code className="bg-muted px-1 rounded">Cloud3 FinOps</code> (seção <em>Custom</em>).
                                                             </li>
                                                             <li>
                                                                 Clique em <strong>+ Add IAM condition</strong> e preencha:
                                                                 <ul className="mt-1 ml-4 flex flex-col gap-1 list-disc list-inside">
                                                                     <li>
                                                                         <strong>Title:</strong>{' '}
-                                                                        <code className="bg-muted px-1 rounded">SaaS MultiCloud Assessment</code>
+                                                                        <code className="bg-muted px-1 rounded">Cloud3 FinOps Assessment</code>
                                                                     </li>
                                                                     <li>
                                                                         <strong>Description:</strong>{' '}

@@ -116,7 +116,7 @@ export async function drawFinopsPdfHeader(doc: PdfDoc, title: string, generatedL
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(90);
-    doc.text('Bridge MultCloud', pageWidth - 14, 24, { align: 'right' });
+    doc.text('Cloud3 FinOps', pageWidth - 14, 24, { align: 'right' });
     doc.text(generatedLine, pageWidth - 14, 29, { align: 'right' });
 
     doc.setDrawColor(220);

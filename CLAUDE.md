@@ -1,4 +1,4 @@
-# Project Rules — SaaS MultiCloud
+# Project Rules — Cloud3 FinOps
 
 This file contains the coding rules and conventions for this project. Always follow these instructions when generating or modifying code.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-07-06T00:00:00.000Z",
-  "title": "Design System: Bridge MultCloud",
+  "title": "Design System: Cloud3 FinOps",
   "extensions": {
     "colorMeta": {
       "primary": {
@@ -217,7 +217,7 @@
   ],
   "narrative": {
     "northStar": "Ops Grid",
-    "overview": "Bridge MultCloud opera como uma malha de decisao: confiavel, objetiva, rapida, tecnica e clara. A interface nao busca espetaculo; ela prioriza leitura de estado, acesso previsivel a acoes e transicoes curtas que mantem o usuario no fluxo operacional.\n\nA composicao visual parte de uma base neutra de alto contraste, com o acento magenta reservado para pontos de comando e selecao. Densidade e tratada como recurso funcional: cada bloco existe para reduzir custo cognitivo em tarefas de governanca, finops e automacao.\n\nEste sistema rejeita explicitamente: interfaces genericas sem hierarquia visual clara (\"cara de template\"), superficies que dificultam localizar rapidamente estados criticos e acoes prioritarias, e decoracoes visuais que competem com dados, contexto operacional e tomada de decisao.",
+    "overview": "Cloud3 FinOps opera como uma malha de decisao: confiavel, objetiva, rapida, tecnica e clara. A interface nao busca espetaculo; ela prioriza leitura de estado, acesso previsivel a acoes e transicoes curtas que mantem o usuario no fluxo operacional.\n\nA composicao visual parte de uma base neutra de alto contraste, com o acento magenta reservado para pontos de comando e selecao. Densidade e tratada como recurso funcional: cada bloco existe para reduzir custo cognitivo em tarefas de governanca, finops e automacao.\n\nEste sistema rejeita explicitamente: interfaces genericas sem hierarquia visual clara (\"cara de template\"), superficies que dificultam localizar rapidamente estados criticos e acoes prioritarias, e decoracoes visuais que competem com dados, contexto operacional e tomada de decisao.",
     "keyCharacteristics": [
       "Hierarquia de decisao visivel em segundos.",
       "Vocabulario de estado consistente entre modulos.",

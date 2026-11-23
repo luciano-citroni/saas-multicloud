@@ -73,7 +73,7 @@ export class AwsProvisionerService {
                     {
                         ResourceType: 'instance',
                         Tags: [
-                            { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                            { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ...(config.tags && typeof config.tags === 'object'
                                 ? Object.entries(config.tags as Record<string, string>).map(([Key, Value]) => ({ Key, Value }))
                                 : []),
@@ -158,7 +158,7 @@ export class AwsProvisionerService {
                 MultiAZ: config.multiAz === true,
                 PubliclyAccessible: false,
                 StorageEncrypted: true,
-                Tags: [{ Key: 'ManagedBy', Value: 'saas-multicloud' }],
+                Tags: [{ Key: 'ManagedBy', Value: 'cloud3-finops' }],
             }),
         ).catch((err: Error) => {
             this.logger.error(`RDS CreateDBInstance falhou: ${err.message}`);
@@ -192,10 +192,10 @@ export class AwsProvisionerService {
                 Role: String(config.roleArn),
                 MemorySize: typeof config.memorySize === 'number' ? config.memorySize : 128,
                 Timeout: typeof config.timeout === 'number' ? config.timeout : 30,
-                Description: config.description ? String(config.description) : 'Created by SaaS MultiCloud',
+                Description: config.description ? String(config.description) : 'Created by Cloud3 FinOps',
                 PackageType: PackageType.Zip,
                 Code: { ZipFile: Buffer.from(zipBase64, 'base64') },
-                Tags: { ManagedBy: 'saas-multicloud' },
+                Tags: { ManagedBy: 'cloud3-finops' },
             }),
         ).catch((err: Error) => {
             this.logger.error(`Lambda CreateFunction falhou: ${err.message}`);

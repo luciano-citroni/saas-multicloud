@@ -227,7 +227,7 @@ export class AutomationsController {
     @Post(':id/grant-missing-permissions')
     @Roles(OrgRole.ADMIN, OrgRole.OWNER)
     @ApiOperation({
-        summary: 'Aplicar permissões IAM faltantes na role da conta (inline policy SaaSMultiCloudAutomationGap)',
+        summary: 'Aplicar permissões IAM faltantes na role da conta (inline policy Cloud3FinOpsAutomationGap)',
     })
     @ApiBody({
         schema: {

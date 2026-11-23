@@ -100,7 +100,7 @@ export const iamRoleConfigSchema = z.object({
 
 export const securityGroupConfigSchema = z.object({
     groupName: bindableString,
-    description: z.union([z.string().min(1), valueBindingSchema]).optional().default('Created by SaaS MultiCloud'),
+    description: z.union([z.string().min(1), valueBindingSchema]).optional().default('Created by Cloud3 FinOps'),
     region: bindableRegion,
     vpcId: bindableString,
 });
@@ -524,7 +524,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
         requiredIamActions: ['ec2:CreateSecurityGroup', 'ec2:DescribeSecurityGroups', 'ec2:CreateTags'],
         fields: [
             { key: 'groupName', label: 'Nome', input: 'text', required: true, acceptsBinding: true },
-            { key: 'description', label: 'Descrição', input: 'text', defaultValue: 'Created by SaaS MultiCloud' },
+            { key: 'description', label: 'Descrição', input: 'text', defaultValue: 'Created by Cloud3 FinOps' },
             regionField('us-east-2'),
             { key: 'vpcId', label: 'VPC ID', input: 'text', required: true, acceptsBinding: true },
         ],

@@ -1,6 +1,6 @@
 /** Brand tokens aligned with frontend `globals.css` (primary #C026D3 / Fuchsia 600). */
 export const EMAIL_BRAND = {
-    name: 'SaaS MultiCloud',
+    name: 'Cloud3 FinOps',
     primary: '#C026D3',
     primaryDark: '#A21CAF',
     foreground: '#18181B',
@@ -35,7 +35,7 @@ export type EmailLayoutOptions = {
  * Shared transactional email shell — table-based for client compatibility.
  */
 export function renderEmailLayout(options: EmailLayoutOptions): string {
-    const frontendUrl = (options.frontendUrl ?? 'https://app.saas-multicloud.com').replace(/\/$/, '');
+    const frontendUrl = (options.frontendUrl ?? 'https://app.cloud3-finops.com').replace(/\/$/, '');
     const preheader = options.preheader?.trim()
         ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(options.preheader)}</div>`
         : '';
@@ -76,7 +76,7 @@ export function renderEmailLayout(options: EmailLayoutOptions): string {
                 <tr>
                   <td style="vertical-align:middle;">
                     <div style="display:inline-block;width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.18);text-align:center;line-height:34px;color:#FFFFFF;font-weight:700;font-family:Arial,Helvetica,sans-serif;font-size:14px;">
-                      SM
+                      C3
                     </div>
                   </td>
                   <td style="vertical-align:middle;padding-left:12px;">
@@ -84,7 +84,7 @@ export function renderEmailLayout(options: EmailLayoutOptions): string {
                       ${EMAIL_BRAND.name}
                     </div>
                     <div style="font-family:Arial,Helvetica,sans-serif;color:rgba(255,255,255,0.82);font-size:12px;margin-top:2px;">
-                      Gestão multicloud
+                      Gestão Cloud3 FinOps
                     </div>
                   </td>
                 </tr>

@@ -801,7 +801,7 @@ export class FinopsBudgetService {
             payload.triggeredAlerts.map((threshold) => `${threshold}%`).join(', ') || '—';
 
         const lines = [
-            `${titleEmoji} *SaaS MultiCloud* — alerta de orçamento`,
+            `${titleEmoji} *Cloud3 FinOps* — alerta de orçamento`,
             ``,
             `🏢 Tenant: ${context.tenantName}`,
             `🏬 Organização: ${context.organizationName}`,

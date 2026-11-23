@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 // Deve espelhar o valor de FINOPS_CONSENT_TERMS no backend (backend/src/finops/constants.ts)
-const CONSENT_TERMS = `Ao aceitar este termo, você autoriza o SaaS MultiCloud a consultar as APIs de gestão de custos da(s) sua(s) conta(s) de nuvem (AWS Cost Explorer, Azure Cost Management e/ou GCP Cloud Billing Export via BigQuery). Essas APIs podem gerar custos adicionais de acordo com o modelo de preços do provedor escolhido. Consulte a documentação do provedor para mais informações sobre tarifas.`;
+const CONSENT_TERMS = `Ao aceitar este termo, você autoriza o Cloud3 FinOps a consultar as APIs de gestão de custos da(s) sua(s) conta(s) de nuvem (AWS Cost Explorer, Azure Cost Management e/ou GCP Cloud Billing Export via BigQuery). Essas APIs podem gerar custos adicionais de acordo com o modelo de preços do provedor escolhido. Consulte a documentação do provedor para mais informações sobre tarifas.`;
 
 type FinopsConsentDialogProps = {
     open: boolean;

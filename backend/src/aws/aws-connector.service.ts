@@ -115,7 +115,7 @@ export interface AwsRoleCredentials {
  * {
 
 
- *   "roleArn":    "arn:aws:iam::123456789012:role/SaasMulticloudRole",
+ *   "roleArn":    "arn:aws:iam::123456789012:role/Cloud3FinOpsRole",
 
 
  *   "region":     "us-east-1",
@@ -266,7 +266,7 @@ export class AwsConnectorService {
                 new AssumeRoleCommand({
                     RoleArn: creds.roleArn,
 
-                    RoleSessionName: 'saas-multicloud',
+                    RoleSessionName: 'cloud3-finops',
 
                     ...(creds.externalId ? { ExternalId: creds.externalId } : {}),
                 })

@@ -886,7 +886,7 @@ export function AssessmentPageClient() {
         [activeProvider, cloudAccountId, organizationId]
     );
 
-    const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Multicloud' : `Assessment ${providerLabel}`;
+    const toolbarTitle = activeProvider === 'unknown' ? 'Assessment Cloud3 FinOps' : `Assessment ${providerLabel}`;
     const groupingModeLabel = getGroupingModeLabel(groupingModes, {
         resourceType: ta.groupByType,
         vpc: ta.groupByNetwork,

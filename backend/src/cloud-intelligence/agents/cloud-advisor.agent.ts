@@ -7,7 +7,7 @@ export class CloudAdvisorAgent implements AiAgent {
         type: AiAgentType.CLOUD_ADVISOR,
         displayName: 'AI Cloud Advisor',
         description:
-            'Central multicloud assistant for inventory, FinOps, governance, assessment, and automations.',
+            'Central Cloud3 FinOps assistant for inventory, FinOps, governance, assessment, and automations.',
         available: true,
         systemPromptAddon:
             'You are the Cloud Advisor. Prefer organization-scoped real data from tools. Never invent resources, costs, or findings.',

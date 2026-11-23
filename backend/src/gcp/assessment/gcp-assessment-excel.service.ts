@@ -19,7 +19,7 @@ export class GcpAssessmentExcelService {
     private getOutputDir(): string {
         const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
         // tmp fora do repo evita reinício do nest --watch ao gerar Excel
-        const dir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
+        const dir = envDir || path.join(os.tmpdir(), 'cloud3-finops', 'assessments');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         return dir;
     }
@@ -60,7 +60,7 @@ export class GcpAssessmentExcelService {
 
     async generateExcel(jobId: string, data: GcpAssessmentData): Promise<string> {
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'SaaS MultiCloud';
+        workbook.creator = 'Cloud3 FinOps';
         workbook.created = new Date();
 
         this.addSummarySheet(workbook, data);

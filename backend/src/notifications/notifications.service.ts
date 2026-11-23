@@ -721,7 +721,7 @@ export class NotificationsService {
     ): string {
         const destination = label?.trim() ? ` (${label.trim()})` : '';
         return [
-            `✅ *SaaS MultiCloud* — teste de WhatsApp`,
+            `✅ *Cloud3 FinOps* — teste de WhatsApp`,
             ``,
             `🏢 Tenant: ${context.tenantName}`,
             `🏬 Organização: ${context.organizationName}`,

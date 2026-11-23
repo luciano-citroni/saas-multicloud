@@ -247,7 +247,7 @@ export class AwsAutomationProvider {
         );
 
         const originDomainName = str(config.originDomainName ?? config.origin);
-        const comment = config.comment ? str(config.comment) : 'Created by SaaS MultiCloud Automation';
+        const comment = config.comment ? str(config.comment) : 'Created by Cloud3 FinOps Automation';
         const enabled = config.enabled !== false;
         const priceClass = str(config.priceClass, 'PriceClass_100');
 
@@ -318,7 +318,7 @@ export class AwsAutomationProvider {
                 new CreateClusterCommand({
                     clusterName,
                     tags: [
-                        { key: 'ManagedBy', value: 'saas-multicloud' },
+                        { key: 'ManagedBy', value: 'cloud3-finops' },
                         { key: 'Name', value: clusterName },
                     ],
                 }),
@@ -363,7 +363,7 @@ export class AwsAutomationProvider {
                             portMappings: [{ containerPort, protocol: 'tcp' }],
                         },
                     ],
-                    tags: [{ key: 'ManagedBy', value: 'saas-multicloud' }],
+                    tags: [{ key: 'ManagedBy', value: 'cloud3-finops' }],
                 }),
             )
             .catch((err) => this.fail('ECS RegisterTaskDefinition', err));
@@ -391,7 +391,7 @@ export class AwsAutomationProvider {
                 new CreateRepositoryCommand({
                     repositoryName,
                     imageScanningConfiguration: { scanOnPush: config.imageScanning !== false },
-                    tags: [{ Key: 'ManagedBy', Value: 'saas-multicloud' }],
+                    tags: [{ Key: 'ManagedBy', Value: 'cloud3-finops' }],
                 }),
             )
             .catch((err) => this.fail('ECR CreateRepository', err));
@@ -430,7 +430,7 @@ export class AwsAutomationProvider {
                     Scheme: scheme,
                     Subnets: subnetIds,
                     SecurityGroups: securityGroupIds.length ? securityGroupIds : undefined,
-                    Tags: [{ Key: 'ManagedBy', Value: 'saas-multicloud' }],
+                    Tags: [{ Key: 'ManagedBy', Value: 'cloud3-finops' }],
                 }),
             )
             .catch((err) => this.fail('ELBv2 CreateLoadBalancer', err));
@@ -475,10 +475,10 @@ export class AwsAutomationProvider {
                     Role: str(config.roleArn),
                     MemorySize: num(config.memorySize, 128),
                     Timeout: num(config.timeout, 30),
-                    Description: 'Created by SaaS MultiCloud',
+                    Description: 'Created by Cloud3 FinOps',
                     PackageType: PackageType.Zip,
                     Code: { ZipFile: this.minimalLambdaZip() },
-                    Tags: { ManagedBy: 'saas-multicloud' },
+                    Tags: { ManagedBy: 'cloud3-finops' },
                 }),
             )
             .catch((err) => this.fail('Lambda CreateFunction', err));
@@ -517,7 +517,7 @@ export class AwsAutomationProvider {
                     RoleName: roleName,
                     AssumeRolePolicyDocument: assumeRolePolicyDocument,
                     Path: path,
-                    Tags: [{ Key: 'ManagedBy', Value: 'saas-multicloud' }],
+                    Tags: [{ Key: 'ManagedBy', Value: 'cloud3-finops' }],
                 }),
             )
             .catch((err) => this.fail('IAM CreateRole', err));
@@ -542,7 +542,7 @@ export class AwsAutomationProvider {
         const region = str(config.region, 'us-east-2');
         const groupName = str(config.groupName);
         const vpcId = str(config.vpcId);
-        const description = str(config.description, 'Created by SaaS MultiCloud');
+        const description = str(config.description, 'Created by Cloud3 FinOps');
         const client: EC2Client = await this.connector.getEc2Client(context.cloudAccountId, context.tenantId, region);
 
         const result = await client
@@ -556,7 +556,7 @@ export class AwsAutomationProvider {
                             ResourceType: 'security-group',
                             Tags: [
                                 { Key: 'Name', Value: groupName },
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ],
                         },
                     ],
@@ -589,7 +589,7 @@ export class AwsAutomationProvider {
                             ResourceType: 'vpc',
                             Tags: [
                                 { Key: 'Name', Value: name },
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ],
                         },
                     ],
@@ -626,7 +626,7 @@ export class AwsAutomationProvider {
                             ResourceType: 'subnet',
                             Tags: [
                                 { Key: 'Name', Value: name },
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ],
                         },
                     ],
@@ -670,7 +670,7 @@ export class AwsAutomationProvider {
                             ResourceType: 'route-table',
                             Tags: [
                                 { Key: 'Name', Value: name },
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ],
                         },
                     ],
@@ -713,7 +713,7 @@ export class AwsAutomationProvider {
                             ResourceType: 'natgateway',
                             Tags: [
                                 { Key: 'Name', Value: name },
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                             ],
                         },
                     ],
@@ -748,7 +748,7 @@ export class AwsAutomationProvider {
                     MultiAZ: config.multiAz === true,
                     PubliclyAccessible: false,
                     StorageEncrypted: true,
-                    Tags: [{ Key: 'ManagedBy', Value: 'saas-multicloud' }],
+                    Tags: [{ Key: 'ManagedBy', Value: 'cloud3-finops' }],
                 }),
             )
             .catch((err) => this.fail('RDS CreateDBInstance', err));
@@ -786,7 +786,7 @@ export class AwsAutomationProvider {
                         {
                             ResourceType: 'instance',
                             Tags: [
-                                { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                { Key: 'ManagedBy', Value: 'cloud3-finops' },
                                 ...(name ? [{ Key: 'Name', Value: name }] : []),
                             ],
                         },
@@ -833,7 +833,7 @@ export class AwsAutomationProvider {
                             {
                                 ResourceType: 'snapshot',
                                 Tags: [
-                                    { Key: 'ManagedBy', Value: 'saas-multicloud' },
+                                    { Key: 'ManagedBy', Value: 'cloud3-finops' },
                                     { Key: 'SourceInstanceId', Value: instanceId },
                                     { Key: 'SourceVolumeId', Value: volumeId },
                                     {
@@ -1036,7 +1036,7 @@ export class AwsAutomationProvider {
                     name,
                     repository: config.repository ? str(config.repository) : undefined,
                     platform: str(config.platform, 'WEB') as never,
-                    tags: { ManagedBy: 'saas-multicloud' },
+                    tags: { ManagedBy: 'cloud3-finops' },
                 }),
             )
             .catch((err) => this.fail('Amplify CreateApp', err));
@@ -1068,11 +1068,11 @@ export class AwsAutomationProvider {
             .send(
                 new CreateRestApiCommand({
                     name,
-                    description: config.description ? str(config.description) : 'Created by SaaS MultiCloud',
+                    description: config.description ? str(config.description) : 'Created by Cloud3 FinOps',
                     endpointConfiguration: {
                         types: [str(config.endpointType, 'REGIONAL') as never],
                     },
-                    tags: { ManagedBy: 'saas-multicloud' },
+                    tags: { ManagedBy: 'cloud3-finops' },
                 }),
             )
             .catch((err) => this.fail('API Gateway CreateRestApi', err));

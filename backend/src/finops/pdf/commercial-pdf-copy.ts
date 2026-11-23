@@ -3,7 +3,7 @@ export type PdfLocale = 'pt' | 'en';
 const pt = {
     commercialTitle: 'Relatório comercial',
     commercialPdfGenerated: 'Gerado em {date}',
-    commercialPdfFooter: 'Bridge MultCloud · Relatório comercial',
+    commercialPdfFooter: 'Cloud3 FinOps · Relatório comercial',
     commercialMonth: 'Mês fechado',
     reportProvider: 'Provedor',
     commercialCurrencyLabel: 'Valores em',
@@ -91,7 +91,7 @@ const pt = {
 const en: typeof pt = {
     commercialTitle: 'Commercial report',
     commercialPdfGenerated: 'Generated on {date}',
-    commercialPdfFooter: 'Bridge MultCloud · Commercial report',
+    commercialPdfFooter: 'Cloud3 FinOps · Commercial report',
     commercialMonth: 'Closed month',
     reportProvider: 'Provider',
     commercialCurrencyLabel: 'Amounts in',

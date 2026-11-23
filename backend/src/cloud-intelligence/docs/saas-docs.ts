@@ -18,7 +18,7 @@ export const SAAS_DOCS: SaasDocChunk[] = [
     {
         topic: 'overview',
         title: 'Visão geral da plataforma',
-        content: `A plataforma MultiCloud reúne em um só lugar custos, inventário de recursos, análises de conta, conformidade e automações para AWS, Azure e GCP.
+        content: `A plataforma Cloud3 FinOps reúne em um só lugar custos, inventário de recursos, análises de conta, conformidade e automações para AWS, Azure e GCP.
 Você só vê os dados da organização ativa e o que o seu papel nela permite.
 O plano da organização define quais áreas ficam disponíveis: Análise de conta, Inventário, Governança, FinOps e Automações.`,
     },

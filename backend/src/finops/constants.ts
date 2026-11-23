@@ -14,7 +14,7 @@ export const FINOPS_CONSENT_VERSION = '1.0';
  * e GCP Cloud Billing Export (BigQuery).
  */
 export const FINOPS_CONSENT_TERMS = `
-Ao aceitar este termo, você autoriza o SaaS MultiCloud a consultar as APIs de
+Ao aceitar este termo, você autoriza o Cloud3 FinOps a consultar as APIs de
 gestão de custos da(s) sua(s) conta(s) de nuvem (AWS Cost Explorer, Azure Cost
 Management e/ou GCP Cloud Billing Export via BigQuery). Essas APIs podem gerar
 custos adicionais de acordo com o modelo de preços do provedor escolhido.

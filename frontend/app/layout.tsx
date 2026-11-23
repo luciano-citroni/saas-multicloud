@@ -19,11 +19,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: {
-        default: 'Bridge MultCloud | Governanca, custos e automacao multi-cloud',
-        template: '%s | Bridge MultCloud',
+        default: 'Cloud3 FinOps | Governanca, custos e automacao multi-cloud',
+        template: '%s | Cloud3 FinOps',
     },
     description: 'Centralize governanca, custos e automacoes de AWS, Azure e GCP em uma unica operacao.',
-    applicationName: 'Bridge MultCloud',
+    applicationName: 'Cloud3 FinOps',
 };
 
 export default function RootLayout({

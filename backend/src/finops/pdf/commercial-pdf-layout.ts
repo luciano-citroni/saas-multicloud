@@ -44,7 +44,7 @@ export function drawFinopsPdfHeader(doc: PdfDoc, title: string, generatedLine: s
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(...PDF_MUTED);
-    doc.text('Bridge MultCloud', pageWidth - 14, 23, { align: 'right' });
+    doc.text('Cloud3 FinOps', pageWidth - 14, 23, { align: 'right' });
     doc.text(generatedLine, pageWidth - 14, 28, { align: 'right' });
     doc.setDrawColor(...PDF_BORDER);
     doc.setLineWidth(0.35);

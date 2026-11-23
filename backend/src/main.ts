@@ -115,7 +115,7 @@ async function bootstrap() {
     if (process.env.NODE_ENV !== 'production') {
         const config = new DocumentBuilder()
 
-            .setTitle('SaaS MultiCloud API')
+            .setTitle('Cloud3 FinOps API')
 
             .setDescription('API de gerenciamento de usuários, organizações e autenticação')
 

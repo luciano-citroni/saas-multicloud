@@ -134,6 +134,6 @@ export async function exportFinopsReportPdf(input: ExportFinopsReportPdfInput): 
         },
     });
 
-    addFinopsPdfFooter(doc, 'Bridge MultCloud · Relatório FinOps');
+    addFinopsPdfFooter(doc, 'Cloud3 FinOps · Relatório FinOps');
     doc.save(input.fileName);
 }

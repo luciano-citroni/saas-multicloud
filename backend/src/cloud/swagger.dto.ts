@@ -87,7 +87,7 @@ export class CloudAccountResponseDto {
 }
 
 export class AwsCredentialsDto {
-    @ApiProperty({ example: 'arn:aws:iam::123456789012:role/SaasMulticloudRole', description: 'ARN da role a ser assumida' })
+    @ApiProperty({ example: 'arn:aws:iam::123456789012:role/Cloud3FinOpsRole', description: 'ARN da role a ser assumida' })
     roleArn: string;
 
     @ApiPropertyOptional({
@@ -118,7 +118,7 @@ export class GcpCredentialsDto {
     projectId: string;
 
     @ApiProperty({
-        example: 'saas-multicloud@meu-projeto-gcp-123.iam.gserviceaccount.com',
+        example: 'cloud3-finops@meu-projeto-gcp-123.iam.gserviceaccount.com',
         description:
             'E-mail da Service Account GCP que a plataforma irá impersonar. ' +
             'O SA da plataforma precisa ter o papel roles/iam.serviceAccountTokenCreator nesta SA.',

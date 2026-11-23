@@ -1,5 +1,5 @@
 ---
-name: Bridge MultCloud
+name: Cloud3 FinOps
 description: Sistema operacional multi-cloud para governança, finops e automação com clareza de decisão.
 colors:
   primary: "oklch(0.627 0.265 328.36)"
@@ -93,13 +93,13 @@ components:
     padding: "{spacing.xs}"
 ---
 
-# Design System: Bridge MultCloud
+# Design System: Cloud3 FinOps
 
 ## 1. Overview
 
 **Creative North Star: "Ops Grid"**
 
-Bridge MultCloud opera como uma malha de decisão: confiável, objetiva, rápida, técnica e clara. A interface não busca espetáculo; ela prioriza leitura de estado, acesso previsível a ações e transições curtas que mantêm o usuário no fluxo operacional.
+Cloud3 FinOps opera como uma malha de decisão: confiável, objetiva, rápida, técnica e clara. A interface não busca espetáculo; ela prioriza leitura de estado, acesso previsível a ações e transições curtas que mantêm o usuário no fluxo operacional.
 
 A composição visual parte de uma base neutra de alto contraste, com o acento magenta reservado para pontos de comando e seleção. Densidade é tratada como recurso funcional: cada bloco existe para reduzir custo cognitivo em tarefas de governança, finops e automação.
 

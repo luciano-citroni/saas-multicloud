@@ -138,7 +138,7 @@ export class MailerService {
                 frontendUrl: this.frontendUrl,
                 cta: { label: 'Confirmar e-mail', href: verifyUrl },
                 footerNote:
-                    'Se você não criou uma conta no SaaS MultiCloud, ignore este e-mail.',
+                    'Se você não criou uma conta no Cloud3 FinOps, ignore este e-mail.',
             }),
         });
     }
@@ -153,7 +153,7 @@ export class MailerService {
         const bodyHtml = `
             <p style="margin:0 0 12px;">
               Este é um <strong>e-mail de teste</strong> das notificações do seu tenant
-              ${label ? `no grupo <strong>${escapeHtml(label)}</strong>` : 'no SaaS MultiCloud'}.
+              ${label ? `no grupo <strong>${escapeHtml(label)}</strong>` : 'no Cloud3 FinOps'}.
             </p>
             <p style="margin:0 0 12px;color:${EMAIL_BRAND.muted};">
               Se você recebeu esta mensagem, o canal de e-mail está configurado corretamente e pronto para receber alertas.

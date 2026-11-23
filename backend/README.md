@@ -1,6 +1,6 @@
-# Backend — SaaS MultiCloud
+# Backend — Cloud3 FinOps
 
-API NestJS do SaaS MultiCloud (cloud accounts, assessment, FinOps, governance, automation).
+API NestJS do Cloud3 FinOps (cloud accounts, assessment, FinOps, governance, automation).
 
 ## Setup rápido
 
@@ -20,7 +20,7 @@ A plataforma **não** usa Access Keys das contas dos clientes. O fluxo é:
 
 ```
 Backend (.env)
-  └─ IAM user: saas-multicloud  (credenciais da plataforma)
+  └─ IAM user: cloud3-finops  (credenciais da plataforma)
        └─ STS AssumeRole
             └─ IAM Role na conta do cliente
                  └─ APIs AWS (EC2, S3, Cost Explorer, etc.)
@@ -30,24 +30,24 @@ Há **duas contas** envolvidas:
 
 | Conta | O que criar | Para quê |
 |-------|-------------|----------|
-| **Plataforma** (sua) | IAM user `saas-multicloud` + Access Key | O backend chama `sts:AssumeRole` |
+| **Plataforma** (sua) | IAM user `cloud3-finops` + Access Key | O backend chama `sts:AssumeRole` |
 | **Cliente** (tenant) | IAM Role com trust + permissões | Assessment, FinOps, sync de recursos |
 
 ---
 
-### Parte 1 — Conta da plataforma (user `saas-multicloud`)
+### Parte 1 — Conta da plataforma (user `cloud3-finops`)
 
 Faça isso **uma vez**, na conta AWS onde roda o backend.
 
 #### 1.1 Criar o usuário IAM
 
 1. Console AWS → **IAM** → **Users** → **Create user**
-2. Nome: `saas-multicloud`
+2. Nome: `cloud3-finops`
 3. Não precisa de console password (só Access Key)
 4. Anote o ARN, por exemplo:
 
 ```text
-arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud
+arn:aws:iam::SEU_ACCOUNT_ID:user/cloud3-finops
 ```
 
 #### 1.2 Policy do user (AssumeRole)
@@ -62,7 +62,7 @@ Anexe uma policy inline (ou managed custom) ao user:
       "Sid": "AllowAssumeCustomerRoles",
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::*:role/SaasMulticloud*"
+      "Resource": "arn:aws:iam::*:role/Cloud3FinOps*"
     }
   ]
 }
@@ -70,12 +70,12 @@ Anexe uma policy inline (ou managed custom) ao user:
 
 Notas:
 
-- O `Resource` pode ser mais restrito (`arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole`) se quiser limitar por conta.
-- O prefixo `SaasMulticloud*` deve bater com o nome da role criada no cliente.
+- O `Resource` pode ser mais restrito (`arn:aws:iam::ACCOUNT_DO_CLIENTE:role/Cloud3FinOpsRole`) se quiser limitar por conta.
+- O prefixo `Cloud3FinOps*` deve bater com o nome da role criada no cliente.
 
 #### 1.3 Criar Access Key
 
-1. User `saas-multicloud` → **Security credentials** → **Create access key**
+1. User `cloud3-finops` → **Security credentials** → **Create access key**
 2. Tipo: **Application running outside AWS**
 3. Copie `Access key ID` e `Secret access key` (o secret só aparece uma vez)
 
@@ -84,7 +84,7 @@ Notas:
 ```env
 AWS_ACCESS_KEY_ID=AKIA................
 AWS_SECRET_ACCESS_KEY=................
-AWS_USER_ARN=arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud
+AWS_USER_ARN=arn:aws:iam::SEU_ACCOUNT_ID:user/cloud3-finops
 # Opcional — default us-east-1
 AWS_STS_REGION=us-east-1
 ```
@@ -104,7 +104,7 @@ unset AWS_SESSION_TOKEN
 aws sts get-caller-identity
 ```
 
-Deve retornar o ARN do user `saas-multicloud`. Se retornar `InvalidClientTokenId`, a Access Key está inválida/revogada.
+Deve retornar o ARN do user `cloud3-finops`. Se retornar `InvalidClientTokenId`, a Access Key está inválida/revogada.
 
 ---
 
@@ -125,7 +125,7 @@ Faça isso **em cada conta AWS** que for conectada no produto.
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud"
+        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/cloud3-finops"
       },
       "Action": "sts:AssumeRole",
       "Condition": {
@@ -147,7 +147,7 @@ Sem External ID (menos seguro, só para testes):
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/saas-multicloud"
+        "AWS": "arn:aws:iam::SEU_ACCOUNT_ID:user/cloud3-finops"
       },
       "Action": "sts:AssumeRole"
     }
@@ -155,11 +155,11 @@ Sem External ID (menos seguro, só para testes):
 }
 ```
 
-4. Nome sugerido: `SaasMulticloudRole`
+4. Nome sugerido: `Cloud3FinOpsRole`
 5. Anote o ARN:
 
 ```text
-arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole
+arn:aws:iam::ACCOUNT_DO_CLIENTE:role/Cloud3FinOpsRole
 ```
 
 #### 2.2 Permissões da role (cliente)
@@ -219,7 +219,7 @@ Na UI (Cloud Accounts) ou API, envie:
   "provider": "aws",
   "alias": "Produção",
   "credentials": {
-    "roleArn": "arn:aws:iam::ACCOUNT_DO_CLIENTE:role/SaasMulticloudRole",
+    "roleArn": "arn:aws:iam::ACCOUNT_DO_CLIENTE:role/Cloud3FinOpsRole",
     "region": "us-east-1",
     "regions": ["us-east-1", "sa-east-1"],
     "externalId": "EXTERNAL_ID_SECRETO_DO_TENANT"
@@ -235,7 +235,7 @@ O backend valida com `sts:AssumeRole` na hora do cadastro. Se a trust policy / E
 
 **Plataforma**
 
-- [ ] User `saas-multicloud` criado
+- [ ] User `cloud3-finops` criado
 - [ ] Policy `sts:AssumeRole` no user
 - [ ] Access Key válida no `.env` (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`)
 - [ ] Sem `AWS_SESSION_TOKEN` com key `AKIA*`

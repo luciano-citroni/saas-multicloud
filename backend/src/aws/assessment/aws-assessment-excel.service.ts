@@ -34,7 +34,7 @@ export class AwsAssessmentExcelService {
         // Preferir tmp fora do repo: gravar em ./uploads com nest --watch (e OneDrive em Documents)
         // dispara "File change detected" e reinicia o backend no meio do sync.
         const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
-        this.outputDir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
+        this.outputDir = envDir || path.join(os.tmpdir(), 'cloud3-finops', 'assessments');
         this.logger.debug(`Excel upload directory: ${this.outputDir}`);
     }
 
@@ -45,7 +45,7 @@ export class AwsAssessmentExcelService {
                 this.outputDir,
                 path.join(projectRoot, 'uploads', 'assessments'),
                 path.join(projectRoot, 'backend', 'uploads', 'assessments'),
-                path.join(os.tmpdir(), 'saas-multicloud', 'assessments'),
+                path.join(os.tmpdir(), 'cloud3-finops', 'assessments'),
             ])
         );
     }
@@ -70,7 +70,7 @@ export class AwsAssessmentExcelService {
     async generateExcel(jobId: string, data: AssessmentData): Promise<string> {
         const workbook = new ExcelJS.Workbook();
 
-        workbook.creator = 'SaaS Multicloud';
+        workbook.creator = 'Cloud3 FinOps';
 
         workbook.created = new Date();
 

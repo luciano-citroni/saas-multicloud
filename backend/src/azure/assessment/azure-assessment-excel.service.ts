@@ -44,7 +44,7 @@ export class AzureAssessmentExcelService {
 
     async generateExcel(jobId: string, data: AzureAssessmentData): Promise<string> {
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'SaaS Multicloud';
+        workbook.creator = 'Cloud3 FinOps';
         workbook.created = new Date();
 
         const color = 'FF0072C6';
@@ -495,7 +495,7 @@ export class AzureAssessmentExcelService {
     private getOutputDir(): string {
         const envDir = process.env.EXCEL_UPLOADS_DIR?.trim();
         // tmp fora do repo evita reinício do nest --watch ao gerar Excel
-        const outputDir = envDir || path.join(os.tmpdir(), 'saas-multicloud', 'assessments');
+        const outputDir = envDir || path.join(os.tmpdir(), 'cloud3-finops', 'assessments');
 
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });

@@ -398,7 +398,7 @@ export class FinopsAnomalyAlertService {
                 : '';
 
         return [
-            `🚨 *SaaS MultiCloud* — digest de anomalias`,
+            `🚨 *Cloud3 FinOps* — digest de anomalias`,
             ``,
             `🏢 Tenant: ${context.tenantName}`,
             `🏬 Organização: ${context.organizationName}`,

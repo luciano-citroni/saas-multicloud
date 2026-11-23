@@ -60,7 +60,7 @@ export class CloudConnectionService {
             const { Credentials } = await sts.send(
                 new AssumeRoleCommand({
                     RoleArn: roleArn,
-                    RoleSessionName: 'saas-multicloud-verify',
+                    RoleSessionName: 'cloud3-finops-verify',
                     ...(externalId ? { ExternalId: externalId } : {}),
                 })
             );

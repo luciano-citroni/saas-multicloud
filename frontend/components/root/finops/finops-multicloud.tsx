@@ -222,7 +222,7 @@ export function FinopsMulticloud() {
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-3">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Multicloud</h1>
+                        <h1 className="text-xl font-semibold tracking-tight">Cloud3 FinOps</h1>
                         <p className="text-sm text-muted-foreground">
                             Comparação de custos e riscos entre provedores cloud
                         </p>

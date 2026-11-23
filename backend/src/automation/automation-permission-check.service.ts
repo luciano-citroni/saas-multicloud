@@ -45,7 +45,7 @@ export interface GrantMissingPermissionsResult {
     message: string;
 }
 
-const AUTOMATION_GAP_POLICY_NAME = 'SaaSMultiCloudAutomationGap';
+const AUTOMATION_GAP_POLICY_NAME = 'Cloud3FinOpsAutomationGap';
 
 @Injectable()
 export class AutomationPermissionCheckService {
@@ -223,7 +223,7 @@ export class AutomationPermissionCheckService {
             Version: '2012-10-17',
             Statement: [
                 {
-                    Sid: 'SaaSMultiCloudAutomationGap',
+                    Sid: 'Cloud3FinOpsAutomationGap',
                     Effect: 'Allow',
                     Action: unique,
                     Resource: '*',
