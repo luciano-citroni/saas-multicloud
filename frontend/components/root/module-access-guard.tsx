@@ -21,6 +21,7 @@ type ModuleRouteConfig = {
 
 const MODULE_ROUTE_CONFIG: ModuleRouteConfig[] = [
     { prefix: '/assessment', module: PlanModule.ASSESSMENT },
+    { prefix: '/inventory', module: PlanModule.CLOUD_INVENTORY },
     { prefix: '/governance', module: PlanModule.GOVERNANCE },
     { prefix: '/ai-governance', module: PlanModule.AI_FINOPS },
     { prefix: '/automation', module: PlanModule.AUTOMATION },

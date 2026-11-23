@@ -29,6 +29,7 @@ import { FileStorageModule } from './file-storage/file-storage.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { CloudIntelligenceModule } from './cloud-intelligence/cloud-intelligence.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CloudInventoryModule } from './cloud-inventory/cloud-inventory.module';
 
 @Module({
     imports: [
@@ -80,6 +81,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         GcpModule,
         AutomationModule,
         CloudIntelligenceModule,
+        CloudInventoryModule,
         NotificationsModule,
         FileStorageModule,
         OrgsModule,

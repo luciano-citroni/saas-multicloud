@@ -26,6 +26,8 @@ export function SiteHeader() {
         'cloud-accounts': nav.cloudAccounts,
         edit: nav.breadcrumbEdit,
         assessment: nav.assessment,
+        inventory: nav.inventory,
+        browse: nav.inventoryBrowse,
         governance: nav.governance,
         analysis: nav.breadcrumbAnalysis,
         finops: nav.finops,
