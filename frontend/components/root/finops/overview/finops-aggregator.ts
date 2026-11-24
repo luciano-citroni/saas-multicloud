@@ -60,8 +60,9 @@ export async function aggregateFinopsData(
     // Calculate total cost from all dashboards
     const totalCost = dashboards.reduce((sum, dashboard) => sum + Number(dashboard?.totalCost ?? 0), 0);
 
-    // Get forecast information
-    const forecastedCost = allForecasts.find((f) => f?.forecastedCost)?.forecastedCost ?? null;
+    // Sum forecasts across all selected accounts (not just the first one).
+    const forecastedCostRaw = allForecasts.reduce((sum, forecast) => sum + Number(forecast?.forecastedCost ?? 0), 0);
+    const forecastedCost = forecastedCostRaw > 0 ? forecastedCostRaw : null;
     const lastBilling = allBillingHistory.flat()[0] ?? null;
     const lastBillingCost = lastBilling ? Number(lastBilling.finalPrice) : null;
     const billingMargin = lastBilling ? Number(lastBilling.marginPercentage) : null;
@@ -83,7 +84,7 @@ export async function aggregateFinopsData(
         criticalAnomalies,
         recommendationSavings,
         score,
-        forecastedCost: forecastedCost ? Number(forecastedCost) : null,
+        forecastedCost: forecastedCost != null ? Number(forecastedCost) : null,
         lastBillingCost,
         billingMargin,
     };

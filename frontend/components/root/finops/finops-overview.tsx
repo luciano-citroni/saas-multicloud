@@ -195,14 +195,27 @@ export function FinopsOverview() {
         return map;
     }, [cloudAccounts]);
 
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
+
     const loadOverview = useCallback(
-        async (orgId: string, options: { silent?: boolean } = {}) => {
+        async (orgId: string, midOrgAccountIds: string[], options: { silent?: boolean } = {}) => {
             if (!options.silent) setLoadingInitial(true);
 
             try {
+                const cloudAccountIds =
+                    selectedAccountIds.length > 0
+                        ? selectedAccountIds.filter((id) => midOrgAccountIds.includes(id))
+                        : midOrgAccountIds;
+
+                if (cloudAccountIds.length === 0) {
+                    setOverview(null);
+                    setPortfolio(null);
+                    return;
+                }
+
                 const response = await fetchFinopsOrgOverview(orgId, {
                     period,
-                    cloudAccountIds: selectedAccountIds.length > 0 ? selectedAccountIds : undefined,
+                    cloudAccountIds,
                 });
 
                 if (response.status === 401) {
@@ -226,7 +239,12 @@ export function FinopsOverview() {
                     setPortfolio(null);
                 } else {
                     const portfolioResponse = await fetchFinopsCommitmentsOverview(orgId, {
-                        cloudAccountId: selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined,
+                        cloudAccountId:
+                            selectedAccountIds.length === 1
+                                ? selectedAccountIds[0]
+                                : cloudAccountIds.length === 1
+                                  ? cloudAccountIds[0]
+                                  : undefined,
                         provider: providerFilters[0] ?? undefined,
                         periodStart: payload.period.startDate,
                         periodEnd: payload.period.endDate,
@@ -252,8 +270,9 @@ export function FinopsOverview() {
             setLoadingInitial(false);
             return;
         }
-        void loadOverview(organizationId);
-    }, [organizationId, loadOverview]);
+        if (loadingCloudAccounts) return;
+        void loadOverview(organizationId, scopedAccountIds);
+    }, [organizationId, loadingCloudAccounts, loadOverview, scopedAccountIds]);
 
     useEffect(() => {
         if (!organizationId) {
@@ -348,7 +367,7 @@ export function FinopsOverview() {
 
                     if (job.status === 'completed') {
                         toast.success(tf.syncComplete);
-                        void loadOverview(orgId, { silent: true });
+                        void loadOverview(orgId, scopedAccountIds, { silent: true });
                     } else {
                         toast.error(job.error?.trim() ? job.error : tf.syncFailed);
                     }
@@ -357,7 +376,7 @@ export function FinopsOverview() {
                 // ignore polling errors
             }
         },
-        [loadOverview, stopPolling, tf.syncComplete, tf.syncFailed]
+        [loadOverview, scopedAccountIds, stopPolling, tf.syncComplete, tf.syncFailed]
     );
 
     const handleStartSync = async (granularity: 'daily' | 'monthly', startDate: string, endDate: string) => {
@@ -444,7 +463,7 @@ export function FinopsOverview() {
 
             setRevokeTarget(null);
             toast.success(tf.consentRevokeSuccess);
-            await loadOverview(organizationId, { silent: true });
+            await loadOverview(organizationId, scopedAccountIds, { silent: true });
         } catch {
             toast.error(tf.consentRevokeError);
         } finally {
@@ -455,7 +474,7 @@ export function FinopsOverview() {
     const handleRefresh = async () => {
         if (!organizationId) return;
         setRefreshing(true);
-        await loadOverview(organizationId, { silent: true });
+        await loadOverview(organizationId, scopedAccountIds, { silent: true });
         setRefreshing(false);
     };
 

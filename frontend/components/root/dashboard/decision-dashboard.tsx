@@ -179,15 +179,17 @@ export function DecisionDashboard() {
             const finopsEnabled = hasModuleAccess(modules, PlanModule.FINOPS);
             const governanceEnabled = hasModuleAccess(modules, PlanModule.GOVERNANCE);
 
+            const midOrgAccountIds = accounts.map((account) => account.id);
+
             const [finopsResult, governanceResult, budgetResult] = await Promise.all([
                 finopsEnabled
-                    ? loadFinops(organizationId)
+                    ? loadFinops(organizationId, midOrgAccountIds)
                     : Promise.resolve({ snapshot: null, locked: false, failed: false, unauthorized: false }),
                 governanceEnabled
                     ? loadGovernance(organizationId, accounts)
                     : Promise.resolve({ rows: [], failed: false, unauthorized: false }),
                 finopsEnabled
-                    ? loadBudgets(organizationId)
+                    ? loadBudgets(organizationId, midOrgAccountIds, accounts)
                     : Promise.resolve({ items: [] as BudgetRisk[], unauthorized: false, failed: false }),
             ]);
 
@@ -285,10 +287,19 @@ export function DecisionDashboard() {
 }
 
 async function loadFinops(
-    organizationId: string
+    organizationId: string,
+    midOrgAccountIds: string[],
 ): Promise<{ snapshot: FinopsSnapshot | null; locked: boolean; failed: boolean; unauthorized: boolean }> {
     try {
-        const response = await fetchFinopsOrgOverview(organizationId, { period: 'currentmonth', anomalyDays: 30 });
+        if (midOrgAccountIds.length === 0) {
+            return { snapshot: parseOverview(null), locked: false, failed: false, unauthorized: false };
+        }
+
+        const response = await fetchFinopsOrgOverview(organizationId, {
+            period: 'currentmonth',
+            anomalyDays: 30,
+            cloudAccountIds: midOrgAccountIds,
+        });
         if (response.status === 401) {
             return { snapshot: null, locked: false, failed: false, unauthorized: true };
         }
@@ -345,9 +356,15 @@ async function loadGovernance(
 }
 
 async function loadBudgets(
-    organizationId: string
+    organizationId: string,
+    midOrgAccountIds: string[],
+    accounts: DashboardAccount[],
 ): Promise<{ items: BudgetRisk[]; unauthorized: boolean; failed: boolean }> {
     try {
+        if (midOrgAccountIds.length === 0) {
+            return { items: [], unauthorized: false, failed: false };
+        }
+
         const response = await fetchOrganizationFinopsBudgetStatuses(organizationId, BUDGET_ACCOUNT_CAP);
         if (response.status === 401) {
             return { items: [], unauthorized: true, failed: false };
@@ -356,7 +373,10 @@ async function loadBudgets(
             return { items: [], unauthorized: false, failed: true };
         }
 
-        return { items: parseBudgets(await response.json()), unauthorized: false, failed: false };
+        const aliasSet = new Set(accounts.map((account) => account.alias));
+        const items = parseBudgets(await response.json()).filter((item) => aliasSet.has(item.accountAlias));
+
+        return { items, unauthorized: false, failed: false };
     } catch {
         return { items: [], unauthorized: false, failed: true };
     }

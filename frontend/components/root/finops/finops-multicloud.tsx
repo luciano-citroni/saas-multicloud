@@ -115,38 +115,26 @@ export function FinopsMulticloud() {
         };
     }, []);
 
-    useEffect(() => {
-        if (!organizationId) return;
-        const load = async () => {
-            try {
-                const response = await fetchOrganizationCloudAccounts(organizationId, {
-                    midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
-                });
-                if (!response.ok) {
-                    setCloudAccounts([]);
-                    return;
-                }
-                const payload = await response.json().catch(() => null);
-                const accounts = Array.isArray(payload)
-                    ? payload
-                    : Array.isArray((payload as { items?: unknown })?.items)
-                      ? (payload as { items: OrganizationCloudAccount[] }).items
-                      : [];
-                setCloudAccounts(accounts);
-            } catch {
-                setCloudAccounts([]);
-            }
-        };
-        void load();
-    }, [organizationId, midOrgId]);
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
+    const [accountsReady, setAccountsReady] = useState(false);
 
     const loadOverview = useCallback(
-        async (orgId: string, silent = false) => {
+        async (orgId: string, midOrgAccountIds: string[], silent = false) => {
             if (!silent) setLoading(true);
             try {
+                const cloudAccountIds =
+                    urlFilters.accountIds.length > 0
+                        ? urlFilters.accountIds.filter((id) => midOrgAccountIds.includes(id))
+                        : midOrgAccountIds;
+
+                if (cloudAccountIds.length === 0) {
+                    setOverview(null);
+                    return;
+                }
+
                 const response = await fetchFinopsOrgOverview(orgId, {
                     period: urlFilters.period,
-                    cloudAccountIds: urlFilters.accountIds.length > 0 ? urlFilters.accountIds : undefined,
+                    cloudAccountIds,
                 });
                 if (response.status === 401) {
                     toast.error(tc.sessionExpired);
@@ -171,11 +159,43 @@ export function FinopsMulticloud() {
 
     useEffect(() => {
         if (!organizationId) {
+            setAccountsReady(false);
             setLoading(false);
             return;
         }
-        void loadOverview(organizationId);
-    }, [organizationId, loadOverview]);
+        setAccountsReady(false);
+        const load = async () => {
+            try {
+                const response = await fetchOrganizationCloudAccounts(organizationId, {
+                    midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+                });
+                if (!response.ok) {
+                    setCloudAccounts([]);
+                    return;
+                }
+                const payload = await response.json().catch(() => null);
+                const accounts = Array.isArray(payload)
+                    ? payload
+                    : Array.isArray((payload as { items?: unknown })?.items)
+                      ? (payload as { items: OrganizationCloudAccount[] }).items
+                      : [];
+                setCloudAccounts(accounts);
+            } catch {
+                setCloudAccounts([]);
+            } finally {
+                setAccountsReady(true);
+            }
+        };
+        void load();
+    }, [organizationId, midOrgId]);
+
+    useEffect(() => {
+        if (!organizationId || !accountsReady) {
+            if (!organizationId) setLoading(false);
+            return;
+        }
+        void loadOverview(organizationId, scopedAccountIds);
+    }, [organizationId, accountsReady, loadOverview, scopedAccountIds]);
 
     const providerRows = useMemo(() => {
         const map = new Map<string, ProviderRow>();
@@ -236,7 +256,7 @@ export function FinopsMulticloud() {
                     disabled={refreshing}
                     onClick={async () => {
                         setRefreshing(true);
-                        await loadOverview(organizationId, true);
+                        await loadOverview(organizationId, scopedAccountIds, true);
                         setRefreshing(false);
                     }}
                 >

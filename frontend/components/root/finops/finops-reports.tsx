@@ -89,8 +89,16 @@ export function FinopsReports() {
         };
     }, []);
 
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
+    const [accountsReady, setAccountsReady] = useState(false);
+
     useEffect(() => {
-        if (!organizationId) return;
+        if (!organizationId) {
+            setAccountsReady(false);
+            setCloudAccounts([]);
+            return;
+        }
+        setAccountsReady(false);
         const load = async () => {
             try {
                 const response = await fetchOrganizationCloudAccounts(organizationId, {
@@ -109,23 +117,36 @@ export function FinopsReports() {
                 setCloudAccounts(accounts);
             } catch {
                 setCloudAccounts([]);
+            } finally {
+                setAccountsReady(true);
             }
         };
         void load();
     }, [organizationId, midOrgId]);
 
     const loadReportData = useCallback(
-        async (orgId: string, silent = false) => {
+        async (orgId: string, midOrgAccountIds: string[], silent = false) => {
             if (!silent) setLoading(true);
             try {
+                const cloudAccountIds =
+                    urlFilters.accountIds.length > 0
+                        ? urlFilters.accountIds.filter((id) => midOrgAccountIds.includes(id))
+                        : midOrgAccountIds;
+
+                if (cloudAccountIds.length === 0) {
+                    setOverview(null);
+                    setOptimize(null);
+                    return;
+                }
+
                 const [overviewRes, optimizeRes] = await Promise.all([
                     fetchFinopsOrgOverview(orgId, {
                         period: urlFilters.period,
-                        cloudAccountIds: urlFilters.accountIds.length > 0 ? urlFilters.accountIds : undefined,
+                        cloudAccountIds,
                     }),
                     fetchFinopsOrgOptimize(orgId, {
                         status: 'open',
-                        cloudAccountId: urlFilters.accountIds.length === 1 ? urlFilters.accountIds[0] : undefined,
+                        cloudAccountId: cloudAccountIds.length === 1 ? cloudAccountIds[0] : undefined,
                         limit: 100,
                     }),
                 ]);
@@ -161,12 +182,12 @@ export function FinopsReports() {
     );
 
     useEffect(() => {
-        if (!organizationId) {
-            setLoading(false);
+        if (!organizationId || !accountsReady) {
+            if (!organizationId) setLoading(false);
             return;
         }
-        void loadReportData(organizationId);
-    }, [organizationId, loadReportData]);
+        void loadReportData(organizationId, scopedAccountIds);
+    }, [organizationId, accountsReady, loadReportData, scopedAccountIds]);
 
     const filteredAccounts = useMemo(() => {
         const accounts = overview?.accounts ?? [];
@@ -364,7 +385,7 @@ export function FinopsReports() {
                         disabled={refreshing}
                         onClick={async () => {
                             setRefreshing(true);
-                            await loadReportData(organizationId, true);
+                            await loadReportData(organizationId, scopedAccountIds, true);
                             setRefreshing(false);
                         }}
                     >

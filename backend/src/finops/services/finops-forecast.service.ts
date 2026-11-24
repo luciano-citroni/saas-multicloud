@@ -170,7 +170,7 @@ export class FinopsForecastService {
 
     /**
      * Fim do mês corrente a partir do snapshot do último sync.
-     * Sem sync → null (UI pede sincronização).
+     * Sem snapshot → projeção linear local (para agregar várias contas no overview).
      */
     async forecastCurrentMonth(organizationId: string, cloudAccountId: string): Promise<ForecastResult | null> {
         const month = currentUtcMonth();
@@ -182,7 +182,10 @@ export class FinopsForecastService {
                 month,
             },
         });
-        if (!row) return null;
+        if (!row) {
+            const linear = await this.linearCurrentMonth(organizationId, cloudAccountId);
+            return linear.forecastedCost > 0 ? linear : null;
+        }
 
         const provider =
             row.provider === 'aws' || row.provider === 'azure' || row.provider === 'gcp' ? row.provider : null;
