@@ -1,4 +1,3 @@
-import { getActiveMidOrgId } from '@/lib/sidebar-context';
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
@@ -8,6 +7,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getActiveMidOrgId } from '@/lib/sidebar-context';
 import {
     createAiFinopsBudget,
     createAiFinopsPolicy,
