@@ -8,7 +8,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository, type FindOptionsWhere } from 'typeorm';
 import { OrgRole, ROLE_HIERARCHY } from '../rbac/roles.enum';
 
 import { OrganizationNotificationEmail } from '../db/entites/organization-notification-email.entity';
@@ -65,26 +65,28 @@ export class NotificationsService {
     ): Promise<PaginatedResult<OrganizationNotificationGroup>> {
         const { page, limit } = normalizePagination(paginationInput);
 
-        const qb = this.groupRepo
-            .createQueryBuilder('group')
-            .where('group.organization_id = :organizationId', { organizationId })
-            .andWhere('group.channel = :channel', { channel });
+        const where: FindOptionsWhere<OrganizationNotificationGroup>[] = midOrgId
+            ? [
+                  { organizationId, channel, isTenantGlobal: true },
+                  { organizationId, channel, midOrgId },
+              ]
+            : [{ organizationId, channel }];
 
-        if (midOrgId) {
-            qb.andWhere('(group.is_tenant_global = true OR group.mid_org_id = :midOrgId)', { midOrgId });
-        }
-
-        const totalItems = await qb.clone().getCount();
+        const totalItems = await this.groupRepo.count({ where });
         const pagination = buildPaginationMeta(totalItems, page, limit);
 
-        const relation = channel === 'whatsapp' ? 'whatsappTargets' : 'emails';
-        const items = await qb
-            .leftJoinAndSelect(`group.${relation}`, relation)
-            .orderBy('group.created_at', 'DESC')
-            .addOrderBy(`${relation}.created_at`, 'ASC')
-            .skip((pagination.page - 1) * limit)
-            .take(limit)
-            .getMany();
+        const items = await this.groupRepo.find({
+            where,
+            relations: channel === 'whatsapp' ? ['whatsappTargets'] : ['emails'],
+            order: {
+                createdAt: 'DESC',
+                ...(channel === 'whatsapp'
+                    ? { whatsappTargets: { createdAt: 'ASC' as const } }
+                    : { emails: { createdAt: 'ASC' as const } }),
+            },
+            skip: (pagination.page - 1) * limit,
+            take: limit,
+        });
 
         return { items, pagination };
     }
