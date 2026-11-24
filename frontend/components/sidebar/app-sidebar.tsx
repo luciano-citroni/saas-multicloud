@@ -18,7 +18,7 @@ import {
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
 import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
-import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { canManageMembers, canOperateModules, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
 import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 import type { SidebarContextOrganization } from '@/lib/queries/types';
@@ -388,6 +388,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const activeOrg = organizations.find((o) => o.id === activeOrganizationId);
         const activeRole = normalizeOrganizationRole(activeOrg?.currentRole ?? null);
         const canManage = canManageMembers(activeRole);
+        const canOperate = canOperateModules(activeRole);
 
         const dashboard = [{ title: tn.dashboard, url: '/', icon: LayoutDashboard }];
 
@@ -403,9 +404,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 ? [
                       { title: tn.groups, url: '/tenant/organizations', icon: Layers },
                       { title: tn.users, url: '/tenant/users', icon: Users },
-                      { title: tn.notifications, url: '/tenant/notifications', icon: Bell },
                   ]
                 : []),
+            ...(canOperate ? [{ title: tn.notifications, url: '/tenant/notifications', icon: Bell }] : []),
             { title: tn.plans, url: '/billing', icon: DollarSign },
         ];
 
