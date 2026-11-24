@@ -184,20 +184,44 @@ export function RegisterForm() {
                                                 </DialogHeader>
                                                 <div className="text-sm text-muted-foreground space-y-3 mt-2">
                                                     <p>
-                                                        Ao criar uma conta, você concorda com nossos termos de uso e política de privacidade. Estes termos
-                                                        regem o uso da plataforma e dos serviços oferecidos.
+                                                        Ao criar uma conta, você concorda com estes termos de uso e práticas de privacidade, que regem o
+                                                        uso da plataforma Cloud3 FinOps e dos serviços oferecidos.
                                                     </p>
                                                     <p>
                                                         <strong className="text-foreground">1. Uso da Plataforma</strong>
                                                         <br />
                                                         Você é responsável por manter a confidencialidade de suas credenciais e por todas as atividades
-                                                        realizadas em sua conta.
+                                                        realizadas em sua conta. O uso deve observar a legislação aplicável e estes termos.
                                                     </p>
                                                     <p>
-                                                        <strong className="text-foreground">2. Privacidade</strong>
+                                                        <strong className="text-foreground">2. Privacidade e Proteção de Dados (LGPD)</strong>
                                                         <br />
-                                                        Coletamos apenas os dados necessários para o funcionamento da plataforma. Seus dados não serão
-                                                        compartilhados com terceiros sem seu consentimento.
+                                                        O Cloud3 FinOps atua como controlador dos dados pessoais tratados na operação da plataforma.
+                                                        Tratamos dados de identificação (nome e e-mail), autenticação e sessões, dados de organização e
+                                                        membros, metadados de contas de nuvem e, somente com consentimento específico, dados de custos
+                                                        FinOps. Quando aplicável, dados de pagamento são processados pelo prestador de cobrança
+                                                        (Stripe).
+                                                        <br />
+                                                        <br />
+                                                        As finalidades incluem criar e manter a conta, prestar o serviço, garantir segurança (sessões e
+                                                        prevenção a abuso), gerenciar planos/cobrança e enviar comunicações operacionais. As bases
+                                                        legais são a execução do contrato, o legítimo interesse (segurança e melhoria do serviço) e o
+                                                        consentimento para a coleta FinOps, que pode ser revogado a qualquer momento na própria conta.
+                                                        <br />
+                                                        <br />
+                                                        Não vendemos dados pessoais. O compartilhamento ocorre apenas com prestadores necessários à
+                                                        operação (infraestrutura de nuvem, e-mail e pagamentos), sob obrigação de confidencialidade.
+                                                        Adotamos medidas de segurança proporcionais, incluindo criptografia de credenciais de nuvem em
+                                                        repouso, tokens de sessão em cookies httpOnly e respostas sanitizadas sem exposição de
+                                                        segredos.
+                                                        <br />
+                                                        <br />
+                                                        Os dados são retidos enquanto a conta ou organização existir e pelo tempo necessário ao
+                                                        cumprimento de obrigações legais. A revogação do consentimento FinOps interrompe novas coletas;
+                                                        o histórico já coletado pode ser preservado. Nos termos do art. 18 da LGPD, você pode solicitar
+                                                        confirmação de tratamento, acesso, correção, eliminação ou anonimização nos limites legais e
+                                                        técnicos do serviço, informação sobre compartilhamentos e revogação de consentimento, pelos
+                                                        canais de suporte da plataforma.
                                                     </p>
                                                     <p>
                                                         <strong className="text-foreground">3. Responsabilidades</strong>
@@ -206,8 +230,7 @@ export function RegisterForm() {
                                                     <p>
                                                         <strong className="text-foreground">4. Alterações</strong>
                                                         <br />
-                                                        Reservamos o direito de atualizar estes termos. Você será notificado em caso de mudanças
-                                                        relevantes.
+                                                        Estes termos podem ser atualizados. Mudanças relevantes serão comunicadas na plataforma.
                                                     </p>
                                                 </div>
                                             </DialogContent>
