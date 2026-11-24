@@ -47,6 +47,7 @@ import { friendlyServiceLabel } from '@/lib/finops/service-label';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
 import { toIntlLocale } from '@/lib/i18n/format';
+import type { AppLocale } from '@/lib/locale';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
@@ -1255,7 +1256,7 @@ function StackedAccountServiceChart({
     data: Array<Record<string, string | number>>;
     services: string[];
     currency: string;
-    locale: string;
+    locale: AppLocale;
 }) {
     const compact = useIsBelowLg();
     const height = Math.max(compact ? 240 : 288, data.length * (compact ? 40 : 48) + (compact ? 64 : 32));
