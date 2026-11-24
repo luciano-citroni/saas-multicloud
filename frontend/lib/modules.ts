@@ -36,7 +36,7 @@ export function hasModuleAccess(modules: string[] | unknown, module: PlanModule)
 }
 
 export function hasAutomationModuleAccess(modules: string[] | unknown): boolean {
-    return hasModuleAccess(modules, PlanModule.AUTOMATION) || hasModuleAccess(modules, PlanModule.CLOUD_INVENTORY);
+    return hasModuleAccess(modules, PlanModule.AUTOMATION);
 }
 
 export function normalizePlanModules(modules: string[] | unknown): string[] {

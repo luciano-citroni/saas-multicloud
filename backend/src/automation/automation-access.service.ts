@@ -7,11 +7,6 @@ export class AutomationAccessService {
     constructor(private readonly billingService: BillingService) {}
 
     async assertAutomationModuleEnabled(tenantId: string): Promise<void> {
-        try {
-            await this.billingService.assertModuleEnabled(tenantId, SystemModule.AUTOMATION);
-            return;
-        } catch {
-            await this.billingService.assertModuleEnabled(tenantId, SystemModule.CLOUD_INVENTORY);
-        }
+        await this.billingService.assertModuleEnabled(tenantId, SystemModule.AUTOMATION);
     }
 }
