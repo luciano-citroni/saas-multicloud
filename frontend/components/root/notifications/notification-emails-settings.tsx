@@ -151,7 +151,7 @@ export function NotificationEmailsSettings() {
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
-    const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(currentRole, 'MEMBER');
 
     const [groups, setGroups] = useState<NotificationGroupItem[]>([]);
     const [loading, setLoading] = useState(true);

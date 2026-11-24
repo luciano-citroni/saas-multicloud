@@ -23,6 +23,7 @@ import { GcpFinopsProvider } from '../providers/gcp-finops.provider';
 import type { FinopsCostEntry } from '../providers/finops-provider.interface';
 import { FinopsCostIngestionService } from './finops-cost-ingestion.service';
 import { FinopsCommitmentsService } from './finops-commitments.service';
+import { FinopsForecastService } from './finops-forecast.service';
 import {
     buildCommercialReport,
     isClosedMonth,
@@ -128,6 +129,7 @@ export class FinopsCommercialReportService implements OnModuleInit {
         private readonly configService: ConfigService,
         private readonly ingestionService: FinopsCostIngestionService,
         private readonly commitmentsService: FinopsCommitmentsService,
+        private readonly forecastService: FinopsForecastService,
         private readonly awsProvider: AwsFinopsProvider,
         private readonly azureProvider: AzureFinopsProvider,
         private readonly gcpProvider: GcpFinopsProvider,
@@ -510,7 +512,6 @@ export class FinopsCommercialReportService implements OnModuleInit {
     private async loadAccountForecasts(organizationId: string): Promise<AccountForecastInput[]> {
         const accounts = await this.cloudAccountRepo
             .createQueryBuilder('ca')
-            .addSelect('ca.credentialsEncrypted')
             .where('ca.tenantId = :organizationId', { organizationId })
             .andWhere('ca.isActive = true')
             .andWhere('ca.provider IN (:...providers)', { providers: ['aws', 'azure'] })
@@ -518,17 +519,12 @@ export class FinopsCommercialReportService implements OnModuleInit {
 
         const forecasts = await Promise.all(
             accounts.map(async (account) => {
-                if (!account.credentialsEncrypted) return null;
                 try {
-                    const credentials = this.decryptCloudCredentials(account.credentialsEncrypted);
-                    const creds = { credentials, cloudAccountId: account.id };
-                    const forecast =
-                        account.provider === 'aws'
-                            ? await this.awsProvider.forecastMonthEnd(creds)
-                            : await this.azureProvider.forecastMonthEnd(creds);
+                    const forecast = await this.forecastService.forecastCurrentMonth(organizationId, account.id);
+                    if (!forecast) return null;
                     return {
                         accountId: account.id,
-                        amount: forecast.amount,
+                        amount: forecast.forecastedCost,
                         currency: forecast.currency.toUpperCase(),
                     };
                 } catch (error) {

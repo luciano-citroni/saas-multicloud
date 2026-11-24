@@ -267,7 +267,7 @@ export function AiBudgetsPanel({
     const t = useTranslations('finops');
     const tc = useTranslations('common');
     const { currentRole: rawRole } = useOrganizationFromSidebar(tenantId);
-    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'MEMBER');
     const [pending, startTransition] = useTransition();
     const [showBudgetForm, setShowBudgetForm] = useState(false);
     const [showPolicyForm, setShowPolicyForm] = useState(false);

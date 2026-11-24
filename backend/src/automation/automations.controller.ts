@@ -131,7 +131,7 @@ export class AutomationsController {
     }
 
     @Delete(':id')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(HttpStatus.NO_CONTENT)
     @ApiOperation({ summary: 'Excluir automação' })
     @ApiResponse({ status: 204, description: 'Automação excluída' })
@@ -143,7 +143,7 @@ export class AutomationsController {
     }
 
     @Post(':id/publish')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Publicar automação (cria nova versão)' })
     publish(
         @CurrentOrganization() org: Tenant,
@@ -154,7 +154,7 @@ export class AutomationsController {
     }
 
     @Post(':id/activate')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Ativar automação publicada' })
     activate(
         @CurrentOrganization() org: Tenant,
@@ -165,7 +165,7 @@ export class AutomationsController {
     }
 
     @Post(':id/deactivate')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Desativar automação' })
     deactivate(
         @CurrentOrganization() org: Tenant,
@@ -187,7 +187,7 @@ export class AutomationsController {
     }
 
     @Post(':id/execute')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Executar automação publicada e ativa' })
     @ApiResponse({ status: 201, description: 'Execução enfileirada' })
@@ -210,7 +210,7 @@ export class AutomationsController {
     }
 
     @Post(':id/validate-permissions')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Simular permissões IAM de criação e exclusão (rollback) na role da conta',
     })
@@ -225,7 +225,7 @@ export class AutomationsController {
     }
 
     @Post(':id/grant-missing-permissions')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Aplicar permissões IAM faltantes na role da conta (inline policy Cloud3FinOpsAutomationGap)',
     })
@@ -251,7 +251,7 @@ export class AutomationsController {
     }
 
     @Post(':id/plan')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Gerar plano da versão publicada' })
     @ApiBody({ schema: { type: 'object', properties: { cloudAccountId: { type: 'string', format: 'uuid' } } } })
     plan(
@@ -263,7 +263,7 @@ export class AutomationsController {
     }
 
     @Post(':id/plan/cancel')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Descartar change set em REVIEW_IN_PROGRESS' })
     cancelPlan(
         @CurrentOrganization() org: Tenant,
@@ -273,7 +273,7 @@ export class AutomationsController {
     }
 
     @Post(':id/revise')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Reabrir uma versão publicada como rascunho' })
     revise(
         @CurrentOrganization() org: Tenant,
@@ -305,7 +305,7 @@ export class AutomationsController {
     }
 
     @Get(':id/executions/:executionId/parameters')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Parâmetros usados na execução para reexecução' })
     @ApiResponse({ status: 200, description: 'Parâmetros disponíveis para replay' })
     getExecutionParameters(
@@ -316,7 +316,7 @@ export class AutomationsController {
     }
 
     @Post(':id/executions/:executionId/rollback')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(HttpStatus.ACCEPTED)
     @ApiOperation({ summary: 'Enfileirar rollback dos recursos provisionados desta execução' })
     @ApiBody({

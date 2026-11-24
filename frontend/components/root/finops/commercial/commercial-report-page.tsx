@@ -231,7 +231,7 @@ export function CommercialReportPage() {
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
-    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'MEMBER');
     const [report, setReport] = useState<CommercialReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);

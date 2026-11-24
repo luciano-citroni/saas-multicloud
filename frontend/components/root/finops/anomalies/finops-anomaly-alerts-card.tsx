@@ -216,7 +216,7 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
     const isBelowLg = useIsBelowLg();
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
-    const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(currentRole, 'MEMBER');
 
     const [open, setOpen] = useState(false);
     const [snapPoint, setSnapPoint] = useState<number | string | null>(ALERTS_SNAP_POINTS[0]);

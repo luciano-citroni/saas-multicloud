@@ -29,6 +29,7 @@ import { FinopsCostAggregationService } from '../services/finops-cost-aggregatio
 import { FinopsAnomalyDetectionService } from '../services/finops-anomaly-detection.service';
 import { FinopsOptimizationService } from '../services/finops-optimization.service';
 import { FinopsCommitmentsService } from '../services/finops-commitments.service';
+import { FinopsForecastService } from '../services/finops-forecast.service';
 
 import { FINOPS_QUEUE, FINOPS_WORKER_CONCURRENCY } from '../constants';
 import { findCloudAccountForTenant } from '../utils/find-cloud-account';
@@ -55,6 +56,7 @@ export class FinopsProcessor extends WorkerHost {
         private readonly anomalyService: FinopsAnomalyDetectionService,
         private readonly optimizationService: FinopsOptimizationService,
         private readonly commitmentsService: FinopsCommitmentsService,
+        private readonly forecastService: FinopsForecastService,
     ) {
         super();
     }
@@ -228,8 +230,8 @@ export class FinopsProcessor extends WorkerHost {
                 );
             }
 
-            // ── 6. Créditos + compromissos (SP / RI / CUD) — soft-fail ────────
-            this.logger.log(`[${jobId}] Fase 6/7: Coletando créditos e compromissos...`);
+            // ── 6. Créditos + compromissos + forecast — soft-fail ───────────
+            this.logger.log(`[${jobId}] Fase 6/7: Coletando créditos, compromissos e forecast...`);
             await job.updateProgress(75);
 
             try {
@@ -253,6 +255,21 @@ export class FinopsProcessor extends WorkerHost {
             } catch (error) {
                 this.logger.warn(
                     `[${jobId}] sync créditos/compromissos falhou (seguindo): ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                );
+            }
+
+            try {
+                await this.forecastService.syncFromProvider(
+                    organizationId,
+                    cloudAccountId,
+                    cloudProvider,
+                    providerCreds,
+                );
+            } catch (error) {
+                this.logger.warn(
+                    `[${jobId}] sync forecast falhou (seguindo): ${
                         error instanceof Error ? error.message : String(error)
                     }`,
                 );

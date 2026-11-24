@@ -186,7 +186,7 @@ export function AiConnectionLimitsPage() {
     const [deleting, setDeleting] = useState(false);
 
     const { currentRole: rawRole } = useOrganizationFromSidebar(tenantId);
-    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'MEMBER');
 
     const pageSize = useMemo(() => {
         const raw = Number(searchParams.get('limit') ?? '10');

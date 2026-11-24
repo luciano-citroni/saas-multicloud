@@ -51,7 +51,7 @@ export class AutomationController {
     }
 
     @Post('run')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Executar fluxo de automação e provisionar recursos na AWS' })
     @ApiBody({ type: RunAutomationRequestDto })

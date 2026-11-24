@@ -255,7 +255,7 @@ export function AutomationDetailClient({
     }, [load]);
 
     const isDraft = automation?.status === 'DRAFT';
-    const canAdmin = hasRequiredOrganizationRole(role, 'ADMIN');
+    const canAdmin = hasRequiredOrganizationRole(role, 'MEMBER');
     const hasPublishedVersion = Boolean(automation && automation.version > 0);
     const canExecute = Boolean(canAdmin && hasPublishedVersion && automation?.status !== 'INACTIVE');
     const isPublishedPage = mode === 'published';

@@ -594,7 +594,7 @@ export function FinopsOverview() {
         [overview?.costByService]
     );
 
-    const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canSync = hasRequiredOrganizationRole(currentRole, 'MEMBER');
     const hasNoData = overview != null && filteredTotals.cost === 0 && overview.costTrend.length === 0;
     const subtitle =
         selectedAccountIds.length === 1 && selectedAccount

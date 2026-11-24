@@ -53,6 +53,7 @@ import { FinopsCreditGrant } from '../db/entites/finops-credit-grant.entity';
 import { FinopsCreditConsumption } from '../db/entites/finops-credit-consumption.entity';
 import { FinopsCommitmentSnapshot } from '../db/entites/finops-commitment-snapshot.entity';
 import { FinopsCommitmentRecommendation } from '../db/entites/finops-commitment-recommendation.entity';
+import { FinopsForecastSnapshot } from '../db/entites/finops-forecast-snapshot.entity';
 import { FinopsRealizedSaving } from '../db/entites/finops-realized-saving.entity';
 import { FinopsExchangeRate } from '../db/entites/finops-exchange-rate.entity';
 import { FinopsUsdQuote } from '../db/entites/finops-usd-quote.entity';
@@ -112,6 +113,7 @@ import { AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
             FinopsCreditConsumption,
             FinopsCommitmentSnapshot,
             FinopsCommitmentRecommendation,
+            FinopsForecastSnapshot,
             FinopsRealizedSaving,
             FinopsExchangeRate,
             FinopsUsdQuote,

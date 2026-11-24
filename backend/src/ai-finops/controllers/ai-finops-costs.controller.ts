@@ -160,7 +160,7 @@ export class AiFinopsCostsController {
     }
 
     @Post('budgets')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(201)
     createBudget(
         @CurrentOrganization() org: Tenant,
@@ -171,7 +171,7 @@ export class AiFinopsCostsController {
     }
 
     @Patch('budgets/:budgetId')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     updateBudget(
         @CurrentOrganization() org: Tenant,
         @CurrentUser() user: AuthUser,
@@ -182,7 +182,7 @@ export class AiFinopsCostsController {
     }
 
     @Delete('budgets/:budgetId')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(204)
     async deleteBudget(
         @CurrentOrganization() org: Tenant,
@@ -209,7 +209,7 @@ export class AiFinopsCostsController {
     }
 
     @Post('recommendations/generate')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     generateRecommendations(
         @CurrentOrganization() org: Tenant,
         @Body() body: { organizationId: string },

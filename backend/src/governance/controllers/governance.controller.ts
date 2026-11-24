@@ -68,7 +68,7 @@ export class GovernanceController {
 
     @Post('accounts/:cloudAccountId/scan')
     @HttpCode(202)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Iniciar scan de governança',
         description:
@@ -253,7 +253,7 @@ export class GovernanceController {
 
     @Post('accounts/:cloudAccountId/suppressions')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Criar supressão de finding',
         description:
@@ -280,7 +280,7 @@ export class GovernanceController {
 
     @Delete('suppressions/:suppressionId')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Remover supressão de finding',
         description: 'Remove uma supressão existente. O achado voltará a impactar o score no próximo scan.',

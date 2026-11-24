@@ -1,14 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
 
-import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { FinopsCostRecord } from '../../db/entites/finops-cost-record.entity';
+import { FinopsForecastSnapshot } from '../../db/entites/finops-forecast-snapshot.entity';
 import { AwsFinopsProvider } from '../providers/aws-finops.provider';
 import { AzureFinopsProvider } from '../providers/azure-finops.provider';
-import type { ProviderMonthForecast } from '../providers/finops-provider.interface';
+import type {
+    FinopsProviderCredentials,
+    ProviderMonthForecast,
+} from '../providers/finops-provider.interface';
 import { andWhereServiceLevelCost } from '../utils/service-level-cost';
 
 export interface ForecastResult {
@@ -41,79 +42,192 @@ export class FinopsForecastService {
     constructor(
         @InjectRepository(FinopsCostRecord)
         private readonly costRecordRepo: Repository<FinopsCostRecord>,
-        @InjectRepository(CloudAccount)
-        private readonly cloudAccountRepo: Repository<CloudAccount>,
-        private readonly configService: ConfigService,
+        @InjectRepository(FinopsForecastSnapshot)
+        private readonly snapshotRepo: Repository<FinopsForecastSnapshot>,
         private readonly awsProvider: AwsFinopsProvider,
         private readonly azureProvider: AzureFinopsProvider,
     ) {}
 
     /**
-     * Fim do mês corrente. AWS e Azure usam o forecast do provedor;
-     * o detalhe por serviço é a distribuição local reescalada para esse total.
-     * GCP e falha de permissão caem na média diária.
+     * Coleta a previsão do provedor (ou linear) e persiste.
+     * Chamado apenas no sync FinOps — leituras usam o snapshot.
      */
-    async forecastCurrentMonth(organizationId: string, cloudAccountId: string): Promise<ForecastResult> {
+    async syncFromProvider(
+        organizationId: string,
+        cloudAccountId: string,
+        cloudProvider: string,
+        providerCreds: FinopsProviderCredentials,
+    ): Promise<void> {
+        const provider =
+            cloudProvider === 'aws' || cloudProvider === 'azure' || cloudProvider === 'gcp' ? cloudProvider : null;
         const linear = await this.linearCurrentMonth(organizationId, cloudAccountId);
-        const account = await this.loadAccount(organizationId, cloudAccountId);
-        const provider = account?.provider === 'aws' || account?.provider === 'azure' || account?.provider === 'gcp' ? account.provider : null;
-        if (!account?.credentialsEncrypted || (provider !== 'aws' && provider !== 'azure')) {
-            return { ...linear, source: 'linear', provider };
-        }
+        let current: ForecastResult = { ...linear, source: 'linear', provider };
 
-        try {
-            const credentials = this.decryptCloudCredentials(account.credentialsEncrypted);
-            const creds = { credentials, cloudAccountId };
-            const forecast = provider === 'aws' ? await this.awsProvider.forecastMonthEnd(creds) : await this.azureProvider.forecastMonthEnd(creds);
-            const totalDays = Math.max(linear.daysElapsed + linear.daysRemaining, 1);
-            this.logger.log(
-                `[Forecast] ${provider} ${cloudAccountId}: previsão do provedor=${forecast.amount.toFixed(2)} ${forecast.currency}`,
-            );
-            return {
-                ...linear,
-                forecastedCost: forecast.amount,
-                avgDailyCost: forecast.amount / totalDays,
-                currency: forecast.currency || linear.currency,
-                confidence: 'high',
-                source: 'provider',
-                provider,
-                byService: scaleToTotal(linear.byService, forecast.amount),
-            };
-        } catch (error) {
-            this.logger.warn(
-                `[Forecast] ${provider} ${cloudAccountId} indisponível, usando projeção linear: ${
-                    error instanceof Error ? error.message : String(error)
-                }`,
-            );
-            return { ...linear, source: 'linear', provider };
-        }
-    }
-
-    /**
-     * Próximos meses. A AWS devolve GetCostForecast mensal.
-     * Azure e GCP ficam na média dos últimos 3 meses.
-     */
-    async forecastNextMonths(organizationId: string, cloudAccountId: string, months = 3): Promise<ForecastMonthProjection[]> {
-        const count = Number.isFinite(months) && months > 0 ? Math.min(Math.trunc(months), 12) : 3;
-        const account = await this.loadAccount(organizationId, cloudAccountId);
-        if (account?.provider === 'aws' && account.credentialsEncrypted) {
+        if (provider === 'aws' || provider === 'azure') {
             try {
-                const credentials = this.decryptCloudCredentials(account.credentialsEncrypted);
-                const upcoming = await this.awsProvider.forecastUpcomingMonths(
-                    { credentials, cloudAccountId },
-                    count,
+                const forecast =
+                    provider === 'aws'
+                        ? await this.awsProvider.forecastMonthEnd(providerCreds)
+                        : await this.azureProvider.forecastMonthEnd(providerCreds);
+                const totalDays = Math.max(linear.daysElapsed + linear.daysRemaining, 1);
+                this.logger.log(
+                    `[Forecast] ${provider} ${cloudAccountId}: previsão do provedor=${forecast.amount.toFixed(2)} ${forecast.currency}`,
                 );
-                if (upcoming.length > 0) return upcoming.slice(0, count).map(toProviderMonth);
+                current = {
+                    ...linear,
+                    forecastedCost: forecast.amount,
+                    avgDailyCost: forecast.amount / totalDays,
+                    currency: forecast.currency || linear.currency,
+                    confidence: 'high',
+                    source: 'provider',
+                    provider,
+                    byService: scaleToTotal(linear.byService, forecast.amount),
+                };
             } catch (error) {
                 this.logger.warn(
-                    `[Forecast] Próximos meses AWS ${cloudAccountId} indisponíveis: ${
+                    `[Forecast] ${provider} ${cloudAccountId} indisponível no sync, usando projeção linear: ${
                         error instanceof Error ? error.message : String(error)
                     }`,
                 );
             }
         }
-        const linear = await this.linearNextMonths(organizationId, cloudAccountId, count);
-        return linear.map((row) => ({ ...row, source: 'linear' as const }));
+
+        const syncedAt = new Date();
+        const currentMonth = current.periodStart.slice(0, 7);
+
+        await this.snapshotRepo.upsert(
+            {
+                organizationId,
+                cloudAccountId,
+                provider: provider ?? cloudProvider,
+                horizon: 'current_month',
+                month: currentMonth,
+                forecastedCost: current.forecastedCost,
+                avgDailyCost: current.avgDailyCost,
+                currency: current.currency,
+                source: current.source,
+                confidence: current.confidence,
+                daysElapsed: current.daysElapsed,
+                daysRemaining: current.daysRemaining,
+                periodStart: current.periodStart,
+                periodEnd: current.periodEnd,
+                byService: current.byService,
+                syncedAt,
+            },
+            {
+                conflictPaths: ['cloudAccountId', 'horizon', 'month'],
+                skipUpdateIfNoValuesChanged: false,
+            },
+        );
+
+        let upcoming: ForecastMonthProjection[] = [];
+        if (provider === 'aws') {
+            try {
+                const rows = await this.awsProvider.forecastUpcomingMonths(providerCreds, 3);
+                if (rows.length > 0) upcoming = rows.slice(0, 3).map(toProviderMonth);
+            } catch (error) {
+                this.logger.warn(
+                    `[Forecast] Próximos meses AWS ${cloudAccountId} indisponíveis no sync: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                );
+            }
+        }
+        if (upcoming.length === 0) {
+            const linearUpcoming = await this.linearNextMonths(organizationId, cloudAccountId, 3);
+            upcoming = linearUpcoming.map((row) => ({ ...row, source: 'linear' as const }));
+        }
+
+        await this.snapshotRepo.delete({
+            organizationId,
+            cloudAccountId,
+            horizon: 'upcoming',
+        });
+
+        if (upcoming.length > 0) {
+            await this.snapshotRepo.insert(
+                upcoming.map((row) => ({
+                    organizationId,
+                    cloudAccountId,
+                    provider: provider ?? cloudProvider,
+                    horizon: 'upcoming' as const,
+                    month: row.month,
+                    forecastedCost: row.forecastedCost,
+                    avgDailyCost: null,
+                    currency: row.currency,
+                    source: row.source,
+                    confidence: null,
+                    daysElapsed: null,
+                    daysRemaining: null,
+                    periodStart: null,
+                    periodEnd: null,
+                    byService: null,
+                    syncedAt,
+                })),
+            );
+        }
+    }
+
+    /**
+     * Fim do mês corrente a partir do snapshot do último sync.
+     * Sem sync → null (UI pede sincronização).
+     */
+    async forecastCurrentMonth(organizationId: string, cloudAccountId: string): Promise<ForecastResult | null> {
+        const month = currentUtcMonth();
+        const row = await this.snapshotRepo.findOne({
+            where: {
+                organizationId,
+                cloudAccountId,
+                horizon: 'current_month',
+                month,
+            },
+        });
+        if (!row) return null;
+
+        const provider =
+            row.provider === 'aws' || row.provider === 'azure' || row.provider === 'gcp' ? row.provider : null;
+
+        return {
+            cloudAccountId,
+            periodStart: toDateString(row.periodStart) ?? `${month}-01`,
+            periodEnd: toDateString(row.periodEnd) ?? lastDayOfMonth(month),
+            forecastedCost: Number(row.forecastedCost),
+            avgDailyCost: Number(row.avgDailyCost ?? 0),
+            daysElapsed: row.daysElapsed ?? 0,
+            daysRemaining: row.daysRemaining ?? 0,
+            currency: row.currency,
+            confidence: row.confidence ?? 'low',
+            source: row.source,
+            provider,
+            byService: row.byService ?? [],
+        };
+    }
+
+    /**
+     * Próximos meses a partir do snapshot do último sync.
+     */
+    async forecastNextMonths(
+        organizationId: string,
+        cloudAccountId: string,
+        months = 3,
+    ): Promise<ForecastMonthProjection[]> {
+        const count = Number.isFinite(months) && months > 0 ? Math.min(Math.trunc(months), 12) : 3;
+        const rows = await this.snapshotRepo.find({
+            where: {
+                organizationId,
+                cloudAccountId,
+                horizon: 'upcoming',
+            },
+            order: { month: 'ASC' },
+            take: count,
+        });
+
+        return rows.map((row) => ({
+            month: row.month,
+            forecastedCost: Number(row.forecastedCost),
+            currency: row.currency,
+            source: row.source,
+        }));
     }
 
     private async linearCurrentMonth(organizationId: string, cloudAccountId: string): Promise<ForecastResult> {
@@ -225,27 +339,6 @@ export class FinopsForecastService {
 
         return projections;
     }
-
-    private async loadAccount(organizationId: string, cloudAccountId: string): Promise<CloudAccount | null> {
-        return this.cloudAccountRepo
-            .createQueryBuilder('ca')
-            .addSelect('ca.credentialsEncrypted')
-            .where('ca.id = :cloudAccountId', { cloudAccountId })
-            .andWhere('ca.tenantId = :organizationId', { organizationId })
-            .getOne();
-    }
-
-    private decryptCloudCredentials(encrypted: string): Record<string, unknown> {
-        const keyHex = this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY');
-        if (!keyHex) throw new Error('CREDENTIALS_ENCRYPTION_KEY não configurada');
-        const key = Buffer.from(keyHex, 'hex');
-        if (key.length !== 32) throw new Error('CREDENTIALS_ENCRYPTION_KEY inválida');
-        const combined = Buffer.from(encrypted, 'base64').toString('utf8');
-        const [ivHex, authTagHex, ciphertext] = combined.split(':');
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
-        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-        return JSON.parse(decipher.update(ciphertext, 'hex', 'utf8') + decipher.final('utf8')) as Record<string, unknown>;
-    }
 }
 
 function scaleToTotal(
@@ -260,4 +353,23 @@ function scaleToTotal(
 
 function toProviderMonth(row: ProviderMonthForecast): ForecastMonthProjection {
     return { month: row.month, forecastedCost: row.amount, currency: row.currency, source: 'provider' };
+}
+
+function currentUtcMonth(): string {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function lastDayOfMonth(month: string): string {
+    const [yearStr, monthStr] = month.split('-');
+    const year = Number(yearStr);
+    const monthNum = Number(monthStr);
+    const last = new Date(Date.UTC(year, monthNum, 0));
+    return last.toISOString().slice(0, 10);
+}
+
+function toDateString(value: string | Date | null | undefined): string | null {
+    if (value == null) return null;
+    if (typeof value === 'string') return value.slice(0, 10);
+    return value.toISOString().slice(0, 10);
 }

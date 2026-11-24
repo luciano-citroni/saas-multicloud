@@ -94,7 +94,7 @@ export class CloudIntelligenceController {
     }
 
     @Post('roi/capture')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Capture a weekly ROI snapshot now' })
     @ApiResponse({ status: 200 })
     async captureRoi(@CurrentOrganization() org: Tenant) {
@@ -127,7 +127,7 @@ export class CloudIntelligenceController {
     }
 
     @Patch('quotas')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Update AI quotas for the organization' })
     @ApiBody({ type: UpdateQuotaRequestDto })
     @ApiResponse({ status: 200, type: AiQuotaResponseDto })
@@ -153,7 +153,7 @@ export class CloudIntelligenceController {
     }
 
     @Patch('daily-settings')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Update Daily Intelligence settings' })
     @ApiBody({ type: DailySettingsRequestDto })
     @ApiResponse({ status: 200, type: DailySettingsResponseDto })
@@ -184,7 +184,7 @@ export class CloudIntelligenceController {
     }
 
     @Post('daily-reports/generate')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Manually generate today Daily Intelligence report' })
     @ApiResponse({ status: 200, type: AiDailyReportResponseDto })
     @ApiResponse({ status: 403, description: 'Tier does not allow Daily Intelligence' })
@@ -266,7 +266,7 @@ export class CloudIntelligenceController {
     }
 
     @Post('recommendations/:id/execute')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Execute the published automation linked to a recommendation' })
     @ApiResponse({ status: 200, type: ExecuteRecommendationResponseDto })
     @ApiResponse({ status: 400, description: 'Automation missing or not ACTIVE' })
@@ -287,7 +287,7 @@ export class CloudIntelligenceController {
     }
 
     @Post('knowledge')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Upsert organization private knowledge (Enterprise)' })
     @ApiBody({ type: UpsertKnowledgeRequestDto })
     @ApiResponse({ status: 200, type: UpsertKnowledgeResponseDto })
@@ -300,7 +300,7 @@ export class CloudIntelligenceController {
     }
 
     @Delete('knowledge/:id')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(204)
     @ApiOperation({ summary: 'Delete organization private knowledge document' })
     @ApiResponse({ status: 204 })

@@ -39,6 +39,11 @@ export function canSyncCloudAccounts(role: OrganizationRole | null): boolean {
     return hasRequiredOrganizationRole(role, 'MEMBER');
 }
 
+/** Day-to-day module use (scans, FinOps sync/consent, notifications, budgets). VIEWER is read-only. */
+export function canOperateModules(role: OrganizationRole | null): boolean {
+    return hasRequiredOrganizationRole(role, 'MEMBER');
+}
+
 export function canManageBilling(role: OrganizationRole | null): boolean {
     return hasRequiredOrganizationRole(role, 'ADMIN');
 }

@@ -485,7 +485,7 @@ export function GovernanceOverview() {
         router.push(`/governance/analysis?jobId=${encodeURIComponent(job.id)}`);
     };
 
-    const canRunScan = activeCloudAccount !== null && hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canRunScan = activeCloudAccount !== null && hasRequiredOrganizationRole(currentRole, 'MEMBER');
     const hasRunningJob = jobs.some((j) => j.status === 'pending' || j.status === 'running');
 
     // -- Empty state ------------------------------------------------------------

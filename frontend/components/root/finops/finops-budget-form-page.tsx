@@ -115,7 +115,7 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
     const midOrgId = useActiveMidOrgId(organizationId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
-    const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(currentRole, 'MEMBER');
 
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [emailGroups, setEmailGroups] = useState<NotificationGroupOption[]>([]);

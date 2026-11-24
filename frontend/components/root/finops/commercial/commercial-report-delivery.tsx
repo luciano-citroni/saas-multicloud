@@ -202,7 +202,7 @@ export function CommercialReportDelivery({
     const schema = useMemo(() => createSchema(t), [t]);
     const isBelowLg = useIsBelowLg();
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
-    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'MEMBER');
     const [open, setOpen] = useState(false);
     const [snapPoint, setSnapPoint] = useState<number | string | null>(DELIVERY_SNAP_POINTS[0]);
     const [loadingGroups, setLoadingGroups] = useState(false);

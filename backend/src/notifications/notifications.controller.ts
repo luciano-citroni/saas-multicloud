@@ -98,7 +98,7 @@ export class NotificationsController {
 
     @Post('groups')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Criar grupo de notificação' })
     @ApiBody({ type: CreateNotificationGroupRequestDto })
     @ApiResponse({ status: 201, type: NotificationGroupResponseDto })
@@ -110,7 +110,7 @@ export class NotificationsController {
     }
 
     @Put('groups/:id')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Editar grupo de notificação' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiBody({ type: UpdateNotificationGroupRequestDto })
@@ -125,7 +125,7 @@ export class NotificationsController {
 
     @Delete('groups/:id')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Remover grupo de notificação' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 204, description: 'Removed' })
@@ -138,7 +138,7 @@ export class NotificationsController {
 
     @Post('groups/:groupId/emails')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Adicionar e-mail a um grupo' })
     @ApiParam({ name: 'groupId', type: 'string', format: 'uuid' })
     @ApiBody({ type: CreateNotificationEmailRequestDto })
@@ -153,7 +153,7 @@ export class NotificationsController {
 
     @Post('groups/:groupId/whatsapp-targets')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Adicionar destino WhatsApp a um grupo' })
     @ApiParam({ name: 'groupId', type: 'string', format: 'uuid' })
     @ApiBody({ type: CreateNotificationWhatsappTargetRequestDto })
@@ -169,7 +169,7 @@ export class NotificationsController {
 
     @Post('groups/:groupId/whatsapp-targets/join-invite')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Entrar em grupo WhatsApp via link de convite e salvar o JID automaticamente',
     })
@@ -188,7 +188,7 @@ export class NotificationsController {
 
     @Post('groups/:id/test')
     @HttpCode(200)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Enviar teste para todos os destinatários ativos do grupo' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: NotificationTestGroupResponseDto })
@@ -202,7 +202,7 @@ export class NotificationsController {
     }
 
     @Put('emails/:id')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Editar e-mail de notificação' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiBody({ type: UpdateNotificationEmailRequestDto })
@@ -217,7 +217,7 @@ export class NotificationsController {
 
     @Delete('emails/:id')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Remover e-mail de notificação' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 204, description: 'Removed' })
@@ -230,7 +230,7 @@ export class NotificationsController {
 
     @Post('emails/:id/test')
     @HttpCode(200)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Enviar e-mail de teste' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: NotificationTestEmailResponseDto })
@@ -242,7 +242,7 @@ export class NotificationsController {
     }
 
     @Put('whatsapp-targets/:id')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Editar destino WhatsApp' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiBody({ type: UpdateNotificationWhatsappTargetRequestDto })
@@ -258,7 +258,7 @@ export class NotificationsController {
 
     @Delete('whatsapp-targets/:id')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Remover destino WhatsApp' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 204, description: 'Removed' })
@@ -271,7 +271,7 @@ export class NotificationsController {
 
     @Post('whatsapp-targets/:id/test')
     @HttpCode(200)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Enviar mensagem de teste WhatsApp' })
     @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: NotificationTestWhatsappTargetResponseDto })

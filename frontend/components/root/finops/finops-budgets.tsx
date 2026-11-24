@@ -383,7 +383,7 @@ export function FinopsBudgets() {
         [cloudAccounts, scopeFilter]
     );
 
-    const canManage = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canManage = hasRequiredOrganizationRole(currentRole, 'MEMBER');
     const isOrgScope = scopeFilter === ORG_SCOPE_VALUE;
 
     const loadStatuses = useCallback(

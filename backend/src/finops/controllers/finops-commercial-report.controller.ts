@@ -75,7 +75,7 @@ export class FinopsCommercialReportController {
     }
 
     @Put('exchange-rate')
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Grava a taxa BRL/USD da fatura do mês' })
     @ApiBody({ schema: { type: 'object', required: ['month', 'brlPerUsd'], properties: { month: { type: 'string' }, brlPerUsd: { type: 'number' } } } })
     @ApiResponse({ status: 200, description: 'Taxa salva' })
@@ -88,7 +88,7 @@ export class FinopsCommercialReportController {
     }
 
     @Put('delivery')
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Configura o envio mensal do relatório comercial' })
     @ApiBody({ schema: { type: 'object', required: ['enabled', 'emails'], properties: { enabled: { type: 'boolean' }, emails: { type: 'array', items: { type: 'string' } } } } })
     @ApiResponse({ status: 200, description: 'Entrega salva' })
@@ -106,7 +106,7 @@ export class FinopsCommercialReportController {
     }
 
     @Post('send')
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(200)
     @ApiOperation({ summary: 'Envia o relatório comercial agora' })
     @ApiBody({ schema: { type: 'object', properties: { month: { type: 'string' } } } })

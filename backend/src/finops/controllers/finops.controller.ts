@@ -736,7 +736,7 @@ export class FinopsController {
     }
 
     @Put('anomaly-alerts/settings')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Atualizar alerta diário de anomalias',
         description:
@@ -777,7 +777,7 @@ export class FinopsController {
 
     @Post('accounts/:cloudAccountId/consent')
     @HttpCode(200)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Aceitar termo de consentimento FinOps',
         description:
@@ -798,7 +798,7 @@ export class FinopsController {
 
     @Delete('accounts/:cloudAccountId/consent')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Revogar consentimento FinOps',
         description: 'Revoga o consentimento para coleta de custos. Dados históricos já coletados são preservados.',
@@ -821,7 +821,7 @@ export class FinopsController {
 
     @Post('accounts/:cloudAccountId/sync')
     @HttpCode(202)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Iniciar coleta de custos (FinOps Sync)',
         description:
@@ -1085,7 +1085,7 @@ export class FinopsController {
 
     @Post('budgets')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({
         summary: 'Criar budget (organização ou conta)',
         description:
@@ -1102,7 +1102,7 @@ export class FinopsController {
     }
 
     @Put('budgets/:budgetId')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Atualizar budget (organização ou conta)' })
     @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
     @ApiBody({ type: CreateBudgetRequestDto })
@@ -1118,7 +1118,7 @@ export class FinopsController {
 
     @Delete('budgets/:budgetId')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Remover budget (organização ou conta)' })
     @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 204, description: 'Budget removido com sucesso' })
@@ -1146,7 +1146,7 @@ export class FinopsController {
 
     @Post('accounts/:cloudAccountId/budgets')
     @HttpCode(201)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Criar budget de custos da conta cloud' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiBody({ type: CreateBudgetRequestDto })
@@ -1224,7 +1224,7 @@ export class FinopsController {
     }
 
     @Put('accounts/:cloudAccountId/budgets/:budgetId')
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Atualizar budget' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
@@ -1242,7 +1242,7 @@ export class FinopsController {
 
     @Delete('accounts/:cloudAccountId/budgets/:budgetId')
     @HttpCode(204)
-    @Roles(OrgRole.OWNER, OrgRole.ADMIN)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @ApiOperation({ summary: 'Remover budget' })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiParam({ name: 'budgetId', type: 'string', format: 'uuid' })
@@ -1306,7 +1306,10 @@ export class FinopsController {
     // =========================================================================
 
     @Get('accounts/:cloudAccountId/forecast')
-    @ApiOperation({ summary: 'Forecast de custo para o mês corrente' })
+    @ApiOperation({
+        summary: 'Forecast de custo para o mês corrente',
+        description: 'Retorna o snapshot coletado no último sync FinOps. Sem sync, responde null.',
+    })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiResponse({ status: 200, type: Object })
     async getForecast(@Param('cloudAccountId', ParseUUIDPipe) cloudAccountId: string, @CurrentOrganization() org: Tenant) {
@@ -1314,7 +1317,10 @@ export class FinopsController {
     }
 
     @Get('accounts/:cloudAccountId/forecast/next-months')
-    @ApiOperation({ summary: 'Projeção para os próximos meses' })
+    @ApiOperation({
+        summary: 'Projeção para os próximos meses',
+        description: 'Retorna os snapshots coletados no último sync FinOps.',
+    })
     @ApiParam({ name: 'cloudAccountId', type: 'string', format: 'uuid' })
     @ApiQuery({ name: 'months', required: false, description: 'Número de meses (default: 3)' })
     @ApiResponse({ status: 200, type: [Object] })

@@ -100,7 +100,7 @@ export class AutomationResourcesController {
     }
 
     @Post('key-pairs')
-    @Roles(OrgRole.ADMIN, OrgRole.OWNER)
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Criar novo Key Pair e retornar PEM' })
     @ApiResponse({ status: 201 })

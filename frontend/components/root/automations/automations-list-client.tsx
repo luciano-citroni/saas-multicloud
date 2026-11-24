@@ -183,7 +183,7 @@ export function AutomationsListClient() {
         }
     }, [page, pagination, syncUrlState]);
 
-    const canAdmin = hasRequiredOrganizationRole(role, 'ADMIN');
+    const canAdmin = hasRequiredOrganizationRole(role, 'MEMBER');
 
     const totalPages = Math.max(1, pagination?.totalPages ?? 1);
     const safePage = Math.min(page, totalPages);

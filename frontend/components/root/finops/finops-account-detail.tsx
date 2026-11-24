@@ -223,7 +223,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
             } else {
                 setOverview(null);
                 setLoadingInitial(false);
-                if (hasRequiredOrganizationRole(currentRole, 'ADMIN')) {
+                if (hasRequiredOrganizationRole(currentRole, 'MEMBER')) {
                     setShowConsentDialog(true);
                 }
             }
@@ -414,7 +414,7 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         }
     };
 
-    const canSync = hasRequiredOrganizationRole(currentRole, 'ADMIN');
+    const canSync = hasRequiredOrganizationRole(currentRole, 'MEMBER');
 
     if (!organizationId) {
         return (
