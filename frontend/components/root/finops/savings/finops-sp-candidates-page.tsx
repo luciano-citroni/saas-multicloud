@@ -78,7 +78,9 @@ export function FinopsSpCandidatesPage() {
             }
             setAccountsReady(false);
             try {
-                const response = await fetchOrganizationCloudAccounts(organizationId, midOrgId ?? undefined);
+                const response = await fetchOrganizationCloudAccounts(organizationId, {
+                    midOrgId: midOrgId ?? undefined,
+                });
                 const body = await response.json().catch(() => null);
                 if (!response.ok) {
                     if (!cancelled) toast.error(extractErrorMessage(body));

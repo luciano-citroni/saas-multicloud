@@ -28,16 +28,8 @@ type InventoryFilterBarProps = {
     className?: string;
 };
 
-function periodLabel(
-    period: InventoryPeriod,
-    labels: {
-        last6months: string;
-        last12months: string;
-        ytd: string;
-        all: string;
-    },
-) {
-    return labels[period];
+function periodLabel(period: InventoryPeriod, labels: Partial<Record<InventoryPeriod, string>>) {
+    return labels[period] ?? period;
 }
 
 function FilterFields({
