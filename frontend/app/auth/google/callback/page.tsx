@@ -1,24 +1,59 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
 const CALLBACK_REPLAY_STORAGE_KEY = 'smc_google_callback_replay_code';
+const CALLBACK_EXCHANGE_LOCK_KEY = 'smc_google_callback_exchange_lock';
 
 function isLikelyGoogleAuthorizationCode(code: string): boolean {
     return code.startsWith('4/') || code.includes('/');
 }
 
+function claimExchangeLock(code: string): boolean {
+    try {
+        const existing = sessionStorage.getItem(CALLBACK_EXCHANGE_LOCK_KEY);
+        if (existing === code) {
+            return false;
+        }
+        sessionStorage.setItem(CALLBACK_EXCHANGE_LOCK_KEY, code);
+        return true;
+    } catch {
+        return true;
+    }
+}
+
+function clearExchangeLock(code: string) {
+    try {
+        if (sessionStorage.getItem(CALLBACK_EXCHANGE_LOCK_KEY) === code) {
+            sessionStorage.removeItem(CALLBACK_EXCHANGE_LOCK_KEY);
+        }
+    } catch {
+        // ignore storage errors
+    }
+}
+
 function GoogleCallbackContent() {
     const searchParams = useSearchParams();
+    const startedRef = useRef(false);
 
     useEffect(() => {
         const code = searchParams.get('code');
 
+        // React Strict Mode remounts effects in dev; the Google code is single-use.
+        if (startedRef.current) {
+            return;
+        }
+        startedRef.current = true;
+
         const createSession = async () => {
             if (!code) {
                 window.location.replace('/auth/sign-in?error=google_auth_failed');
+                return;
+            }
+
+            if (!claimExchangeLock(code)) {
                 return;
             }
 
@@ -30,6 +65,8 @@ function GoogleCallbackContent() {
                 });
 
                 if (!response.ok) {
+                    clearExchangeLock(code);
+
                     const shouldReplayOnBackendCallback =
                         response.status === 401 && isLikelyGoogleAuthorizationCode(code) && sessionStorage.getItem(CALLBACK_REPLAY_STORAGE_KEY) !== code;
 
@@ -46,9 +83,11 @@ function GoogleCallbackContent() {
                 }
 
                 sessionStorage.removeItem(CALLBACK_REPLAY_STORAGE_KEY);
+                clearExchangeLock(code);
 
                 window.location.replace('/');
             } catch {
+                clearExchangeLock(code);
                 window.location.replace('/auth/sign-in?error=google_auth_failed');
             }
         };
