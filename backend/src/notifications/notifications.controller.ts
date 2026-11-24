@@ -26,8 +26,9 @@ import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { OrgRole } from '../rbac/roles.enum';
-import { CurrentOrganization } from '../tenant/tenant.decorators';
+import { CurrentMembership, CurrentOrganization } from '../tenant/tenant.decorators';
 import type { Tenant } from '../db/entites/tenant.entity';
+import type { TenantMember } from '../db/entites/tenant-member.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { ApiPaginationQuery } from '../common/swagger/pagination-query.swagger';
 import { parsePaginationQuery } from '../common/pagination/parse-pagination-query';
@@ -78,13 +79,19 @@ export class NotificationsController {
     constructor(private readonly notificationsService: NotificationsService) {}
 
     @Get('groups')
-    @ApiOperation({ summary: 'Listar grupos de notificação do tenant' })
+    @ApiOperation({ summary: 'Listar grupos de notificação (organização + globais do tenant)' })
     @ApiQuery({ name: 'channel', required: false, enum: ['email', 'whatsapp'] })
+    @ApiQuery({
+        name: 'midOrgId',
+        required: false,
+        description: 'Filtra grupos da mid-org + grupos globais do tenant',
+    })
     @ApiPaginationQuery()
     @ApiResponse({ status: 200, type: [NotificationGroupResponseDto] })
     listGroups(
         @CurrentOrganization() org: Tenant,
         @Query('channel') channel?: string,
+        @Query('midOrgId') midOrgId?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
     ) {
@@ -93,6 +100,7 @@ export class NotificationsController {
             org.id,
             parsed.success ? parsed.data : 'email',
             parsePaginationQuery(page, limit),
+            midOrgId?.trim() || null,
         );
     }
 
@@ -104,9 +112,10 @@ export class NotificationsController {
     @ApiResponse({ status: 201, type: NotificationGroupResponseDto })
     createGroup(
         @CurrentOrganization() org: Tenant,
+        @CurrentMembership() membership: TenantMember,
         @Body(new ZodValidationPipe(createNotificationGroupSchema)) dto: CreateNotificationGroupDto,
     ): Promise<NotificationGroupResponseDto> {
-        return this.notificationsService.createGroup(org.id, dto);
+        return this.notificationsService.createGroup(org.id, dto, membership.role as OrgRole);
     }
 
     @Put('groups/:id')
@@ -117,10 +126,11 @@ export class NotificationsController {
     @ApiResponse({ status: 200, type: NotificationGroupResponseDto })
     updateGroup(
         @CurrentOrganization() org: Tenant,
+        @CurrentMembership() membership: TenantMember,
         @Param('id', ParseUUIDPipe) id: string,
         @Body(new ZodValidationPipe(updateNotificationGroupSchema)) dto: UpdateNotificationGroupDto,
     ): Promise<NotificationGroupResponseDto> {
-        return this.notificationsService.updateGroup(id, org.id, dto);
+        return this.notificationsService.updateGroup(id, org.id, dto, membership.role as OrgRole);
     }
 
     @Delete('groups/:id')

@@ -12,6 +12,19 @@ export class CreateNotificationGroupRequestDto {
 
     @ApiPropertyOptional({ example: true })
     isActive?: boolean;
+
+    @ApiPropertyOptional({
+        format: 'uuid',
+        nullable: true,
+        description: 'Mid-org id. Required unless isTenantGlobal=true.',
+    })
+    midOrgId?: string | null;
+
+    @ApiPropertyOptional({
+        example: false,
+        description: 'When true, group is shared across the tenant. ADMIN/OWNER only.',
+    })
+    isTenantGlobal?: boolean;
 }
 
 export class UpdateNotificationGroupRequestDto {
@@ -23,6 +36,12 @@ export class UpdateNotificationGroupRequestDto {
 
     @ApiPropertyOptional({ example: true })
     isActive?: boolean;
+
+    @ApiPropertyOptional({ format: 'uuid', nullable: true })
+    midOrgId?: string | null;
+
+    @ApiPropertyOptional({ example: false })
+    isTenantGlobal?: boolean;
 }
 
 export class CreateNotificationEmailRequestDto {
@@ -148,8 +167,14 @@ export class NotificationGroupResponseDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
 
-    @ApiProperty({ format: 'uuid' })
+    @ApiProperty({ format: 'uuid', description: 'Tenant id' })
     organizationId!: string;
+
+    @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Mid-org id when not global' })
+    midOrgId!: string | null;
+
+    @ApiProperty({ description: 'Shared across all mid-orgs of the tenant when true' })
+    isTenantGlobal!: boolean;
 
     @ApiProperty({ example: 'FinOps' })
     name!: string;

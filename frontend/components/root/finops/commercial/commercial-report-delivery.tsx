@@ -27,7 +27,7 @@ import { useIsBelowLg } from '@/hooks/use-mobile';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
-import { notifyMobileFiltersDrawer } from '@/lib/sidebar-context';
+import { getActiveMidOrgId, notifyMobileFiltersDrawer } from '@/lib/sidebar-context';
 import { useTranslations, type Translations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -236,8 +236,8 @@ export function CommercialReportDelivery({
         setLoadingGroups(true);
         try {
             const [emailRes, whatsappRes] = await Promise.all([
-                fetchNotificationGroups(organizationId, 'email', { limit: 100 }),
-                fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100 }),
+                fetchNotificationGroups(organizationId, 'email', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
+                fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
             ]);
             const emailBody = await emailRes.json().catch(() => null);
             const whatsappBody = await whatsappRes.json().catch(() => null);

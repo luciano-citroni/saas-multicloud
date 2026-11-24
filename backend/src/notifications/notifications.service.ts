@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     ConflictException,
+    ForbiddenException,
     Injectable,
     Logger,
     NotFoundException,
@@ -8,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, QueryFailedError, Repository } from 'typeorm';
+import { OrgRole, ROLE_HIERARCHY } from '../rbac/roles.enum';
 
 import { OrganizationNotificationEmail } from '../db/entites/organization-notification-email.entity';
 import {
@@ -59,23 +61,30 @@ export class NotificationsService {
         organizationId: string,
         channel: NotificationChannel = 'email',
         paginationInput: PaginationInput = {},
+        midOrgId?: string | null,
     ): Promise<PaginatedResult<OrganizationNotificationGroup>> {
         const { page, limit } = normalizePagination(paginationInput);
-        const totalItems = await this.groupRepo.count({ where: { organizationId, channel } });
+
+        const qb = this.groupRepo
+            .createQueryBuilder('group')
+            .where('group.organization_id = :organizationId', { organizationId })
+            .andWhere('group.channel = :channel', { channel });
+
+        if (midOrgId) {
+            qb.andWhere('(group.is_tenant_global = true OR group.mid_org_id = :midOrgId)', { midOrgId });
+        }
+
+        const totalItems = await qb.clone().getCount();
         const pagination = buildPaginationMeta(totalItems, page, limit);
 
-        const items = await this.groupRepo.find({
-            where: { organizationId, channel },
-            relations: channel === 'whatsapp' ? ['whatsappTargets'] : ['emails'],
-            order: {
-                createdAt: 'DESC',
-                ...(channel === 'whatsapp'
-                    ? { whatsappTargets: { createdAt: 'ASC' as const } }
-                    : { emails: { createdAt: 'ASC' as const } }),
-            },
-            skip: (pagination.page - 1) * limit,
-            take: limit,
-        });
+        const relation = channel === 'whatsapp' ? 'whatsappTargets' : 'emails';
+        const items = await qb
+            .leftJoinAndSelect(`group.${relation}`, relation)
+            .orderBy('group.created_at', 'DESC')
+            .addOrderBy(`${relation}.created_at`, 'ASC')
+            .skip((pagination.page - 1) * limit)
+            .take(limit)
+            .getMany();
 
         return { items, pagination };
     }
@@ -97,9 +106,17 @@ export class NotificationsService {
     async createGroup(
         organizationId: string,
         dto: CreateNotificationGroupDto,
+        actorRole: OrgRole,
     ): Promise<OrganizationNotificationGroup> {
+        const isTenantGlobal = dto.isTenantGlobal === true;
+        this.assertCanManageTenantGlobal(actorRole, isTenantGlobal);
+
+        const midOrgId = isTenantGlobal ? null : await this.resolveMidOrgId(organizationId, dto.midOrgId);
+
         const group = this.groupRepo.create({
             organizationId,
+            midOrgId,
+            isTenantGlobal,
             name: dto.name.trim(),
             description: dto.description?.trim() ? dto.description.trim() : null,
             channel: dto.channel ?? 'email',
@@ -119,14 +136,33 @@ export class NotificationsService {
         id: string,
         organizationId: string,
         dto: UpdateNotificationGroupDto,
+        actorRole: OrgRole,
     ): Promise<OrganizationNotificationGroup> {
         const group = await this.findGroupOrFail(id, organizationId);
+
+        const nextIsTenantGlobal = dto.isTenantGlobal !== undefined ? dto.isTenantGlobal : group.isTenantGlobal;
+        if (dto.isTenantGlobal !== undefined && dto.isTenantGlobal !== group.isTenantGlobal) {
+            this.assertCanManageTenantGlobal(actorRole, true);
+        }
+        if (nextIsTenantGlobal && !group.isTenantGlobal) {
+            this.assertCanManageTenantGlobal(actorRole, true);
+        }
 
         if (dto.name !== undefined) group.name = dto.name.trim();
         if (dto.description !== undefined) {
             group.description = dto.description?.trim() ? dto.description.trim() : null;
         }
         if (dto.isActive !== undefined) group.isActive = dto.isActive;
+
+        if (dto.isTenantGlobal !== undefined || dto.midOrgId !== undefined) {
+            group.isTenantGlobal = nextIsTenantGlobal;
+            group.midOrgId = nextIsTenantGlobal
+                ? null
+                : await this.resolveMidOrgId(
+                      organizationId,
+                      dto.midOrgId !== undefined ? dto.midOrgId : group.midOrgId,
+                  );
+        }
 
         try {
             await this.groupRepo.save(group);
@@ -729,6 +765,32 @@ export class NotificationsService {
             ``,
             `Se você recebeu esta mensagem, o canal está configurado corretamente.`,
         ].join('\n');
+    }
+
+    private assertCanManageTenantGlobal(actorRole: OrgRole, isTenantGlobal: boolean): void {
+        if (!isTenantGlobal) return;
+        const level = ROLE_HIERARCHY[actorRole] ?? 0;
+        if (level < ROLE_HIERARCHY[OrgRole.ADMIN]) {
+            throw new ForbiddenException(ErrorMessages.NOTIFICATIONS.TENANT_GLOBAL_FORBIDDEN);
+        }
+    }
+
+    private async resolveMidOrgId(
+        tenantId: string,
+        midOrgId: string | null | undefined,
+    ): Promise<string> {
+        if (!midOrgId) {
+            throw new BadRequestException(ErrorMessages.NOTIFICATIONS.MID_ORG_REQUIRED);
+        }
+
+        const organization = await this.organizationRepo.findOne({
+            where: { id: midOrgId, tenantId },
+            select: ['id'],
+        });
+        if (!organization) {
+            throw new NotFoundException(ErrorMessages.NOTIFICATIONS.MID_ORG_NOT_FOUND);
+        }
+        return organization.id;
     }
 
     private rethrowUniqueConflict(error: unknown, kind: 'group' | 'email' | 'whatsapp'): void {

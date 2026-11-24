@@ -31,7 +31,7 @@ import { extractErrorMessage } from '@/lib/error-messages';
 import { useIsBelowLg } from '@/hooks/use-mobile';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
-import { notifyMobileFiltersDrawer } from '@/lib/sidebar-context';
+import { getActiveMidOrgId, notifyMobileFiltersDrawer } from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { useTranslations, type Translations } from '@/lib/i18n';
 
@@ -270,8 +270,8 @@ export function FinopsAnomalyAlertsCard({ organizationId }: FinopsAnomalyAlertsC
         try {
             const [settingsRes, emailRes, whatsappRes] = await Promise.all([
                 fetchFinopsAnomalyAlertSettings(organizationId),
-                fetchNotificationGroups(organizationId, 'email', { limit: 100 }),
-                fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100 }),
+                fetchNotificationGroups(organizationId, 'email', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
+                fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
             ]);
 
             const settingsBody = await settingsRes.json().catch(() => null);

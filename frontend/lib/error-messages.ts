@@ -582,6 +582,18 @@ export const ErrorMessages = {
             en: 'Could not send the WhatsApp test message.',
             pt: 'Não foi possível enviar a mensagem de teste no WhatsApp.',
         },
+        MID_ORG_REQUIRED: {
+            en: 'An organization is required unless the group is tenant-global.',
+            pt: 'Uma organização é obrigatória, salvo se o grupo for global no tenant.',
+        },
+        MID_ORG_NOT_FOUND: {
+            en: 'Organization not found in this tenant.',
+            pt: 'Organização não encontrada neste tenant.',
+        },
+        TENANT_GLOBAL_FORBIDDEN: {
+            en: 'Only tenant admins or owners can manage tenant-global notification groups.',
+            pt: 'Somente admins ou owners do tenant podem gerenciar grupos globais.',
+        },
         INVALID_WHATSAPP_INVITE: {
             en: 'Invalid WhatsApp group invite link or code.',
             pt: 'Link ou código de convite do grupo WhatsApp inválido.',

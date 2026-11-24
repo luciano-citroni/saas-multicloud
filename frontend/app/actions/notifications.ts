@@ -5,6 +5,8 @@ export type NotificationGroupPayload = {
     description?: string | null;
     channel?: NotificationChannel;
     isActive?: boolean;
+    midOrgId?: string | null;
+    isTenantGlobal?: boolean;
 };
 
 export type NotificationEmailPayload = {
@@ -23,7 +25,7 @@ export type NotificationWhatsappTargetPayload = {
 export async function fetchNotificationGroups(
     organizationId: string,
     channel: NotificationChannel = 'email',
-    options?: { page?: number; limit?: number }
+    options?: { page?: number; limit?: number; midOrgId?: string | null }
 ) {
     const params = new URLSearchParams({
         organizationId,
@@ -31,6 +33,9 @@ export async function fetchNotificationGroups(
         page: String(options?.page ?? 1),
         limit: String(options?.limit ?? 10),
     });
+    if (options?.midOrgId) {
+        params.set('midOrgId', options.midOrgId);
+    }
     return fetch(`/api/notifications/groups?${params.toString()}`, { cache: 'no-store' });
 }
 

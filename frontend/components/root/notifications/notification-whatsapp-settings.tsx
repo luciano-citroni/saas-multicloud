@@ -72,6 +72,8 @@ export type WhatsappTargetItem = {
 export type WhatsappGroupItem = {
     id: string;
     organizationId: string;
+    midOrgId: string | null;
+    isTenantGlobal: boolean;
     name: string;
     description: string | null;
     channel: 'whatsapp';
@@ -87,6 +89,7 @@ const createGroupSchema = (t: { nameRequired: string }) =>
         name: z.string().min(1, t.nameRequired).max(120),
         description: z.string().max(255).optional(),
         isActive: z.boolean(),
+        isTenantGlobal: z.boolean(),
     });
 
 const createTargetSchema = (t: {
@@ -217,12 +220,16 @@ function normalizeGroupsPayload(payload: unknown): {
 
 type NotificationWhatsappSettingsProps = {
     organizationId: string;
+    midOrgId: string | null;
     canManage: boolean;
+    canSetTenantGlobal: boolean;
 };
 
 export function NotificationWhatsappSettings({
     organizationId,
+    midOrgId,
     canManage,
+    canSetTenantGlobal,
 }: NotificationWhatsappSettingsProps) {
     const t = useTranslations('notifications');
     const tc = useTranslations('common');
@@ -252,7 +259,7 @@ export function NotificationWhatsappSettings({
 
     const groupForm = useForm<GroupFormData>({
         resolver: zodResolver(groupSchema),
-        defaultValues: { name: '', description: '', isActive: true },
+        defaultValues: { name: '', description: '', isActive: true, isTenantGlobal: false },
     });
 
     const targetForm = useForm<TargetFormData>({
@@ -268,12 +275,13 @@ export function NotificationWhatsappSettings({
     const watchedTargetType = targetForm.watch('targetType');
 
     const load = useCallback(
-        async (orgId: string, nextPage = page, nextLimit = pageSize) => {
+        async (orgId: string, nextPage = page, nextLimit = pageSize, scopedMidOrgId = midOrgId) => {
             setLoading(true);
             try {
                 const response = await fetchNotificationGroups(orgId, 'whatsapp', {
                     page: nextPage,
                     limit: nextLimit,
+                    midOrgId: scopedMidOrgId,
                 });
                 if (!response.ok) {
                     const body = await response.json().catch(() => null);
@@ -304,16 +312,20 @@ export function NotificationWhatsappSettings({
                 setLoading(false);
             }
         },
-        [page, pageSize, t],
+        [midOrgId, page, pageSize, t],
     );
 
     useEffect(() => {
-        void load(organizationId, page, pageSize);
-    }, [organizationId, page, pageSize, load]);
+        void load(organizationId, page, pageSize, midOrgId);
+    }, [organizationId, midOrgId, page, pageSize, load]);
 
     const openCreateGroup = () => {
+        if (!midOrgId && !canSetTenantGlobal) {
+            toast.error(t.selectOrganization);
+            return;
+        }
         setEditingGroup(null);
-        groupForm.reset({ name: '', description: '', isActive: true });
+        groupForm.reset({ name: '', description: '', isActive: true, isTenantGlobal: false });
         setGroupDialogOpen(true);
     };
 
@@ -323,6 +335,7 @@ export function NotificationWhatsappSettings({
             name: group.name,
             description: group.description ?? '',
             isActive: group.isActive,
+            isTenantGlobal: group.isTenantGlobal === true,
         });
         setGroupDialogOpen(true);
     };
@@ -353,11 +366,19 @@ export function NotificationWhatsappSettings({
     };
 
     const onSubmitGroup = async (data: GroupFormData) => {
+        const isTenantGlobal = canSetTenantGlobal && data.isTenantGlobal;
+        if (!isTenantGlobal && !midOrgId) {
+            toast.error(t.selectOrganization);
+            return;
+        }
+
         const payload = {
             name: data.name.trim(),
             description: data.description?.trim() ? data.description.trim() : null,
             channel: 'whatsapp' as const,
             isActive: data.isActive,
+            isTenantGlobal,
+            midOrgId: isTenantGlobal ? null : midOrgId,
         };
 
         try {
@@ -372,7 +393,7 @@ export function NotificationWhatsappSettings({
             toast.success(editingGroup ? t.groupUpdated : t.groupCreated);
             setGroupDialogOpen(false);
             if (!editingGroup) setPage(1);
-            void load(organizationId, editingGroup ? page : 1, pageSize);
+            void load(organizationId, editingGroup ? page : 1, pageSize, midOrgId);
         } catch {
             toast.error(t.saveGroupError);
         }
@@ -611,7 +632,14 @@ export function NotificationWhatsappSettings({
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="space-y-0.5">
-                                                        <p className="font-medium">{group.name}</p>
+                                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                                            <p className="font-medium">{group.name}</p>
+                                                            {group.isTenantGlobal ? (
+                                                                <Badge variant="secondary">{t.tenantGlobalBadge}</Badge>
+                                                            ) : (
+                                                                <Badge variant="outline">{t.organizationScopedBadge}</Badge>
+                                                            )}
+                                                        </div>
                                                         {group.description ? (
                                                             <p className="text-muted-foreground text-xs">
                                                                 {group.description}
@@ -926,6 +954,26 @@ export function NotificationWhatsappSettings({
                                     </FormItem>
                                 )}
                             />
+                            {canSetTenantGlobal ? (
+                                <FormField
+                                    control={groupForm.control}
+                                    name="isTenantGlobal"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-start gap-2 space-y-0 rounded-lg border px-3 py-2">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                />
+                                            </FormControl>
+                                            <div className="space-y-0.5">
+                                                <FormLabel className="font-normal">{t.tenantGlobalLabel}</FormLabel>
+                                                <p className="text-muted-foreground text-xs">{t.tenantGlobalHint}</p>
+                                            </div>
+                                        </FormItem>
+                                    )}
+                                />
+                            ) : null}
                             <DialogFooter>
                                 <Button
                                     type="button"

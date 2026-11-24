@@ -319,6 +319,12 @@ export const ErrorMessages = {
 
         WHATSAPP_TEST_SEND_FAILED: 'Could not send the WhatsApp test message.',
 
+        MID_ORG_REQUIRED: 'An organization (mid-org) is required unless the group is tenant-global.',
+
+        MID_ORG_NOT_FOUND: 'Organization (mid-org) not found in this tenant.',
+
+        TENANT_GLOBAL_FORBIDDEN: 'Only tenant admins or owners can manage tenant-global notification groups.',
+
         INVALID_WHATSAPP_INVITE: 'Invalid WhatsApp group invite link or code.',
 
         WHATSAPP_JOIN_GROUP_FAILED: 'Could not join the WhatsApp group via Evolution API.',

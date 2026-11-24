@@ -337,8 +337,8 @@ export function FinopsBudgets() {
                     fetchOrganizationCloudAccounts(organizationId, {
                         midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
                     }),
-                    fetchNotificationGroups(organizationId, 'email', { limit: 100 }),
-                    fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100 }),
+                    fetchNotificationGroups(organizationId, 'email', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
+                    fetchNotificationGroups(organizationId, 'whatsapp', { limit: 100, midOrgId: getActiveMidOrgId(organizationId) }),
                 ]);
 
                 if (accountsResponse.ok) {

@@ -149,8 +149,8 @@ export function FinopsBudgetFormPage({ mode, budgetId }: FinopsBudgetFormPagePro
         setLoadingGroups(true);
         try {
             const [emailResponse, whatsappResponse] = await Promise.all([
-                fetchNotificationGroups(orgId, 'email', { limit: 100 }),
-                fetchNotificationGroups(orgId, 'whatsapp', { limit: 100 }),
+                fetchNotificationGroups(orgId, 'email', { limit: 100, midOrgId: getActiveMidOrgId(orgId) }),
+                fetchNotificationGroups(orgId, 'whatsapp', { limit: 100, midOrgId: getActiveMidOrgId(orgId) }),
             ]);
             const emailPayload = emailResponse.ok ? await emailResponse.json().catch(() => null) : null;
             const whatsappPayload = whatsappResponse.ok ? await whatsappResponse.json().catch(() => null) : null;

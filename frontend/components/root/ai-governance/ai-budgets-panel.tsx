@@ -1,3 +1,4 @@
+import { getActiveMidOrgId } from '@/lib/sidebar-context';
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
@@ -343,8 +344,8 @@ export function AiBudgetsPanel({
         void (async () => {
             try {
                 const [emailRes, whatsappRes, policiesRes] = await Promise.all([
-                    fetchNotificationGroups(tenantId, 'email', { limit: 100 }),
-                    fetchNotificationGroups(tenantId, 'whatsapp', { limit: 100 }),
+                    fetchNotificationGroups(tenantId, 'email', { limit: 100, midOrgId: getActiveMidOrgId(tenantId) }),
+                    fetchNotificationGroups(tenantId, 'whatsapp', { limit: 100, midOrgId: getActiveMidOrgId(tenantId) }),
                     fetchAiFinopsPolicies(tenantId, midOrgId),
                 ]);
                 if (cancelled) return;

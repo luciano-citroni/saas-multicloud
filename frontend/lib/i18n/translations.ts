@@ -2681,7 +2681,13 @@ const pt = {
         addEmail: 'Adicionar e-mail',
         addWhatsapp: 'Adicionar WhatsApp',
         selectTenant: 'Selecione um tenant na sidebar.',
-        pageDescription: 'Configuração do tenant inteiro. Organize destinatários em grupos e envie testes.',
+        selectOrganization: 'Selecione uma organização na sidebar para criar grupos.',
+        pageDescription:
+            'Grupos ficam ligados à organização ativa. Admins podem marcar um grupo como global no tenant.',
+        tenantGlobalLabel: 'Global no tenant',
+        tenantGlobalHint: 'Disponível para todas as organizações deste tenant. Somente admin/owner.',
+        tenantGlobalBadge: 'Global',
+        organizationScopedBadge: 'Organização',
         tabEmail: 'E-mail',
         emailGroupsTitle: 'Grupos de e-mail',
         emailGroupsDesc:
@@ -5752,7 +5758,13 @@ const en: TranslationMap<typeof pt> = {
         addEmail: 'Add email',
         addWhatsapp: 'Add WhatsApp',
         selectTenant: 'Select a tenant in the sidebar.',
-        pageDescription: 'Tenant-wide settings. Organize recipients into groups and send tests.',
+        selectOrganization: 'Select an organization in the sidebar to create groups.',
+        pageDescription:
+            'Groups are tied to the active organization. Admins can mark a group as tenant-global.',
+        tenantGlobalLabel: 'Tenant-global',
+        tenantGlobalHint: 'Available to every organization in this tenant. Admin/owner only.',
+        tenantGlobalBadge: 'Global',
+        organizationScopedBadge: 'Organization',
         tabEmail: 'Email',
         emailGroupsTitle: 'Email groups',
         emailGroupsDesc:

@@ -37,10 +37,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
-import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { canManageMembers, hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     createNotificationEmail,
@@ -69,6 +74,8 @@ export type NotificationEmailItem = {
 export type NotificationGroupItem = {
     id: string;
     organizationId: string;
+    midOrgId: string | null;
+    isTenantGlobal: boolean;
     name: string;
     description: string | null;
     channel: 'email' | 'whatsapp';
@@ -83,6 +90,7 @@ const createGroupSchema = (t: { nameRequired: string }) =>
         name: z.string().min(1, t.nameRequired).max(120),
         description: z.string().max(255).optional(),
         isActive: z.boolean(),
+        isTenantGlobal: z.boolean(),
     });
 
 const createEmailSchema = (t: { emailInvalid: string }) =>
@@ -149,9 +157,11 @@ export function NotificationEmailsSettings() {
     const t = useTranslations('notifications');
     const tc = useTranslations('common');
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const [midOrgId, setMidOrgId] = useState<string | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
     const canManage = hasRequiredOrganizationRole(currentRole, 'MEMBER');
+    const canSetTenantGlobal = canManageMembers(currentRole);
 
     const [groups, setGroups] = useState<NotificationGroupItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -177,7 +187,7 @@ export function NotificationEmailsSettings() {
 
     const groupForm = useForm<GroupFormData>({
         resolver: zodResolver(groupSchema),
-        defaultValues: { name: '', description: '', isActive: true },
+        defaultValues: { name: '', description: '', isActive: true, isTenantGlobal: false },
     });
 
     const emailForm = useForm<EmailFormData>({
@@ -186,26 +196,35 @@ export function NotificationEmailsSettings() {
     });
 
     useEffect(() => {
-        setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        const tenantId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+        setOrganizationId(tenantId);
+        setMidOrgId(getActiveMidOrgId(tenantId));
     }, []);
 
     useEffect(() => {
-        const handle = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
-        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
-        window.addEventListener('storage', handle);
+        const syncContext = () => {
+            const tenantId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+            setOrganizationId(tenantId);
+            setMidOrgId(getActiveMidOrgId(tenantId));
+        };
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncContext);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncContext);
+        window.addEventListener('storage', syncContext);
         return () => {
-            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handle);
-            window.removeEventListener('storage', handle);
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncContext);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncContext);
+            window.removeEventListener('storage', syncContext);
         };
     }, []);
 
     const load = useCallback(
-        async (orgId: string, nextPage = page, nextLimit = pageSize) => {
+        async (orgId: string, nextPage = page, nextLimit = pageSize, scopedMidOrgId = midOrgId) => {
             setLoading(true);
             try {
                 const response = await fetchNotificationGroups(orgId, 'email', {
                     page: nextPage,
                     limit: nextLimit,
+                    midOrgId: scopedMidOrgId,
                 });
                 if (!response.ok) {
                     const body = await response.json().catch(() => null);
@@ -236,7 +255,7 @@ export function NotificationEmailsSettings() {
                 setLoading(false);
             }
         },
-        [page, pageSize, t]
+        [midOrgId, page, pageSize, t]
     );
 
     useEffect(() => {
@@ -246,12 +265,16 @@ export function NotificationEmailsSettings() {
             setLoading(false);
             return;
         }
-        void load(organizationId, page, pageSize);
-    }, [organizationId, page, pageSize, load]);
+        void load(organizationId, page, pageSize, midOrgId);
+    }, [organizationId, midOrgId, page, pageSize, load]);
 
     const openCreateGroup = () => {
+        if (!midOrgId && !canSetTenantGlobal) {
+            toast.error(t.selectOrganization);
+            return;
+        }
         setEditingGroup(null);
-        groupForm.reset({ name: '', description: '', isActive: true });
+        groupForm.reset({ name: '', description: '', isActive: true, isTenantGlobal: false });
         setGroupDialogOpen(true);
     };
 
@@ -261,6 +284,7 @@ export function NotificationEmailsSettings() {
             name: group.name,
             description: group.description ?? '',
             isActive: group.isActive,
+            isTenantGlobal: group.isTenantGlobal === true,
         });
         setGroupDialogOpen(true);
     };
@@ -285,11 +309,19 @@ export function NotificationEmailsSettings() {
 
     const onSubmitGroup = async (data: GroupFormData) => {
         if (!organizationId) return;
+        const isTenantGlobal = canSetTenantGlobal && data.isTenantGlobal;
+        if (!isTenantGlobal && !midOrgId) {
+            toast.error(t.selectOrganization);
+            return;
+        }
+
         const payload = {
             name: data.name.trim(),
             description: data.description?.trim() ? data.description.trim() : null,
             channel: 'email' as const,
             isActive: data.isActive,
+            isTenantGlobal,
+            midOrgId: isTenantGlobal ? null : midOrgId,
         };
 
         try {
@@ -304,7 +336,7 @@ export function NotificationEmailsSettings() {
             toast.success(editingGroup ? t.groupUpdated : t.groupCreated);
             setGroupDialogOpen(false);
             if (!editingGroup) setPage(1);
-            void load(organizationId, editingGroup ? page : 1, pageSize);
+            void load(organizationId, editingGroup ? page : 1, pageSize, midOrgId);
         } catch {
             toast.error(t.saveGroupError);
         }
@@ -520,7 +552,14 @@ export function NotificationEmailsSettings() {
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <div className="space-y-0.5">
-                                                                        <p className="font-medium">{group.name}</p>
+                                                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                                                            <p className="font-medium">{group.name}</p>
+                                                                            {group.isTenantGlobal ? (
+                                                                                <Badge variant="secondary">{t.tenantGlobalBadge}</Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline">{t.organizationScopedBadge}</Badge>
+                                                                            )}
+                                                                        </div>
                                                                         {group.description ? (
                                                                             <p className="text-muted-foreground text-xs">
                                                                                 {group.description}
@@ -785,7 +824,9 @@ export function NotificationEmailsSettings() {
                         <TabsContent value="whatsapp" className="mt-4">
                             <NotificationWhatsappSettings
                                 organizationId={organizationId}
+                                midOrgId={midOrgId}
                                 canManage={canManage}
+                                canSetTenantGlobal={canSetTenantGlobal}
                             />
                         </TabsContent>
                     </Tabs>
@@ -846,6 +887,26 @@ export function NotificationEmailsSettings() {
                                     </FormItem>
                                 )}
                             />
+                            {canSetTenantGlobal ? (
+                                <FormField
+                                    control={groupForm.control}
+                                    name="isTenantGlobal"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-start gap-2 space-y-0 rounded-lg border px-3 py-2">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                />
+                                            </FormControl>
+                                            <div className="space-y-0.5">
+                                                <FormLabel className="font-normal">{t.tenantGlobalLabel}</FormLabel>
+                                                <p className="text-muted-foreground text-xs">{t.tenantGlobalHint}</p>
+                                            </div>
+                                        </FormItem>
+                                    )}
+                                />
+                            ) : null}
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={() => setGroupDialogOpen(false)}>
                                     {tc.cancel}
