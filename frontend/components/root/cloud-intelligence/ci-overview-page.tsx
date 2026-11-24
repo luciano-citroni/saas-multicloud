@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CircleAlert, MessageSquare, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,11 +11,18 @@ import {
     type AiDailyReport,
     type AiDashboard,
 } from '@/app/actions/cloud-intelligence';
+import { fetchOrganizationCloudAccounts } from '@/app/actions/organization';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { useTranslations } from '@/lib/i18n';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { CiPageHeader } from './ci-page-header';
 import { useCiLabels } from './ci-labels';
@@ -42,6 +49,8 @@ export function CiOverviewPage() {
     const { severityLabel } = useCiLabels();
     const [pending, startTransition] = useTransition();
     const [generating, setGenerating] = useState(false);
+    const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const [dashboard, setDashboard] = useState<AiDashboard | null>(null);
     const [latestReport, setLatestReport] = useState<AiDailyReport | null>(null);
     const [loaded, setLoaded] = useState(false);
@@ -56,8 +65,18 @@ export function CiOverviewPage() {
         };
     }, [latestReport]);
 
-    const load = () => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+    useEffect(() => {
+        const syncOrg = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        syncOrg();
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        };
+    }, []);
+
+    const load = useCallback(() => {
         if (!organizationId) {
             setDashboard(null);
             setLatestReport(null);
@@ -65,8 +84,28 @@ export function CiOverviewPage() {
             return;
         }
         startTransition(async () => {
+            const accountsRes = await fetchOrganizationCloudAccounts(organizationId, {
+                midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+            });
+            const accountsPayload = accountsRes.ok ? await accountsRes.json().catch(() => null) : null;
+            const accounts = Array.isArray(accountsPayload)
+                ? accountsPayload
+                : Array.isArray((accountsPayload as { items?: unknown } | null)?.items)
+                  ? (accountsPayload as { items: { id: string }[] }).items
+                  : [];
+            const scopedAccountIds = accounts.map((account: { id: string }) => account.id);
+
+            if (scopedAccountIds.length === 0) {
+                setDashboard(null);
+                setLatestReport(null);
+                setLoaded(true);
+                return;
+            }
+
             const [dashRes, reportsRes] = await Promise.all([
-                fetchCloudIntelligenceDashboard(organizationId),
+                fetchCloudIntelligenceDashboard(organizationId, {
+                    cloudAccountIds: scopedAccountIds.join(','),
+                }),
                 fetchCloudIntelligenceDailyReports(organizationId),
             ]);
             if (dashRes.ok) {
@@ -82,15 +121,13 @@ export function CiOverviewPage() {
             }
             setLoaded(true);
         });
-    };
+    }, [midOrgId, organizationId]);
 
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [load]);
 
     const generateAnalysis = async () => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) return;
         setGenerating(true);
         try {

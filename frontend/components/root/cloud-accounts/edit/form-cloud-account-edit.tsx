@@ -22,7 +22,9 @@ import {
     type OrganizationCloudAccountDetails,
 } from '@/app/actions/organization';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
+import { getActiveMidOrgId, notifySidebarContextUpdated } from '@/lib/sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 import {
     buildTrustPolicy,
     PERMISSIONS_POLICY,
@@ -172,6 +174,8 @@ function PolicyBlock({ label, json }: { label: string; json: object }) {
 }
 
 export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) {
+    const midOrgId = useActiveMidOrgId(organizationId);
+    const cloudAccountsQuery = useCloudAccounts(organizationId);
     const router = useRouter();
     const tca = useTranslations('cloudAccounts');
     const { locale } = useLocale();
@@ -230,6 +234,14 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
     }, [organizationId]);
 
     useEffect(() => {
+        if (cloudAccountsQuery.isLoading) return;
+
+        const scopedIds = new Set((cloudAccountsQuery.data ?? []).map((item) => item.id));
+        if (scopedIds.size > 0 && !scopedIds.has(cloudAccountId)) {
+            router.replace('/cloud-accounts');
+            return;
+        }
+
         const loadCloudAccount = async () => {
             setIsLoadingAccount(true);
 
@@ -239,7 +251,7 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
                 if (!response.ok) {
                     toast.error(extractErrorMessage((payload as ApiErrorPayload | null) ?? null));
-                    router.replace('/organizations');
+                    router.replace('/cloud-accounts');
                     return;
                 }
 
@@ -247,7 +259,13 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
 
                 if (!account) {
                     toast.error(tca.loadError);
-                    router.replace('/organizations');
+                    router.replace('/cloud-accounts');
+                    return;
+                }
+
+                const activeMid = midOrgId ?? getActiveMidOrgId(organizationId);
+                if (account.organizationId && activeMid && account.organizationId !== activeMid) {
+                    router.replace('/cloud-accounts');
                     return;
                 }
 
@@ -279,14 +297,24 @@ export function FormCloudAccountEdit({ organizationId, cloudAccountId }: Props) 
                 }
             } catch {
                 toast.error(tca.loadError);
-                router.replace('/organizations');
+                router.replace('/cloud-accounts');
             } finally {
                 setIsLoadingAccount(false);
             }
         };
 
         void loadCloudAccount();
-    }, [cloudAccountId, form, orgs, organizationId, router, tca.loadError]);
+    }, [
+        cloudAccountId,
+        cloudAccountsQuery.data,
+        cloudAccountsQuery.isLoading,
+        form,
+        midOrgId,
+        orgs,
+        organizationId,
+        router,
+        tca.loadError,
+    ]);
 
     useEffect(() => {
         if (!cloudAccount?.isSyncInProgress) {

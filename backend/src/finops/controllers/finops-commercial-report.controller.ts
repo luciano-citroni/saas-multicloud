@@ -16,6 +16,14 @@ import { attachmentContentDisposition } from '../../common/utils/safe-content-di
 import { FinopsCommercialReportService } from '../services/finops-commercial-report.service';
 
 const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+
+function parseCloudAccountIds(raw?: string): string[] | undefined {
+    if (raw == null) return undefined;
+    return raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+}
 const rateSchema = z.object({
     month: monthSchema,
     brlPerUsd: z.number().positive(),
@@ -43,10 +51,20 @@ export class FinopsCommercialReportController {
     @Get()
     @ApiOperation({ summary: 'Relatório comercial do mês fechado' })
     @ApiQuery({ name: 'month', required: false, description: 'Mês fechado YYYY-MM. Padrão: mês anterior.' })
+    @ApiQuery({
+        name: 'cloudAccountIds',
+        required: false,
+        type: String,
+        description: 'CSV de UUIDs de cloud accounts (escopo mid-org). Omitir = tenant inteiro.',
+    })
     @ApiResponse({ status: 200, description: 'Dashboard executivo agregado' })
     @ApiResponse({ status: 400, description: 'Mês ainda não fechado' })
-    getReport(@Query('month') month: string | undefined, @CurrentOrganization() org: Tenant) {
-        return this.reportService.getReport(org.id, month);
+    getReport(
+        @Query('month') month: string | undefined,
+        @Query('cloudAccountIds') cloudAccountIds: string | undefined,
+        @CurrentOrganization() org: Tenant,
+    ) {
+        return this.reportService.getReport(org.id, month, parseCloudAccountIds(cloudAccountIds));
     }
 
     @Get('pdf')
@@ -54,18 +72,31 @@ export class FinopsCommercialReportController {
     @ApiQuery({ name: 'month', required: false, description: 'Mês fechado YYYY-MM' })
     @ApiQuery({ name: 'currency', required: false, description: 'USD ou BRL' })
     @ApiQuery({ name: 'locale', required: false, description: 'pt ou en' })
+    @ApiQuery({
+        name: 'cloudAccountIds',
+        required: false,
+        type: String,
+        description: 'CSV de UUIDs de cloud accounts (escopo mid-org). Omitir = tenant inteiro.',
+    })
     @ApiResponse({ status: 200, description: 'Arquivo PDF' })
     @ApiResponse({ status: 400, description: 'Mês ainda não fechado' })
     async downloadPdf(
         @Query('month') month: string | undefined,
         @Query('currency') currency: string | undefined,
         @Query('locale') locale: string | undefined,
+        @Query('cloudAccountIds') cloudAccountIds: string | undefined,
         @CurrentOrganization() org: Tenant,
         @Res({ passthrough: true }) res: Response,
     ): Promise<StreamableFile> {
         const viewCurrency = currency === 'USD' || currency === 'BRL' ? currency : undefined;
         const viewLocale = locale === 'en' || locale === 'pt' ? locale : undefined;
-        const file = await this.reportService.renderPdf(org.id, month, viewCurrency, viewLocale);
+        const file = await this.reportService.renderPdf(
+            org.id,
+            month,
+            viewCurrency,
+            viewLocale,
+            parseCloudAccountIds(cloudAccountIds),
+        );
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': attachmentContentDisposition(file.filename),

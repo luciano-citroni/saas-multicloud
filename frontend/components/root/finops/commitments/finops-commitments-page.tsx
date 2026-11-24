@@ -457,14 +457,27 @@ export function FinopsCommitmentsPage() {
         void loadAccounts(organizationId, midOrgId);
     }, [organizationId, midOrgId, loadAccounts]);
 
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
+
     const loadData = useCallback(async () => {
         if (!organizationId) {
             setLoading(false);
             return;
         }
         setLoading(true);
+        const selectedAccountIds = urlFilters.accountIds.filter((id) => scopedAccountIds.includes(id));
+        if (scopedAccountIds.length === 0) {
+            setOverview(null);
+            setGrants([]);
+            setConsumptions([]);
+            setUtilization([]);
+            setRecommendations([]);
+            setLoading(false);
+            return;
+        }
         const filter = {
-            cloudAccountId: urlFilters.accountIds.length === 1 ? urlFilters.accountIds[0] : undefined,
+            cloudAccountId: selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined,
+            cloudAccountIds: selectedAccountIds.length > 0 ? selectedAccountIds : scopedAccountIds,
             provider: urlFilters.providers[0] ?? undefined,
             periodStart: periodDates.periodStart,
             periodEnd: periodDates.periodEnd,
@@ -502,7 +515,14 @@ export function FinopsCommitmentsPage() {
         } finally {
             setLoading(false);
         }
-    }, [organizationId, urlFilters.accountIds, urlFilters.providers, periodDates, t.commitmentsLoadError]);
+    }, [
+        organizationId,
+        scopedAccountIds,
+        urlFilters.accountIds,
+        urlFilters.providers,
+        periodDates,
+        t.commitmentsLoadError,
+    ]);
 
     useEffect(() => {
         void loadData();

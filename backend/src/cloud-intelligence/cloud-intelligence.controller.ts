@@ -7,6 +7,7 @@ import {
     ApiResponse,
     ApiTags,
 } from '@nestjs/swagger';
+import type { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { PlanModuleGuard, RequirePlanModule } from '../common/guards/plan-module.guard';
 import { SystemModule } from '../common/modules/system-modules';
@@ -23,6 +24,7 @@ import {
     dailySettingsSchema,
     dashboardQuerySchema,
     listRecommendationsQuerySchema,
+    parseCloudAccountIdsQuery,
     recommendationIdParamSchema,
     updateQuotaSchema,
     updateRecommendationSchema,
@@ -108,7 +110,10 @@ export class CloudIntelligenceController {
         @CurrentOrganization() org: Tenant,
         @Query(new ZodValidationPipe(dashboardQuerySchema)) query: DashboardQuery,
     ) {
-        return this.dashboardService.getDashboard(org.id, query);
+        return this.dashboardService.getDashboard(org.id, {
+            ...query,
+            cloudAccountIds: parseCloudAccountIdsQuery(query.cloudAccountIds),
+        });
     }
 
     @Get('usage')
@@ -197,7 +202,7 @@ export class CloudIntelligenceController {
     @ApiResponse({ status: 200, type: [AiRecommendationResponseDto] })
     async listRecommendations(
         @CurrentOrganization() org: Tenant,
-        @Query(new ZodValidationPipe(listRecommendationsQuerySchema))
+        @Query(new ZodValidationPipe(listRecommendationsQuerySchema as z.ZodType<ListRecommendationsQuery>))
         query: ListRecommendationsQuery,
     ) {
         return this.recommendationsService.list(org.id, {
@@ -211,6 +216,7 @@ export class CloudIntelligenceController {
             automatable: query.automatable,
             minScore: query.minScore,
             correlated: query.correlated,
+            cloudAccountIds: parseCloudAccountIdsQuery(query.cloudAccountIds),
         });
     }
 

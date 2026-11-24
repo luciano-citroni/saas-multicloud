@@ -17,6 +17,7 @@ export type DashboardFilters = {
     period?: string;
     category?: string;
     severity?: string;
+    cloudAccountIds?: string[];
 };
 
 @Injectable()
@@ -35,6 +36,24 @@ export class CloudIntelligenceDashboardService {
     ) {}
 
     async getDashboard(organizationId: string, filters: DashboardFilters = {}) {
+        const scopedIds =
+            filters.cloudAccountIds == null
+                ? undefined
+                : [...new Set(filters.cloudAccountIds.map((id) => id.trim()).filter(Boolean))];
+
+        const anomalyWhere =
+            scopedIds == null
+                ? { organizationId, status: 'open' as const }
+                : scopedIds.length === 0
+                  ? null
+                  : undefined;
+        const findingWhere =
+            scopedIds == null
+                ? { organizationId, status: 'non_compliant' as const }
+                : scopedIds.length === 0
+                  ? null
+                  : undefined;
+
         const [usage, quotas, recommendations, reports, openAnomalies, openFindings] = await Promise.all([
             this.usageService.getUsageOverview(organizationId),
             this.quotasService.getSnapshot(organizationId),
@@ -42,12 +61,31 @@ export class CloudIntelligenceDashboardService {
                 status: filters.severity ? undefined : undefined,
                 category: filters.category,
                 take: 20,
+                cloudAccountIds: scopedIds,
             }),
             this.dailyIntelligenceService.listReports(organizationId, 1),
-            this.anomalyRepository.count({ where: { organizationId, status: 'open' } }),
-            this.findingRepository.count({
-                where: { organizationId, status: 'non_compliant' },
-            }),
+            anomalyWhere === null
+                ? Promise.resolve(0)
+                : scopedIds?.length
+                  ? this.anomalyRepository
+                        .createQueryBuilder('a')
+                        .where('a.organizationId = :organizationId', { organizationId })
+                        .andWhere('a.status = :status', { status: 'open' })
+                        .andWhere('a.cloudAccountId IN (:...scopedIds)', { scopedIds })
+                        .getCount()
+                  : this.anomalyRepository.count({ where: { organizationId, status: 'open' } }),
+            findingWhere === null
+                ? Promise.resolve(0)
+                : scopedIds?.length
+                  ? this.findingRepository
+                        .createQueryBuilder('f')
+                        .where('f.organizationId = :organizationId', { organizationId })
+                        .andWhere('f.status = :status', { status: 'non_compliant' })
+                        .andWhere('f.cloudAccountId IN (:...scopedIds)', { scopedIds })
+                        .getCount()
+                  : this.findingRepository.count({
+                        where: { organizationId, status: 'non_compliant' },
+                    }),
         ]);
 
         let filteredRecs = recommendations;

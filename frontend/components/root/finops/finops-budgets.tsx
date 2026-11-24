@@ -410,10 +410,17 @@ export function FinopsBudgets() {
             };
 
             try {
-                // "organization" = visão completa (tenant + contas).
+                // "organization" = todas as contas da mid-org ativa (não o tenant inteiro).
                 // Conta específica = budgets da conta + budgets do tenant (aplicam a todas as contas).
                 if (filter === ORG_SCOPE_VALUE) {
-                    const parsed = await parseStatuses(await fetchOrganizationFinopsBudgetStatuses(orgId, 50));
+                    const scopedIds = cloudAccounts.map((account) => account.id);
+                    if (scopedIds.length === 0) {
+                        setStatuses([]);
+                        return;
+                    }
+                    const parsed = await parseStatuses(
+                        await fetchOrganizationFinopsBudgetStatuses(orgId, 50, undefined, scopedIds),
+                    );
                     if (!parsed.ok) {
                         if (parsed.status === 401) {
                             toast.error(tCommon.sessionExpired);
@@ -468,7 +475,7 @@ export function FinopsBudgets() {
                 setRefreshing(false);
             }
         },
-        [router, t, tCommon]
+        [cloudAccounts, router, t, tCommon]
     );
 
     const loadAiBudgets = useCallback(

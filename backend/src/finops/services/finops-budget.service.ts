@@ -314,20 +314,38 @@ export class FinopsBudgetService {
 
     /**
      * Status de budgets ativos: tenant-wide + contas FinOps (dashboard batch).
+     * When `cloudAccountIds` is set, only those accounts are evaluated (mid-org scope).
+     * Organization-scope budgets are omitted when a mid-org account filter is active.
      */
     async listOrgBudgetStatuses(
         organizationId: string,
         accountCap = 8,
         evaluationPeriod?: FinopsBudgetPeriod,
+        cloudAccountIds?: string[],
     ): Promise<OrgBudgetStatus[]> {
-        const orgStatuses = await this.listOrganizationBudgetStatuses(organizationId, evaluationPeriod);
+        const scopedIds =
+            cloudAccountIds == null
+                ? undefined
+                : [...new Set(cloudAccountIds.map((id) => id.trim()).filter(Boolean))];
+
+        const orgStatuses =
+            scopedIds != null
+                ? []
+                : await this.listOrganizationBudgetStatuses(organizationId, evaluationPeriod);
         const orgMapped: OrgBudgetStatus[] = orgStatuses.map((status) => ({
             ...status,
             cloudAccountAlias: 'Organização',
         }));
 
+        if (scopedIds && scopedIds.length === 0) {
+            return orgMapped;
+        }
+
         const accounts = await this.cloudAccountRepo.find({
-            where: { tenantId: organizationId },
+            where:
+                scopedIds != null
+                    ? { tenantId: organizationId, id: In(scopedIds) }
+                    : { tenantId: organizationId },
             select: ['id', 'alias', 'provider'],
             order: { createdAt: 'ASC' },
         });

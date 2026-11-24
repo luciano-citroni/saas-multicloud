@@ -119,9 +119,17 @@ export function FinopsSpCandidatesPage() {
         if (!organizationId || !accountsReady) return;
         setLoading(true);
         try {
+            const scopedIds = scopedAccounts.map((account) => account.id);
+            if (scopedIds.length === 0) {
+                setItems([]);
+                setLoading(false);
+                return;
+            }
             const response = await fetchFinopsCommitmentCandidates(organizationId, {
                 cloudAccountId:
                     accountFilter !== ACCOUNT_FILTER_ALL ? accountFilter : undefined,
+                cloudAccountIds:
+                    accountFilter !== ACCOUNT_FILTER_ALL ? [accountFilter] : scopedIds,
                 provider: providerFilter !== PROVIDER_FILTER_ALL ? providerFilter : undefined,
                 lookbackDays: 90,
                 limit: 50,
@@ -133,12 +141,7 @@ export function FinopsSpCandidatesPage() {
                 return;
             }
             const nextItems = Array.isArray(body?.items) ? (body.items as CommitmentCandidate[]) : [];
-            const allowed = new Set(scopedAccounts.map((account) => account.id));
-            setItems(
-                accountFilter === ACCOUNT_FILTER_ALL
-                    ? nextItems.filter((item) => allowed.has(item.cloudAccountId))
-                    : nextItems,
-            );
+            setItems(nextItems);
             setLookbackDays(
                 typeof body?.lookbackDays === 'number' && Number.isFinite(body.lookbackDays)
                     ? body.lookbackDays

@@ -29,7 +29,13 @@ import {
 } from '@/components/root/governance/analysis/governance-analysis-filter-bar';
 import { fetchGovernanceJobFindings, fetchGovernanceJobStatus } from '@/app/actions/governance';
 import { extractErrorMessage } from '@/lib/error-messages';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+} from '@/lib/sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 import {
     GOVERNANCE_RESOURCE_TYPE_TAGS,
     GOVERNANCE_RESOURCE_TYPES_BY_PROVIDER,
@@ -211,6 +217,7 @@ export function GovernanceAnalysis() {
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
     const [cloudAccountId, setCloudAccountId] = useState<string | null>(null);
+    const cloudAccountsQuery = useCloudAccounts(organizationId);
 
     const [job, setJob] = useState<GovernanceJob | null>(null);
     const [findings, setFindings] = useState<GovernanceFinding[]>([]);
@@ -301,9 +308,30 @@ export function GovernanceAnalysis() {
     }, [nameFilter, page, pageSize, resourceTypeFilter, severityFilter]);
 
     useEffect(() => {
-        setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
-        setCloudAccountId(window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY));
+        const syncContext = () => {
+            setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+            setCloudAccountId(window.localStorage.getItem(ACTIVE_CLOUD_GLOBAL_KEY));
+        };
+        syncContext();
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncContext);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncContext);
+        window.addEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, syncContext);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncContext);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncContext);
+            window.removeEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, syncContext);
+        };
     }, []);
+
+    useEffect(() => {
+        if (!organizationId || cloudAccountsQuery.isLoading) return;
+        const scopedIds = new Set((cloudAccountsQuery.data ?? []).map((account) => account.id));
+        if (!cloudAccountId) return;
+        if (scopedIds.size > 0 && !scopedIds.has(cloudAccountId)) {
+            setCloudAccountId(null);
+            router.replace('/governance');
+        }
+    }, [cloudAccountId, cloudAccountsQuery.data, cloudAccountsQuery.isLoading, organizationId, router]);
 
     useEffect(() => {
         if (!organizationId || !cloudAccountId || !jobId) {

@@ -22,11 +22,13 @@ import {
     fetchCommercialReport,
     sendCommercialReport,
 } from '@/app/actions/finops';
+import { fetchOrganizationCloudAccounts, type OrganizationCloudAccount } from '@/app/actions/organization';
 import { CommercialReportDelivery } from '@/components/root/finops/commercial/commercial-report-delivery';
 import { CommercialFinancePanels } from '@/components/root/finops/commercial/commercial-finance-panels';
 import { commercialProjectionDetail } from '@/components/root/finops/commercial/projection-detail';
 import { FinopsLoadingSkeleton } from '@/components/root/finops/overview/finops-loading-skeleton';
 import { FinopsSubnav } from '@/components/root/finops/finops-subnav';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import {
     FINOPS_CHART_COLORS,
     FINOPS_CHART_GRID,
@@ -50,7 +52,12 @@ import { toIntlLocale } from '@/lib/i18n/format';
 import type { AppLocale } from '@/lib/locale';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
-import { ACTIVE_ORG_CHANGED_EVENT, ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 
 type Point = { date: string; cost: number };
@@ -230,12 +237,16 @@ export function CommercialReportPage() {
     const viewCurrency = parseViewCurrency(searchParams.get('currency'));
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const canManage = hasRequiredOrganizationRole(normalizeOrganizationRole(rawRole), 'MEMBER');
+    const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
+    const [accountsReady, setAccountsReady] = useState(false);
     const [report, setReport] = useState<CommercialReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
 
     const updateFilters = useCallback(
         (patch: { month?: string; currency?: ViewCurrency }) => {
@@ -254,12 +265,43 @@ export function CommercialReportPage() {
         const read = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
         read();
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, read);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, read);
         window.addEventListener('storage', read);
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, read);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, read);
             window.removeEventListener('storage', read);
         };
     }, []);
+
+    const loadAccounts = useCallback(async (orgId: string, activeMidOrgId: string | null) => {
+        setAccountsReady(false);
+        try {
+            const response = await fetchOrganizationCloudAccounts(orgId, {
+                midOrgId: activeMidOrgId ?? getActiveMidOrgId(orgId),
+            });
+            if (!response.ok) {
+                setCloudAccounts([]);
+                return;
+            }
+            const payload = await response.json().catch(() => null);
+            const items = Array.isArray(payload)
+                ? payload
+                : Array.isArray((payload as { items?: unknown })?.items)
+                  ? (payload as { items: OrganizationCloudAccount[] }).items
+                  : [];
+            setCloudAccounts(items);
+        } catch {
+            setCloudAccounts([]);
+        } finally {
+            setAccountsReady(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!organizationId) return;
+        void loadAccounts(organizationId, midOrgId);
+    }, [organizationId, midOrgId, loadAccounts]);
 
     useEffect(() => {
         const hasValidMonth = Boolean(monthParam && months.includes(monthParam));
@@ -272,10 +314,16 @@ export function CommercialReportPage() {
     }, [monthParam, months, searchParams, selectedMonth, updateFilters, viewCurrency]);
 
     const load = useCallback(async () => {
-        if (!organizationId || !selectedMonth) return;
+        if (!organizationId || !selectedMonth || !accountsReady) return;
         setLoading(true);
         try {
-            const response = await fetchCommercialReport(organizationId, selectedMonth);
+            if (scopedAccountIds.length === 0) {
+                setReport(null);
+                return;
+            }
+            const response = await fetchCommercialReport(organizationId, selectedMonth, {
+                cloudAccountIds: scopedAccountIds,
+            });
             const payload = await response.json().catch(() => null);
             if (response.status === 401) {
                 toast.error(tc.sessionExpired);
@@ -294,7 +342,15 @@ export function CommercialReportPage() {
         } finally {
             setLoading(false);
         }
-    }, [organizationId, router, selectedMonth, tc.sessionExpired, tf.commercialLoadError]);
+    }, [
+        accountsReady,
+        organizationId,
+        router,
+        scopedAccountIds,
+        selectedMonth,
+        tc.sessionExpired,
+        tf.commercialLoadError,
+    ]);
 
     useEffect(() => {
         void load();
@@ -319,6 +375,9 @@ export function CommercialReportPage() {
                 currency: activeCurrency,
                 locale: locale === 'en' ? 'en' : 'pt',
             });
+            if (scopedAccountIds.length > 0) {
+                params.set('cloudAccountIds', scopedAccountIds.join(','));
+            }
             const response = await fetch(`/api/finops/commercial-report/pdf?${params.toString()}`, { cache: 'no-store' });
             if (!response.ok) {
                 const body = await response.json().catch(() => null);
@@ -350,6 +409,20 @@ export function CommercialReportPage() {
                     <CardDescription>{tf.selectOrgDesc}</CardDescription>
                 </CardHeader>
             </Card>
+        );
+    }
+
+    if (accountsReady && scopedAccountIds.length === 0) {
+        return (
+            <div className="flex flex-col gap-6">
+                <FinopsSubnav />
+                <Card>
+                    <CardHeader>
+                        <CardTitle>{tf.commercialTitle}</CardTitle>
+                        <CardDescription>{tf.noCloudAccountsInTenant}</CardDescription>
+                    </CardHeader>
+                </Card>
+            </div>
         );
     }
 

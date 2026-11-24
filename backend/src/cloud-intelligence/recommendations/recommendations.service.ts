@@ -45,6 +45,7 @@ export class RecommendationsService {
             minScore?: number;
             correlated?: boolean;
             take?: number;
+            cloudAccountIds?: string[];
         },
     ): Promise<AiRecommendation[]> {
         const qb = this.recommendationRepository
@@ -53,6 +54,14 @@ export class RecommendationsService {
             .orderBy(`COALESCE((r.estimated_impact->>'rankingScore')::float, 0)`, 'DESC')
             .addOrderBy('r.created_at', 'DESC')
             .take(filters?.take ?? 100);
+
+        if (filters?.cloudAccountIds) {
+            const scopedIds = [...new Set(filters.cloudAccountIds.map((id) => id.trim()).filter(Boolean))];
+            if (scopedIds.length === 0) {
+                return [];
+            }
+            qb.andWhere(`r.resource_reference->>'cloudAccountId' IN (:...scopedIds)`, { scopedIds });
+        }
 
         if (filters?.status) {
             const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];

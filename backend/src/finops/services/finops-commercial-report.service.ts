@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/c
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { CloudAccount } from '../../db/entites/cloud-account.entity';
 import { Organization } from '../../db/entites/organization.entity';
@@ -178,17 +178,22 @@ export class FinopsCommercialReportService implements OnModuleInit {
         return resolved;
     }
 
-    async getReport(organizationId: string, month?: string): Promise<CommercialReportResponse> {
+    async getReport(
+        organizationId: string,
+        month?: string,
+        cloudAccountIds?: string[],
+    ): Promise<CommercialReportResponse> {
         const referenceMonth = this.resolveMonth(month);
-        const report = await this.compose(organizationId, referenceMonth);
+        const scopedAccountIds = await this.resolveScopedAccountIds(organizationId, cloudAccountIds);
+        const report = await this.compose(organizationId, referenceMonth, scopedAccountIds);
         const [settings, lastSend, tenant, organizations, anomalies, credits, commitments] = await Promise.all([
             this.settingsRepo.findOne({ where: { organizationId } }),
             this.sendRepo.findOne({ where: { organizationId, month: referenceMonth } }),
             this.tenantRepo.findOne({ where: { id: organizationId } }),
             this.organizationRepo.find({ where: { tenantId: organizationId }, order: { name: 'ASC' } }),
-            this.loadMonthAnomalies(organizationId, report),
-            this.loadCredits(organizationId, report),
-            this.loadCommitments(organizationId, report),
+            this.loadMonthAnomalies(organizationId, report, scopedAccountIds),
+            this.loadCredits(organizationId, report, scopedAccountIds),
+            this.loadCommitments(organizationId, report, scopedAccountIds),
         ]);
         const tenantName = tenant?.name?.trim() ?? '';
         const organizationNames = [...new Set(organizations.map((organization) => organization.name.trim()).filter(Boolean))];
@@ -261,8 +266,9 @@ export class FinopsCommercialReportService implements OnModuleInit {
         month?: string,
         currency?: 'USD' | 'BRL',
         locale?: 'pt' | 'en',
+        cloudAccountIds?: string[],
     ): Promise<{ buffer: Buffer; filename: string }> {
-        const report = await this.getReport(organizationId, month);
+        const report = await this.getReport(organizationId, month, cloudAccountIds);
         const buffer = await buildCommercialReportPdf(report, { currency, locale });
         return { buffer, filename: commercialReportPdfFileName(report.organizationName, report.referenceMonth) };
     }
@@ -394,20 +400,57 @@ export class FinopsCommercialReportService implements OnModuleInit {
     }
 
 
-    private async compose(organizationId: string, referenceMonth: string): Promise<CommercialReportModel> {
+    private async resolveScopedAccountIds(
+        organizationId: string,
+        cloudAccountIds?: string[],
+    ): Promise<string[] | undefined> {
+        if (cloudAccountIds == null) return undefined;
+        const requested = [...new Set(cloudAccountIds.map((id) => id.trim()).filter(Boolean))];
+        if (requested.length === 0) return [];
+        const accounts = await this.cloudAccountRepo.find({
+            where: { tenantId: organizationId, id: In(requested) },
+            select: ['id'],
+        });
+        return accounts.map((account) => account.id);
+    }
+
+    private async compose(
+        organizationId: string,
+        referenceMonth: string,
+        scopedAccountIds?: string[],
+    ): Promise<CommercialReportModel> {
         const oldest = monthBounds(shiftMonth(referenceMonth, -2));
         const today = saoPauloToday();
         const current = monthBounds(today.slice(0, 7));
         const end = current.end > oldest.end ? current.end : oldest.end;
         const resourceStart = monthBounds(shiftMonth(referenceMonth, -1)).start;
         const resourceEnd = monthBounds(referenceMonth).end;
-        await this.ensureResourceCosts(organizationId, resourceStart, resourceEnd);
+
+        if (scopedAccountIds && scopedAccountIds.length === 0) {
+            return buildCommercialReport({
+                referenceMonth,
+                todayIso: today,
+                accounts: [],
+                serviceRows: [],
+                resourceRows: [],
+                exchangeRate: null,
+                previousExchangeRate: null,
+                exchangeRateChangePct: null,
+                accountForecasts: [],
+            });
+        }
+
+        await this.ensureResourceCosts(organizationId, resourceStart, resourceEnd, scopedAccountIds);
+        const accountWhere =
+            scopedAccountIds != null
+                ? { tenantId: organizationId, id: In(scopedAccountIds) }
+                : { tenantId: organizationId };
         const [accounts, serviceRows, resourceRows, quote, accountForecasts] = await Promise.all([
-            this.cloudAccountRepo.find({ where: { tenantId: organizationId }, order: { alias: 'ASC' } }),
-            this.loadServiceRows(organizationId, oldest.start, end),
-            this.loadResourceRows(organizationId, resourceStart, resourceEnd),
+            this.cloudAccountRepo.find({ where: accountWhere, order: { alias: 'ASC' } }),
+            this.loadServiceRows(organizationId, oldest.start, end, scopedAccountIds),
+            this.loadResourceRows(organizationId, resourceStart, resourceEnd, scopedAccountIds),
             this.loadUsdBrlQuote(),
-            this.loadAccountForecasts(organizationId),
+            this.loadAccountForecasts(organizationId, scopedAccountIds),
         ]);
 
         return buildCommercialReport({
@@ -427,16 +470,25 @@ export class FinopsCommercialReportService implements OnModuleInit {
         });
     }
 
-    private async loadMonthAnomalies(organizationId: string, report: CommercialReportModel): Promise<CommercialAnomalies> {
+    private async loadMonthAnomalies(
+        organizationId: string,
+        report: CommercialReportModel,
+        scopedAccountIds?: string[],
+    ): Promise<CommercialAnomalies> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) {
+            return { total: 0, acknowledged: 0, items: [] };
+        }
         const bounds = monthBounds(report.referenceMonth);
-        const rows = await this.anomalyRepo
+        const qb = this.anomalyRepo
             .createQueryBuilder('anomaly')
             .leftJoinAndSelect('anomaly.cloudAccount', 'account')
             .where('anomaly.organizationId = :organizationId', { organizationId })
             .andWhere('anomaly.anomalyDate >= :start', { start: bounds.start })
-            .andWhere('anomaly.anomalyDate <= :end', { end: bounds.end })
-            .orderBy('anomaly.financialImpact', 'DESC')
-            .getMany();
+            .andWhere('anomaly.anomalyDate <= :end', { end: bounds.end });
+        if (scopedAccountIds?.length) {
+            qb.andWhere('anomaly.cloudAccountId IN (:...scopedAccountIds)', { scopedAccountIds });
+        }
+        const rows = await qb.orderBy('anomaly.financialImpact', 'DESC').getMany();
 
         return {
             total: rows.length,
@@ -453,11 +505,19 @@ export class FinopsCommercialReportService implements OnModuleInit {
         };
     }
 
-    private async loadCredits(organizationId: string, report: CommercialReportModel): Promise<CommercialCredits> {
+    private async loadCredits(
+        organizationId: string,
+        report: CommercialReportModel,
+        scopedAccountIds?: string[],
+    ): Promise<CommercialCredits> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) {
+            return { hasCredits: false, granted: 0, consumed: 0, remaining: 0, deductedFromTotal: false };
+        }
         const bounds = monthBounds(report.referenceMonth);
         const credits = await this.commitmentsService.listCredits(organizationId, {
             periodStart: bounds.start,
             periodEnd: bounds.end,
+            cloudAccountIds: scopedAccountIds,
         });
         const currency = String(credits.totals.currency || 'USD');
         const granted = this.toDisplay(Number(credits.totals.totalGranted), currency, report);
@@ -472,10 +532,27 @@ export class FinopsCommercialReportService implements OnModuleInit {
         };
     }
 
-    private async loadCommitments(organizationId: string, report: CommercialReportModel): Promise<CommercialCommitments> {
+    private async loadCommitments(
+        organizationId: string,
+        report: CommercialReportModel,
+        scopedAccountIds?: string[],
+    ): Promise<CommercialCommitments> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) {
+            return {
+                hasData: false,
+                avgUtilizationPercent: null,
+                avgCoveragePercent: null,
+                unusedCommitment: null,
+                potentialMonthlySavings: null,
+                savingsPlanCount: 0,
+                reservationCount: 0,
+                cudCount: 0,
+            };
+        }
+        const filter = { cloudAccountIds: scopedAccountIds };
         const [overview, utilization] = await Promise.all([
-            this.commitmentsService.getOverview(organizationId),
-            this.commitmentsService.listUtilization(organizationId),
+            this.commitmentsService.getOverview(organizationId, filter),
+            this.commitmentsService.listUtilization(organizationId, filter),
         ]);
         const currency = String(overview.commitments.currency || 'USD');
         const items = utilization.items.filter((item) => !item.externalId.includes('aggregate'));
@@ -509,13 +586,20 @@ export class FinopsCommercialReportService implements OnModuleInit {
         return amount;
     }
 
-    private async loadAccountForecasts(organizationId: string): Promise<AccountForecastInput[]> {
-        const accounts = await this.cloudAccountRepo
+    private async loadAccountForecasts(
+        organizationId: string,
+        scopedAccountIds?: string[],
+    ): Promise<AccountForecastInput[]> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) return [];
+        const qb = this.cloudAccountRepo
             .createQueryBuilder('ca')
             .where('ca.tenantId = :organizationId', { organizationId })
             .andWhere('ca.isActive = true')
-            .andWhere('ca.provider IN (:...providers)', { providers: ['aws', 'azure'] })
-            .getMany();
+            .andWhere('ca.provider IN (:...providers)', { providers: ['aws', 'azure'] });
+        if (scopedAccountIds?.length) {
+            qb.andWhere('ca.id IN (:...scopedAccountIds)', { scopedAccountIds });
+        }
+        const accounts = await qb.getMany();
 
         const forecasts = await Promise.all(
             accounts.map(async (account) => {
@@ -540,13 +624,22 @@ export class FinopsCommercialReportService implements OnModuleInit {
         return forecasts.filter((item): item is AccountForecastInput => item != null);
     }
 
-    private async ensureResourceCosts(organizationId: string, start: string, end: string): Promise<void> {
-        const accounts = await this.cloudAccountRepo
+    private async ensureResourceCosts(
+        organizationId: string,
+        start: string,
+        end: string,
+        scopedAccountIds?: string[],
+    ): Promise<void> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) return;
+        const qb = this.cloudAccountRepo
             .createQueryBuilder('ca')
             .addSelect('ca.credentialsEncrypted')
             .where('ca.tenantId = :organizationId', { organizationId })
-            .andWhere('ca.isActive = true')
-            .getMany();
+            .andWhere('ca.isActive = true');
+        if (scopedAccountIds?.length) {
+            qb.andWhere('ca.id IN (:...scopedAccountIds)', { scopedAccountIds });
+        }
+        const accounts = await qb.getMany();
 
         await Promise.all(
             accounts.map(async (account) => {
@@ -656,8 +749,14 @@ export class FinopsCommercialReportService implements OnModuleInit {
         };
     }
 
-    private async loadServiceRows(organizationId: string, start: string, end: string): Promise<ServiceCostRow[]> {
-        const rows = await this.costRecordRepo
+    private async loadServiceRows(
+        organizationId: string,
+        start: string,
+        end: string,
+        scopedAccountIds?: string[],
+    ): Promise<ServiceCostRow[]> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) return [];
+        const qb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select('cr.cloudAccountId', 'accountId')
             .addSelect('cr.cloudProvider', 'provider')
@@ -670,7 +769,11 @@ export class FinopsCommercialReportService implements OnModuleInit {
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.date >= :start', { start })
             .andWhere('cr.date <= :end', { end })
-            .andWhere(`(cr.resourceId = '' OR cr.resourceId IS NULL)`)
+            .andWhere(`(cr.resourceId = '' OR cr.resourceId IS NULL)`);
+        if (scopedAccountIds?.length) {
+            qb.andWhere('cr.cloudAccountId IN (:...scopedAccountIds)', { scopedAccountIds });
+        }
+        const rows = await qb
             .groupBy('cr.cloudAccountId')
             .addGroupBy('cr.cloudProvider')
             .addGroupBy('cr.service')
@@ -701,8 +804,14 @@ export class FinopsCommercialReportService implements OnModuleInit {
         }));
     }
 
-    private async loadResourceRows(organizationId: string, start: string, end: string): Promise<ResourceCostRow[]> {
-        const rows = await this.costRecordRepo
+    private async loadResourceRows(
+        organizationId: string,
+        start: string,
+        end: string,
+        scopedAccountIds?: string[],
+    ): Promise<ResourceCostRow[]> {
+        if (scopedAccountIds && scopedAccountIds.length === 0) return [];
+        const qb = this.costRecordRepo
             .createQueryBuilder('cr')
             .select(RESOURCE_NAME_SQL, 'name')
             .addSelect('cr.service', 'service')
@@ -714,7 +823,11 @@ export class FinopsCommercialReportService implements OnModuleInit {
             .where('cr.organizationId = :organizationId', { organizationId })
             .andWhere('cr.date >= :start', { start })
             .andWhere('cr.date <= :end', { end })
-            .andWhere(`cr.resourceId IS NOT NULL AND cr.resourceId <> ''`)
+            .andWhere(`cr.resourceId IS NOT NULL AND cr.resourceId <> ''`);
+        if (scopedAccountIds?.length) {
+            qb.andWhere('cr.cloudAccountId IN (:...scopedAccountIds)', { scopedAccountIds });
+        }
+        const rows = await qb
             .groupBy(RESOURCE_NAME_SQL)
             .addGroupBy('cr.service')
             .addGroupBy(`to_char(cr."date", 'YYYY-MM')`)

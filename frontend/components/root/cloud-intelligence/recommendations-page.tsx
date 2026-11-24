@@ -48,9 +48,16 @@ import { MobileFiltersDrawer } from '@/components/root/layout';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Separator } from '@/components/ui/separator';
 import { useLocale } from '@/components/providers/locale-provider';
+import { fetchOrganizationCloudAccounts } from '@/app/actions/organization';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { useTranslations } from '@/lib/i18n';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import {
     canAutomateRecommendation,
@@ -153,6 +160,8 @@ export function CloudIntelligenceRecommendationsPanel() {
     const automatable = parseAutomatable(searchParams.get('automatable'));
     const qFromUrl = (searchParams.get('q') ?? '').trim();
     const [pending, startTransition] = useTransition();
+    const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const [items, setItems] = useState<AiRecommendation[]>([]);
     const [selected, setSelected] = useState<AiRecommendation | null>(null);
     const [loaded, setLoaded] = useState(false);
@@ -161,6 +170,17 @@ export function CloudIntelligenceRecommendationsPanel() {
     const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
     const [draftSearch, setDraftSearch] = useState(qFromUrl);
     const selectedId = searchParams.get('id') ?? undefined;
+
+    useEffect(() => {
+        const syncOrg = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        syncOrg();
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        };
+    }, []);
 
     const filterKey = useMemo(
         () =>
@@ -237,13 +257,29 @@ export function CloudIntelligenceRecommendationsPanel() {
     };
 
     const load = () => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) {
             setLoaded(true);
             setItems([]);
             return;
         }
         startTransition(async () => {
+            const accountsRes = await fetchOrganizationCloudAccounts(organizationId, {
+                midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+            });
+            const accountsPayload = accountsRes.ok ? await accountsRes.json().catch(() => null) : null;
+            const accounts = Array.isArray(accountsPayload)
+                ? accountsPayload
+                : Array.isArray((accountsPayload as { items?: unknown } | null)?.items)
+                  ? (accountsPayload as { items: { id: string }[] }).items
+                  : [];
+            const scopedAccountIds = accounts.map((account: { id: string }) => account.id);
+            if (scopedAccountIds.length === 0) {
+                setItems([]);
+                setSelected(null);
+                setLoaded(true);
+                return;
+            }
+
             const res = await fetchCloudIntelligenceRecommendations(organizationId, {
                 status,
                 category,
@@ -252,6 +288,7 @@ export function CloudIntelligenceRecommendationsPanel() {
                 q: qFromUrl || undefined,
                 automatable:
                     automatable === 'all' ? undefined : automatable === 'yes' ? true : false,
+                cloudAccountIds: scopedAccountIds,
             });
             if (!res.ok) {
                 toast.error(extractErrorMessage(await res.json().catch(() => ({}))));
@@ -288,10 +325,9 @@ export function CloudIntelligenceRecommendationsPanel() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterKey]);
+    }, [filterKey, organizationId, midOrgId]);
 
     const withOrg = async (fn: (orgId: string) => Promise<Response>) => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) return;
         const res = await fn(organizationId);
         if (!res.ok) {

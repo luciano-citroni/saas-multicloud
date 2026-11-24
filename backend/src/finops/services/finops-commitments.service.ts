@@ -64,6 +64,8 @@ export interface UpdateCreditGrantDto {
 
 export interface CommitmentsFilter {
     cloudAccountId?: string;
+    /** When set (including empty), restricts to these tenant accounts instead of all tenant accounts. */
+    cloudAccountIds?: string[];
     provider?: string;
     periodStart?: string;
     periodEnd?: string;
@@ -1498,7 +1500,23 @@ export class FinopsCommitmentsService {
             );
             if (!account) return [];
             if (filter.provider && account.provider !== filter.provider) return [];
+            if (filter.cloudAccountIds && !filter.cloudAccountIds.includes(account.id)) return [];
             return [account.id];
+        }
+
+        if (filter.cloudAccountIds) {
+            const requested = [...new Set(filter.cloudAccountIds.map((id) => id.trim()).filter(Boolean))];
+            if (requested.length === 0) return [];
+            const qb = this.cloudAccountRepo
+                .createQueryBuilder('ca')
+                .select(['ca.id', 'ca.provider'])
+                .where('(ca.tenantId = :organizationId OR ca.organizationId = :organizationId)', { organizationId })
+                .andWhere('ca.id IN (:...requested)', { requested });
+            if (filter.provider) {
+                qb.andWhere('ca.provider = :provider', { provider: filter.provider });
+            }
+            const accounts = await qb.getMany();
+            return accounts.map((a) => a.id);
         }
 
         const qb = this.cloudAccountRepo

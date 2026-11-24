@@ -409,7 +409,8 @@ export async function fetchFinopsBudgetStatuses(
 export async function fetchOrganizationFinopsBudgetStatuses(
     organizationId: string,
     accountCap = 8,
-    evaluationPeriod?: 'daily' | 'monthly'
+    evaluationPeriod?: 'daily' | 'monthly',
+    cloudAccountIds?: string[],
 ) {
     const searchParams = new URLSearchParams({
         organizationId,
@@ -417,6 +418,9 @@ export async function fetchOrganizationFinopsBudgetStatuses(
         limit: '100',
     });
     if (evaluationPeriod) searchParams.set('evaluationPeriod', evaluationPeriod);
+    if (cloudAccountIds?.length) {
+        searchParams.set('cloudAccountIds', cloudAccountIds.join(','));
+    }
 
     return fetch(`/api/finops/budgets/status?${searchParams.toString()}`, {
         cache: 'no-store',
@@ -573,6 +577,7 @@ export async function fetchFinopsOrgOptimize(
 
 export type FinopsCommitmentsFilter = {
     cloudAccountId?: string;
+    cloudAccountIds?: string[];
     provider?: string;
     periodStart?: string;
     periodEnd?: string;
@@ -580,6 +585,9 @@ export type FinopsCommitmentsFilter = {
 
 function appendCommitmentsFilter(params: URLSearchParams, options?: FinopsCommitmentsFilter) {
     if (options?.cloudAccountId) params.set('cloudAccountId', options.cloudAccountId);
+    if (options?.cloudAccountIds?.length) {
+        params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    }
     if (options?.provider) params.set('provider', options.provider);
     if (options?.periodStart) params.set('periodStart', options.periodStart);
     if (options?.periodEnd) params.set('periodEnd', options.periodEnd);
@@ -696,8 +704,15 @@ export async function deleteFinopsCreditGrant(organizationId: string, grantId: s
     );
 }
 
-export async function fetchCommercialReport(organizationId: string, month: string) {
+export async function fetchCommercialReport(
+    organizationId: string,
+    month: string,
+    options?: { cloudAccountIds?: string[] },
+) {
     const params = new URLSearchParams({ organizationId, month });
+    if (options?.cloudAccountIds?.length) {
+        params.set('cloudAccountIds', options.cloudAccountIds.join(','));
+    }
     return fetch(`/api/finops/commercial-report?${params.toString()}`, { cache: 'no-store' });
 }
 

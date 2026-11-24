@@ -87,9 +87,19 @@ export const listRecommendationsQuerySchema = z.object({
         .enum(['true', 'false'])
         .optional()
         .transform((value) => (value === undefined ? undefined : value === 'true')),
+    /** CSV de UUIDs (escopo mid-org). */
+    cloudAccountIds: z.string().optional(),
 });
 
 export type ListRecommendationsQuery = z.infer<typeof listRecommendationsQuerySchema>;
+
+export function parseCloudAccountIdsQuery(raw?: string): string[] | undefined {
+    if (raw == null || raw === '') return undefined;
+    return raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+}
 
 export const updateQuotaSchema = z.object({
     dailyLimit: z.number().int().min(0).nullable().optional(),
@@ -109,6 +119,8 @@ export const dashboardQuerySchema = z.object({
     period: z.string().min(1).max(40).optional(),
     category: z.string().min(1).max(100).optional(),
     severity: z.string().min(1).max(20).optional(),
+    /** CSV de UUIDs (escopo mid-org). */
+    cloudAccountIds: z.string().optional(),
 });
 
 export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;

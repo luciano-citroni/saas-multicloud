@@ -47,8 +47,14 @@ import {
 } from '@/components/ui/item';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { useTranslations } from '@/lib/i18n';
-import { ACTIVE_ORG_STORAGE_KEY } from '@/lib/sidebar-context';
+import {
+    ACTIVE_MID_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_ORG_STORAGE_KEY,
+    getActiveMidOrgId,
+} from '@/lib/sidebar-context';
 import { cn } from '@/lib/utils';
 import { CiMarkdownEditor } from './ci-markdown-editor';
 import {
@@ -141,6 +147,8 @@ export function CiKnowledgePanel() {
         return Number.isInteger(raw) && raw > 0 ? raw : 1;
     }, [searchParams]);
 
+    const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
     const [cloudAccounts, setCloudAccounts] = useState<OrganizationCloudAccount[]>([]);
     const [pending, setPending] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -196,8 +204,20 @@ export function CiKnowledgePanel() {
         [pathname, router, searchParams],
     );
 
+    useEffect(() => {
+        const syncOrg = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        syncOrg();
+        window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        return () => {
+            window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, syncOrg);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, syncOrg);
+        };
+    }, []);
+
+    const scopedAccountIds = useMemo(() => cloudAccounts.map((account) => account.id), [cloudAccounts]);
+
     const load = useCallback(async () => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) {
             setDocs([]);
             setPagination(null);
@@ -217,7 +237,14 @@ export function CiKnowledgePanel() {
                 return;
             }
             const parsed = unwrapDocs(await res.json());
-            setDocs(parsed.items);
+            const allowed = new Set(scopedAccountIds);
+            const filtered = parsed.items.filter((doc) => {
+                if (doc.scope !== 'cloud_accounts') return true;
+                const ids = doc.cloudAccountIds ?? [];
+                if (ids.length === 0) return true;
+                return ids.some((id) => allowed.has(id));
+            });
+            setDocs(filtered);
             setPagination(parsed.pagination);
             if (parsed.pagination && page > parsed.pagination.totalPages && parsed.pagination.totalPages > 0) {
                 setPage(parsed.pagination.totalPages);
@@ -225,14 +252,13 @@ export function CiKnowledgePanel() {
         } finally {
             setLoading(false);
         }
-    }, [page, setPage]);
+    }, [organizationId, page, scopedAccountIds, setPage]);
 
     useEffect(() => {
         void load();
     }, [load]);
 
     useEffect(() => {
-        const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
         if (!organizationId) {
             setCloudAccounts([]);
             return;
@@ -242,6 +268,7 @@ export function CiKnowledgePanel() {
                 const res = await fetchOrganizationCloudAccounts(organizationId, {
                     limit: 100,
                     isActive: true,
+                    midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
                 });
                 if (!res.ok) {
                     setCloudAccounts([]);
@@ -261,7 +288,7 @@ export function CiKnowledgePanel() {
                 setCloudAccounts([]);
             }
         })();
-    }, []);
+    }, [organizationId, midOrgId]);
 
     const normalizedTags = useMemo(
         () =>

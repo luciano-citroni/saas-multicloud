@@ -132,6 +132,7 @@ export async function fetchCloudIntelligenceRecommendations(
         q?: string;
         automatable?: boolean;
         agentType?: string;
+        cloudAccountIds?: string[];
     },
 ) {
     const search = new URLSearchParams();
@@ -144,6 +145,9 @@ export async function fetchCloudIntelligenceRecommendations(
         search.set('automatable', String(params.automatable));
     }
     if (params?.agentType) search.set('agentType', params.agentType);
+    if (params?.cloudAccountIds?.length) {
+        search.set('cloudAccountIds', params.cloudAccountIds.join(','));
+    }
     const qs = search.toString();
     const path = qs
         ? `/api/cloud-intelligence/recommendations?${qs}`

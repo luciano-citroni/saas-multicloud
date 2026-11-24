@@ -298,7 +298,17 @@ export function FinopsOverview() {
         const loadBudgetExtras = async () => {
             try {
                 if (!selectedAccountId) {
-                    const budgetRes = await fetchOrganizationFinopsBudgetStatuses(organizationId, 50);
+                    if (scopedAccountIds.length === 0) {
+                        setBudgetStatuses([]);
+                        setLastSyncAt(null);
+                        return;
+                    }
+                    const budgetRes = await fetchOrganizationFinopsBudgetStatuses(
+                        organizationId,
+                        50,
+                        undefined,
+                        scopedAccountIds,
+                    );
                     if (budgetRes.ok) {
                         setBudgetStatuses(normalizeStatuses(await budgetRes.json().catch(() => null)));
                     } else {
@@ -341,7 +351,7 @@ export function FinopsOverview() {
         };
 
         void loadBudgetExtras();
-    }, [organizationId, selectedAccountId]);
+    }, [organizationId, selectedAccountId, scopedAccountIds]);
 
     const stopPolling = useCallback(() => {
         if (pollingRef.current) {

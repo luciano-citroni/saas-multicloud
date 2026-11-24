@@ -365,7 +365,12 @@ async function loadBudgets(
             return { items: [], unauthorized: false, failed: false };
         }
 
-        const response = await fetchOrganizationFinopsBudgetStatuses(organizationId, BUDGET_ACCOUNT_CAP);
+        const response = await fetchOrganizationFinopsBudgetStatuses(
+            organizationId,
+            BUDGET_ACCOUNT_CAP,
+            undefined,
+            midOrgAccountIds,
+        );
         if (response.status === 401) {
             return { items: [], unauthorized: true, failed: false };
         }

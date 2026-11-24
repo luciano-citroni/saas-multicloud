@@ -314,10 +314,17 @@ export function useAiChatController(options?: { enabled?: boolean }) {
             abortRef.current = controller;
 
             try {
+                const activeCloudAccountId =
+                    window.localStorage.getItem(`smc_active_cloud_account_id:${organizationId}`) ??
+                    window.localStorage.getItem('smc_active_cloud_account_id') ??
+                    undefined;
                 const response = await fetch(streamAiChatMessageUrl(organizationId, conversationId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content }),
+                    body: JSON.stringify({
+                        content,
+                        ...(activeCloudAccountId ? { cloudAccountId: activeCloudAccountId } : {}),
+                    }),
                     signal: controller.signal,
                 });
 

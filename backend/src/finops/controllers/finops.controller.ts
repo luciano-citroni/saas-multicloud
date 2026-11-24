@@ -219,6 +219,14 @@ const anomalyAlertSettingsSchema = z
         }
     });
 
+function parseCloudAccountIdsCsv(raw?: string): string[] | undefined {
+    if (raw == null || raw === '') return undefined;
+    return raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+}
+
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 @ApiTags('FinOps')
@@ -556,12 +564,14 @@ export class FinopsController {
             'KPIs de créditos (concedido/consumido/restante) e compromissos (utilization, coverage, pode reservar mais).',
     })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
     @ApiQuery({ name: 'periodStart', required: false, description: 'YYYY-MM-DD' })
     @ApiQuery({ name: 'periodEnd', required: false, description: 'YYYY-MM-DD' })
     @ApiResponse({ status: 200, type: CommitmentsOverviewDto })
     async getCommitmentsOverview(
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @Query('provider') provider: string,
         @Query('periodStart') periodStart: string,
         @Query('periodEnd') periodEnd: string,
@@ -569,6 +579,7 @@ export class FinopsController {
     ) {
         return this.commitmentsService.getOverview(org.id, {
             cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: parseCloudAccountIdsCsv(cloudAccountIds),
             provider: provider || undefined,
             periodStart: periodStart || undefined,
             periodEnd: periodEnd || undefined,
@@ -581,12 +592,14 @@ export class FinopsController {
         description: 'Grants manuais com saldo restante e linhas de consumo sincronizadas.',
     })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
     @ApiQuery({ name: 'periodStart', required: false })
     @ApiQuery({ name: 'periodEnd', required: false })
     @ApiResponse({ status: 200, description: 'Grants + consumptions + totals' })
     async getCommitmentsCredits(
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @Query('provider') provider: string,
         @Query('periodStart') periodStart: string,
         @Query('periodEnd') periodEnd: string,
@@ -594,6 +607,7 @@ export class FinopsController {
     ) {
         return this.commitmentsService.listCredits(org.id, {
             cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: parseCloudAccountIdsCsv(cloudAccountIds),
             provider: provider || undefined,
             periodStart: periodStart || undefined,
             periodEnd: periodEnd || undefined,
@@ -664,15 +678,18 @@ export class FinopsController {
         description: 'Savings Plans (AWS), Reservations (Azure), CUDs (GCP).',
     })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
     @ApiResponse({ status: 200, description: 'Utilization snapshots' })
     async getCommitmentsUtilization(
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @Query('provider') provider: string,
         @CurrentOrganization() org: Tenant,
     ) {
         return this.commitmentsService.listUtilization(org.id, {
             cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: parseCloudAccountIdsCsv(cloudAccountIds),
             provider: provider || undefined,
         });
     }
@@ -683,15 +700,18 @@ export class FinopsController {
         description: 'Inclui eligible / ineligibleReason (o que pode ou não reservar).',
     })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
     @ApiResponse({ status: 200, description: 'Purchase recommendations' })
     async getCommitmentsRecommendations(
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @Query('provider') provider: string,
         @CurrentOrganization() org: Tenant,
     ) {
         return this.commitmentsService.listRecommendations(org.id, {
             cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: parseCloudAccountIdsCsv(cloudAccountIds),
             provider: provider || undefined,
         });
     }
@@ -703,12 +723,14 @@ export class FinopsController {
             'Heurística local: recursos de compute com gasto recorrente e estável no lookback (padrão 90 dias), para apoiar a decisão de compromisso.',
     })
     @ApiQuery({ name: 'cloudAccountId', required: false, type: String })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiQuery({ name: 'provider', required: false, enum: ['aws', 'azure', 'gcp'] })
     @ApiQuery({ name: 'lookbackDays', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
     @ApiResponse({ status: 200, description: 'Commitment resource candidates' })
     async getCommitmentCandidates(
         @Query('cloudAccountId') cloudAccountId: string,
+        @Query('cloudAccountIds') cloudAccountIds: string,
         @Query('provider') provider: string,
         @Query('lookbackDays') lookbackDaysRaw: string,
         @Query('limit') limitRaw: string,
@@ -718,6 +740,7 @@ export class FinopsController {
         const limitParsed = Number.parseInt(limitRaw ?? '', 10);
         return this.commitmentsService.listCommitmentCandidates(org.id, {
             cloudAccountId: cloudAccountId || undefined,
+            cloudAccountIds: parseCloudAccountIdsCsv(cloudAccountIds),
             provider: provider || undefined,
             lookbackDays: Number.isFinite(lookbackParsed) ? lookbackParsed : undefined,
             limit: Number.isFinite(limitParsed) ? limitParsed : undefined,
@@ -1175,17 +1198,20 @@ export class FinopsController {
     })
     @ApiQuery({ name: 'accountCap', required: false, type: Number })
     @ApiQuery({ name: 'evaluationPeriod', required: false, enum: ['daily', 'monthly'] })
+    @ApiQuery({ name: 'cloudAccountIds', required: false, type: String, description: 'CSV de UUIDs (escopo mid-org)' })
     @ApiResponse({ status: 200, type: [BudgetStatusDto] })
     async listOrgBudgetStatuses(
         @CurrentOrganization() org: Tenant,
         @Query('accountCap') accountCap?: string,
         @Query('evaluationPeriod') evaluationPeriod?: string,
+        @Query('cloudAccountIds') cloudAccountIds?: string,
     ) {
         const parsedCap = accountCap ? Number.parseInt(accountCap, 10) : 8;
         return this.budgetService.listOrgBudgetStatuses(
             org.id,
             Number.isFinite(parsedCap) ? parsedCap : 8,
             evaluationPeriod === 'daily' || evaluationPeriod === 'monthly' ? evaluationPeriod : undefined,
+            parseCloudAccountIdsCsv(cloudAccountIds),
         );
     }
 

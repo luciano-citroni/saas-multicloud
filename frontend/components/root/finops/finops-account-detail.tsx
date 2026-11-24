@@ -38,12 +38,16 @@ import type {
 import {
     ACTIVE_ORG_STORAGE_KEY,
     ACTIVE_ORG_CHANGED_EVENT,
+    ACTIVE_MID_ORG_CHANGED_EVENT,
     ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT,
+    getActiveMidOrgId,
     notifyActiveCloudAccountChanged,
 } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { useActiveMidOrgId } from '@/lib/hooks/use-active-mid-org-id';
 import { hasRequiredOrganizationRole, normalizeOrganizationRole } from '@/lib/organization-rbac';
 import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
+import { useCloudAccounts } from '@/lib/queries/use-cloud-accounts';
 import {
     acceptFinopsConsent,
     fetchFinopsBudgetStatuses,
@@ -74,6 +78,8 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
     const tc = useTranslations('common');
 
     const [organizationId, setOrganizationId] = useState<string | null>(null);
+    const midOrgId = useActiveMidOrgId(organizationId);
+    const cloudAccountsQuery = useCloudAccounts(organizationId);
     const [account, setAccount] = useState<OrganizationCloudAccount | null>(null);
     const { currentRole: rawRole } = useOrganizationFromSidebar(organizationId);
     const currentRole = normalizeOrganizationRole(rawRole);
@@ -113,15 +119,25 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
     useEffect(() => {
         const handleOrgChange = () => setOrganizationId(window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
         window.addEventListener(ACTIVE_ORG_CHANGED_EVENT, handleOrgChange);
+        window.addEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleOrgChange);
         window.addEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleOrgChange);
         return () => {
             window.removeEventListener(ACTIVE_ORG_CHANGED_EVENT, handleOrgChange);
+            window.removeEventListener(ACTIVE_MID_ORG_CHANGED_EVENT, handleOrgChange);
             window.removeEventListener(ACTIVE_CLOUD_ACCOUNT_CHANGED_EVENT, handleOrgChange);
         };
     }, []);
 
     useEffect(() => {
         if (!organizationId) return;
+        if (cloudAccountsQuery.isLoading) return;
+
+        const scopedIds = new Set((cloudAccountsQuery.data ?? []).map((item) => item.id));
+        if (scopedIds.size > 0 && !scopedIds.has(cloudAccountId)) {
+            setAccount(null);
+            router.replace('/finops');
+            return;
+        }
 
         const loadAccount = async () => {
             try {
@@ -131,6 +147,16 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
                     return;
                 }
                 const payload = (await response.json().catch(() => null)) as OrganizationCloudAccount | null;
+                const activeMid = midOrgId ?? getActiveMidOrgId(organizationId);
+                if (
+                    payload?.organizationId &&
+                    activeMid &&
+                    payload.organizationId !== activeMid
+                ) {
+                    setAccount(null);
+                    router.replace('/finops');
+                    return;
+                }
                 setAccount(payload);
                 if (payload?.provider) {
                     window.localStorage.setItem(CLOUD_PROVIDER_STORAGE_KEY, payload.provider);
@@ -141,7 +167,14 @@ export function FinopsAccountDetail({ cloudAccountId }: FinopsAccountDetailProps
         };
 
         void loadAccount();
-    }, [cloudAccountId, organizationId]);
+    }, [
+        cloudAccountId,
+        cloudAccountsQuery.data,
+        cloudAccountsQuery.isLoading,
+        midOrgId,
+        organizationId,
+        router,
+    ]);
 
     const loadConsent = useCallback(async (orgId: string, cloudId: string, provider: string) => {
         const response = await fetchFinopsConsent(orgId, cloudId, provider);
