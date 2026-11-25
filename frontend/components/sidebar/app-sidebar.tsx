@@ -18,7 +18,13 @@ import {
     SIDEBAR_CONTEXT_UPDATED_EVENT,
 } from '@/lib/sidebar-context';
 import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
-import { canManageMembers, canOperateModules, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import {
+    canInviteAsOrganizationAdmin,
+    canManageMembers,
+    canOperateModules,
+    normalizeOrganizationRole,
+    type OrganizationRole,
+} from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
 import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 import type { SidebarContextOrganization } from '@/lib/queries/types';
@@ -45,6 +51,7 @@ type SidebarOrganization = {
 type SidebarMidOrg = {
     id: string;
     name: string;
+    currentRole?: OrganizationRole | null;
 };
 
 type SidebarCloudAccount = {
@@ -66,7 +73,17 @@ function getCloudStorageKey(organizationId: string) {
 
 function normalizeMidOrgsPayload(payload: SidebarMidOrgsResponse): SidebarMidOrg[] {
     const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
-    return items.filter((o): o is SidebarMidOrg => typeof o?.id === 'string' && typeof o?.name === 'string');
+    return items
+        .filter((o): o is SidebarMidOrg => typeof o?.id === 'string' && typeof o?.name === 'string')
+        .map((o) => ({
+            id: o.id,
+            name: o.name,
+            currentRole: normalizeOrganizationRole(
+                typeof (o as { currentRole?: unknown }).currentRole === 'string'
+                    ? ((o as { currentRole?: string | null }).currentRole ?? null)
+                    : null,
+            ),
+        }));
 }
 
 function normalizeCloudAccountsPayload(payload: SidebarCloudAccount[] | SidebarCloudAccountsResponse): SidebarCloudAccount[] {
@@ -388,6 +405,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const activeOrg = organizations.find((o) => o.id === activeOrganizationId);
         const activeRole = normalizeOrganizationRole(activeOrg?.currentRole ?? null);
         const canManage = canManageMembers(activeRole);
+        const canInviteUsers =
+            canManage || canInviteAsOrganizationAdmin(midOrgs.map((org) => org.currentRole ?? null));
         const canOperate = canOperateModules(activeRole);
 
         const dashboard = [{ title: tn.dashboard, url: '/', icon: LayoutDashboard }];
@@ -400,12 +419,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const tenant = [
             { title: tn.newTenant, url: '/tenant/new', icon: Plus },
             { title: tn.tenants, url: '/tenant', icon: Layers },
-            ...(canManage
-                ? [
-                      { title: tn.groups, url: '/tenant/organizations', icon: Layers },
-                      { title: tn.users, url: '/tenant/users', icon: Users },
-                  ]
-                : []),
+            ...(canManage ? [{ title: tn.groups, url: '/tenant/organizations', icon: Layers }] : []),
+            ...(canInviteUsers ? [{ title: tn.users, url: '/tenant/users', icon: Users }] : []),
             ...(canOperate ? [{ title: tn.notifications, url: '/tenant/notifications', icon: Bell }] : []),
             { title: tn.plans, url: '/billing', icon: DollarSign },
         ];
@@ -437,7 +452,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         });
 
         return { dashboardItems: dashboard, cloudNavItems: cloudNav, tenantItems: tenant, moduleItems: modules, showTenant: true };
-    }, [activeOrganizationId, activeOrganizationModules, organizations, tn]);
+    }, [activeOrganizationId, activeOrganizationModules, midOrgs, organizations, tn]);
 
     return (
         <Sidebar collapsible="icon" {...props}>

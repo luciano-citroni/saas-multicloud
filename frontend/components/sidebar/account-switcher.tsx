@@ -15,6 +15,10 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
+
+/** Após este limite a lista deixa de crescer e ativa scroll. */
+const MENU_LIST_SCROLL_AFTER = 5;
 
 type TenantItem = {
     id: string;
@@ -92,6 +96,36 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
                     className="h-7 w-full rounded-md border border-input bg-transparent pl-6 pr-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
             </div>
+        </div>
+    );
+}
+
+function ScrollableMenuList({
+    count,
+    variant = 'single',
+    children,
+}: {
+    count: number;
+    /** single ≈ 1 linha (tenant/org); stacked ≈ alias + provider (conta cloud) */
+    variant?: 'single' | 'stacked';
+    children: React.ReactNode;
+}) {
+    const scroll = count > MENU_LIST_SCROLL_AFTER;
+    return (
+        <div
+            className={cn(
+                'min-w-0',
+                scroll &&
+                    cn(
+                        'overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]',
+                        // ~5 itens; teto em dvh para mobile com viewport baixo
+                        variant === 'stacked'
+                            ? 'max-h-[min(16.25rem,42dvh)]'
+                            : 'max-h-[min(12.5rem,36dvh)]',
+                    ),
+            )}
+        >
+            {children}
         </div>
     );
 }
@@ -187,7 +221,7 @@ export function AccountSwitcher({
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out"
+                        className="max-h-[min(85dvh,var(--radix-dropdown-menu-content-available-height))] w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out"
                         align="start"
                         side={side}
                         sideOffset={4}
@@ -196,19 +230,21 @@ export function AccountSwitcher({
                         {tenants.length > 3 && (
                             <SearchInput value={tenantSearch} onChange={setTenantSearch} placeholder={ts.filterTenant} />
                         )}
-                        {filteredTenants.map((tenant) => (
-                            <DropdownMenuItem
-                                key={tenant.id}
-                                onClick={() => onTenantChange?.(tenant)}
-                                className="gap-2 p-2"
-                            >
-                                <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
-                                    <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
-                                </div>
-                                <span className="flex-1 truncate">{tenant.name}</span>
-                                {tenant.id === selectedTenant?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
-                            </DropdownMenuItem>
-                        ))}
+                        <ScrollableMenuList count={filteredTenants.length}>
+                            {filteredTenants.map((tenant) => (
+                                <DropdownMenuItem
+                                    key={tenant.id}
+                                    onClick={() => onTenantChange?.(tenant)}
+                                    className="gap-2 p-2"
+                                >
+                                    <div className="flex size-6 items-center justify-center rounded-md border border-sidebar-primary/15 bg-sidebar-primary/10 text-sidebar-primary">
+                                        <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
+                                    </div>
+                                    <span className="flex-1 truncate">{tenant.name}</span>
+                                    {tenant.id === selectedTenant?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
+                                </DropdownMenuItem>
+                            ))}
+                        </ScrollableMenuList>
                         {filteredTenants.length === 0 && (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}
@@ -256,7 +292,7 @@ export function AccountSwitcher({
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out"
+                        className="max-h-[min(85dvh,var(--radix-dropdown-menu-content-available-height))] w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out"
                         align="start"
                         side={side}
                         sideOffset={4}
@@ -269,19 +305,21 @@ export function AccountSwitcher({
                         {midOrgs.length === 0 ? (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noOrganizationsCreated}</p>
                         ) : filteredOrgs.length > 0 ? (
-                            filteredOrgs.map((org) => (
-                                <DropdownMenuItem
-                                    key={org.id}
-                                    onClick={() => onMidOrgChange?.(org)}
-                                    className="gap-2 p-2"
-                                >
-                                    <div className="flex size-6 items-center justify-center rounded-md border">
-                                        <Layers className="size-3.5 shrink-0" aria-hidden="true" />
-                                    </div>
-                                    <span className="flex-1 truncate">{org.name}</span>
-                                    {org.id === selectedMidOrg?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
-                                </DropdownMenuItem>
-                            ))
+                            <ScrollableMenuList count={filteredOrgs.length}>
+                                {filteredOrgs.map((org) => (
+                                    <DropdownMenuItem
+                                        key={org.id}
+                                        onClick={() => onMidOrgChange?.(org)}
+                                        className="gap-2 p-2"
+                                    >
+                                        <div className="flex size-6 items-center justify-center rounded-md border">
+                                            <Layers className="size-3.5 shrink-0" aria-hidden="true" />
+                                        </div>
+                                        <span className="flex-1 truncate">{org.name}</span>
+                                        {org.id === selectedMidOrg?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
+                                    </DropdownMenuItem>
+                                ))}
+                            </ScrollableMenuList>
                         ) : (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}
@@ -303,30 +341,32 @@ export function AccountSwitcher({
                         {cloudAccounts.length === 0 ? (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noCloudAccountsInOrg}</p>
                         ) : filteredAccounts.length > 0 ? (
-                            filteredAccounts.map((account) => (
-                                <DropdownMenuItem
-                                    key={account.id}
-                                    onClick={() => onCloudAccountChange?.(account)}
-                                    className="gap-2 p-2"
-                                >
-                                    <div
-                                        className="flex size-6 items-center justify-center rounded-md border"
-                                        style={getProviderIconStyle(getProviderTheme(account.provider).baseColor)}
+                            <ScrollableMenuList count={filteredAccounts.length} variant="stacked">
+                                {filteredAccounts.map((account) => (
+                                    <DropdownMenuItem
+                                        key={account.id}
+                                        onClick={() => onCloudAccountChange?.(account)}
+                                        className="gap-2 p-2"
                                     >
-                                        <Cloud className="size-3.5 shrink-0" aria-hidden="true" />
-                                    </div>
-                                    <div className="flex flex-1 flex-col min-w-0">
-                                        <span className="truncate text-sm">{account.alias}</span>
-                                        <span
-                                            className="truncate text-xs"
-                                            style={getProviderMetaStyle(getProviderTheme(account.provider).baseColor)}
+                                        <div
+                                            className="flex size-6 items-center justify-center rounded-md border"
+                                            style={getProviderIconStyle(getProviderTheme(account.provider).baseColor)}
                                         >
-                                            {getProviderTheme(account.provider).label}
-                                        </span>
-                                    </div>
-                                    {account.id === selectedCloudAccount?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
-                                </DropdownMenuItem>
-                            ))
+                                            <Cloud className="size-3.5 shrink-0" aria-hidden="true" />
+                                        </div>
+                                        <div className="flex min-w-0 flex-1 flex-col">
+                                            <span className="truncate text-sm">{account.alias}</span>
+                                            <span
+                                                className="truncate text-xs"
+                                                style={getProviderMetaStyle(getProviderTheme(account.provider).baseColor)}
+                                            >
+                                                {getProviderTheme(account.provider).label}
+                                            </span>
+                                        </div>
+                                        {account.id === selectedCloudAccount?.id && <Check className="ml-auto size-4 text-primary shrink-0" aria-hidden="true" />}
+                                    </DropdownMenuItem>
+                                ))}
+                            </ScrollableMenuList>
                         ) : (
                             <p className="px-2 py-1.5 text-xs text-muted-foreground">{ts.noResults}</p>
                         )}

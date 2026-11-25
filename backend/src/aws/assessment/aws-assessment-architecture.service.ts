@@ -49,6 +49,8 @@ export interface ArchitectureVpc {
 
     securityGroups: ArchitectureResource[];
 
+    networkAcls: ArchitectureResource[];
+
     routeTables: ArchitectureResource[];
 
     loadBalancers: ArchitectureResource[];
@@ -97,6 +99,8 @@ export interface ArchitectureModel {
         snsTopics: ArchitectureResource[];
 
         wafWebAcls: ArchitectureResource[];
+
+        wafIpSets: ArchitectureResource[];
 
         apiGateways: ArchitectureResource[];
     };
@@ -181,6 +185,8 @@ export class AwsAssessmentArchitectureService {
             subnets: [],
 
             securityGroups: [],
+
+            networkAcls: [],
 
             routeTables: [],
 
@@ -285,6 +291,19 @@ export class AwsAssessmentArchitectureService {
             const vpc = getVpcOrUnassigned(sg.vpcId);
 
             vpc.securityGroups.push({ id: sg.id, type: 'Security Group', name: sg.name, awsId: sg.awsSecurityGroupId });
+        }
+
+        for (const nacl of data.networkAcls) {
+            const vpc = getVpcOrUnassigned(nacl.vpcId);
+
+            vpc.networkAcls.push({
+                id: nacl.id,
+                type: 'Network ACL',
+                name: nacl.tags?.['Name'] ?? nacl.awsNetworkAclId,
+                awsId: nacl.awsNetworkAclId,
+                region: nacl.region ?? undefined,
+                details: { isDefault: nacl.isDefault },
+            });
         }
 
         for (const rt of data.routeTables) {
@@ -547,6 +566,18 @@ export class AwsAssessmentArchitectureService {
                 snsTopics: data.snsTopics.map((t) => ({ id: t.id, type: 'SNS Topic', name: t.topicName, awsId: t.topicArn }) as ArchitectureResource),
 
                 wafWebAcls: data.wafWebAcls.map((w) => ({ id: w.id, type: 'WAF Web ACL', name: w.name, awsId: w.webAclArn }) as ArchitectureResource),
+
+                wafIpSets: data.wafIpSets.map(
+                    (ip) =>
+                        ({
+                            id: ip.id,
+                            type: 'WAF IP Set',
+                            name: ip.name,
+                            awsId: ip.ipSetArn,
+                            region: ip.region ?? undefined,
+                            details: { scope: ip.scope, ipAddressVersion: ip.ipAddressVersion },
+                        }) as ArchitectureResource
+                ),
 
                 apiGateways: data.apiGatewayRestApis.map(
                     (a) => ({ id: a.id, type: 'API Gateway REST API', name: a.name, awsId: a.awsApiId }) as ArchitectureResource
@@ -907,6 +938,22 @@ export class AwsAssessmentArchitectureService {
                 pushEdge(vpcNodeId, meta.id, 'has-security-group');
             }
 
+            for (const networkAcl of vpc.networkAcls) {
+                const meta = nodeMetaFromType(networkAcl);
+
+                const networkAclRegion = resolveRegionalValue(networkAcl, vpc.id);
+
+                pushNode(meta.id, meta.kind, networkAcl.name, networkAcl.type, {
+                    awsId: networkAcl.awsId,
+
+                    details: { ...(networkAcl.details ?? {}), vpcId: vpc.id, vpcName: vpc.name, region: networkAclRegion },
+
+                    group: { ...vpcGroup, region: networkAclRegion },
+                });
+
+                pushEdge(vpcNodeId, meta.id, 'has-network-acl');
+            }
+
             for (const loadBalancer of vpc.loadBalancers) {
                 const meta = nodeMetaFromType(loadBalancer);
 
@@ -1127,6 +1174,8 @@ export class AwsAssessmentArchitectureService {
 
             { relationship: 'contains-waf', items: model.globalResources.wafWebAcls },
 
+            { relationship: 'contains-waf-ip-set', items: model.globalResources.wafIpSets },
+
             { relationship: 'contains-api', items: model.globalResources.apiGateways },
         ];
 
@@ -1231,6 +1280,8 @@ export class AwsAssessmentArchitectureService {
 
         renderGlobalBlock('WAF', 'WAF', globalResources.wafWebAcls, 'WAF: ');
 
+        renderGlobalBlock('WAFIP', 'WAF IP Sets', globalResources.wafIpSets, 'IPSet: ');
+
         lines.push('    end', '');
 
         for (const vpc of model.vpcs) {
@@ -1270,6 +1321,14 @@ export class AwsAssessmentArchitectureService {
                 lines.push(`        subgraph ${vpcId}_SG["Security Groups"]`);
 
                 vpc.securityGroups.forEach((sg) => lines.push(`            ${mid(sg.id)}["SG: ${mLabel(sg.name)}"]`));
+
+                lines.push('        end');
+            }
+
+            if (vpc.networkAcls.length > 0) {
+                lines.push(`        subgraph ${vpcId}_NACL["Network ACLs"]`);
+
+                vpc.networkAcls.forEach((nacl) => lines.push(`            ${mid(nacl.id)}["NACL: ${mLabel(nacl.name)}"]`));
 
                 lines.push('        end');
             }
@@ -1355,6 +1414,8 @@ export class AwsAssessmentArchitectureService {
             vpc.routeTables.forEach((rt) => lines.push(`    ${vpcRootId} -->|routes| ${mid(rt.id)}`));
 
             vpc.securityGroups.forEach((sg) => lines.push(`    ${vpcRootId} -->|protects| ${mid(sg.id)}`));
+
+            vpc.networkAcls.forEach((nacl) => lines.push(`    ${vpcRootId} -->|filters| ${mid(nacl.id)}`));
 
             vpc.databases.forEach((db) => lines.push(`    ${vpcRootId} -->|stores| ${mid(db.id)}`));
 

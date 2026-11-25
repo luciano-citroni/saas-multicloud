@@ -1,13 +1,43 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { OrganizationMembersTab } from '@/components/root/organizations/members/organization-members-tab';
-import { canManageMembers, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import {
+    canInviteAsOrganizationAdmin,
+    canManageMembers,
+    normalizeOrganizationRole,
+    type OrganizationRole,
+} from '@/lib/organization-rbac';
 import { useTranslations } from '@/lib/i18n';
 import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
+
+async function hasOrganizationInviteAccess(tenantId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/orgs?organizationId=${encodeURIComponent(tenantId)}`, {
+            cache: 'no-store',
+        });
+        if (!response.ok) return false;
+        const payload = await response.json().catch(() => null);
+        const items = Array.isArray(payload)
+            ? payload
+            : payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)
+              ? (payload as { items: unknown[] }).items
+              : [];
+        const roles = items.map((item) =>
+            normalizeOrganizationRole(
+                typeof item === 'object' && item !== null
+                    ? ((item as { currentRole?: string | null }).currentRole ?? null)
+                    : null,
+            ),
+        );
+        return canInviteAsOrganizationAdmin(roles);
+    } catch {
+        return false;
+    }
+}
 
 export default function OrganizationMembersPage() {
     const params = useParams<{ organizationId: string }>();
@@ -16,6 +46,7 @@ export default function OrganizationMembersPage() {
     const tm = useTranslations('members');
     const to = useTranslations('organizations');
     const sidebarQuery = useSidebarContext();
+    const [canAccess, setCanAccess] = useState<boolean | null>(null);
 
     useEffect(() => {
         if (!organizationId) {
@@ -37,20 +68,42 @@ export default function OrganizationMembersPage() {
         const targetOrg = sidebarQuery.data.organizations.find((o) => o.id === organizationId);
         const role = normalizeOrganizationRole(targetOrg?.currentRole ?? null);
 
-        if (!canManageMembers(role)) {
+        if (!role) {
             toast.error(to.noEditPermission);
             router.replace('/organizations');
+            return;
         }
+
+        if (canManageMembers(role)) {
+            setCanAccess(true);
+            return;
+        }
+
+        let cancelled = false;
+        void hasOrganizationInviteAccess(organizationId).then((allowed) => {
+            if (cancelled) return;
+            if (!allowed) {
+                toast.error(to.noEditPermission);
+                router.replace('/organizations');
+                setCanAccess(false);
+                return;
+            }
+            setCanAccess(true);
+        });
+
+        return () => {
+            cancelled = true;
+        };
     }, [organizationId, router, sidebarQuery.data, sidebarQuery.isError, sidebarQuery.isFetched, sidebarQuery.isLoading, to]);
 
-    if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data) {
+    if (!organizationId || !sidebarQuery.isFetched || sidebarQuery.isLoading || !sidebarQuery.data || canAccess !== true) {
         return null;
     }
 
     const targetOrg = sidebarQuery.data.organizations.find((o) => o.id === organizationId);
-    const currentRole = normalizeOrganizationRole(targetOrg?.currentRole ?? null);
+    const currentRole = normalizeOrganizationRole(targetOrg?.currentRole ?? null) as OrganizationRole | null;
 
-    if (!currentRole || !canManageMembers(currentRole)) {
+    if (!currentRole) {
         return null;
     }
 

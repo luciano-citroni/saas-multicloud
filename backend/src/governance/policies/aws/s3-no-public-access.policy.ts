@@ -7,8 +7,9 @@ import { GovernancePolicy, PolicyContext, PolicyEvaluationResult, FindingSeverit
 @Injectable()
 export class S3NoPublicAccessPolicy implements GovernancePolicy {
     readonly id = 'aws-s3-no-public-access';
-    readonly name = 'S3 Bucket Must Not Be Publicly Accessible';
-    readonly description = 'S3 buckets should have Block Public Access enabled to prevent unintended public exposure of data.';
+    readonly name = 'S3 Bucket Block Public Access Must Be Enabled';
+    readonly description =
+        'S3 buckets should have all four Block Public Access settings enabled. This checks BPA configuration — not whether objects are currently world-readable via ACL.';
     readonly resourceType = 'S3Bucket';
     readonly severity: FindingSeverity = 'critical';
     readonly provider = 'aws';
@@ -22,9 +23,9 @@ export class S3NoPublicAccessPolicy implements GovernancePolicy {
                     status: 'non_compliant',
                     resourceId: bucket.bucketName,
                     resourceType: this.resourceType,
-                    description: `S3 bucket "${bucket.bucketName}" does not have Block Public Access enabled and may be publicly accessible.`,
+                    description: `S3 bucket "${bucket.bucketName}" does not have all Block Public Access settings enabled (ACLs/policy). The bucket may still be private via ACL, but BPA is incomplete.`,
                     recommendation:
-                        'Enable all four Block Public Access settings on the S3 bucket: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets.',
+                        'Enable all four Block Public Access settings on the S3 bucket: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets. This is independent of current object ACLs — a private bucket can still fail this control if BPA is off.',
                     metadata: {
                         bucketName: bucket.bucketName,
                         bucketArn: bucket.bucketArn,

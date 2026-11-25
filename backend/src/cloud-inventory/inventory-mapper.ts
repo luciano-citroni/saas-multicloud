@@ -290,6 +290,15 @@ export function flattenAwsInventory(data: Record<string, unknown[]>): InventoryR
         ...mapCollection(data.sqsQueues, 'SQS Queue', 'aws', ['createdAtAws'], ['queueName', 'name'], ['queueUrl']),
         ...mapCollection(data.snsTopics, 'SNS Topic', 'aws', [], ['topicName', 'name'], ['topicArn']),
         ...mapCollection(data.wafWebAcls, 'WAF Web ACL', 'aws', [], ['name', 'webAclName'], ['scope']),
+        ...mapCollection(data.wafIpSets, 'WAF IP Set', 'aws', [], ['name'], ['scope', 'ipAddressVersion']),
+        ...mapCollection(
+            data.networkAcls,
+            'Network ACL',
+            'aws',
+            [],
+            ['awsNetworkAclId', 'name'],
+            ['region', 'isDefault', 'awsVpcId'],
+        ),
         ...mapCollection(data.guardDutyDetectors, 'GuardDuty Detector', 'aws', ['createdAtAws'], ['detectorId'], ['status']),
     ];
 }

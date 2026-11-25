@@ -427,12 +427,16 @@ export class AwsConnectorService {
 
      */
 
-    async getS3Client(cloudAccountId: string, organizationId: string): Promise<S3Client> {
+    async getS3Client(cloudAccountId: string, organizationId: string, region?: string): Promise<S3Client> {
         const creds = await this.resolveRoleCredentials(cloudAccountId, organizationId);
+        const finalRegion = region && region.trim() !== '' ? region.trim() : creds.region;
+        const temporaryCreds = await this.assumeRole({ ...creds, region: finalRegion });
 
-        const temporaryCreds = await this.assumeRole(creds);
-
-        return new S3Client({ region: creds.region, credentials: temporaryCreds });
+        return new S3Client({
+            region: finalRegion,
+            credentials: temporaryCreds,
+            followRegionRedirects: true,
+        });
     }
 
     /**

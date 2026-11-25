@@ -27,7 +27,9 @@ import { AzureAssessmentJob } from '../db/entites/azure-assessment-job.entity';
 import { CloudSyncJob } from '../db/entites/cloud-sync-job.entity';
 
 import { GENERAL_SYNC_JOB_NAME, GENERAL_SYNC_QUEUE } from '../aws/assessment/constants';
+import { AZURE_ASSESSMENT_JOB_NAME, AZURE_ASSESSMENT_QUEUE } from '../azure/assessment/constants';
 import { GCP_GENERAL_SYNC_JOB_NAME, GCP_GENERAL_SYNC_QUEUE } from '../gcp/assessment/constants';
+import { SystemModule } from '../common/modules/system-modules';
 
 type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
     isSyncInProgress: boolean;
@@ -38,6 +40,20 @@ type CloudAccountWithSyncStatus = Omit<CloudAccount, 'credentialsEncrypted'> & {
 type CloudAccountSyncFeedback = {
     error: string | null;
     warning: string | null;
+};
+
+export type EnqueueGeneralSyncAllResult = {
+    queued: number;
+    skipped: number;
+    failed: number;
+    results: Array<{
+        cloudAccountId: string;
+        alias: string;
+        provider: string;
+        status: 'queued' | 'skipped' | 'failed';
+        jobId?: string;
+        reason?: string;
+    }>;
 };
 
 @Injectable()
@@ -62,6 +78,9 @@ export class CloudService {
 
         @InjectQueue(GENERAL_SYNC_QUEUE)
         private readonly generalSyncQueue: Queue,
+
+        @InjectQueue(AZURE_ASSESSMENT_QUEUE)
+        private readonly azureAssessmentQueue: Queue,
 
         @InjectQueue(GCP_GENERAL_SYNC_QUEUE)
         private readonly gcpGeneralSyncQueue: Queue,
@@ -585,6 +604,128 @@ export class CloudService {
             ...acc,
             ...syncMetadata[acc.id],
         }));
+    }
+
+    /**
+     * Enfileira sync geral (inventário/assessment) para todas as contas do tenant
+     * (opcionalmente filtradas pela mid-org). Contas já em sync são ignoradas.
+     */
+    async enqueueGeneralSyncAll(
+        tenantId: string,
+        filters?: Pick<ListCloudAccountsQueryDto, 'organizationId'>,
+    ): Promise<EnqueueGeneralSyncAllResult> {
+        await this.assertCloudInventoryAccess(tenantId);
+
+        const accounts = await this.findByOrganization(tenantId, filters);
+        const results: EnqueueGeneralSyncAllResult['results'] = [];
+        let queued = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (const account of accounts) {
+            if (account.isSyncInProgress) {
+                skipped += 1;
+                results.push({
+                    cloudAccountId: account.id,
+                    alias: account.alias,
+                    provider: account.provider,
+                    status: 'skipped',
+                    reason: 'already_syncing',
+                });
+                continue;
+            }
+
+            try {
+                const jobId = await this.enqueueGeneralSyncForAccount(account, tenantId);
+                queued += 1;
+                results.push({
+                    cloudAccountId: account.id,
+                    alias: account.alias,
+                    provider: account.provider,
+                    status: 'queued',
+                    jobId,
+                });
+            } catch (error: unknown) {
+                failed += 1;
+                const reason = error instanceof Error ? error.message : String(error);
+                this.logger.error(`[Cloud Sync All] Falha ao enfileirar ${account.id} (${account.provider}): ${reason}`);
+                results.push({
+                    cloudAccountId: account.id,
+                    alias: account.alias,
+                    provider: account.provider,
+                    status: 'failed',
+                    reason,
+                });
+            }
+        }
+
+        return { queued, skipped, failed, results };
+    }
+
+    private async assertCloudInventoryAccess(organizationId: string): Promise<void> {
+        try {
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.CLOUD_INVENTORY);
+        } catch {
+            // Compatibilidade com planos antigos que ainda usam apenas "assessment".
+            await this.billingService.assertModuleEnabled(organizationId, SystemModule.ASSESSMENT);
+        }
+    }
+
+    private async enqueueGeneralSyncForAccount(
+        account: Pick<CloudAccount, 'id' | 'provider'>,
+        tenantId: string,
+    ): Promise<string> {
+        const provider = String(account.provider).toLowerCase();
+        const jobOptions = {
+            attempts: 2,
+            backoff: { type: 'exponential' as const, delay: 5000 },
+            removeOnComplete: { count: 50 },
+            removeOnFail: { count: 20 },
+        };
+
+        if (provider === CloudProvider.AWS || provider === 'aws') {
+            await this.cloudAccountRepository.update(
+                { id: account.id, tenantId },
+                { isGeneralSyncInProgress: true },
+            );
+            const job = await this.generalSyncQueue.add(GENERAL_SYNC_JOB_NAME, { cloudAccountId: account.id }, jobOptions);
+            return String(job.id);
+        }
+
+        if (provider === CloudProvider.GCP || provider === 'gcp') {
+            await this.cloudAccountRepository.update(
+                { id: account.id, tenantId },
+                { isGeneralSyncInProgress: true },
+            );
+            const job = await this.gcpGeneralSyncQueue.add(
+                GCP_GENERAL_SYNC_JOB_NAME,
+                { cloudAccountId: account.id },
+                jobOptions,
+            );
+            return String(job.id);
+        }
+
+        if (provider === CloudProvider.AZURE || provider === 'azure') {
+            const job = this.azureAssessmentJobRepository.create({
+                cloudAccountId: account.id,
+                organizationId: tenantId,
+                status: 'pending',
+            });
+            const saved = await this.azureAssessmentJobRepository.save(job);
+            await this.azureAssessmentQueue.add(
+                AZURE_ASSESSMENT_JOB_NAME,
+                {
+                    jobId: saved.id,
+                    cloudAccountId: account.id,
+                    organizationId: tenantId,
+                    runSync: true,
+                },
+                jobOptions,
+            );
+            return saved.id;
+        }
+
+        throw new BadRequestException(ErrorMessages.CLOUD_ACCOUNTS.INVALID_PROVIDER);
     }
 
     private async getSyncMetadataForAccounts(accountIds: string[]): Promise<Record<string, Omit<CloudAccountWithSyncStatus, keyof Omit<CloudAccount, 'credentialsEncrypted'>>>> {

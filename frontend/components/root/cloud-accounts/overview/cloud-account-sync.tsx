@@ -19,14 +19,16 @@ import { useOrganizationFromSidebar } from '@/lib/queries/use-sidebar-context';
 import {
     deleteOrganizationCloudAccount,
     enqueueGeneralSync,
+    enqueueGeneralSyncAll,
     fetchOrganizationCloudAccounts,
     isAwsProvider,
     isGcpProvider,
     pollGeneralSyncJobStatus,
+    type EnqueueGeneralSyncAllResponse,
     type GeneralSyncJobStatus,
     type OrganizationCloudAccount as CloudAccount,
 } from '@/app/actions/organization';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CloudAccountTable } from './cloud-account-table';
@@ -137,6 +139,7 @@ export function CloudAccountSync() {
     const [accounts, setAccounts] = useState<CloudAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
+    const [syncingAll, setSyncingAll] = useState(false);
     const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
     const [pendingDeleteAccountId, setPendingDeleteAccountId] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
@@ -381,9 +384,53 @@ export function CloudAccountSync() {
     const hasCloudAccountLimit = maxCloudAccounts > 0;
     const hasReachedCloudAccountLimit = hasCloudAccountLimit && accounts.length >= maxCloudAccounts;
 
+    const handleSyncAllAccounts = useCallback(async () => {
+        if (!organizationId || !canSyncAccounts || syncingAll || syncingAccountId || accounts.length === 0) {
+            return;
+        }
+
+        setSyncingAll(true);
+        try {
+            const response = await enqueueGeneralSyncAll(organizationId, {
+                midOrgId: midOrgId ?? getActiveMidOrgId(organizationId),
+            });
+            const payload = (await response.json().catch(() => null)) as
+                | (ApiErrorPayload & Partial<EnqueueGeneralSyncAllResponse>)
+                | null;
+
+            if (!response.ok) {
+                toast.error(extractErrorMessage(payload ?? null));
+                return;
+            }
+
+            const queued = typeof payload?.queued === 'number' ? payload.queued : 0;
+            const skipped = typeof payload?.skipped === 'number' ? payload.skipped : 0;
+            const failed = typeof payload?.failed === 'number' ? payload.failed : 0;
+
+            if (queued === 0 && failed === 0) {
+                toast.info(tca.syncAllNone);
+            } else if (skipped > 0 || failed > 0) {
+                toast.success(
+                    tca.syncAllPartial
+                        .replace('{queued}', String(queued))
+                        .replace('{skipped}', String(skipped))
+                        .replace('{failed}', String(failed)),
+                );
+            } else {
+                toast.success(tca.syncAllStarted.replace('{queued}', String(queued)));
+            }
+
+            await loadAccounts(organizationId, { nextRefreshing: true });
+        } catch {
+            toast.error(tca.syncAllError);
+        } finally {
+            setSyncingAll(false);
+        }
+    }, [accounts.length, canSyncAccounts, loadAccounts, midOrgId, organizationId, syncingAccountId, syncingAll, tca]);
+
     const handleSyncAccount = useCallback(
         async (cloudAccountId: string) => {
-            if (!organizationId || !canSyncAccounts || syncingAccountId) {
+            if (!organizationId || !canSyncAccounts || syncingAccountId || syncingAll) {
                 return;
             }
 
@@ -473,7 +520,7 @@ export function CloudAccountSync() {
                 }
             }
         },
-        [accounts, canSyncAccounts, loadAccounts, organizationId, startSyncJobPolling, stopSyncPolling, syncingAccountId, tca]
+        [accounts, canSyncAccounts, loadAccounts, organizationId, startSyncJobPolling, stopSyncPolling, syncingAccountId, syncingAll, tca]
     );
 
     const handleEditAccount = useCallback(
@@ -588,11 +635,25 @@ export function CloudAccountSync() {
                         {hasReachedCloudAccountLimit ? <p className="text-xs text-muted-foreground">{tca.planLimitNote}</p> : null}
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
+                        {canSyncAccounts && accounts.length > 0 ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full min-w-0 justify-center gap-2 lg:w-auto"
+                                onClick={() => void handleSyncAllAccounts()}
+                                disabled={syncingAll || Boolean(syncingAccountId)}
+                                isLoading={syncingAll}
+                            >
+                                <RefreshCw className="size-4 shrink-0" />
+                                <span className="truncate">{tca.syncAllAction}</span>
+                            </Button>
+                        ) : null}
                         {connectAccountButton}
                         <Button
                             variant="outline"
                             size="sm"
+                            className="w-full min-w-0 justify-center gap-2 lg:w-auto"
                             onClick={() => void loadAccounts(organizationId, { nextRefreshing: true })}
                             isLoading={refreshing}
                         >

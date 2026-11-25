@@ -127,6 +127,10 @@ export class AwsAssessmentExcelService {
 
         this.addWafSheet(workbook, data);
 
+        this.addWafIpSetSheet(workbook, data);
+
+        this.addNetworkAclSheet(workbook, data);
+
         this.addGuardDutySheet(workbook, data);
 
         this.addIamSheet(workbook, data);
@@ -367,6 +371,10 @@ export class AwsAssessmentExcelService {
             { type: 'ECR Repository', count: data.ecrRepositories.length },
 
             { type: 'WAF Web ACL', count: data.wafWebAcls.length },
+
+            { type: 'WAF IP Set', count: data.wafIpSets.length },
+
+            { type: 'Network ACL', count: data.networkAcls.length },
 
             { type: 'GuardDuty Detector', count: data.guardDutyDetectors.length },
 
@@ -1274,20 +1282,100 @@ export class AwsAssessmentExcelService {
 
             { header: 'Scope', key: 'scope' },
 
+            { header: 'Default Action', key: 'defaultAction' },
+
             { header: 'Rules Count', key: 'rulesCount' },
+
+            { header: 'Associated Resources', key: 'associatedCount' },
         ]);
 
         data.wafWebAcls.forEach((r) =>
             sheet.addRow({
                 name: r.name,
 
-                region: r.scope === 'CLOUDFRONT' ? 'global' : this.regionFromArn(r.webAclArn),
+                region: r.region ?? (r.scope === 'CLOUDFRONT' ? 'global' : this.regionFromArn(r.webAclArn)),
 
                 webAclArn: r.webAclArn,
 
                 scope: r.scope,
 
+                defaultAction: r.defaultAction ?? '',
+
                 rulesCount: r.rulesCount ?? 0,
+
+                associatedCount: r.associatedResources?.length ?? 0,
+            })
+        );
+
+        this.finalize(sheet);
+    }
+
+    private addWafIpSetSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const sheet = this.createSheet(wb, 'WAF IP Sets', [
+            { header: 'Name', key: 'name' },
+
+            { header: 'Region', key: 'region' },
+
+            { header: 'ARN', key: 'ipSetArn' },
+
+            { header: 'Scope', key: 'scope' },
+
+            { header: 'IP Version', key: 'ipAddressVersion' },
+
+            { header: 'Addresses Count', key: 'addressesCount' },
+        ]);
+
+        data.wafIpSets.forEach((r) =>
+            sheet.addRow({
+                name: r.name,
+
+                region: r.region ?? (r.scope === 'CLOUDFRONT' ? 'global' : this.regionFromArn(r.ipSetArn)),
+
+                ipSetArn: r.ipSetArn,
+
+                scope: r.scope,
+
+                ipAddressVersion: r.ipAddressVersion ?? '',
+
+                addressesCount: r.addresses?.length ?? 0,
+            })
+        );
+
+        this.finalize(sheet);
+    }
+
+    private addNetworkAclSheet(wb: ExcelJS.Workbook, data: AssessmentData): void {
+        const sheet = this.createSheet(wb, 'Network ACLs', [
+            { header: 'Network ACL ID', key: 'awsNetworkAclId' },
+
+            { header: 'Name', key: 'name' },
+
+            { header: 'Region', key: 'region' },
+
+            { header: 'VPC ID', key: 'awsVpcId' },
+
+            { header: 'Default', key: 'isDefault' },
+
+            { header: 'Entries Count', key: 'entriesCount' },
+
+            { header: 'Associations Count', key: 'associationsCount' },
+        ]);
+
+        data.networkAcls.forEach((r) =>
+            sheet.addRow({
+                awsNetworkAclId: r.awsNetworkAclId,
+
+                name: r.tags?.['Name'] ?? r.awsNetworkAclId,
+
+                region: r.region ?? '',
+
+                awsVpcId: r.awsVpcId ?? '',
+
+                isDefault: r.isDefault ? 'Yes' : 'No',
+
+                entriesCount: r.entries?.length ?? 0,
+
+                associationsCount: r.associations?.length ?? 0,
             })
         );
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,16 +15,25 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ErrorMessages, extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
+import {
+    canManageMembers,
+    getAssignableInviteRoles,
+    hasRequiredOrganizationRole,
+    normalizeOrganizationRole,
+    type OrganizationRole,
+} from '@/lib/organization-rbac';
 import { cn } from '@/lib/utils';
 
 type Props = {
     organizationId: string;
+    currentRole: OrganizationRole;
     onSuccess: () => void;
 };
 
 type OrganizationOption = {
     id: string;
     name: string;
+    currentRole: OrganizationRole | null;
 };
 
 function normalizeOrganizations(payload: unknown): OrganizationOption[] {
@@ -34,16 +43,22 @@ function normalizeOrganizations(payload: unknown): OrganizationOption[] {
           ? (payload as { items: unknown[] }).items
           : [];
 
-    return items.filter(
-        (item): item is OrganizationOption =>
-            typeof item === 'object' &&
-            item !== null &&
-            typeof (item as { id?: unknown }).id === 'string' &&
-            typeof (item as { name?: unknown }).name === 'string'
-    );
+    return items
+        .map((item) => {
+            if (typeof item !== 'object' || item === null) return null;
+            const id = (item as { id?: unknown }).id;
+            const name = (item as { name?: unknown }).name;
+            if (typeof id !== 'string' || typeof name !== 'string') return null;
+            return {
+                id,
+                name,
+                currentRole: normalizeOrganizationRole((item as { currentRole?: unknown }).currentRole as string | null),
+            };
+        })
+        .filter((item): item is OrganizationOption => item !== null);
 }
 
-export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
+export function InviteMemberDialog({ organizationId, currentRole, onSuccess }: Props) {
     const [open, setOpen] = useState(false);
     const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
     const [loadingOrganizations, setLoadingOrganizations] = useState(false);
@@ -51,11 +66,41 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
     const tc = useTranslations('common');
     const router = useRouter();
 
-    const schema = z.object({
-        email: z.string().email(t.inviteEmailInvalid),
-        role: z.enum(['ADMIN', 'MEMBER', 'VIEWER'], { message: t.inviteRoleRequired }),
-        organizationIds: z.array(z.string().uuid()).min(1, t.inviteOrganizationRequired),
-    });
+    const isTenantAdmin = canManageMembers(currentRole);
+
+    const invitableOrganizations = useMemo(() => {
+        if (isTenantAdmin) return organizations;
+        return organizations.filter((org) => hasRequiredOrganizationRole(org.currentRole, 'ADMIN'));
+    }, [isTenantAdmin, organizations]);
+
+    const effectiveInviteRole = useMemo<OrganizationRole | null>(() => {
+        if (isTenantAdmin) return currentRole;
+        if (invitableOrganizations.length === 0) return null;
+        const levels: Record<OrganizationRole, number> = { OWNER: 4, ADMIN: 3, MEMBER: 2, VIEWER: 1 };
+        let weakest: OrganizationRole | null = null;
+        for (const org of invitableOrganizations) {
+            if (!org.currentRole) continue;
+            if (!weakest || levels[org.currentRole] < levels[weakest]) {
+                weakest = org.currentRole;
+            }
+        }
+        return weakest;
+    }, [currentRole, invitableOrganizations, isTenantAdmin]);
+
+    const assignableRoles = useMemo(
+        () => getAssignableInviteRoles(effectiveInviteRole),
+        [effectiveInviteRole],
+    );
+
+    const schema = useMemo(
+        () =>
+            z.object({
+                email: z.string().email(t.inviteEmailInvalid),
+                role: z.enum(['ADMIN', 'MEMBER', 'VIEWER'], { message: t.inviteRoleRequired }),
+                organizationIds: z.array(z.string().uuid()).min(1, t.inviteOrganizationRequired),
+            }),
+        [t.inviteEmailInvalid, t.inviteOrganizationRequired, t.inviteRoleRequired],
+    );
     type FormValues = z.infer<typeof schema>;
 
     const form = useForm<FormValues>({
@@ -86,9 +131,20 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                 const nextOrganizations = normalizeOrganizations(payload);
                 setOrganizations(nextOrganizations);
 
+                const selectable = isTenantAdmin
+                    ? nextOrganizations
+                    : nextOrganizations.filter((org) => hasRequiredOrganizationRole(org.currentRole, 'ADMIN'));
+
                 const selectedIds = form.getValues('organizationIds');
-                if (selectedIds.length === 0 && nextOrganizations.length > 0) {
-                    form.setValue('organizationIds', [nextOrganizations[0].id], { shouldValidate: true });
+                if (selectedIds.length === 0 && selectable.length > 0) {
+                    form.setValue('organizationIds', [selectable[0].id], { shouldValidate: true });
+                } else if (selectedIds.length > 0) {
+                    const allowed = new Set(selectable.map((org) => org.id));
+                    form.setValue(
+                        'organizationIds',
+                        selectedIds.filter((id) => allowed.has(id)),
+                        { shouldValidate: true },
+                    );
                 }
             } catch {
                 toast.error(t.inviteLoadOrganizationsError);
@@ -99,9 +155,22 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
         };
 
         void loadOrganizations();
-    }, [form, open, organizationId, t.inviteLoadOrganizationsError]);
+    }, [form, isTenantAdmin, open, organizationId, t.inviteLoadOrganizationsError]);
+
+    useEffect(() => {
+        if (assignableRoles.length === 0) return;
+        const current = form.getValues('role');
+        if (!assignableRoles.includes(current)) {
+            form.setValue('role', assignableRoles[0], { shouldValidate: true });
+        }
+    }, [assignableRoles, form]);
 
     const onSubmit = form.handleSubmit(async (data) => {
+        if (!assignableRoles.includes(data.role)) {
+            toast.error(t.inviteError);
+            return;
+        }
+
         try {
             const response = await fetch(`/api/organization/${encodeURIComponent(organizationId)}/members`, {
                 method: 'POST',
@@ -128,7 +197,7 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
             }
 
             toast.success(t.inviteSuccess);
-            form.reset();
+            form.reset({ email: '', role: assignableRoles.includes('MEMBER') ? 'MEMBER' : assignableRoles[0], organizationIds: [] });
             setOrganizations([]);
             setOpen(false);
             onSuccess();
@@ -136,6 +205,11 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
             toast.error(t.inviteError);
         }
     });
+
+    const roleOptions = assignableRoles.map((role) => ({
+        value: role,
+        label: role === 'ADMIN' ? t.roleAdmin : role === 'MEMBER' ? t.roleMember : t.roleViewer,
+    }));
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -175,11 +249,8 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                                         mode="single"
                                         value={field.value}
                                         onValueChange={field.onChange}
-                                        options={[
-                                            { value: 'ADMIN', label: t.roleAdmin },
-                                            { value: 'MEMBER', label: t.roleMember },
-                                            { value: 'VIEWER', label: t.roleViewer },
-                                        ]}
+                                        options={roleOptions}
+                                        disabled={roleOptions.length === 0}
                                     />
                                     <FormMessage />
                                 </FormItem>
@@ -216,11 +287,11 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                                     <div className="rounded-md border">
                                         {loadingOrganizations ? (
                                             <p className="p-3 text-sm text-muted-foreground">{tc.loading}</p>
-                                        ) : organizations.length === 0 ? (
+                                        ) : invitableOrganizations.length === 0 ? (
                                             <p className="p-3 text-sm text-muted-foreground">{t.inviteNoOrganizations}</p>
                                         ) : (
                                             <div className="divide-y">
-                                                {organizations.map((org) => {
+                                                {invitableOrganizations.map((org) => {
                                                     const checked = field.value.includes(org.id);
 
                                                     return (
@@ -274,7 +345,11 @@ export function InviteMemberDialog({ organizationId, onSuccess }: Props) {
                             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                                 {tc.cancel}
                             </Button>
-                            <Button type="submit" isLoading={form.formState.isSubmitting}>
+                            <Button
+                                type="submit"
+                                isLoading={form.formState.isSubmitting}
+                                disabled={assignableRoles.length === 0 || invitableOrganizations.length === 0}
+                            >
                                 {t.sendInvite}
                             </Button>
                         </DialogFooter>

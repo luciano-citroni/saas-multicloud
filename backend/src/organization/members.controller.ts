@@ -110,20 +110,22 @@ export class MembersController {
 
     @Get('invites')
     @HttpCode(HttpStatus.OK)
+    @Roles(OrgRole.MEMBER)
     @ApiOperation({ summary: 'Listar convites pendentes da organização' })
     @ApiResponse({ status: 200, description: 'Lista de convites pendentes', type: [InviteListItemResponseDto] })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    listInvites(@CurrentOrganization() organization: Tenant) {
-        return this.organizationService.listPendingInvites(organization.id);
+    @ApiResponse({ status: 403, description: 'Acesso negado' })
+    listInvites(@CurrentUser() user: JwtPayload, @CurrentOrganization() organization: Tenant) {
+        return this.organizationService.listPendingInvites(organization.id, user.sub);
     }
 
     @Post('invites/:inviteId/resend')
     @HttpCode(HttpStatus.OK)
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.MEMBER)
     @ApiOperation({ summary: 'Reenviar e-mail de convite pendente' })
     @ApiResponse({ status: 200, description: 'Convite reenviado com sucesso', type: InviteResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    @ApiResponse({ status: 403, description: 'Acesso negado - ADMIN do tenant ou autor do convite' })
     @ApiResponse({ status: 404, description: 'Convite não encontrado' })
     resendInvite(
         @CurrentUser() user: JwtPayload,
@@ -135,14 +137,18 @@ export class MembersController {
 
     @Delete('invites/:inviteId')
     @HttpCode(HttpStatus.OK)
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.MEMBER)
     @ApiOperation({ summary: 'Cancelar convite pendente' })
     @ApiResponse({ status: 200, description: 'Convite cancelado com sucesso', type: CancelInviteResponseDto })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    @ApiResponse({ status: 403, description: 'Acesso negado - ADMIN do tenant ou autor do convite' })
     @ApiResponse({ status: 404, description: 'Convite não encontrado' })
-    cancelInvite(@CurrentOrganization() organization: Tenant, @Param(new ZodValidationPipe(inviteIdParamSchema)) params: InviteIdParam) {
-        return this.organizationService.cancelInvite(params.inviteId, organization.id);
+    cancelInvite(
+        @CurrentUser() user: JwtPayload,
+        @CurrentOrganization() organization: Tenant,
+        @Param(new ZodValidationPipe(inviteIdParamSchema)) params: InviteIdParam,
+    ) {
+        return this.organizationService.cancelInvite(params.inviteId, organization.id, user.sub);
     }
 
     @Get(':userId/orgs')
@@ -199,14 +205,14 @@ export class MembersController {
      * Um e-mail com link de aceite será enviado para o endereço informado.
 
 
-     * Apenas ADMIN e OWNER podem enviar convites.
+     * ADMIN/OWNER do tenant, ou ADMIN de organization (mid-org) nas orgs selecionadas.
 
 
      */
 
     @Post('invite')
     @HttpCode(HttpStatus.OK)
-    @Roles(OrgRole.ADMIN)
+    @Roles(OrgRole.MEMBER)
     @ApiOperation({ summary: 'Convidar usuário para a organização via e-mail' })
     @ApiBody({
         description: 'Dados do convite',
@@ -222,7 +228,7 @@ export class MembersController {
     })
     @ApiResponse({ status: 400, description: 'Dados inválidos - e-mail ou cargo incorretos' })
     @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
-    @ApiResponse({ status: 403, description: 'Acesso negado - apenas ADMIN+' })
+    @ApiResponse({ status: 403, description: 'Acesso negado - ADMIN do tenant ou ADMIN das organizations selecionadas' })
     @ApiResponse({
         status: 409,
 

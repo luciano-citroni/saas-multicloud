@@ -64,6 +64,30 @@ export class CloudController {
         return this.cloudService.findByOrganization(org.id, query);
     }
 
+    @Post('accounts/sync-all')
+    @Roles(OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MEMBER)
+    @HttpCode(HttpStatus.ACCEPTED)
+    @ApiQuery({
+        name: 'organizationId',
+        required: false,
+        description: 'Filtro por Organização (mid-org) — cloud_accounts.organization_id. Omitir = todas as contas do tenant.',
+    })
+    @ApiOperation({
+        summary: 'Enfileirar sync geral de todas as contas cloud',
+        description:
+            'Coloca na fila o sync geral (inventário/assessment) de cada conta do tenant (ou mid-org). Contas já em sync são ignoradas.',
+    })
+    @ApiResponse({ status: 202, description: 'Syncs enfileirados (parcial ou total)' })
+    @ApiResponse({ status: 401, description: 'Token inválido ou expirado' })
+    @ApiResponse({ status: 403, description: 'Acesso negado ou módulo não habilitado' })
+    async syncAllAccounts(
+        @CurrentOrganization() org: Tenant,
+        @Query(new ZodValidationPipe(listCloudAccountsQuerySchema.pick({ organizationId: true })))
+        query: Pick<ListCloudAccountsQueryDto, 'organizationId'>,
+    ) {
+        return this.cloudService.enqueueGeneralSyncAll(org.id, query);
+    }
+
     @Get('accounts/:id')
     @Roles(OrgRole.ADMIN)
     @ApiOperation({

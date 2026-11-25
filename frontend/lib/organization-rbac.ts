@@ -59,3 +59,19 @@ export function canDeleteOrganization(role: OrganizationRole | null): boolean {
 export function canManageMembers(role: OrganizationRole | null): boolean {
     return hasRequiredOrganizationRole(role, 'ADMIN');
 }
+
+/** Roles an inviter can assign on invite, based on their own role. */
+export function getAssignableInviteRoles(
+    requesterRole: OrganizationRole | null,
+): Array<'ADMIN' | 'MEMBER' | 'VIEWER'> {
+    if (requesterRole === 'OWNER') return ['ADMIN', 'MEMBER', 'VIEWER'];
+    if (requesterRole === 'ADMIN') return ['MEMBER', 'VIEWER'];
+    return [];
+}
+
+/** True when the user can invite into at least one mid-org as ADMIN+. */
+export function canInviteAsOrganizationAdmin(
+    organizationRoles: Array<OrganizationRole | null | undefined>,
+): boolean {
+    return organizationRoles.some((role) => hasRequiredOrganizationRole(role ?? null, 'ADMIN'));
+}

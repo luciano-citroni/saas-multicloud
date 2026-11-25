@@ -30,6 +30,8 @@ import {
     AwsSqsQueue,
     AwsSnsTopic,
     AwsWafWebAcl,
+    AwsWafIpSet,
+    AwsNetworkAcl,
     AwsGuardDutyDetector,
 } from '../../db/entites';
 
@@ -45,6 +47,7 @@ export interface AssessmentData {
     loadBalancers: AwsLoadBalancer[];
     loadBalancerListeners: AwsLoadBalancerListener[];
     securityGroups: AwsSecurityGroup[];
+    networkAcls: AwsNetworkAcl[];
     iamRoles: AwsIamRole[];
     rdsInstances: AwsRdsInstance[];
     s3Buckets: AwsS3Bucket[];
@@ -62,6 +65,7 @@ export interface AssessmentData {
     sqsQueues: AwsSqsQueue[];
     snsTopics: AwsSnsTopic[];
     wafWebAcls: AwsWafWebAcl[];
+    wafIpSets: AwsWafIpSet[];
     guardDutyDetectors: AwsGuardDutyDetector[];
 }
 
@@ -101,6 +105,8 @@ export class AwsAssessmentReportService {
         @InjectRepository(AwsSqsQueue) private readonly sqsRepo: Repository<AwsSqsQueue>,
         @InjectRepository(AwsSnsTopic) private readonly snsRepo: Repository<AwsSnsTopic>,
         @InjectRepository(AwsWafWebAcl) private readonly wafRepo: Repository<AwsWafWebAcl>,
+        @InjectRepository(AwsWafIpSet) private readonly wafIpSetRepo: Repository<AwsWafIpSet>,
+        @InjectRepository(AwsNetworkAcl) private readonly networkAclRepo: Repository<AwsNetworkAcl>,
         @InjectRepository(AwsGuardDutyDetector) private readonly gdRepo: Repository<AwsGuardDutyDetector>
     ) {}
 
@@ -133,6 +139,8 @@ export class AwsAssessmentReportService {
             sqsQueues,
             snsTopics,
             wafWebAcls,
+            wafIpSets,
+            networkAcls,
             guardDutyDetectors,
         ] = await Promise.all([
             this.vpcRepo.find({ where: byAccount }),
@@ -159,6 +167,8 @@ export class AwsAssessmentReportService {
             this.sqsRepo.find({ where: byAccount }),
             this.snsRepo.find({ where: byAccount }),
             this.wafRepo.find({ where: byAccount }),
+            this.wafIpSetRepo.find({ where: byAccount }),
+            this.networkAclRepo.find({ where: byAccount }),
             this.gdRepo.find({ where: byAccount }),
         ]);
 
@@ -186,6 +196,7 @@ export class AwsAssessmentReportService {
             loadBalancers,
             loadBalancerListeners,
             securityGroups,
+            networkAcls,
             iamRoles,
             rdsInstances,
             s3Buckets,
@@ -203,6 +214,7 @@ export class AwsAssessmentReportService {
             sqsQueues,
             snsTopics,
             wafWebAcls,
+            wafIpSets,
             guardDutyDetectors,
         };
     }
@@ -220,6 +232,7 @@ export class AwsAssessmentReportService {
             'Load Balancer': data.loadBalancers.length,
             'LB Listener': data.loadBalancerListeners.length,
             'Security Group': data.securityGroups.length,
+            'Network ACL': data.networkAcls.length,
             'IAM Role': data.iamRoles.length,
             'RDS Instance': data.rdsInstances.length,
             'S3 Bucket': data.s3Buckets.length,
@@ -237,6 +250,7 @@ export class AwsAssessmentReportService {
             'SQS Queue': data.sqsQueues.length,
             'SNS Topic': data.snsTopics.length,
             'WAF Web ACL': data.wafWebAcls.length,
+            'WAF IP Set': data.wafIpSets.length,
             'GuardDuty Detector': data.guardDutyDetectors.length,
         };
         const totalResources = Object.values(byType).reduce((a, b) => a + b, 0);

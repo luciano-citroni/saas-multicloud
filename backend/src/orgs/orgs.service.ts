@@ -31,13 +31,19 @@ export class OrgsService {
         return saved;
     }
 
-    async findAll(tenantId: string, userId: string): Promise<Organization[]> {
-        return this.orgRepository
+    async findAll(tenantId: string, userId: string): Promise<Array<Organization & { currentRole: string | null }>> {
+        const rows = await this.orgRepository
             .createQueryBuilder('organization')
             .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
+            .addSelect('membership.role', 'membership_role')
             .where('organization.tenantId = :tenantId', { tenantId })
             .orderBy('organization.createdAt', 'ASC')
-            .getMany();
+            .getRawAndEntities();
+
+        return rows.entities.map((organization, index) => ({
+            ...organization,
+            currentRole: typeof rows.raw[index]?.membership_role === 'string' ? rows.raw[index].membership_role : null,
+        }));
     }
 
     async findAllPaginated(
@@ -46,7 +52,7 @@ export class OrgsService {
         page: number,
         limit: number
     ): Promise<{
-        items: Organization[];
+        items: Array<Organization & { currentRole: string | null }>;
         pagination: {
             page: number;
             limit: number;
@@ -62,18 +68,22 @@ export class OrgsService {
         const qb = this.orgRepository
             .createQueryBuilder('organization')
             .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
+            .addSelect('membership.role', 'membership_role')
             .where('organization.tenantId = :tenantId', { tenantId })
             .orderBy('organization.createdAt', 'ASC');
 
         const totalItems = await qb.getCount();
-        const items = await qb
+        const rows = await qb
             .skip((safePage - 1) * safeLimit)
             .take(safeLimit)
-            .getMany();
+            .getRawAndEntities();
         const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
 
         return {
-            items,
+            items: rows.entities.map((organization, index) => ({
+                ...organization,
+                currentRole: typeof rows.raw[index]?.membership_role === 'string' ? rows.raw[index].membership_role : null,
+            })),
             pagination: {
                 page: safePage,
                 limit: safeLimit,

@@ -34,7 +34,14 @@ export const PERMISSIONS_POLICY = {
         {
             Sid: 'EC2ReadAccess',
             Effect: 'Allow',
-            Action: ['ec2:DescribeInstances', 'ec2:DescribeVpcs', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups', 'ec2:DescribeRouteTables'],
+            Action: [
+                'ec2:DescribeInstances',
+                'ec2:DescribeVpcs',
+                'ec2:DescribeSubnets',
+                'ec2:DescribeSecurityGroups',
+                'ec2:DescribeRouteTables',
+                'ec2:DescribeNetworkAcls',
+            ],
             Resource: '*',
         },
         {
@@ -161,7 +168,14 @@ export const PERMISSIONS_POLICY = {
         {
             Sid: 'WAFReadAccess',
             Effect: 'Allow',
-            Action: ['wafv2:ListWebACLs', 'wafv2:GetWebACL', 'wafv2:ListTagsForResource'],
+            Action: [
+                'wafv2:ListWebACLs',
+                'wafv2:GetWebACL',
+                'wafv2:ListTagsForResource',
+                'wafv2:ListIPSets',
+                'wafv2:GetIPSet',
+                'wafv2:ListResourcesForWebACL',
+            ],
             Resource: '*',
         },
         {

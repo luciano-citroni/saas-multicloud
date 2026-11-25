@@ -33,6 +33,8 @@ export function translateGovernancePolicyName(name: string): string {
         'EC2 Instance Should Not Have a Public IP Address': 'Instância EC2 não deve ter IP público',
         'S3 Bucket Must Have Server-Side Encryption Enabled': 'Bucket S3 deve ter criptografia no servidor habilitada',
         'S3 Bucket Must Not Be Publicly Accessible': 'Bucket S3 não deve ser acessível publicamente',
+        'S3 Bucket Block Public Access Must Be Enabled':
+            'Bucket S3 deve ter Bloqueio de Acesso Público habilitado',
         'S3 Bucket Should Have Server Access Logging Enabled': 'Bucket S3 deve ter logging de acesso habilitado',
         'S3 Bucket Should Have Versioning Enabled': 'Bucket S3 deve ter versionamento habilitado',
         'Security Group Must Not Allow SSH From Any IP': 'Security Group não deve permitir SSH de qualquer IP',
@@ -368,6 +370,15 @@ export function translateGovernanceDescription(description: string): string {
         return `O bucket S3 "${bucketName}" não possui Bloqueio de Acesso Público habilitado e pode estar acessível publicamente.`;
     }
 
+    const s3PublicAccessIncompleteRegex =
+        /^S3 bucket "([^"]+)" does not have all Block Public Access settings enabled \(ACLs\/policy\)\. The bucket may still be private via ACL, but BPA is incomplete\.$/i;
+    const s3PublicAccessIncompleteMatch = description.match(s3PublicAccessIncompleteRegex);
+
+    if (s3PublicAccessIncompleteMatch) {
+        const [, bucketName] = s3PublicAccessIncompleteMatch;
+        return `O bucket S3 "${bucketName}" não tem todas as configurações de Bloqueio de Acesso Público habilitadas (ACLs/política). O bucket pode estar privado via ACL, mas o BPA está incompleto.`;
+    }
+
     const s3AccessLoggingRegex = /^S3 bucket "([^"]+)" does not have server access logging enabled\. Access requests are not being recorded\.$/i;
     const s3AccessLoggingMatch = description.match(s3AccessLoggingRegex);
 
@@ -404,6 +415,13 @@ export function translateGovernanceRecommendation(recommendation: string): strin
 
     if (s3PublicAccessRegex.test(recommendation)) {
         return 'Habilite as quatro configurações de Bloqueio de Acesso Público no bucket S3: Bloquear ACLs públicas (BlockPublicAcls), Ignorar ACLs públicas (IgnorePublicAcls), Bloquear política pública (BlockPublicPolicy) e Restringir buckets públicos (RestrictPublicBuckets).';
+    }
+
+    const s3PublicAccessIncompleteRecommendationRegex =
+        /^Enable all four Block Public Access settings on the S3 bucket: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets\. This is independent of current object ACLs — a private bucket can still fail this control if BPA is off\.$/i;
+
+    if (s3PublicAccessIncompleteRecommendationRegex.test(recommendation)) {
+        return 'Habilite as quatro configurações de Bloqueio de Acesso Público no bucket S3: Bloquear ACLs públicas (BlockPublicAcls), Ignorar ACLs públicas (IgnorePublicAcls), Bloquear política pública (BlockPublicPolicy) e Restringir buckets públicos (RestrictPublicBuckets). Isso é independente das ACLs atuais — um bucket privado ainda pode falhar nesse controle se o BPA estiver desligado.';
     }
 
     const s3AccessLoggingRecommendationRegex =

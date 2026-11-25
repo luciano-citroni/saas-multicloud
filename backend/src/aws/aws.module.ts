@@ -24,6 +24,7 @@ import { AwsElastiCacheModule } from './elasticache/aws-elasticache.module';
 import { AwsSqsModule } from './sqs/aws-sqs.module';
 import { AwsSnsModule } from './sns/aws-sns.module';
 import { AwsWafModule } from './waf/aws-waf.module';
+import { AwsNetworkAclModule } from './network-acl/aws-network-acl.module';
 import { AwsGuardDutyModule } from './guardduty/aws-guardduty.module';
 import { AwsAssessmentModule } from './assessment/aws-assessment.module';
 
@@ -54,6 +55,7 @@ import { AwsAssessmentModule } from './assessment/aws-assessment.module';
         AwsSqsModule,
         AwsSnsModule,
         AwsWafModule,
+        AwsNetworkAclModule,
         AwsGuardDutyModule,
         AwsAssessmentModule,
     ],

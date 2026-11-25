@@ -189,7 +189,14 @@ export class OrganizationService {
             throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
         }
 
-        const inviterLevel = ROLE_HIERARCHY[inviterMembership.role as OrgRole] ?? 0;
+        const organizationIds = await this.resolveInviteOrganizationIds(tenantId, dto.organizationIds);
+        const inviterLevel = await this.resolveInviteAuthorityLevel(
+            tenantId,
+            inviterUserId,
+            inviterMembership.role as OrgRole,
+            organizationIds,
+        );
+
         const invitedRoleLevel = ROLE_HIERARCHY[dto.role as OrgRole] ?? 0;
         // Same rule as updateMemberRole: cannot assign a role >= own level (ADMIN cannot mint peer ADMINs).
         if (invitedRoleLevel >= inviterLevel) {
@@ -205,8 +212,6 @@ export class OrganizationService {
         }
 
         await this.inviteRepository.delete({ tenantId, email: dto.email.toLowerCase(), status: TenantInviteStatus.PENDING });
-
-        const organizationIds = await this.resolveInviteOrganizationIds(tenantId, dto.organizationIds);
 
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 8);
@@ -488,9 +493,29 @@ export class OrganizationService {
         };
     }
 
-    async listPendingInvites(tenantId: string): Promise<TenantInvite[]> {
+    async listPendingInvites(tenantId: string, requesterUserId: string): Promise<TenantInvite[]> {
+        const requesterMembership = await this.memberRepository.findOne({ where: { tenantId, userId: requesterUserId } });
+        if (!requesterMembership) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const isTenantAdmin =
+            (ROLE_HIERARCHY[requesterMembership.role as OrgRole] ?? 0) >= ROLE_HIERARCHY[OrgRole.ADMIN];
+
+        if (isTenantAdmin) {
+            return this.inviteRepository.find({
+                where: { tenantId, status: TenantInviteStatus.PENDING },
+                order: { createdAt: 'DESC' },
+            });
+        }
+
+        // Organization (mid-org) admins only see invites they created.
         return this.inviteRepository.find({
-            where: { tenantId, status: TenantInviteStatus.PENDING },
+            where: {
+                tenantId,
+                status: TenantInviteStatus.PENDING,
+                invitedByUserId: requesterUserId,
+            },
             order: { createdAt: 'DESC' },
         });
     }
@@ -498,6 +523,8 @@ export class OrganizationService {
     async resendInvite(inviteId: string, tenantId: string, requesterId: string): Promise<TenantInvite> {
         const invite = await this.inviteRepository.findOne({ where: { id: inviteId, tenantId } });
         if (!invite) throw new NotFoundException(ErrorMessages.INVITES.NOT_FOUND);
+
+        await this.ensureCanManageInvite(tenantId, requesterId, invite);
 
         const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
         const inviter = await this.userRepository.findOne({ where: { id: requesterId } });
@@ -524,9 +551,15 @@ export class OrganizationService {
         return saved;
     }
 
-    async cancelInvite(inviteId: string, tenantId: string): Promise<{ inviteId: string; cancelled: true }> {
+    async cancelInvite(
+        inviteId: string,
+        tenantId: string,
+        requesterId: string,
+    ): Promise<{ inviteId: string; cancelled: true }> {
         const invite = await this.inviteRepository.findOne({ where: { id: inviteId, tenantId } });
         if (!invite) throw new NotFoundException(ErrorMessages.INVITES.NOT_FOUND);
+
+        await this.ensureCanManageInvite(tenantId, requesterId, invite);
         await this.inviteRepository.remove(invite);
         return { inviteId, cancelled: true };
     }
@@ -679,6 +712,91 @@ export class OrganizationService {
         }
 
         return uniqueIds;
+    }
+
+    /**
+     * Invite authority:
+     * - Tenant ADMIN/OWNER: can invite; level = tenant role.
+     * - Otherwise: must be ADMIN+ on every selected organization (mid-org); level = weakest of those.
+     */
+    private async resolveInviteAuthorityLevel(
+        tenantId: string,
+        inviterUserId: string,
+        tenantRole: OrgRole,
+        organizationIds: string[],
+    ): Promise<number> {
+        const tenantLevel = ROLE_HIERARCHY[tenantRole] ?? 0;
+        if (tenantLevel >= ROLE_HIERARCHY[OrgRole.ADMIN]) {
+            if (organizationIds.length === 0) {
+                return tenantLevel;
+            }
+
+            // Tenant admins may only grant orgs they belong to (OWNER may grant any org in tenant).
+            if (tenantRole !== OrgRole.OWNER) {
+                const memberships = await this.organizationMembershipRepository.find({
+                    where: { userId: inviterUserId, organizationId: In(organizationIds) },
+                    select: ['organizationId'],
+                });
+                if (memberships.length !== organizationIds.length) {
+                    throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+                }
+            }
+
+            return tenantLevel;
+        }
+
+        if (organizationIds.length === 0) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const memberships = await this.organizationMembershipRepository.find({
+            where: { userId: inviterUserId, organizationId: In(organizationIds) },
+        });
+
+        if (memberships.length !== organizationIds.length) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const levels = memberships.map((membership) => ROLE_HIERARCHY[membership.role as OrgRole] ?? 0);
+        const weakest = Math.min(...levels);
+        if (weakest < ROLE_HIERARCHY[OrgRole.ADMIN]) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        return weakest;
+    }
+
+    private async ensureCanManageInvite(
+        tenantId: string,
+        requesterId: string,
+        invite: TenantInvite,
+    ): Promise<void> {
+        const requesterMembership = await this.memberRepository.findOne({
+            where: { tenantId, userId: requesterId },
+        });
+        if (!requesterMembership) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const isTenantAdmin =
+            (ROLE_HIERARCHY[requesterMembership.role as OrgRole] ?? 0) >= ROLE_HIERARCHY[OrgRole.ADMIN];
+        if (isTenantAdmin) return;
+
+        if (invite.invitedByUserId !== requesterId) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        const organizationIds = invite.organizationIds?.filter(Boolean) ?? [];
+        if (organizationIds.length === 0) {
+            throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
+        }
+
+        await this.resolveInviteAuthorityLevel(
+            tenantId,
+            requesterId,
+            requesterMembership.role as OrgRole,
+            organizationIds,
+        );
     }
 
     private async addUserToInviteOrganizations(tenantId: string, userId: string, role: OrgRole, invitedOrganizationIds?: string[]): Promise<void> {

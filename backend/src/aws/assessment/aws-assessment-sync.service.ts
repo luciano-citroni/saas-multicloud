@@ -48,6 +48,8 @@ import { AwsSnsService } from '../sns/aws-sns.service';
 
 import { AwsWafService } from '../waf/aws-waf.service';
 
+import { AwsNetworkAclService } from '../network-acl/aws-network-acl.service';
+
 import { AwsGuardDutyService } from '../guardduty/aws-guardduty.service';
 import { AwsConnectorService } from '../aws-connector.service';
 
@@ -104,6 +106,8 @@ export class AwsAssessmentSyncService {
 
         private readonly wafService: AwsWafService,
 
+        private readonly networkAclService: AwsNetworkAclService,
+
         private readonly guardDutyService: AwsGuardDutyService,
 
         private readonly connector: AwsConnectorService
@@ -142,6 +146,8 @@ export class AwsAssessmentSyncService {
         await this.runStep('Route Tables', () => this.routeTablesService.syncRouteTablesFromAws(cloudAccountId, organizationId));
 
         await this.runStep('Security Groups', () => this.securityGroupService.syncSecurityGroupsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Network ACLs', () => this.networkAclService.syncNetworkAclsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('IAM Roles', () => this.iamService.syncRolesFromAws(cloudAccountId, organizationId, undefined, 'all'));
 
@@ -197,6 +203,8 @@ export class AwsAssessmentSyncService {
 
         await this.runStep('WAF Web ACLs', () => this.wafService.syncWebAclsFromAws(cloudAccountId, organizationId));
 
+        await this.runStep('WAF IP Sets', () => this.wafService.syncIpSetsFromAws(cloudAccountId, organizationId));
+
         await this.runStep('GuardDuty Detectors', () => this.guardDutyService.syncDetectorsFromAws(cloudAccountId, organizationId));
     }
 
@@ -208,6 +216,8 @@ export class AwsAssessmentSyncService {
         await this.runStep('Route Tables', () => this.routeTablesService.syncRouteTablesFromAws(cloudAccountId, organizationId));
 
         await this.runStep('Security Groups', () => this.securityGroupService.syncSecurityGroupsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('Network ACLs', () => this.networkAclService.syncNetworkAclsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('EC2 Instances', () => this.ec2Service.syncInstancesFromAws(cloudAccountId, organizationId));
 
@@ -250,6 +260,8 @@ export class AwsAssessmentSyncService {
         await this.runStep('SNS Topics', () => this.snsService.syncTopicsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('WAF Web ACLs', () => this.wafService.syncWebAclsFromAws(cloudAccountId, organizationId));
+
+        await this.runStep('WAF IP Sets', () => this.wafService.syncIpSetsFromAws(cloudAccountId, organizationId));
 
         await this.runStep('GuardDuty Detectors', () => this.guardDutyService.syncDetectorsFromAws(cloudAccountId, organizationId));
     }

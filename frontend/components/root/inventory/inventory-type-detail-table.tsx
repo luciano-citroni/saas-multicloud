@@ -127,7 +127,7 @@ export function InventoryTypeDetailTable({
                                     {humanizeAttributeKey(key)}
                                 </TableHead>
                             ))}
-                            <TableHead className="hidden min-w-52 md:table-cell">{t.colTags}</TableHead>
+                            <TableHead className="hidden min-w-64 md:table-cell">{t.colTags}</TableHead>
                             <TableHead className="min-w-36">{t.colCreatedAt}</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -148,13 +148,16 @@ export function InventoryTypeDetailTable({
                             items.map((item) => (
                                 <TableRow key={item.id}>
                                     <TableCell className="max-w-56 min-w-0">
-                                        <div className="min-w-0">
+                                        <div className="min-w-0 space-y-1">
                                             <p className="truncate font-medium">{item.name}</p>
-                                            <p className="mt-0.5 truncate text-xs text-muted-foreground md:hidden">
+                                            <p className="truncate text-xs text-muted-foreground md:hidden">
                                                 {showTypeColumn ? `${item.resourceType} · ` : ''}
                                                 {item.region || '—'}
                                                 {item.status ? ` · ${item.status}` : ''}
                                             </p>
+                                            <div className="md:hidden">
+                                                <InventoryTagList tags={item.tags} max={2} compact />
+                                            </div>
                                         </div>
                                     </TableCell>
                                     {showTypeColumn ? (
@@ -182,8 +185,8 @@ export function InventoryTypeDetailTable({
                                             {item.attributes?.[key] || '—'}
                                         </TableCell>
                                     ))}
-                                    <TableCell className="hidden align-top md:table-cell">
-                                        <InventoryTagList tags={item.tags} max={3} />
+                                    <TableCell className="hidden align-middle md:table-cell">
+                                        <InventoryTagList tags={item.tags} max={2} />
                                     </TableCell>
                                     <TableCell className="whitespace-nowrap text-muted-foreground">
                                         {formatDateTime(item.createdAt)}

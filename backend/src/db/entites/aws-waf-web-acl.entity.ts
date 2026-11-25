@@ -6,19 +6,25 @@ import {
     ManyToOne,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
-    type Relation
+    type Relation,
 } from 'typeorm';
 
 import { CloudAccount } from './cloud-account.entity';
 
 /**
-
-
- * Representa uma Web ACL do WAFv2 sincronizada da Amazon Web Services.
-
-
+ * Regra enxuta de uma Web ACL WAFv2 (sem dump nested completo do statement AWS).
  */
+export interface WafWebAclRuleSummary {
+    name: string;
+    priority: number;
+    action: string | null;
+    statementType: string | null;
+    statementSummary: Record<string, unknown> | null;
+}
 
+/**
+ * Representa uma Web ACL do WAFv2 sincronizada da Amazon Web Services.
+ */
 @Entity('aws_waf_web_acls')
 export class AwsWafWebAcl {
     @PrimaryGeneratedColumn('uuid')
@@ -28,52 +34,50 @@ export class AwsWafWebAcl {
     cloudAccountId!: string;
 
     /** ID da Web ACL na AWS. */
-
     @Column({ type: 'varchar', length: 255, name: 'aws_web_acl_id' })
     awsWebAclId!: string;
 
     /** ARN da Web ACL na AWS. */
-
     @Column({ type: 'varchar', length: 2048, name: 'web_acl_arn', unique: true })
     webAclArn!: string;
 
     /** Nome da Web ACL. */
-
     @Column({ type: 'varchar', length: 255, name: 'name' })
     name!: string;
 
     /** Descrição da Web ACL. */
-
     @Column({ type: 'varchar', length: 1024, name: 'description', nullable: true })
     description!: string | null;
 
     /** Escopo (CLOUDFRONT ou REGIONAL). */
-
     @Column({ type: 'varchar', length: 20, name: 'scope' })
     scope!: string;
 
-    /** Capacidade usada pelas regras (WCU). */
+    /** Região AWS (us-east-1 para CLOUDFRONT). */
+    @Column({ type: 'varchar', length: 32, name: 'region', nullable: true })
+    region!: string | null;
 
+    /** Capacidade usada pelas regras (WCU). */
     @Column({ type: 'int', name: 'capacity', nullable: true })
     capacity!: number | null;
 
     /** Ação padrão (ALLOW ou BLOCK). */
-
     @Column({ type: 'varchar', length: 10, name: 'default_action', nullable: true })
     defaultAction!: string | null;
 
     /** Número de regras na Web ACL. */
-
     @Column({ type: 'int', name: 'rules_count', nullable: true })
     rulesCount!: number | null;
 
-    /** ARNs dos recursos associados. */
+    /** Regras resumidas da Web ACL. */
+    @Column({ type: 'jsonb', name: 'rules', nullable: true })
+    rules!: WafWebAclRuleSummary[] | null;
 
+    /** ARNs dos recursos associados. */
     @Column({ type: 'jsonb', name: 'associated_resources', nullable: true })
     associatedResources!: string[] | null;
 
     /** Tags em JSON. */
-
     @Column({ type: 'jsonb', nullable: true })
     tags!: Record<string, string> | null;
 

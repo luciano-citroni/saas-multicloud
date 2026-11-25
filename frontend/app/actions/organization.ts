@@ -193,6 +193,31 @@ export async function enqueueGeneralSync(organizationId: string, cloudAccountId:
     });
 }
 
+export type EnqueueGeneralSyncAllResponse = {
+    queued: number;
+    skipped: number;
+    failed: number;
+    results?: Array<{
+        cloudAccountId: string;
+        alias: string;
+        provider: string;
+        status: 'queued' | 'skipped' | 'failed';
+        jobId?: string;
+        reason?: string;
+    }>;
+};
+
+export async function enqueueGeneralSyncAll(organizationId: string, options: { midOrgId?: string | null } = {}) {
+    const searchParams = new URLSearchParams({ organizationId });
+    if (options.midOrgId) {
+        searchParams.set('midOrgId', options.midOrgId);
+    }
+
+    return fetch(`/api/cloud/accounts/sync-all?${searchParams.toString()}`, {
+        method: 'POST',
+    });
+}
+
 export async function fetchOrganizationCloudAccountById(organizationId: string, cloudAccountId: string) {
     const url = `/api/cloud/accounts/${encodeURIComponent(cloudAccountId)}?organizationId=${encodeURIComponent(organizationId)}`;
 

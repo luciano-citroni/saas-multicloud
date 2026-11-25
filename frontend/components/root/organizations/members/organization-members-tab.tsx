@@ -31,7 +31,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { useTranslations } from '@/lib/i18n';
-import { hasRequiredOrganizationRole, type OrganizationRole } from '@/lib/organization-rbac';
+import {
+    canInviteAsOrganizationAdmin,
+    hasRequiredOrganizationRole,
+    normalizeOrganizationRole,
+    type OrganizationRole,
+} from '@/lib/organization-rbac';
 import { InviteMemberDialog } from './invite-member-dialog';
 import { EditUserDialog } from './edit-user-dialog';
 
@@ -80,6 +85,50 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
     const [inviteRoleFilter, setInviteRoleFilter] = useState('ALL');
     const [invitePageIndex, setInvitePageIndex] = useState(0);
     const [invitePageSize, setInvitePageSize] = useState(10);
+    const [canInviteAsOrgAdmin, setCanInviteAsOrgAdmin] = useState(false);
+
+    const canInvite = canManage || canInviteAsOrgAdmin;
+
+    useEffect(() => {
+        if (canManage) {
+            setCanInviteAsOrgAdmin(false);
+            return;
+        }
+
+        let cancelled = false;
+        const loadInviteAuthority = async () => {
+            try {
+                const response = await fetch(`/api/orgs?organizationId=${encodeURIComponent(organizationId)}`, {
+                    cache: 'no-store',
+                });
+                if (!response.ok) {
+                    if (!cancelled) setCanInviteAsOrgAdmin(false);
+                    return;
+                }
+                const payload = await response.json().catch(() => null);
+                const items = Array.isArray(payload)
+                    ? payload
+                    : payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)
+                      ? (payload as { items: unknown[] }).items
+                      : [];
+                const roles = items.map((item) =>
+                    normalizeOrganizationRole(
+                        typeof item === 'object' && item !== null
+                            ? ((item as { currentRole?: string | null }).currentRole ?? null)
+                            : null,
+                    ),
+                );
+                if (!cancelled) setCanInviteAsOrgAdmin(canInviteAsOrganizationAdmin(roles));
+            } catch {
+                if (!cancelled) setCanInviteAsOrgAdmin(false);
+            }
+        };
+
+        void loadInviteAuthority();
+        return () => {
+            cancelled = true;
+        };
+    }, [canManage, organizationId]);
 
     const filteredMembers = useMemo(() => {
         let result = members;
@@ -221,8 +270,12 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                     <Button variant="ghost" size="icon" onClick={refresh} title={tc.refresh}>
                         <RefreshCw className="h-4 w-4" />
                     </Button>
-                    {canManage && (
-                        <InviteMemberDialog organizationId={organizationId} onSuccess={refresh} />
+                    {canInvite && (
+                        <InviteMemberDialog
+                            organizationId={organizationId}
+                            currentRole={currentRole}
+                            onSuccess={refresh}
+                        />
                     )}
                 </div>
             </div>
@@ -402,13 +455,13 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                             <TableHead className="px-4 font-medium">Cargo</TableHead>
                                             <TableHead className="px-4 font-medium">{t.sentAt}</TableHead>
                                             <TableHead className="px-4 font-medium">{t.expiresAt}</TableHead>
-                                            {canManage && <TableHead className="w-24 px-4 font-medium" />}
+                                            {canInvite && <TableHead className="w-24 px-4 font-medium" />}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {paginatedInvites.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={canManage ? 5 : 4} className="h-24 text-center text-muted-foreground">
+                                                <TableCell colSpan={canInvite ? 5 : 4} className="h-24 text-center text-muted-foreground">
                                                     {t.invitesFilterEmpty}
                                                 </TableCell>
                                             </TableRow>
@@ -427,7 +480,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                                     <TableCell className="px-4 text-muted-foreground text-sm">
                                                         {format(new Date(invite.expiresAt), 'dd/MM/yyyy')}
                                                     </TableCell>
-                                                    {canManage && (
+                                                    {canInvite && (
                                                         <TableCell className="px-4">
                                                             <div className="flex items-center gap-1">
                                                                 <Button

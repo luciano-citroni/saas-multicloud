@@ -47,6 +47,8 @@ import {
     AwsSqsQueue,
     AwsSnsTopic,
     AwsWafWebAcl,
+    AwsWafIpSet,
+    AwsNetworkAcl,
     AwsGuardDutyDetector,
 } from '../../db/entites';
 
@@ -75,6 +77,7 @@ import { AwsElastiCacheModule } from '../elasticache/aws-elasticache.module';
 import { AwsSqsModule } from '../sqs/aws-sqs.module';
 import { AwsSnsModule } from '../sns/aws-sns.module';
 import { AwsWafModule } from '../waf/aws-waf.module';
+import { AwsNetworkAclModule } from '../network-acl/aws-network-acl.module';
 import { AwsGuardDutyModule } from '../guardduty/aws-guardduty.module';
 import { AwsConnectorModule } from '../aws-connector.module';
 import { TenantModule } from '../../tenant/tenant.module';
@@ -122,6 +125,8 @@ import { BillingModule } from '../../billing/billing.module';
             AwsSqsQueue,
             AwsSnsTopic,
             AwsWafWebAcl,
+            AwsWafIpSet,
+            AwsNetworkAcl,
             AwsGuardDutyDetector,
         ]),
 
@@ -150,6 +155,7 @@ import { BillingModule } from '../../billing/billing.module';
         AwsSqsModule,
         AwsSnsModule,
         AwsWafModule,
+        AwsNetworkAclModule,
         AwsGuardDutyModule,
         AwsConnectorModule,
         TenantModule,
