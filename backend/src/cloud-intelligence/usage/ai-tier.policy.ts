@@ -53,17 +53,31 @@ export function normalizeAiTier(raw: string | null | undefined): AiTier | null {
     return null;
 }
 
-/** Resolve tier from explicit metadata or plan modules fallback. */
+function planIncludesCloudIntelligence(modules: readonly string[]): boolean {
+    return modules.some((moduleName) => {
+        const normalized = moduleName.trim().toLowerCase();
+        return normalized === '*' || normalized === 'cloud_intelligence';
+    });
+}
+
+/**
+ * Resolve tier from explicit metadata or plan modules fallback.
+ * Without Cloud Intelligence on the plan, the assistant stays on the free
+ * basic tier (Cloud Advisor only) even if a stale higher tier was stored.
+ */
 export function resolveAiTier(input: {
     aiTier?: string | null;
     modules?: string[] | null;
 }): AiTier {
+    const modules = (input.modules ?? []).map((m) => m.trim().toLowerCase());
+    if (!planIncludesCloudIntelligence(modules)) {
+        return 'basic';
+    }
+
     const explicit = normalizeAiTier(input.aiTier);
     if (explicit) return explicit;
 
-    const modules = (input.modules ?? []).map((m) => m.trim().toLowerCase());
     if (modules.includes('*')) return 'enterprise';
-    if (modules.includes('cloud_intelligence')) return 'basic';
     return 'basic';
 }
 

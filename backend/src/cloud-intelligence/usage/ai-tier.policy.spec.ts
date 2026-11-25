@@ -6,10 +6,20 @@ import {
 } from './ai-tier.policy';
 
 describe('ai-tier.policy', () => {
-    it('resolves explicit tiers', () => {
-        expect(resolveAiTier({ aiTier: 'professional' })).toBe('professional');
-        expect(resolveAiTier({ aiTier: 'pro' })).toBe('professional');
-        expect(resolveAiTier({ aiTier: 'enterprise' })).toBe('enterprise');
+    it('resolves explicit tiers when Cloud Intelligence is on the plan', () => {
+        expect(resolveAiTier({ aiTier: 'professional', modules: ['cloud_intelligence'] })).toBe(
+            'professional',
+        );
+        expect(resolveAiTier({ aiTier: 'pro', modules: ['cloud_intelligence'] })).toBe('professional');
+        expect(resolveAiTier({ aiTier: 'enterprise', modules: ['cloud_intelligence'] })).toBe(
+            'enterprise',
+        );
+    });
+
+    it('keeps the free basic assistant when Cloud Intelligence is absent', () => {
+        expect(resolveAiTier({ aiTier: 'enterprise', modules: ['finops'] })).toBe('basic');
+        expect(resolveAiTier({ aiTier: 'professional', modules: [] })).toBe('basic');
+        expect(resolveAiTier({})).toBe('basic');
     });
 
     it('falls back to enterprise when modules include *', () => {

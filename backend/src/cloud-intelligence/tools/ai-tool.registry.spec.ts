@@ -85,6 +85,23 @@ describe('AiToolRegistry', () => {
         expect(names).toContain('get_saas_documentation');
         expect(names).not.toContain('get_governance_score');
         expect(names).not.toContain('get_automations');
+        expect(names).not.toContain('search_knowledge');
+        expect(names).not.toContain('get_ci_recommendations');
+        expect(names).not.toContain('get_daily_briefing');
+    });
+
+    it('exposes Cloud Intelligence tools only when the module is enabled', () => {
+        const withoutCi = service.listToolsForContext(new Set()).map((tool) => tool.name);
+        expect(withoutCi).toContain('get_cloud_accounts');
+        expect(withoutCi).toContain('get_saas_documentation');
+        expect(withoutCi).not.toContain('get_ci_recommendations');
+
+        const withCi = service
+            .listToolsForContext(new Set([SystemModule.CLOUD_INTELLIGENCE]))
+            .map((tool) => tool.name);
+        expect(withCi).toContain('search_knowledge');
+        expect(withCi).toContain('get_ci_recommendations');
+        expect(withCi).toContain('get_daily_briefing');
     });
 
     it('injects organization context and ignores model-supplied organizationId', async () => {

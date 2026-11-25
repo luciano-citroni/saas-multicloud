@@ -118,6 +118,8 @@ export class AiToolRegistry {
                     SystemModule.ASSESSMENT,
                     SystemModule.GOVERNANCE,
                     SystemModule.AUTOMATION,
+                    SystemModule.CLOUD_INTELLIGENCE,
+                    SystemModule.AI_FINOPS,
                 ]);
             }
             return new Set(modules);
@@ -836,7 +838,7 @@ export class AiToolRegistry {
                 name: 'search_knowledge',
                 description:
                     'Search org knowledge base and SaaS docs. Filter by domain when answering governance, finops, or automation policy questions. Prefer tenant tools for live infrastructure facts.',
-                requiredModules: [],
+                requiredModules: [SystemModule.CLOUD_INTELLIGENCE],
                 parameters: {
                     type: 'object',
                     properties: {
@@ -881,7 +883,7 @@ export class AiToolRegistry {
                 name: 'get_ci_recommendations',
                 description:
                     'List prioritized Cloud Intelligence recommendations (ranked FinOps/Governance actions).',
-                requiredModules: [],
+                requiredModules: [SystemModule.CLOUD_INTELLIGENCE],
                 parameters: {
                     type: 'object',
                     properties: {
@@ -929,7 +931,7 @@ export class AiToolRegistry {
             {
                 name: 'get_daily_briefing',
                 description: 'Get the latest Daily Intelligence briefing (top prioritized actions).',
-                requiredModules: [],
+                requiredModules: [SystemModule.CLOUD_INTELLIGENCE],
                 parameters: { type: 'object', properties: {} },
                 schema: z.object({}),
                 handler: async (_args, ctx) => {

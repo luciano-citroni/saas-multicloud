@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { BillingService } from '../../billing/billing.service';
 import { ErrorMessages } from '../../common/messages/error-messages';
 import { AiOrgQuota } from '../../db/entites/ai-org-quota.entity';
 import { resolveAiTier, type AiTier } from './ai-tier.policy';
@@ -32,6 +33,7 @@ export class AiQuotasService {
         private readonly quotaRepository: Repository<AiOrgQuota>,
         private readonly usageService: AiUsageService,
         private readonly configService: ConfigService,
+        private readonly billingService: BillingService,
     ) {}
 
     private envLimit(key: string): number | null {
@@ -61,13 +63,28 @@ export class AiQuotasService {
         return this.quotaRepository.save(quota);
     }
 
+    private async resolvePlanModules(organizationId: string): Promise<string[]> {
+        try {
+            const plan = await this.billingService.getActivePlanForOrganization(organizationId);
+            return plan.metadata.modules ?? [];
+        } catch {
+            return [];
+        }
+    }
+
     async getTier(organizationId: string): Promise<AiTier> {
-        const quota = await this.getOrCreateQuota(organizationId);
-        return resolveAiTier({ aiTier: quota.tier, modules: ['cloud_intelligence'] });
+        const [quota, modules] = await Promise.all([
+            this.getOrCreateQuota(organizationId),
+            this.resolvePlanModules(organizationId),
+        ]);
+        return resolveAiTier({ aiTier: quota.tier, modules });
     }
 
     async getSnapshot(organizationId: string): Promise<QuotaSnapshot> {
-        const quota = await this.getOrCreateQuota(organizationId);
+        const [quota, modules] = await Promise.all([
+            this.getOrCreateQuota(organizationId),
+            this.resolvePlanModules(organizationId),
+        ]);
         const now = new Date();
         const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -83,7 +100,7 @@ export class AiQuotasService {
 
         return {
             enabled: quota.enabled,
-            tier: resolveAiTier({ aiTier: quota.tier, modules: ['cloud_intelligence'] }),
+            tier: resolveAiTier({ aiTier: quota.tier, modules }),
             dailyLimit,
             monthlyLimit,
             dailyUsed,

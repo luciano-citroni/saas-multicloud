@@ -20,8 +20,6 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators';
-import { PlanModuleGuard, RequirePlanModule } from '../common/guards/plan-module.guard';
-import { SystemModule } from '../common/modules/system-modules';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RolesGuard } from '../rbac/roles.guard';
 import { CurrentOrganization } from '../tenant/tenant.decorators';
@@ -47,6 +45,8 @@ type AuthUser = { sub: string; sessionId: string };
 
 /**
  * Backward-compatible `/ai-chat` surface backed by Cloud Intelligence orchestrator.
+ * Available to any authenticated org member (basic Cloud Advisor). Advanced CI
+ * features remain gated on `/cloud-intelligence` and CI-only tools.
  */
 @ApiTags('AI Chat')
 @ApiBearerAuth('access-token')
@@ -55,8 +55,7 @@ type AuthUser = { sub: string; sessionId: string };
     description: 'Organization UUID',
     required: true,
 })
-@RequirePlanModule(SystemModule.CLOUD_INTELLIGENCE)
-@UseGuards(TenantGuard, RolesGuard, PlanModuleGuard)
+@UseGuards(TenantGuard, RolesGuard)
 @Throttle({ default: { ttl: 60_000, limit: 20 } })
 @Controller('ai-chat')
 export class AiChatCompatController {

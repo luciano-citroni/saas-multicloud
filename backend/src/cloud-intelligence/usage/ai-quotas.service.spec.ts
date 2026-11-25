@@ -19,11 +19,17 @@ describe('AiQuotasService', () => {
             return undefined;
         }),
     };
+    const billingService = {
+        getActivePlanForOrganization: jest.fn().mockResolvedValue({
+            metadata: { modules: ['cloud_intelligence'] },
+        }),
+    };
 
     const service = new AiQuotasService(
         quotaRepository as never,
         usageService as never,
         configService as never,
+        billingService as never,
     );
 
     beforeEach(() => {

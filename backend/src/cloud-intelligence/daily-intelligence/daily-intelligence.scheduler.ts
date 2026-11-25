@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Queue } from 'bullmq';
 import { CLOUD_INTELLIGENCE_DAILY_JOB, CLOUD_INTELLIGENCE_DAILY_QUEUE } from '../constants';
-import { resolveAiTier, tierHasCapability } from '../usage/ai-tier.policy';
+import { tierHasCapability } from '../usage/ai-tier.policy';
 import { AiQuotasService } from '../usage/ai-quotas.service';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class DailyIntelligenceScheduler {
         const quotas = await this.quotasService.listOrganizationsForDailyIntelligence();
         let enqueued = 0;
         for (const quota of quotas) {
-            const tier = resolveAiTier({ aiTier: quota.tier, modules: ['cloud_intelligence'] });
+            const tier = await this.quotasService.getTier(quota.organizationId);
             if (!tierHasCapability(tier, 'daily_intelligence')) {
                 continue;
             }

@@ -1,3 +1,5 @@
+import { StreamableFile } from '@nestjs/common';
+
 import { isBlockedSensitiveKey, redactSensitiveData } from './redact-sensitive-data';
 
 describe('redactSensitiveData', () => {
@@ -39,5 +41,14 @@ describe('redactSensitiveData', () => {
         expect(isBlockedSensitiveKey('failedLoginAttempts')).toBe(true);
         expect(isBlockedSensitiveKey('locked_until')).toBe(true);
         expect(isBlockedSensitiveKey('email')).toBe(false);
+    });
+
+    it('passes StreamableFile and Buffer through so PDF downloads stay intact', () => {
+        const pdf = Buffer.from('%PDF-1.4 commercial-report');
+        const file = new StreamableFile(pdf);
+
+        expect(redactSensitiveData(file)).toBe(file);
+        expect(redactSensitiveData(pdf)).toBe(pdf);
+        expect(Buffer.from(redactSensitiveData(pdf)).subarray(0, 5).toString()).toBe('%PDF-');
     });
 });
