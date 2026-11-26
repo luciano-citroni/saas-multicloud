@@ -208,14 +208,14 @@ export function InviteMemberDialog({ organizationId, currentRole, onSuccess }: P
 
     const roleOptions = assignableRoles.map((role) => ({
         value: role,
-        label: role === 'ADMIN' ? t.roleAdmin : role === 'MEMBER' ? t.roleMember : t.roleViewer,
+        label: role === 'ADMIN' ? t.tenantAdminRole : role === 'MEMBER' ? t.roleMember : t.roleViewer,
     }));
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button size="sm" className="gap-2">
-                    <UserPlus className="h-4 w-4" />
+                <Button size="sm" className="w-full gap-2 lg:w-auto">
+                    <UserPlus className="size-4" />
                     {t.inviteButton}
                 </Button>
             </DialogTrigger>

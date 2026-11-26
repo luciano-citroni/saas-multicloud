@@ -20,6 +20,7 @@ import {
 import { hasAutomationModuleAccess, hasModuleAccess, normalizePlanModules, PlanModule } from '@/lib/modules';
 import {
     canInviteAsOrganizationAdmin,
+    canManageBilling,
     canManageMembers,
     canOperateModules,
     normalizeOrganizationRole,
@@ -405,6 +406,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const activeOrg = organizations.find((o) => o.id === activeOrganizationId);
         const activeRole = normalizeOrganizationRole(activeOrg?.currentRole ?? null);
         const canManage = canManageMembers(activeRole);
+        const canBilling = canManageBilling(activeRole);
         const canInviteUsers =
             canManage || canInviteAsOrganizationAdmin(midOrgs.map((org) => org.currentRole ?? null));
         const canOperate = canOperateModules(activeRole);
@@ -422,7 +424,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             ...(canManage ? [{ title: tn.groups, url: '/tenant/organizations', icon: Layers }] : []),
             ...(canInviteUsers ? [{ title: tn.users, url: '/tenant/users', icon: Users }] : []),
             ...(canOperate ? [{ title: tn.notifications, url: '/tenant/notifications', icon: Bell }] : []),
-            { title: tn.plans, url: '/billing', icon: DollarSign },
+            ...(canBilling ? [{ title: tn.plans, url: '/billing', icon: DollarSign }] : []),
         ];
 
         const modules = [

@@ -67,6 +67,7 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
     const [loadingInvites, setLoadingInvites] = useState(true);
 
     const [removingId, setRemovingId] = useState<string | null>(null);
+    const [promotingUserId, setPromotingUserId] = useState<string | null>(null);
     const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
     const [editingMember, setEditingMember] = useState<Member | null>(null);
 
@@ -249,7 +250,12 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
     };
 
     const roleLabel = (role: string) => {
-        const map: Record<string, string> = { OWNER: t.roleOwner, ADMIN: t.roleAdmin, MEMBER: t.roleMember, VIEWER: t.roleViewer };
+        const map: Record<string, string> = {
+            OWNER: t.roleOwner,
+            ADMIN: t.tenantAdminRole,
+            MEMBER: t.roleMember,
+            VIEWER: t.roleViewer,
+        };
         return map[role] ?? role;
     };
 
@@ -260,15 +266,46 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
         return (hierarchy[currentRole] ?? 0) > (hierarchy[targetRole] ?? 0);
     };
 
+    const handleMakeTenantAdmin = async (member: Member) => {
+        setPromotingUserId(member.userId);
+        try {
+            const res = await fetch(
+                `/api/organization/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(member.userId)}`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: 'ADMIN' }),
+                },
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                toast.error(extractErrorMessage(body));
+                return;
+            }
+            toast.success(t.makeTenantAdminSuccess);
+            void loadMembers();
+        } catch {
+            toast.error(t.changeRoleError);
+        } finally {
+            setPromotingUserId(null);
+        }
+    };
+
     const refresh = () => { void loadMembers(); void loadInvites(); };
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{t.description}</p>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={refresh} title={tc.refresh}>
-                        <RefreshCw className="h-4 w-4" />
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <p className="min-w-0 text-sm leading-relaxed text-muted-foreground">{t.description}</p>
+                <div className="grid w-full gap-2 lg:flex lg:w-auto lg:items-center">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full lg:w-auto"
+                        onClick={refresh}
+                    >
+                        <RefreshCw className="size-4" />
+                        {tc.refresh}
                     </Button>
                     {canInvite && (
                         <InviteMemberDialog
@@ -338,6 +375,10 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                         ) : (
                                             paginatedMembers.map((member) => {
                                                 const canAct = canActOnMember(member.role) && member.userId !== currentUserId;
+                                                const canMakeAdmin =
+                                                    currentRole === 'OWNER' &&
+                                                    canAct &&
+                                                    (member.role === 'MEMBER' || member.role === 'VIEWER');
                                                 return (
                                                     <TableRow key={member.id}>
                                                         <TableCell className="px-4 font-medium">{member.user.name}</TableCell>
@@ -354,6 +395,19 @@ export function OrganizationMembersTab({ organizationId, currentRole, currentUse
                                                             <TableCell className="px-4">
                                                                 {canAct && (
                                                                     <div className="flex items-center gap-1">
+                                                                        {canMakeAdmin ? (
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                className="h-8"
+                                                                                title={t.makeTenantAdmin}
+                                                                                disabled={promotingUserId === member.userId}
+                                                                                isLoading={promotingUserId === member.userId}
+                                                                                onClick={() => void handleMakeTenantAdmin(member)}
+                                                                            >
+                                                                                {t.makeTenantAdmin}
+                                                                            </Button>
+                                                                        ) : null}
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"

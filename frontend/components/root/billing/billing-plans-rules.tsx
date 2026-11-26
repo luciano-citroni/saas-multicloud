@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import PlanCard from './PlanCard';
@@ -11,6 +11,8 @@ import { fetchPlans, fetchSubscription, createChangePlanSession } from '@/app/ac
 import { useTranslations } from '@/lib/i18n';
 import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { extractErrorMessage } from '@/lib/error-messages';
+import { canManageBilling, normalizeOrganizationRole } from '@/lib/organization-rbac';
+import { useSidebarContext } from '@/lib/queries/use-sidebar-context';
 
 type PlanMetadata = {
     maxCloudAccounts: number;
@@ -82,12 +84,22 @@ export function BillingPlansRules() {
     const searchParams = useSearchParams();
     const handledCheckoutRef = useRef(false);
     const t = useTranslations('billing');
+    const sidebarQuery = useSidebarContext();
     const [loading, setLoading] = useState(true);
     const [changingPriceId, setChangingPriceId] = useState<string | null>(null);
     const [plans, setPlans] = useState<BillingPlan[]>([]);
     const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
 
     const currentPriceId = subscription?.stripePriceId ?? null;
+
+    const canChoosePlan = useMemo(() => {
+        const organizationId =
+            typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY) : null;
+        const org =
+            sidebarQuery.data?.organizations.find((item) => item.id === organizationId) ??
+            sidebarQuery.data?.organizations[0];
+        return canManageBilling(normalizeOrganizationRole(org?.currentRole ?? null));
+    }, [sidebarQuery.data?.organizations]);
 
     const loadBillingData = useCallback(
         async (checkoutSessionId?: string) => {
@@ -173,6 +185,11 @@ export function BillingPlansRules() {
 
     const handleChangePlan = useCallback(
         async (priceId: string) => {
+            if (!canChoosePlan) {
+                toast.error(t.changePlanError);
+                return;
+            }
+
             const organizationId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
 
             if (!organizationId) {
@@ -211,7 +228,7 @@ export function BillingPlansRules() {
                 setChangingPriceId(null);
             }
         },
-        [router]
+        [canChoosePlan, router, t.changePlanError, t.loadBillingError, t.noCheckoutUrl, t.redirectingToCheckout]
     );
 
     return (
@@ -236,7 +253,7 @@ export function BillingPlansRules() {
                                 plan={plan}
                                 isCurrent={isCurrent}
                                 isChanging={isChanging}
-                                canChoose={true}
+                                canChoose={canChoosePlan}
                                 onChoose={(p) => void handleChangePlan(p)}
                             />
                         );

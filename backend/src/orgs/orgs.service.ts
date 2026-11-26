@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Organization } from '../db/entites/organization.entity';
 import { OrganizationMembership } from '../db/entites/organization-membership.entity';
-import { Tenant } from '../db/entites/tenant.entity';
 import { ErrorMessages } from '../common/messages/error-messages';
+import { OrgRole, ROLE_HIERARCHY } from '../rbac/roles.enum';
 import type { CreateOrgDto, UpdateOrgDto } from './orgs.dto';
+
+type OrganizationWithRole = Organization & { currentRole: string | null };
 
 @Injectable()
 export class OrgsService {
@@ -31,28 +33,20 @@ export class OrgsService {
         return saved;
     }
 
-    async findAll(tenantId: string, userId: string): Promise<Array<Organization & { currentRole: string | null }>> {
-        const rows = await this.orgRepository
-            .createQueryBuilder('organization')
-            .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
-            .addSelect('membership.role', 'membership_role')
-            .where('organization.tenantId = :tenantId', { tenantId })
-            .orderBy('organization.createdAt', 'ASC')
-            .getRawAndEntities();
-
-        return rows.entities.map((organization, index) => ({
-            ...organization,
-            currentRole: typeof rows.raw[index]?.membership_role === 'string' ? rows.raw[index].membership_role : null,
-        }));
+    async findAll(tenantId: string, userId: string, tenantRole: string): Promise<OrganizationWithRole[]> {
+        const qb = this.buildListQuery(tenantId, userId, tenantRole);
+        const rows = await qb.getRawAndEntities();
+        return this.mapWithRole(rows);
     }
 
     async findAllPaginated(
         tenantId: string,
         userId: string,
+        tenantRole: string,
         page: number,
         limit: number
     ): Promise<{
-        items: Array<Organization & { currentRole: string | null }>;
+        items: OrganizationWithRole[];
         pagination: {
             page: number;
             limit: number;
@@ -65,13 +59,7 @@ export class OrgsService {
         const safePage = Math.max(1, page);
         const safeLimit = Math.min(100, Math.max(1, limit));
 
-        const qb = this.orgRepository
-            .createQueryBuilder('organization')
-            .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
-            .addSelect('membership.role', 'membership_role')
-            .where('organization.tenantId = :tenantId', { tenantId })
-            .orderBy('organization.createdAt', 'ASC');
-
+        const qb = this.buildListQuery(tenantId, userId, tenantRole);
         const totalItems = await qb.getCount();
         const rows = await qb
             .skip((safePage - 1) * safeLimit)
@@ -80,10 +68,7 @@ export class OrgsService {
         const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / safeLimit);
 
         return {
-            items: rows.entities.map((organization, index) => ({
-                ...organization,
-                currentRole: typeof rows.raw[index]?.membership_role === 'string' ? rows.raw[index].membership_role : null,
-            })),
+            items: this.mapWithRole(rows),
             pagination: {
                 page: safePage,
                 limit: safeLimit,
@@ -95,10 +80,21 @@ export class OrgsService {
         };
     }
 
-    async findOne(id: string, tenantId: string, userId: string): Promise<Organization> {
+    async findOne(id: string, tenantId: string, userId: string, tenantRole: string): Promise<Organization> {
+        if (this.canSeeAllOrganizations(tenantRole)) {
+            const org = await this.orgRepository.findOne({ where: { id, tenantId } });
+            if (!org) throw new NotFoundException(ErrorMessages.ORGANIZATIONS.NOT_FOUND);
+            return org;
+        }
+
         const org = await this.orgRepository
             .createQueryBuilder('organization')
-            .innerJoin(OrganizationMembership, 'membership', 'membership.organization_id = organization.id AND membership.user_id = :userId', { userId })
+            .innerJoin(
+                OrganizationMembership,
+                'membership',
+                'membership.organization_id = organization.id AND membership.user_id = :userId',
+                { userId }
+            )
             .where('organization.id = :id', { id })
             .andWhere('organization.tenantId = :tenantId', { tenantId })
             .getOne();
@@ -107,15 +103,53 @@ export class OrgsService {
         return org;
     }
 
-    async update(id: string, tenantId: string, userId: string, dto: UpdateOrgDto): Promise<Organization> {
-        const org = await this.findOne(id, tenantId, userId);
+    async update(id: string, tenantId: string, userId: string, tenantRole: string, dto: UpdateOrgDto): Promise<Organization> {
+        const org = await this.findOne(id, tenantId, userId, tenantRole);
         if (dto.name !== undefined) org.name = dto.name;
         return this.orgRepository.save(org);
     }
 
-    async remove(id: string, tenantId: string, userId: string): Promise<{ id: string; deleted: true }> {
-        const org = await this.findOne(id, tenantId, userId);
+    async remove(id: string, tenantId: string, userId: string, tenantRole: string): Promise<{ id: string; deleted: true }> {
+        const org = await this.findOne(id, tenantId, userId, tenantRole);
         await this.orgRepository.remove(org);
         return { id, deleted: true };
+    }
+
+    /** Tenant OWNER/ADMIN can list and manage every mid-org in the tenant. */
+    private canSeeAllOrganizations(tenantRole: string): boolean {
+        return (ROLE_HIERARCHY[tenantRole as OrgRole] ?? 0) >= ROLE_HIERARCHY[OrgRole.ADMIN];
+    }
+
+    private buildListQuery(tenantId: string, userId: string, tenantRole: string): SelectQueryBuilder<Organization> {
+        const qb = this.orgRepository
+            .createQueryBuilder('organization')
+            .addSelect('membership.role', 'membership_role')
+            .where('organization.tenantId = :tenantId', { tenantId })
+            .orderBy('organization.createdAt', 'ASC');
+
+        if (this.canSeeAllOrganizations(tenantRole)) {
+            qb.leftJoin(
+                OrganizationMembership,
+                'membership',
+                'membership.organization_id = organization.id AND membership.user_id = :userId',
+                { userId }
+            );
+        } else {
+            qb.innerJoin(
+                OrganizationMembership,
+                'membership',
+                'membership.organization_id = organization.id AND membership.user_id = :userId',
+                { userId }
+            );
+        }
+
+        return qb;
+    }
+
+    private mapWithRole(rows: { entities: Organization[]; raw: Array<{ membership_role?: string }> }): OrganizationWithRole[] {
+        return rows.entities.map((organization, index) => ({
+            ...organization,
+            currentRole: typeof rows.raw[index]?.membership_role === 'string' ? rows.raw[index].membership_role : null,
+        }));
     }
 }

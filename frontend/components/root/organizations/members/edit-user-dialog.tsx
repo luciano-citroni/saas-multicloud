@@ -103,27 +103,39 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
         }
     }, [open, currentRole, form, loadOrgAccess]);
 
-    const onSaveRole = form.handleSubmit(async (data) => {
+    const saveRole = async (role: 'ADMIN' | 'MEMBER' | 'VIEWER', successMessage?: string) => {
         setSavingRole(true);
         try {
             const res = await fetch(`/api/organization/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: data.role }),
+                body: JSON.stringify({ role }),
             });
             const body = await res.json().catch(() => null);
             if (!res.ok) {
                 toast.error(extractErrorMessage(body));
-                return;
+                return false;
             }
-            toast.success(t.changeRoleSuccess);
+            toast.success(successMessage ?? t.changeRoleSuccess);
             onSuccess();
+            return true;
         } catch {
             toast.error(t.changeRoleError);
+            return false;
         } finally {
             setSavingRole(false);
         }
+    };
+
+    const onSaveRole = form.handleSubmit(async (data) => {
+        await saveRole(data.role);
     });
+
+    const onMakeTenantAdmin = async () => {
+        form.setValue('role', 'ADMIN', { shouldValidate: true });
+        const ok = await saveRole('ADMIN', t.makeTenantAdminSuccess);
+        if (ok) onOpenChange(false);
+    };
 
     const handleAddToOrg = async (targetOrgId: string) => {
         const parsed = addToOrgSchema.safeParse({ role: pendingRole[targetOrgId] });
@@ -214,47 +226,62 @@ export function EditUserDialog({ open, onOpenChange, organizationId, userId, use
                 </DialogHeader>
 
                 <div className="flex flex-col gap-5 pt-1">
-                    {/* ── Cargo na org atual ─────────────────────────── */}
+                    {/* ── Cargo / Admin do tenant ─────────────────── */}
                     <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                            <div className="flex size-7 items-center justify-center rounded-md border bg-muted/40">
+                        <div className="flex items-start gap-2">
+                            <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/40">
                                 <Layers className="size-3.5" aria-hidden="true" />
                             </div>
-                            <div>
+                            <div className="min-w-0 space-y-0.5">
                                 <p className="text-sm font-medium">{t.roleInOrg}</p>
-                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t.orgBadge}</p>
+                                <p className="text-xs leading-relaxed text-muted-foreground">{t.tenantAdminRoleHint}</p>
                             </div>
                         </div>
                         {canChangeRole ? (
                             <Form {...form}>
-                                <form onSubmit={onSaveRole} className="flex items-end gap-2">
-                                    <FormField
-                                        control={form.control}
-                                        name="role"
-                                        render={({ field }) => (
-                                            <FormItem className="flex-1">
-                                                <FormLabel className="sr-only">{t.inviteRoleLabel}</FormLabel>
-                                                <SearchableSelect
-                                                    mode="single"
-                                                    value={field.value}
-                                                    onValueChange={field.onChange}
-                                                    options={assignableRoles.map((r) => ({
-                                                        value: r,
-                                                        label: roleLabel(r),
-                                                    }))}
-                                                />
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <Button type="submit" size="sm" isLoading={savingRole}>
-                                        {tc.save}
-                                    </Button>
+                                <form onSubmit={onSaveRole} className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                        <FormField
+                                            control={form.control}
+                                            name="role"
+                                            render={({ field }) => (
+                                                <FormItem className="min-w-0 flex-1">
+                                                    <FormLabel>{t.inviteRoleLabel}</FormLabel>
+                                                    <SearchableSelect
+                                                        mode="single"
+                                                        value={field.value}
+                                                        onValueChange={field.onChange}
+                                                        options={assignableRoles.map((r) => ({
+                                                            value: r,
+                                                            label: r === 'ADMIN' ? t.tenantAdminRole : roleLabel(r),
+                                                        }))}
+                                                    />
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <Button type="submit" size="sm" isLoading={savingRole} className="w-full sm:w-auto">
+                                            {tc.save}
+                                        </Button>
+                                    </div>
+                                    {requesterRole === 'OWNER' && currentRole !== 'ADMIN' ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full sm:w-auto"
+                                            disabled={savingRole}
+                                            isLoading={savingRole}
+                                            onClick={() => void onMakeTenantAdmin()}
+                                        >
+                                            {t.makeTenantAdmin}
+                                        </Button>
+                                    ) : null}
                                 </form>
                             </Form>
                         ) : (
                             <Badge variant={ROLE_VARIANT[currentRole] ?? 'outline'} className="w-fit">
-                                {roleLabel(currentRole)}
+                                {currentRole === 'ADMIN' ? t.tenantAdminRole : roleLabel(currentRole)}
                             </Badge>
                         )}
                     </div>

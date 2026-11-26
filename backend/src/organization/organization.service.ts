@@ -716,32 +716,18 @@ export class OrganizationService {
 
     /**
      * Invite authority:
-     * - Tenant ADMIN/OWNER: can invite; level = tenant role.
+     * - Tenant ADMIN/OWNER: can invite into any mid-org in the tenant; level = tenant role.
      * - Otherwise: must be ADMIN+ on every selected organization (mid-org); level = weakest of those.
      */
     private async resolveInviteAuthorityLevel(
-        tenantId: string,
+        _tenantId: string,
         inviterUserId: string,
         tenantRole: OrgRole,
         organizationIds: string[],
     ): Promise<number> {
         const tenantLevel = ROLE_HIERARCHY[tenantRole] ?? 0;
+        // Tenant OWNER/ADMIN may invite into any mid-org in the tenant (same visibility as org list).
         if (tenantLevel >= ROLE_HIERARCHY[OrgRole.ADMIN]) {
-            if (organizationIds.length === 0) {
-                return tenantLevel;
-            }
-
-            // Tenant admins may only grant orgs they belong to (OWNER may grant any org in tenant).
-            if (tenantRole !== OrgRole.OWNER) {
-                const memberships = await this.organizationMembershipRepository.find({
-                    where: { userId: inviterUserId, organizationId: In(organizationIds) },
-                    select: ['organizationId'],
-                });
-                if (memberships.length !== organizationIds.length) {
-                    throw new ForbiddenException(ErrorMessages.RBAC.INSUFFICIENT_PERMISSIONS);
-                }
-            }
-
             return tenantLevel;
         }
 

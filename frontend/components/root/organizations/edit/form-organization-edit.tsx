@@ -16,6 +16,7 @@ import {
 import { createOrganizationSchema, type OrganizationFormValues } from '@/components/root/organizations/new/scheme';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IconInput } from '@/components/ui/input-icon';
+import { Skeleton } from '@/components/ui/skeleton';
 import { extractErrorMessage } from '@/lib/error-messages';
 import { ACTIVE_ORG_STORAGE_KEY, notifySidebarContextUpdated } from '@/lib/sidebar-context';
 import { formatCNPJ } from '@/lib/validators/cnpj';
@@ -105,7 +106,7 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
         };
 
         void loadOrganization();
-    }, [form, organizationId, router]);
+    }, [form, organizationId, router, t.loadOrgError]);
 
     const onSubmit = form.handleSubmit(async (data) => {
         setIsLoading(true);
@@ -192,45 +193,75 @@ export function FormOrganizationEdit({ organizationId, currentRole }: Props) {
     };
 
     if (isLoadingOrganization) {
-        return <div className="py-6 text-sm text-muted-foreground">{t.loadingOrg}</div>;
+        return (
+            <div className="space-y-6">
+                <div className="space-y-4 rounded-xl border p-4 sm:p-5">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-56" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </div>
+                <Skeleton className="h-9 w-36 ml-auto" />
+            </div>
+        );
     }
 
     return (
         <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-5 sm:gap-6">
-                <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{tc.name}</FormLabel>
-                            <FormControl>
-                                <IconInput placeholder={t.orgNamePlaceholder} StartIcon={Building2} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
+            <form onSubmit={onSubmit} className="flex flex-col gap-6">
+                <section className="rounded-xl border bg-card">
+                    <div className="border-b px-4 py-3 sm:px-5">
+                        <p className="text-sm font-medium">{t.generalSectionTitle}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                            {t.generalSectionDesc}
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
+                        <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                                <FormItem className="min-w-0">
+                                    <FormLabel>{tc.name}</FormLabel>
+                                    <FormControl>
+                                        <IconInput
+                                            placeholder={t.orgNamePlaceholder}
+                                            StartIcon={Building2}
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                <FormField
-                    control={form.control}
-                    name="cnpj"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{t.cnpjLabel}</FormLabel>
-                            <FormControl>
-                                <IconInput
-                                    placeholder={t.cnpjPlaceholder}
-                                    StartIcon={IdCardLanyard}
-                                    {...field}
-                                    value={formatCNPJ(field.value ?? '')}
-                                    onChange={(event) => field.onChange(event.target.value.replace(/\D/g, ''))}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
+                        <FormField
+                            control={form.control}
+                            name="cnpj"
+                            render={({ field }) => (
+                                <FormItem className="min-w-0">
+                                    <FormLabel>{t.cnpjLabel}</FormLabel>
+                                    <FormControl>
+                                        <IconInput
+                                            placeholder={t.cnpjPlaceholder}
+                                            StartIcon={IdCardLanyard}
+                                            {...field}
+                                            value={formatCNPJ(field.value ?? '')}
+                                            onChange={(event) =>
+                                                field.onChange(event.target.value.replace(/\D/g, ''))
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                </section>
 
                 <OrganizationEditActions
                     resourceName={form.watch('name')}

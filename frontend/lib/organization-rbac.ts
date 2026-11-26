@@ -48,6 +48,11 @@ export function canManageBilling(role: OrganizationRole | null): boolean {
     return hasRequiredOrganizationRole(role, 'ADMIN');
 }
 
+/** Tenant OWNER/ADMIN can see and manage every mid-org in the tenant. */
+export function canSeeAllOrganizations(role: OrganizationRole | null): boolean {
+    return hasRequiredOrganizationRole(role, 'ADMIN');
+}
+
 export function canEditOrganization(role: OrganizationRole | null): boolean {
     return hasRequiredOrganizationRole(role, 'ADMIN');
 }
